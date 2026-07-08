@@ -492,11 +492,11 @@ Cover:
 ```text
 Normal product checkout stores unit/price snapshot and creates sale_deduction.
 Combo checkout stores BOM snapshot and deducts component stock, not combo stock.
-Roll/sheet checkout requires object deduction or explicit accepted fallback.
+Roll/sheet checkout allows selling before object assignment and records a pending material reconciliation state.
 Old invoices keep old snapshot after product/BOM price changes.
 ```
 
-**Status 2026-07-07:** đã bổ sung DB test cho normal checkout và combo checkout: product snapshot, BOM snapshot, component `sale_deduction`, không trừ tồn mã combo. Roll/sheet object deduction chưa có UI/payload POS nên vẫn pending ở Step 3.
+**Status 2026-07-07:** đã bổ sung DB test cho normal checkout và combo checkout: product snapshot, BOM snapshot, component `sale_deduction`, không trừ tồn mã combo. Owner đã chốt lại ngày 2026-07-08 rằng roll/sheet POS không chặn checkout khi chưa biết object vật lý; phần còn lại là lưu trạng thái cần đối soát vật tư sau.
 
 - [x] **Step 2: Implement snapshot fields**
 
@@ -506,9 +506,9 @@ Ensure order items store enough snapshot data: product name/code, unit, conversi
 
 - [ ] **Step 3: Implement deduction**
 
-Use `stock_movements.sale_deduction` for all official stock changes. Do not write raw stock numbers directly.
+Use `stock_movements.sale_deduction` for official stock changes where the deduction target is known. For roll/sheet lines without an assigned physical object, checkout must still succeed and record a pending material reconciliation state for later machine/production matching.
 
-**Status 2026-07-08:** normal checkout ghi `stock_movements.sale_deduction`; combo checkout trừ vật tư cấu thành theo BOM snapshot và không trừ mã combo. Roll/sheet checkout object-level deduction chưa hoàn tất; trước khi bật bán thật cuộn/tấm cần POS gửi object được chọn hoặc backend từ chối rõ nếu thiếu object. Drift liên quan đang được theo dõi ở `REV-2026-07-08-001` vì `/pos/cart/validate` có trong frontend/docs nhưng chưa được Supabase router dispatch.
+**Status 2026-07-08:** normal checkout ghi `stock_movements.sale_deduction`; combo checkout trừ vật tư cấu thành theo BOM snapshot và không trừ mã combo. Roll/sheet checkout không được chặn chỉ vì chưa chọn object hoặc tồn vật lý âm. Phần còn lại là trạng thái/cảnh báo đối soát vật tư sau checkout và đề xuất gán object từ dữ liệu máy sản xuất. Drift liên quan đang được theo dõi ở `REV-2026-07-08-001` vì `/pos/cart/validate` có trong frontend/docs nhưng chưa được Supabase router dispatch.
 
 - [x] **Step 4: Verify**
 
@@ -593,6 +593,6 @@ Manual browser smoke:
 ## Risk Notes
 
 - Do not import KiotViet Excel into production until dry-run counts and invalid rows are reviewed.
-- Do not enable real POS checkout for roll/sheet before object-level deduction is implemented or an explicit fallback rule is accepted.
+- Do not block real POS checkout for roll/sheet solely because object-level assignment is missing. Record pending material reconciliation instead.
 - Do not use `stocktakes` for khui vật tư; use `inventory_material_openings`.
 - If backend cannot return a field yet, UI may show `Chưa có` only with matching doc note and no fake data.

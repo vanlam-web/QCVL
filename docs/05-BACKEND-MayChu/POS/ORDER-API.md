@@ -62,7 +62,9 @@ Ghi chú MVP: `perm.create_order` và các quyền thao tác POS thường ngày
 
 ### `POST /pos/cart/validate`
 
-Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
+Validate mềm và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
+
+Endpoint này không dùng để khóa nghiệp vụ bán hàng theo tồn kho. Nó trả lỗi cho dữ liệu không thể tính tiền/lưu chứng từ, và trả `warnings` cho các vấn đề vận hành như tồn âm, thiếu object cuộn/tấm hoặc thiếu dữ liệu đối soát sản xuất.
 
 **Permission:** `perm.create_order`
 
@@ -91,23 +93,28 @@ Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
 
 `customer_id` được phép null ở bước validate giỏ hàng vì chưa ghi chứng từ.
 
-**Validation:**
+**Validation chặn lưu:**
 
-- Mọi `product_id` phải tồn tại, active và cùng organization.
-- `quantity > 0`.
-- `unit_price >= 0`.
-- `sell_method` phải khớp sản phẩm hoặc là cách bán hợp lệ được Backend cho phép.
-- Với `area_m2`, `width_m` và `height_m` bắt buộc lớn hơn 0.
-- Với `linear_m`, `linear_m` bắt buộc lớn hơn 0.
+- Có ít nhất một dòng hàng nếu gọi để chuẩn bị checkout.
+- Dòng phải có `product_id` hoặc snapshot đủ để lưu chứng từ theo rule hiện hành.
+- `quantity` và `unit_price` không được là dữ liệu không parse được.
 - `price_source = manual` được phép khi người dùng sửa giá.
+
+**Cảnh báo không chặn:**
+
+- Tồn kho tổng thiếu hoặc âm.
+- Tồn vật lý cuộn/tấm thiếu hoặc âm.
+- Dòng `roll`/`sheet` chưa chọn object vật lý.
+- Dòng thiếu thông tin kỹ thuật phục vụ sản xuất/đối soát sau nhưng vẫn đủ để tính tiền và lưu chứng từ.
+- Chưa chọn khách hàng ở bước nháp; checkout sẽ resolve về `KH000001 - Khách lẻ`.
 
 **Workflow:**
 
 1. Xác thực actor, workstation và permission.
 2. Tải sản phẩm active trong organization.
-3. Validate từng dòng.
-4. Tính lại `line_total` theo Business Rule tính giỏ hàng.
-5. Trả giỏ hàng đã chuẩn hóa cho Frontend.
+3. Validate mềm từng dòng.
+4. Tính lại `line_total` theo Business Rule tính giỏ hàng nếu dữ liệu đủ.
+5. Trả giỏ hàng đã chuẩn hóa kèm danh sách cảnh báo cho Frontend.
 
 **Response data:**
 
@@ -124,7 +131,14 @@ Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
     }
   ],
   "subtotal_amount": 180000,
-  "total_amount": 180000
+  "total_amount": 180000,
+  "warnings": [
+    {
+      "code": "ROLL_OBJECT_UNASSIGNED",
+      "client_line_id": "local-line-1",
+      "message": "Dòng bạt chưa gán cuộn thực tế, sẽ cần đối soát sau."
+    }
+  ]
 }
 ```
 
@@ -177,7 +191,7 @@ Lưu hóa đơn nháp hiện tại thành báo giá.
 - Nếu có `customer_id`, khách phải cùng organization.
 - `customer_snapshot` bắt buộc, kể cả khách lẻ.
 - Có ít nhất một dòng hàng.
-- Dòng hàng phải pass cùng validation với `/pos/cart/validate`.
+- Dòng hàng pass validation mềm như `/pos/cart/validate`; các cảnh báo tồn/object không chặn lưu báo giá.
 - `subtotal_amount` và `total_amount` do Backend tính lại, không tin tổng tiền client gửi lên.
 
 **Workflow:**
@@ -355,7 +369,7 @@ Nếu khách trả dư và nhân viên chọn cấn vào nợ cũ, phần cấn 
 **Validation:**
 
 - Có ít nhất một dòng hàng.
-- Dòng hàng phải pass validation như `/pos/cart/validate`.
+- Dòng hàng pass validation mềm như `/pos/cart/validate`; các cảnh báo tồn/object không chặn checkout.
 - Backend tự tính lại `line_subtotal_amount`, `line_total`, `subtotal_amount`, `discount_amount`, `total_amount`.
 - Nếu `source_quote_id` có giá trị, báo giá phải cùng organization, `order_type = quote`, `status = active`.
 - Nếu Frontend không gửi `customer_id`, Backend resolve về `KH000001 - Khách lẻ`.
@@ -365,6 +379,9 @@ Nếu khách trả dư và nhân viên chọn cấn vào nợ cũ, phần cấn 
 - Một lần checkout chỉ được chọn tối đa một tài khoản bank.
 - Nếu `old_debt_payment_amount > 0`, `customer_id` bắt buộc.
 - Cho phép tồn kho âm sau cảnh báo; Backend không chặn checkout chỉ vì thiếu tồn.
+- Cho phép checkout hàng `roll`/`sheet` khi chưa chọn object vật lý. Dòng này phải được đánh dấu cần đối soát vật tư sau.
+- Nếu input có object vật lý cho dòng `roll`/`sheet`, Backend lưu snapshot object đó vào dòng hoặc movement theo schema hiện hành.
+- Một dòng checkout chỉ nhận tối đa một object vật lý. Nếu nhân viên dùng nhiều cuộn/tấm cho cùng một sản phẩm, POS phải gửi thành nhiều dòng.
 
 **Workflow bắt buộc trong một transaction nghiệp vụ:**
 
@@ -374,7 +391,7 @@ Nếu khách trả dư và nhân viên chọn cấn vào nợ cũ, phần cấn 
 4. Resolve khách hàng: nếu input không có khách, dùng `KH000001 - Khách lẻ`.
 5. Tạo `orders` loại `invoice`, `status = completed`.
 6. Tạo `order_items` snapshot.
-7. Trừ kho theo Inventory rule bằng `stock_movements`.
+7. Ghi trừ kho/nhu cầu trừ kho theo Inventory rule bằng `stock_movements`. Với dòng chưa gán object, ghi cảnh báo/trạng thái cần đối soát sau thay vì chặn checkout.
 8. Nếu có tiền thực giữ lại, tạo `payment_receipts` và `payment_receipt_methods`.
 9. Tạo `cashbook_entries` từ từng dòng phương thức thu.
 10. Nếu hóa đơn mới còn nợ, tạo `customer_debt_entries` loại `invoice_debt`.
@@ -404,7 +421,13 @@ Nếu bất kỳ bước ghi dữ liệu chính nào lỗi, transaction phải r
     "code": "PT000001",
     "total_received_amount": 300000
   },
-  "inventory_warnings": []
+  "inventory_warnings": [
+    {
+      "code": "ROLL_OBJECT_UNASSIGNED",
+      "order_item_id": "uuid",
+      "message": "Dòng bạt chưa gán cuộn thực tế, cần đối soát sau sản xuất."
+    }
+  ]
 }
 ```
 

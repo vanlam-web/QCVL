@@ -96,7 +96,16 @@ Trong MVP, một lần thanh toán chỉ có tối đa một tài khoản ngân 
 | Điều kiện | Mô tả |
 |---|---|
 | Giỏ hàng không rỗng | Phải có ít nhất 1 dòng sản phẩm |
-| Không có lỗi validation | Toàn bộ dòng hợp lệ (kích thước > 0, SL > 0) |
+| Khách lẻ nợ có ghi chú | Nếu hóa đơn còn nợ và chưa chọn khách cụ thể, hệ thống lưu vào `KH000001 - Khách lẻ` nhưng bắt buộc có ghi chú nợ |
+
+Checkout không bị chặn chỉ vì:
+
+- tồn kho tổng đang âm hoặc không đủ
+- tồn vật lý cuộn/tấm đang âm hoặc không đủ
+- dòng cuộn/tấm chưa chọn object vật lý
+- dòng còn thiếu dữ liệu kỹ thuật phục vụ sản xuất/đối soát sau, miễn vẫn đủ thông tin tối thiểu để lưu chứng từ và tính tiền
+
+Các thiếu sót này là cảnh báo vận hành, không phải lỗi chặn bán trong MVP.
 
 ---
 
@@ -104,7 +113,7 @@ Trong MVP, một lần thanh toán chỉ có tối đa một tài khoản ngân 
 
 ### BR-CHK-04: Trừ kho vật tư
 
-Khi đơn bán thành công, hệ thống **luôn trừ kho** theo các dòng hàng đã chốt.
+Khi đơn bán thành công, hệ thống ghi nhận trừ kho/nhu cầu trừ kho theo các dòng hàng đã chốt.
 
 | Loại dòng | Hành vi trừ kho |
 |---|---|
@@ -117,6 +126,14 @@ Nếu nhân viên chọn **Không lưu — Chỉ trừ kho**, BOM vừa nhập v
 Giá bán combo độc lập với tổng giá vật tư thành phần. Tổng giá vật tư nếu có chỉ dùng để tham khảo chi phí.
 
 Nếu hệ thống phát hiện thiếu vật tư trên dòng hàng hoặc thành phần BOM, POS chỉ cảnh báo và có thể hiện nút `Khui vật tư` trên dòng đó. Khui là tùy chọn; không bấm khui thì báo giá vẫn lưu được và hóa đơn vẫn theo rule tồn âm/cảnh báo đã chốt.
+
+Với hàng cuộn/tấm:
+
+- Nếu đã biết cuộn/tấm vật lý, dòng hóa đơn có thể gắn object ngay.
+- Nếu chưa biết cuộn/tấm vật lý, hóa đơn vẫn được tạo và dòng được đánh dấu cần đối soát vật tư sau.
+- Tồn vật lý hoặc tồn tổng được phép âm theo rule tồn âm.
+- Sau khi in/sản xuất, dữ liệu máy hoặc thao tác nhân viên có thể dùng để đề xuất gán khổ/cuộn/tấm phù hợp cho dòng hóa đơn.
+- Một dòng hóa đơn chỉ gán một object vật lý; nếu cần nhiều object thì tách thành nhiều dòng.
 
 ### BR-CHK-05: Lưu đơn hàng
 
