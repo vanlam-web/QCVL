@@ -21,6 +21,7 @@
 | [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) | Quy ước Docker, CI/CD, backup, monitoring, disaster recovery |
 | [ENVIRONMENTS-CI.md](./ENVIRONMENTS-CI.md) | Local, dev cloud, staging, production baseline và CI/CD |
 | [PHASE-0-RUNBOOK.md](./PHASE-0-RUNBOOK.md) | Runbook kiểm thử/vận hành Phase 0 |
+| [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) | Trạng thái triển khai NAS dev hiện tại của dự án QCVL |
 | [SHARED-DEV-SERVER.md](./SHARED-DEV-SERVER.md) | Shared-dev LAN/Tailscale fallback khi cần |
 | [PRODUCTION.md](./PRODUCTION.md) | Vận hành production, smoke test, rollback, monitoring tối thiểu |
 | [BACKUP-RESTORE.md](./BACKUP-RESTORE.md) | Chính sách backup, RPO/RTO và restore drill |

@@ -12,6 +12,7 @@
 | Nguồn đúng 8 tầng | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Quy tắc viết tài liệu | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 | Trạng thái sống / queue hiện tại | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |
+| Trạng thái NAS dev hiện tại của QCVL | [07-DEPLOYMENT-TrienKhai/QCVL-NAS-DEV.md](./07-DEPLOYMENT-TrienKhai/QCVL-NAS-DEV.md) |
 | Quy ước phối hợp Spec / Implement / Review | [WORKFLOW-SPEC-IMPLEMENT.md](./WORKFLOW-SPEC-IMPLEMENT.md) |
 | Vòng lặp tự động giữa các luồng | [WORKFLOW-AUTO-SPEC-IMPLEMENT.md](./WORKFLOW-AUTO-SPEC-IMPLEMENT.md) |
 | Quy ước spec/plan/draft/handoff lịch sử | [superpowers/README.md](./superpowers/README.md) |
