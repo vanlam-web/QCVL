@@ -1,5 +1,13 @@
-import type { FormEvent, ReactNode, SyntheticEvent } from 'react'
+import { isValidElement, type FormEvent, type ReactNode, type SyntheticEvent } from 'react'
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+
+export interface ManagementSearchSuggestion {
+  id: string
+  primary: ReactNode
+  secondary?: ReactNode
+  meta?: ReactNode
+  ariaLabel?: string
+}
 
 export function ManagementPage({
   title,
@@ -153,15 +161,25 @@ export function ManagementCompactSearch({
   value,
   leadingIcon,
   trailingAction,
+  suggestions,
+  suggestionsLabel,
+  emptySuggestion,
   onChange,
+  onSuggestionSelect,
 }: {
   label: string
   placeholder?: string
   value: string
   leadingIcon?: ReactNode
   trailingAction?: ReactNode
+  suggestions?: ManagementSearchSuggestion[]
+  suggestionsLabel?: string
+  emptySuggestion?: ReactNode
   onChange: (value: string) => void
+  onSuggestionSelect?: (suggestion: ManagementSearchSuggestion) => void
 }) {
+  const showSuggestions = suggestions !== undefined && (suggestions.length > 0 || emptySuggestion !== undefined)
+  const showClearAction = value.length > 0 && isValidElement(trailingAction) && trailingAction.type === ManagementCompactCreateAction
   return (
     <div className="management-compact-search">
       {leadingIcon ? <span className="management-compact-search-leading">{leadingIcon}</span> : null}
@@ -171,7 +189,45 @@ export function ManagementCompactSearch({
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-      {trailingAction ? <span className="management-compact-search-trailing">{trailingAction}</span> : null}
+      {trailingAction ? (
+        <span className="management-compact-search-trailing">
+          {showClearAction ? (
+            <button
+              aria-label="Xóa tìm kiếm"
+              className="management-compact-create-action management-compact-create-action-clear"
+              title="Xóa tìm kiếm"
+              type="button"
+              onClick={() => onChange('')}
+            >
+              <Plus aria-hidden="true" size={18} strokeWidth={2} />
+            </button>
+          ) : (
+            trailingAction
+          )}
+        </span>
+      ) : null}
+      {showSuggestions ? (
+        <ul aria-label={suggestionsLabel ?? `${label} gợi ý`} className="management-search-suggestions" role="listbox">
+          {suggestions.length > 0 ? (
+            suggestions.map((suggestion) => (
+              <li key={suggestion.id}>
+                <button
+                  aria-label={suggestion.ariaLabel}
+                  role="option"
+                  type="button"
+                  onClick={() => onSuggestionSelect?.(suggestion)}
+                >
+                  <strong>{suggestion.primary}</strong>
+                  {suggestion.secondary ? <span>{suggestion.secondary}</span> : null}
+                  {suggestion.meta ? <span>{suggestion.meta}</span> : null}
+                </button>
+              </li>
+            ))
+          ) : (
+            <li className="management-search-suggestions-empty">{emptySuggestion}</li>
+          )}
+        </ul>
+      ) : null}
     </div>
   )
 }

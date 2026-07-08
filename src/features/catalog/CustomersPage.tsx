@@ -64,8 +64,11 @@ export function CustomersPage({
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
   const customerDebtRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
+  const customerSearchRequestId = useRef(0)
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState('')
+  const [customerSearchSuggestions, setCustomerSearchSuggestions] = useState<Customer[]>([])
+  const [customerSearchSuggestionsOpen, setCustomerSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [customerGroupId, setCustomerGroupId] = useState('all')
   const [createdFrom, setCreatedFrom] = useState('')
@@ -194,9 +197,66 @@ export function CustomersPage({
   async function filterCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmed = search.trim()
+    setCustomerSearchSuggestionsOpen(false)
     setPage(1)
     await load({
       search: trimmed,
+      customerGroupIdValue: customerGroupId,
+      createdFromValue: createdFrom,
+      createdToValue: createdTo,
+      createdByValue: createdBy,
+      totalSalesMinValue: totalSalesMin,
+      totalSalesMaxValue: totalSalesMax,
+      totalDebtMinValue: totalDebtMin,
+      totalDebtMaxValue: totalDebtMax,
+      page: 1,
+    })
+  }
+
+  async function suggestCustomers(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = customerSearchRequestId.current + 1
+    customerSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setCustomerSearchSuggestions([])
+      setCustomerSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const totalSalesMinFilter = numberFilterValue(totalSalesMin)
+      const totalSalesMaxFilter = numberFilterValue(totalSalesMax)
+      const totalDebtMinFilter = numberFilterValue(totalDebtMin)
+      const totalDebtMaxFilter = numberFilterValue(totalDebtMax)
+      const result = await service.listCustomers({
+        search: query,
+        page: 1,
+        page_size: 8,
+        ...(customerGroupId === 'all' ? {} : { customer_group_id: customerGroupId }),
+        ...(createdFrom === '' ? {} : { created_from: createdFrom }),
+        ...(createdTo === '' ? {} : { created_to: createdTo }),
+        ...(createdBy === 'all' ? {} : { created_by: createdBy }),
+        ...(totalSalesMinFilter === undefined ? {} : { total_sales_min: totalSalesMinFilter }),
+        ...(totalSalesMaxFilter === undefined ? {} : { total_sales_max: totalSalesMaxFilter }),
+        ...(totalDebtMinFilter === undefined ? {} : { total_debt_min: totalDebtMinFilter }),
+        ...(totalDebtMaxFilter === undefined ? {} : { total_debt_max: totalDebtMaxFilter }),
+      })
+      if (customerSearchRequestId.current !== requestId) return
+      setCustomerSearchSuggestions(result.items)
+      setCustomerSearchSuggestionsOpen(true)
+    } catch {
+      if (customerSearchRequestId.current !== requestId) return
+      setCustomerSearchSuggestions([])
+      setCustomerSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectCustomerSuggestion(customer: Customer) {
+    setSearch(customer.code)
+    setCustomerSearchSuggestionsOpen(false)
+    setPage(1)
+    await load({
+      search: customer.code,
       customerGroupIdValue: customerGroupId,
       createdFromValue: createdFrom,
       createdToValue: createdTo,
@@ -375,7 +435,24 @@ export function CustomersPage({
               <ManagementCompactCreateAction ariaLabel="Tạo khách hàng" onClick={openCreateCustomer} />
             }
             value={search}
-            onChange={setSearch}
+            suggestions={
+              customerSearchSuggestionsOpen
+                ? customerSearchSuggestions.map((customer) => ({
+                    id: customer.id,
+                    primary: `${customer.code} ${customer.name}`,
+                    secondary: customer.phone ?? 'Chưa có số điện thoại',
+                    meta: customer.total_debt_amount === undefined ? undefined : <MoneyText value={customer.total_debt_amount} />,
+                    ariaLabel: `${customer.code} ${customer.name} ${customer.phone ?? ''}`.trim(),
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý khách hàng"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestCustomers(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const customer = customerSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (customer) void selectCustomerSuggestion(customer)
+            }}
           />
         </ManagementCompactToolbar>
       }

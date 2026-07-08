@@ -1,4 +1,4 @@
-# ORDER-API — API nháp, báo giá và hóa đơn POS
+﻿# ORDER-API â€” API nhÃ¡p, bÃ¡o giÃ¡ vÃ  hÃ³a Ä‘Æ¡n POS
 
 > **Base path:** `/api/v1`
 > **Business:** [POS-ORDER-LIFECYCLE.md](../../03-BUSINESS-NghiepVu/Sales/POS-ORDER-LIFECYCLE.md)
@@ -6,55 +6,55 @@
 
 ---
 
-## 1. Phạm vi
+## 1. Pháº¡m vi
 
-Tài liệu này là Source of Truth cho Backend API liên quan đến vòng đời đơn POS:
+TÃ i liá»‡u nÃ y lÃ  Source of Truth cho Backend API liÃªn quan Ä‘áº¿n vÃ²ng Ä‘á»i Ä‘Æ¡n POS:
 
-- validate/tính giỏ hàng nháp
-- lưu báo giá `BG...`
-- tìm và mở lại báo giá
-- cập nhật báo giá
-- checkout tạo hóa đơn `HD...`
-- sửa hóa đơn đã chốt bằng bản mới `MaCu.01`
-- đọc chứng từ đã lưu
-- khóa hóa đơn cũ khi mở lại để sửa ở phase sau
+- validate/tÃ­nh giá» hÃ ng nhÃ¡p
+- lÆ°u bÃ¡o giÃ¡ `BG...`
+- tÃ¬m vÃ  má»Ÿ láº¡i bÃ¡o giÃ¡
+- cáº­p nháº­t bÃ¡o giÃ¡
+- checkout táº¡o hÃ³a Ä‘Æ¡n `HD...`
+- sá»­a hÃ³a Ä‘Æ¡n Ä‘Ã£ chá»‘t báº±ng báº£n má»›i `MaCu.01`
+- Ä‘á»c chá»©ng tá»« Ä‘Ã£ lÆ°u
+- khÃ³a hÃ³a Ä‘Æ¡n cÅ© khi má»Ÿ láº¡i Ä‘á»ƒ sá»­a á»Ÿ phase sau
 
-Trạng thái implementation hiện tại:
+Tráº¡ng thÃ¡i implementation hiá»‡n táº¡i:
 
-- Đã có foundation checkout/hóa đơn và Sales Documents readonly theo các phase đã merge.
-- Sửa/hủy hóa đơn đã chốt và đảo kho/tiền/công nợ nằm ngoài phạm vi hiện tại. Chỉ bật khi có transaction an toàn, rule nghiệp vụ rõ và test đủ cho các bảng liên quan.
+- ÄÃ£ cÃ³ foundation checkout/hÃ³a Ä‘Æ¡n vÃ  Sales Documents readonly theo cÃ¡c phase Ä‘Ã£ merge.
+- Sá»­a/há»§y hÃ³a Ä‘Æ¡n Ä‘Ã£ chá»‘t vÃ  Ä‘áº£o kho/tiá»n/cÃ´ng ná»£ náº±m ngoÃ i pháº¡m vi hiá»‡n táº¡i. Chá»‰ báº­t khi cÃ³ transaction an toÃ n, rule nghiá»‡p vá»¥ rÃµ vÃ  test Ä‘á»§ cho cÃ¡c báº£ng liÃªn quan.
 
-Không bao gồm:
+KhÃ´ng bao gá»“m:
 
-- API quản trị sổ quỹ/đối soát độc lập
-- API kiểm kho/quản trị tồn kho độc lập
-- in/gửi bill
+- API quáº£n trá»‹ sá»• quá»¹/Ä‘á»‘i soÃ¡t Ä‘á»™c láº­p
+- API kiá»ƒm kho/quáº£n trá»‹ tá»“n kho Ä‘á»™c láº­p
+- in/gá»­i bill
 
-Nháp POS Phase 2 vẫn lưu local theo máy tại `POS/ARCHITECTURE.md`. Backend không tạo bản ghi `orders` cho nháp cho đến khi nhân viên lưu báo giá hoặc checkout thành công.
+NhÃ¡p POS Phase 2 váº«n lÆ°u local theo mÃ¡y táº¡i `POS/ARCHITECTURE.md`. Backend khÃ´ng táº¡o báº£n ghi `orders` cho nhÃ¡p cho Ä‘áº¿n khi nhÃ¢n viÃªn lÆ°u bÃ¡o giÃ¡ hoáº·c checkout thÃ nh cÃ´ng.
 
 ---
 
-## 2. Auth, response và permission
+## 2. Auth, response vÃ  permission
 
-Mọi endpoint yêu cầu:
+Má»i endpoint yÃªu cáº§u:
 
 ```http
-Authorization: Bearer <supabase_access_token>
+Authorization: Bearer <qcvl_access_token>
 X-Workstation-Id: <uuid>
-X-Request-Id: <client-generated-id>   # không bắt buộc
+X-Request-Id: <client-generated-id>   # khÃ´ng báº¯t buá»™c
 ```
 
-Áp dụng response chuẩn tại [FOUNDATION-API.md](../FOUNDATION-API.md#2-response-chuẩn).
+Ãp dá»¥ng response chuáº©n táº¡i [FOUNDATION-API.md](../FOUNDATION-API.md#2-response-chuáº©n).
 
-| Nhóm API | Permission |
+| NhÃ³m API | Permission |
 |---|---|
-| Validate/tính giỏ nháp | `perm.create_order` |
-| Tạo, đọc, cập nhật báo giá | `perm.create_order` |
-| Checkout tạo hóa đơn | `perm.create_order` |
-| Sửa hóa đơn đã chốt | `perm.edit_order_locked` |
-| Khóa/mở khóa hóa đơn cũ để sửa | `perm.edit_order_locked` |
+| Validate/tÃ­nh giá» nhÃ¡p | `perm.create_order` |
+| Táº¡o, Ä‘á»c, cáº­p nháº­t bÃ¡o giÃ¡ | `perm.create_order` |
+| Checkout táº¡o hÃ³a Ä‘Æ¡n | `perm.create_order` |
+| Sá»­a hÃ³a Ä‘Æ¡n Ä‘Ã£ chá»‘t | `perm.edit_order_locked` |
+| KhÃ³a/má»Ÿ khÃ³a hÃ³a Ä‘Æ¡n cÅ© Ä‘á»ƒ sá»­a | `perm.edit_order_locked` |
 
-Ghi chú MVP: `perm.create_order` và các quyền thao tác POS thường ngày phải nằm trong preset `Nhân viên nội bộ`. `perm.edit_order_locked` là guard kỹ thuật cho luồng sửa/hủy chứng từ đã chốt bằng bản mới `MaCu.01`; nếu Owner muốn kiểm soát mạnh hơn, tách ở preset hoặc yêu cầu xác nhận lại, không thêm approval nhiều bước trong MVP.
+Ghi chÃº MVP: `perm.create_order` vÃ  cÃ¡c quyá»n thao tÃ¡c POS thÆ°á»ng ngÃ y pháº£i náº±m trong preset `NhÃ¢n viÃªn ná»™i bá»™`. `perm.edit_order_locked` lÃ  guard ká»¹ thuáº­t cho luá»“ng sá»­a/há»§y chá»©ng tá»« Ä‘Ã£ chá»‘t báº±ng báº£n má»›i `MaCu.01`; náº¿u Owner muá»‘n kiá»ƒm soÃ¡t máº¡nh hÆ¡n, tÃ¡ch á»Ÿ preset hoáº·c yÃªu cáº§u xÃ¡c nháº­n láº¡i, khÃ´ng thÃªm approval nhiá»u bÆ°á»›c trong MVP.
 
 ---
 
@@ -62,7 +62,7 @@ Ghi chú MVP: `perm.create_order` và các quyền thao tác POS thường ngày
 
 ### `POST /pos/cart/validate`
 
-Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
+Validate vÃ  tÃ­nh láº¡i giá» hÃ ng nhÃ¡p tá»« dá»¯ liá»‡u POS gá»­i lÃªn.
 
 **Permission:** `perm.create_order`
 
@@ -82,32 +82,32 @@ Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
       "linear_m": 1.5,
       "unit_price": 120000,
       "price_source": "customer_group",
-      "note": "Cắt gấp"
+      "note": "Cáº¯t gáº¥p"
     }
   ],
-  "note": "Giao chiều nay"
+  "note": "Giao chiá»u nay"
 }
 ```
 
-`customer_id` được phép null ở bước validate giỏ hàng vì chưa ghi chứng từ.
+`customer_id` Ä‘Æ°á»£c phÃ©p null á»Ÿ bÆ°á»›c validate giá» hÃ ng vÃ¬ chÆ°a ghi chá»©ng tá»«.
 
 **Validation:**
 
-- Mọi `product_id` phải tồn tại, active và cùng organization.
+- Má»i `product_id` pháº£i tá»“n táº¡i, active vÃ  cÃ¹ng organization.
 - `quantity > 0`.
 - `unit_price >= 0`.
-- `sell_method` phải khớp sản phẩm hoặc là cách bán hợp lệ được Backend cho phép.
-- Với `area_m2`, `width_m` và `height_m` bắt buộc lớn hơn 0.
-- Với `linear_m`, `linear_m` bắt buộc lớn hơn 0.
-- `price_source = manual` được phép khi người dùng sửa giá.
+- `sell_method` pháº£i khá»›p sáº£n pháº©m hoáº·c lÃ  cÃ¡ch bÃ¡n há»£p lá»‡ Ä‘Æ°á»£c Backend cho phÃ©p.
+- Vá»›i `area_m2`, `width_m` vÃ  `height_m` báº¯t buá»™c lá»›n hÆ¡n 0.
+- Vá»›i `linear_m`, `linear_m` báº¯t buá»™c lá»›n hÆ¡n 0.
+- `price_source = manual` Ä‘Æ°á»£c phÃ©p khi ngÆ°á»i dÃ¹ng sá»­a giÃ¡.
 
 **Workflow:**
 
-1. Xác thực actor, workstation và permission.
-2. Tải sản phẩm active trong organization.
-3. Validate từng dòng.
-4. Tính lại `line_total` theo Business Rule tính giỏ hàng.
-5. Trả giỏ hàng đã chuẩn hóa cho Frontend.
+1. XÃ¡c thá»±c actor, workstation vÃ  permission.
+2. Táº£i sáº£n pháº©m active trong organization.
+3. Validate tá»«ng dÃ²ng.
+4. TÃ­nh láº¡i `line_total` theo Business Rule tÃ­nh giá» hÃ ng.
+5. Tráº£ giá» hÃ ng Ä‘Ã£ chuáº©n hÃ³a cho Frontend.
 
 **Response data:**
 
@@ -134,7 +134,7 @@ Validate và tính lại giỏ hàng nháp từ dữ liệu POS gửi lên.
 
 ### `POST /orders/quotes`
 
-Lưu hóa đơn nháp hiện tại thành báo giá.
+LÆ°u hÃ³a Ä‘Æ¡n nhÃ¡p hiá»‡n táº¡i thÃ nh bÃ¡o giÃ¡.
 
 **Permission:** `perm.create_order`
 
@@ -145,7 +145,7 @@ Lưu hóa đơn nháp hiện tại thành báo giá.
   "customer_id": "uuid",
   "customer_snapshot": {
     "code": "KH000001",
-    "name": "Công ty ABC",
+    "name": "CÃ´ng ty ABC",
     "phone": "0901234567"
   },
   "price_list_id": "uuid",
@@ -164,30 +164,30 @@ Lưu hóa đơn nháp hiện tại thành báo giá.
       "unit_price": 120000,
       "price_source": "customer_group",
       "line_total": 180000,
-      "note": "Cắt gấp"
+      "note": "Cáº¯t gáº¥p"
     }
   ],
-  "note": "Giao chiều nay"
+  "note": "Giao chiá»u nay"
 }
 ```
 
 **Validation:**
 
-- Nếu Frontend không gửi `customer_id`, Backend resolve về khách mặc định `KH000001 - Khách lẻ` trước khi lưu.
-- Nếu có `customer_id`, khách phải cùng organization.
-- `customer_snapshot` bắt buộc, kể cả khách lẻ.
-- Có ít nhất một dòng hàng.
-- Dòng hàng phải pass cùng validation với `/pos/cart/validate`.
-- `subtotal_amount` và `total_amount` do Backend tính lại, không tin tổng tiền client gửi lên.
+- Náº¿u Frontend khÃ´ng gá»­i `customer_id`, Backend resolve vá» khÃ¡ch máº·c Ä‘á»‹nh `KH000001 - KhÃ¡ch láº»` trÆ°á»›c khi lÆ°u.
+- Náº¿u cÃ³ `customer_id`, khÃ¡ch pháº£i cÃ¹ng organization.
+- `customer_snapshot` báº¯t buá»™c, ká»ƒ cáº£ khÃ¡ch láº».
+- CÃ³ Ã­t nháº¥t má»™t dÃ²ng hÃ ng.
+- DÃ²ng hÃ ng pháº£i pass cÃ¹ng validation vá»›i `/pos/cart/validate`.
+- `subtotal_amount` vÃ  `total_amount` do Backend tÃ­nh láº¡i, khÃ´ng tin tá»•ng tiá»n client gá»­i lÃªn.
 
 **Workflow:**
 
-1. Validate giỏ hàng.
-2. Sinh mã `BG...` tăng dần trong organization.
-3. Tạo `orders` với `order_type = quote`, `status = active`.
-4. Tạo `order_items` theo snapshot đã validate.
-5. Ghi `order_status_history` từ null sang `active`.
-6. Trả báo giá vừa tạo.
+1. Validate giá» hÃ ng.
+2. Sinh mÃ£ `BG...` tÄƒng dáº§n trong organization.
+3. Táº¡o `orders` vá»›i `order_type = quote`, `status = active`.
+4. Táº¡o `order_items` theo snapshot Ä‘Ã£ validate.
+5. Ghi `order_status_history` tá»« null sang `active`.
+6. Tráº£ bÃ¡o giÃ¡ vá»«a táº¡o.
 
 **Response data:**
 
@@ -203,59 +203,59 @@ Lưu hóa đơn nháp hiện tại thành báo giá.
 
 ### `GET /orders/quotes`
 
-Tìm báo giá.
+TÃ¬m bÃ¡o giÃ¡.
 
 **Permission:** `perm.create_order`
 
 **Query:**
 
-| Tham số | Kiểu | Bắt buộc | Mô tả |
+| Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `search` | `string` | Không | Tìm theo mã báo giá, tên/mã khách trong snapshot |
-| `status` | `string` | Không | `active`, `converted`, `cancelled`, mặc định `active` |
-| `page` | `number` | Không | Mặc định `1` |
-| `page_size` | `number` | Không | Mặc định `20`, tối đa `100` |
+| `search` | `string` | KhÃ´ng | TÃ¬m theo mÃ£ bÃ¡o giÃ¡, tÃªn/mÃ£ khÃ¡ch trong snapshot |
+| `status` | `string` | KhÃ´ng | `active`, `converted`, `cancelled`, máº·c Ä‘á»‹nh `active` |
+| `page` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `1` |
+| `page_size` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `20`, tá»‘i Ä‘a `100` |
 
 ### `GET /orders/{id}`
 
-Đọc báo giá hoặc hóa đơn đã lưu.
+Äá»c bÃ¡o giÃ¡ hoáº·c hÃ³a Ä‘Æ¡n Ä‘Ã£ lÆ°u.
 
 **Permission:** `perm.create_order`
 
-Chỉ trả chứng từ trong cùng organization.
+Chá»‰ tráº£ chá»©ng tá»« trong cÃ¹ng organization.
 
 ### `PUT /orders/quotes/{id}`
 
-Cập nhật báo giá active.
+Cáº­p nháº­t bÃ¡o giÃ¡ active.
 
 **Permission:** `perm.create_order`
 
-Validation giống `POST /orders/quotes`.
+Validation giá»‘ng `POST /orders/quotes`.
 
-Chỉ cho cập nhật báo giá `order_type = quote` và `status = active`.
+Chá»‰ cho cáº­p nháº­t bÃ¡o giÃ¡ `order_type = quote` vÃ  `status = active`.
 
-Khi Frontend mở báo giá vào POS rồi nhân viên bấm **Báo giá**, UI phải hỏi lưu đè báo giá cũ hay lưu thành báo giá mới:
+Khi Frontend má»Ÿ bÃ¡o giÃ¡ vÃ o POS rá»“i nhÃ¢n viÃªn báº¥m **BÃ¡o giÃ¡**, UI pháº£i há»i lÆ°u Ä‘Ã¨ bÃ¡o giÃ¡ cÅ© hay lÆ°u thÃ nh bÃ¡o giÃ¡ má»›i:
 
-- Lưu đè gọi `PUT /orders/quotes/{id}` và giữ mã `BG...`.
-- Lưu mới gọi `POST /orders/quotes` và sinh mã `BG...` mới.
-- Mặc định UI nên đề xuất lưu mới để tránh mất nội dung báo giá đã gửi.
+- LÆ°u Ä‘Ã¨ gá»i `PUT /orders/quotes/{id}` vÃ  giá»¯ mÃ£ `BG...`.
+- LÆ°u má»›i gá»i `POST /orders/quotes` vÃ  sinh mÃ£ `BG...` má»›i.
+- Máº·c Ä‘á»‹nh UI nÃªn Ä‘á» xuáº¥t lÆ°u má»›i Ä‘á»ƒ trÃ¡nh máº¥t ná»™i dung bÃ¡o giÃ¡ Ä‘Ã£ gá»­i.
 
-Workflow cập nhật:
+Workflow cáº­p nháº­t:
 
 1. Validate input.
-2. Cập nhật snapshot tổng ở `orders`.
-3. Thay thế toàn bộ `order_items` của báo giá bằng danh sách mới.
-4. Không đổi mã `BG...`.
+2. Cáº­p nháº­t snapshot tá»•ng á»Ÿ `orders`.
+3. Thay tháº¿ toÃ n bá»™ `order_items` cá»§a bÃ¡o giÃ¡ báº±ng danh sÃ¡ch má»›i.
+4. KhÃ´ng Ä‘á»•i mÃ£ `BG...`.
 
 ### `POST /orders/quotes/{id}/cancel`
 
-Hủy báo giá.
+Há»§y bÃ¡o giÃ¡.
 
 **Permission:** `perm.create_order`
 
-Chỉ cho hủy báo giá `status = active`.
+Chá»‰ cho há»§y bÃ¡o giÃ¡ `status = active`.
 
-Hủy báo giá không xóa dữ liệu, chỉ đổi `status = cancelled` và ghi `order_status_history`.
+Há»§y bÃ¡o giÃ¡ khÃ´ng xÃ³a dá»¯ liá»‡u, chá»‰ Ä‘á»•i `status = cancelled` vÃ  ghi `order_status_history`.
 
 ---
 
@@ -263,13 +263,13 @@ Hủy báo giá không xóa dữ liệu, chỉ đổi `status = cancelled` và g
 
 ### `POST /orders/quotes/{id}/mark-converted`
 
-Đánh dấu báo giá đã được chuyển thành hóa đơn.
+ÄÃ¡nh dáº¥u bÃ¡o giÃ¡ Ä‘Ã£ Ä‘Æ°á»£c chuyá»ƒn thÃ nh hÃ³a Ä‘Æ¡n.
 
 **Permission:** `perm.create_order`
 
-Endpoint này chỉ được gọi nội bộ sau khi checkout tạo hóa đơn `HD...` thành công và checkout có giữ `source_quote_id`.
+Endpoint nÃ y chá»‰ Ä‘Æ°á»£c gá»i ná»™i bá»™ sau khi checkout táº¡o hÃ³a Ä‘Æ¡n `HD...` thÃ nh cÃ´ng vÃ  checkout cÃ³ giá»¯ `source_quote_id`.
 
-Frontend không gọi endpoint này trực tiếp trong MVP. Nếu checkout không truyền `source_quote_id`, báo giá cũ vẫn giữ trạng thái hiện tại và hóa đơn mới được xem như hóa đơn bán thẳng.
+Frontend khÃ´ng gá»i endpoint nÃ y trá»±c tiáº¿p trong MVP. Náº¿u checkout khÃ´ng truyá»n `source_quote_id`, bÃ¡o giÃ¡ cÅ© váº«n giá»¯ tráº¡ng thÃ¡i hiá»‡n táº¡i vÃ  hÃ³a Ä‘Æ¡n má»›i Ä‘Æ°á»£c xem nhÆ° hÃ³a Ä‘Æ¡n bÃ¡n tháº³ng.
 
 **Input:**
 
@@ -281,23 +281,23 @@ Frontend không gọi endpoint này trực tiếp trong MVP. Nếu checkout khô
 
 **Validation:**
 
-- Báo giá phải cùng organization, `order_type = quote`, `status = active`.
-- Hóa đơn phải cùng organization, `order_type = invoice`.
-- Hóa đơn phải có `source_quote_id` trỏ về báo giá này.
+- BÃ¡o giÃ¡ pháº£i cÃ¹ng organization, `order_type = quote`, `status = active`.
+- HÃ³a Ä‘Æ¡n pháº£i cÃ¹ng organization, `order_type = invoice`.
+- HÃ³a Ä‘Æ¡n pháº£i cÃ³ `source_quote_id` trá» vá» bÃ¡o giÃ¡ nÃ y.
 
 **Workflow:**
 
-1. Kiểm tra báo giá và hóa đơn.
-2. Đổi báo giá sang `status = converted`.
+1. Kiá»ƒm tra bÃ¡o giÃ¡ vÃ  hÃ³a Ä‘Æ¡n.
+2. Äá»•i bÃ¡o giÃ¡ sang `status = converted`.
 3. Ghi `order_status_history`.
 
 ---
 
-## 6. Checkout hóa đơn
+## 6. Checkout hÃ³a Ä‘Æ¡n
 
 ### `POST /orders/checkout`
 
-Checkout giỏ hàng hiện tại thành hóa đơn bán hàng `HD...`.
+Checkout giá» hÃ ng hiá»‡n táº¡i thÃ nh hÃ³a Ä‘Æ¡n bÃ¡n hÃ ng `HD...`.
 
 **Permission:** `perm.create_order`
 
@@ -309,7 +309,7 @@ Checkout giỏ hàng hiện tại thành hóa đơn bán hàng `HD...`.
   "customer_id": "uuid",
   "customer_snapshot": {
     "code": "KH000001",
-    "name": "Công ty ABC",
+    "name": "CÃ´ng ty ABC",
     "phone": "0901234567"
   },
   "price_list_id": "uuid",
@@ -318,7 +318,7 @@ Checkout giỏ hàng hiện tại thành hóa đơn bán hàng `HD...`.
       "product_id": "uuid",
       "product_snapshot": {
         "code": "BAT-HIFLEX-32",
-        "name": "Bạt Hiflex 3.2m",
+        "name": "Báº¡t Hiflex 3.2m",
         "unit_name": "m2",
         "sell_method": "area_m2"
       },
@@ -329,7 +329,7 @@ Checkout giỏ hàng hiện tại thành hóa đơn bán hàng `HD...`.
       "unit_price": 50000,
       "discount_amount": 0,
       "price_source": "customer_group",
-      "note": "Chừa biên theo mặc định"
+      "note": "Chá»«a biÃªn theo máº·c Ä‘á»‹nh"
     }
   ],
   "payment": {
@@ -340,50 +340,50 @@ Checkout giỏ hàng hiện tại thành hóa đơn bán hàng `HD...`.
     "old_debt_payment_amount": 0
   },
   "retail_debt_note": null,
-  "note": "Giao chiều nay"
+  "note": "Giao chiá»u nay"
 }
 ```
 
-`source_quote_id`, `customer_id`, `price_list_id`, `bank_account_id` được phép null trong input theo nghiệp vụ. Khi ghi hóa đơn, `customer_id` null phải được Backend resolve về `KH000001 - Khách lẻ`; dữ liệu lưu không dùng bucket khách lẻ null.
+`source_quote_id`, `customer_id`, `price_list_id`, `bank_account_id` Ä‘Æ°á»£c phÃ©p null trong input theo nghiá»‡p vá»¥. Khi ghi hÃ³a Ä‘Æ¡n, `customer_id` null pháº£i Ä‘Æ°á»£c Backend resolve vá» `KH000001 - KhÃ¡ch láº»`; dá»¯ liá»‡u lÆ°u khÃ´ng dÃ¹ng bucket khÃ¡ch láº» null.
 
-Ghi chú: khi nhân viên mở báo giá về POS, POS tạo một nháp local có thể sửa. Nếu checkout gửi `source_quote_id`, backend giữ link `BG... -> HD...` và đổi báo giá sang `converted`. Nếu checkout không gửi `source_quote_id`, backend tạo hóa đơn như bán thẳng; đây vẫn là hành vi hợp lệ trong MVP.
+Ghi chÃº: khi nhÃ¢n viÃªn má»Ÿ bÃ¡o giÃ¡ vá» POS, POS táº¡o má»™t nhÃ¡p local cÃ³ thá»ƒ sá»­a. Náº¿u checkout gá»­i `source_quote_id`, backend giá»¯ link `BG... -> HD...` vÃ  Ä‘á»•i bÃ¡o giÃ¡ sang `converted`. Náº¿u checkout khÃ´ng gá»­i `source_quote_id`, backend táº¡o hÃ³a Ä‘Æ¡n nhÆ° bÃ¡n tháº³ng; Ä‘Ã¢y váº«n lÃ  hÃ nh vi há»£p lá»‡ trong MVP.
 
-`payment.cash_amount` và `payment.bank_amount` là số tiền thực giữ lại để ghi quỹ, không bao gồm tiền thừa đã trả lại khách.
+`payment.cash_amount` vÃ  `payment.bank_amount` lÃ  sá»‘ tiá»n thá»±c giá»¯ láº¡i Ä‘á»ƒ ghi quá»¹, khÃ´ng bao gá»“m tiá»n thá»«a Ä‘Ã£ tráº£ láº¡i khÃ¡ch.
 
-Nếu khách trả dư và nhân viên chọn cấn vào nợ cũ, phần cấn nợ được đưa vào `old_debt_payment_amount`. Nếu trả lại khách, phần đó không đưa vào `cash_amount`/`bank_amount`.
+Náº¿u khÃ¡ch tráº£ dÆ° vÃ  nhÃ¢n viÃªn chá»n cáº¥n vÃ o ná»£ cÅ©, pháº§n cáº¥n ná»£ Ä‘Æ°á»£c Ä‘Æ°a vÃ o `old_debt_payment_amount`. Náº¿u tráº£ láº¡i khÃ¡ch, pháº§n Ä‘Ã³ khÃ´ng Ä‘Æ°a vÃ o `cash_amount`/`bank_amount`.
 
 **Validation:**
 
-- Có ít nhất một dòng hàng.
-- Dòng hàng phải pass validation như `/pos/cart/validate`.
-- Backend tự tính lại `line_subtotal_amount`, `line_total`, `subtotal_amount`, `discount_amount`, `total_amount`.
-- Nếu `source_quote_id` có giá trị, báo giá phải cùng organization, `order_type = quote`, `status = active`.
-- Nếu Frontend không gửi `customer_id`, Backend resolve về `KH000001 - Khách lẻ`.
-- Nếu khách được resolve là `KH000001` và hóa đơn còn nợ, `retail_debt_note` bắt buộc để nhận diện người nợ.
+- CÃ³ Ã­t nháº¥t má»™t dÃ²ng hÃ ng.
+- DÃ²ng hÃ ng pháº£i pass validation nhÆ° `/pos/cart/validate`.
+- Backend tá»± tÃ­nh láº¡i `line_subtotal_amount`, `line_total`, `subtotal_amount`, `discount_amount`, `total_amount`.
+- Náº¿u `source_quote_id` cÃ³ giÃ¡ trá»‹, bÃ¡o giÃ¡ pháº£i cÃ¹ng organization, `order_type = quote`, `status = active`.
+- Náº¿u Frontend khÃ´ng gá»­i `customer_id`, Backend resolve vá» `KH000001 - KhÃ¡ch láº»`.
+- Náº¿u khÃ¡ch Ä‘Æ°á»£c resolve lÃ  `KH000001` vÃ  hÃ³a Ä‘Æ¡n cÃ²n ná»£, `retail_debt_note` báº¯t buá»™c Ä‘á»ƒ nháº­n diá»‡n ngÆ°á»i ná»£.
 - `cash_amount >= 0`, `bank_amount >= 0`, `old_debt_payment_amount >= 0`.
-- Nếu `bank_amount > 0`, `bank_account_id` bắt buộc, active, cùng organization và là tài khoản `bank`.
-- Một lần checkout chỉ được chọn tối đa một tài khoản bank.
-- Nếu `old_debt_payment_amount > 0`, `customer_id` bắt buộc.
-- Cho phép tồn kho âm sau cảnh báo; Backend không chặn checkout chỉ vì thiếu tồn.
+- Náº¿u `bank_amount > 0`, `bank_account_id` báº¯t buá»™c, active, cÃ¹ng organization vÃ  lÃ  tÃ i khoáº£n `bank`.
+- Má»™t láº§n checkout chá»‰ Ä‘Æ°á»£c chá»n tá»‘i Ä‘a má»™t tÃ i khoáº£n bank.
+- Náº¿u `old_debt_payment_amount > 0`, `customer_id` báº¯t buá»™c.
+- Cho phÃ©p tá»“n kho Ã¢m sau cáº£nh bÃ¡o; Backend khÃ´ng cháº·n checkout chá»‰ vÃ¬ thiáº¿u tá»“n.
 
-**Workflow bắt buộc trong một transaction nghiệp vụ:**
+**Workflow báº¯t buá»™c trong má»™t transaction nghiá»‡p vá»¥:**
 
-1. Xác thực actor, workstation và permission.
-2. Validate giỏ hàng và tính lại tiền.
-3. Sinh mã `HD...`.
-4. Resolve khách hàng: nếu input không có khách, dùng `KH000001 - Khách lẻ`.
-5. Tạo `orders` loại `invoice`, `status = completed`.
-6. Tạo `order_items` snapshot.
-7. Trừ kho theo Inventory rule bằng `stock_movements`.
-8. Nếu có tiền thực giữ lại, tạo `payment_receipts` và `payment_receipt_methods`.
-9. Tạo `cashbook_entries` từ từng dòng phương thức thu.
-10. Nếu hóa đơn mới còn nợ, tạo `customer_debt_entries` loại `invoice_debt`.
-11. Nếu có trả nợ cũ, phân bổ vào hóa đơn còn nợ cũ nhất trước bằng `customer_debt_allocations` và tạo `customer_debt_entries` loại `debt_payment`.
-12. Nếu có `source_quote_id`, đổi báo giá sang `converted`; nếu không có thì bỏ qua bước này.
+1. XÃ¡c thá»±c actor, workstation vÃ  permission.
+2. Validate giá» hÃ ng vÃ  tÃ­nh láº¡i tiá»n.
+3. Sinh mÃ£ `HD...`.
+4. Resolve khÃ¡ch hÃ ng: náº¿u input khÃ´ng cÃ³ khÃ¡ch, dÃ¹ng `KH000001 - KhÃ¡ch láº»`.
+5. Táº¡o `orders` loáº¡i `invoice`, `status = completed`.
+6. Táº¡o `order_items` snapshot.
+7. Trá»« kho theo Inventory rule báº±ng `stock_movements`.
+8. Náº¿u cÃ³ tiá»n thá»±c giá»¯ láº¡i, táº¡o `payment_receipts` vÃ  `payment_receipt_methods`.
+9. Táº¡o `cashbook_entries` tá»« tá»«ng dÃ²ng phÆ°Æ¡ng thá»©c thu.
+10. Náº¿u hÃ³a Ä‘Æ¡n má»›i cÃ²n ná»£, táº¡o `customer_debt_entries` loáº¡i `invoice_debt`.
+11. Náº¿u cÃ³ tráº£ ná»£ cÅ©, phÃ¢n bá»• vÃ o hÃ³a Ä‘Æ¡n cÃ²n ná»£ cÅ© nháº¥t trÆ°á»›c báº±ng `customer_debt_allocations` vÃ  táº¡o `customer_debt_entries` loáº¡i `debt_payment`.
+12. Náº¿u cÃ³ `source_quote_id`, Ä‘á»•i bÃ¡o giÃ¡ sang `converted`; náº¿u khÃ´ng cÃ³ thÃ¬ bá» qua bÆ°á»›c nÃ y.
 13. Ghi `order_status_history`.
-14. Trả hóa đơn, payment summary, debt summary và cảnh báo tồn kho nếu có.
+14. Tráº£ hÃ³a Ä‘Æ¡n, payment summary, debt summary vÃ  cáº£nh bÃ¡o tá»“n kho náº¿u cÃ³.
 
-Nếu bất kỳ bước ghi dữ liệu chính nào lỗi, transaction phải rollback; không được tạo hóa đơn dở dang.
+Náº¿u báº¥t ká»³ bÆ°á»›c ghi dá»¯ liá»‡u chÃ­nh nÃ o lá»—i, transaction pháº£i rollback; khÃ´ng Ä‘Æ°á»£c táº¡o hÃ³a Ä‘Æ¡n dá»Ÿ dang.
 
 **Response data:**
 
@@ -410,11 +410,11 @@ Nếu bất kỳ bước ghi dữ liệu chính nào lỗi, transaction phải r
 
 ---
 
-## 7. Sửa hóa đơn đã chốt
+## 7. Sá»­a hÃ³a Ä‘Æ¡n Ä‘Ã£ chá»‘t
 
 ### `POST /orders/{id}/revise`
 
-Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa đè hóa đơn cũ.
+Táº¡o báº£n sá»­a cá»§a hÃ³a Ä‘Æ¡n Ä‘Ã£ chá»‘t theo mÃ£ `MaCu.01`, khÃ´ng sá»­a Ä‘Ã¨ hÃ³a Ä‘Æ¡n cÅ©.
 
 **Permission:** `perm.edit_order_locked`
 
@@ -425,7 +425,7 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
   "customer_id": "uuid",
   "customer_snapshot": {
     "code": "KH000001",
-    "name": "Công ty ABC",
+    "name": "CÃ´ng ty ABC",
     "phone": "0901234567"
   },
   "items": [
@@ -433,7 +433,7 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
       "product_id": "uuid",
       "product_snapshot": {
         "code": "BAT-HIFLEX-32",
-        "name": "Bạt Hiflex 3.2m",
+        "name": "Báº¡t Hiflex 3.2m",
         "unit_name": "m2",
         "sell_method": "area_m2"
       },
@@ -444,7 +444,7 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
       "unit_price": 50000,
       "discount_amount": 0,
       "price_source": "manual",
-      "note": "Nội dung sau sửa"
+      "note": "Ná»™i dung sau sá»­a"
     }
   ],
   "payment": {
@@ -454,33 +454,33 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
     "old_debt_payment_amount": 0
   },
   "revision_reason_code": "wrong_dimension",
-  "revision_reason_note": "Sửa sai kích thước",
-  "note": "Nội dung sau sửa"
+  "revision_reason_note": "Sá»­a sai kÃ­ch thÆ°á»›c",
+  "note": "Ná»™i dung sau sá»­a"
 }
 ```
 
 **Validation:**
 
-- Hóa đơn gốc phải cùng organization, `order_type = invoice`.
-- Chỉ cho sửa bản hóa đơn còn hiệu lực gần nhất trong chuỗi `base_code`.
-- Hóa đơn đang bị user khác lock thì trả `RESOURCE_CONFLICT`.
-- `revision_reason_code` bắt buộc, thuộc nhóm `wrong_price`, `wrong_dimension`, `wrong_customer`, `customer_changed_mind`, `other`.
-- `revision_reason_note` không bắt buộc, trừ khi `revision_reason_code = other`.
-- Nhân viên nội bộ được sửa/hủy trong 10 ngày từ thời điểm tạo hóa đơn; sau 10 ngày endpoint yêu cầu quyền quản lý/admin hoặc quyền mạnh tương ứng.
-- Input giỏ hàng và payment validate như checkout.
+- HÃ³a Ä‘Æ¡n gá»‘c pháº£i cÃ¹ng organization, `order_type = invoice`.
+- Chá»‰ cho sá»­a báº£n hÃ³a Ä‘Æ¡n cÃ²n hiá»‡u lá»±c gáº§n nháº¥t trong chuá»—i `base_code`.
+- HÃ³a Ä‘Æ¡n Ä‘ang bá»‹ user khÃ¡c lock thÃ¬ tráº£ `RESOURCE_CONFLICT`.
+- `revision_reason_code` báº¯t buá»™c, thuá»™c nhÃ³m `wrong_price`, `wrong_dimension`, `wrong_customer`, `customer_changed_mind`, `other`.
+- `revision_reason_note` khÃ´ng báº¯t buá»™c, trá»« khi `revision_reason_code = other`.
+- NhÃ¢n viÃªn ná»™i bá»™ Ä‘Æ°á»£c sá»­a/há»§y trong 10 ngÃ y tá»« thá»i Ä‘iá»ƒm táº¡o hÃ³a Ä‘Æ¡n; sau 10 ngÃ y endpoint yÃªu cáº§u quyá»n quáº£n lÃ½/admin hoáº·c quyá»n máº¡nh tÆ°Æ¡ng á»©ng.
+- Input giá» hÃ ng vÃ  payment validate nhÆ° checkout.
 
 **Workflow:**
 
-1. Lock hóa đơn gốc hoặc kiểm tra lock hiện có của actor.
-2. Validate lại toàn bộ nội dung sau sửa.
-3. Tạo hóa đơn mới với cùng `base_code`, `revision_no` tăng 1 và mã dạng `HD000123.01`.
-4. Chuyển hóa đơn cũ sang `status = cancelled`, `cancel_reason_type = revised`, `replaced_by_order_id = hóa đơn mới`.
-5. Hóa đơn mới lưu `revised_from_order_id = hóa đơn cũ`.
-6. Đảo kho của hóa đơn cũ bằng `stock_movements.movement_type = invoice_reversal`, rồi trừ kho lại theo hóa đơn mới.
-7. Đảo công nợ của hóa đơn cũ, rồi ghi công nợ lại theo hóa đơn mới nếu còn nợ.
-8. Xử lý tiền theo chênh lệch: bản mới tăng tiền thì thu thêm hoặc ghi nợ; bản mới giảm tiền thì hoàn tiền hoặc cấn nợ cũ nếu khách còn nợ.
-9. Ghi `order_status_history` cho cả hóa đơn cũ và hóa đơn mới.
-10. Unlock hóa đơn.
+1. Lock hÃ³a Ä‘Æ¡n gá»‘c hoáº·c kiá»ƒm tra lock hiá»‡n cÃ³ cá»§a actor.
+2. Validate láº¡i toÃ n bá»™ ná»™i dung sau sá»­a.
+3. Táº¡o hÃ³a Ä‘Æ¡n má»›i vá»›i cÃ¹ng `base_code`, `revision_no` tÄƒng 1 vÃ  mÃ£ dáº¡ng `HD000123.01`.
+4. Chuyá»ƒn hÃ³a Ä‘Æ¡n cÅ© sang `status = cancelled`, `cancel_reason_type = revised`, `replaced_by_order_id = hÃ³a Ä‘Æ¡n má»›i`.
+5. HÃ³a Ä‘Æ¡n má»›i lÆ°u `revised_from_order_id = hÃ³a Ä‘Æ¡n cÅ©`.
+6. Äáº£o kho cá»§a hÃ³a Ä‘Æ¡n cÅ© báº±ng `stock_movements.movement_type = invoice_reversal`, rá»“i trá»« kho láº¡i theo hÃ³a Ä‘Æ¡n má»›i.
+7. Äáº£o cÃ´ng ná»£ cá»§a hÃ³a Ä‘Æ¡n cÅ©, rá»“i ghi cÃ´ng ná»£ láº¡i theo hÃ³a Ä‘Æ¡n má»›i náº¿u cÃ²n ná»£.
+8. Xá»­ lÃ½ tiá»n theo chÃªnh lá»‡ch: báº£n má»›i tÄƒng tiá»n thÃ¬ thu thÃªm hoáº·c ghi ná»£; báº£n má»›i giáº£m tiá»n thÃ¬ hoÃ n tiá»n hoáº·c cáº¥n ná»£ cÅ© náº¿u khÃ¡ch cÃ²n ná»£.
+9. Ghi `order_status_history` cho cáº£ hÃ³a Ä‘Æ¡n cÅ© vÃ  hÃ³a Ä‘Æ¡n má»›i.
+10. Unlock hÃ³a Ä‘Æ¡n.
 
 **Response data:**
 
@@ -506,15 +506,15 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
 
 ### `POST /orders/{id}/lock`
 
-Khóa hóa đơn cũ khi mở lại để sửa trong phase sau.
+KhÃ³a hÃ³a Ä‘Æ¡n cÅ© khi má»Ÿ láº¡i Ä‘á»ƒ sá»­a trong phase sau.
 
 **Permission:** `perm.edit_order_locked`
 
-Chi tiết lock hiện tại tham chiếu [ARCHITECTURE.md §3](./ARCHITECTURE.md#3-concurrency-lock--khóa-đơn-tranh-chấp).
+Chi tiáº¿t lock hiá»‡n táº¡i tham chiáº¿u [ARCHITECTURE.md Â§3](./ARCHITECTURE.md#3-concurrency-lock--khÃ³a-Ä‘Æ¡n-tranh-cháº¥p).
 
 ### `POST /orders/{id}/unlock`
 
-Giải phóng khóa hóa đơn.
+Giáº£i phÃ³ng khÃ³a hÃ³a Ä‘Æ¡n.
 
 **Permission:** `perm.edit_order_locked`
 
@@ -522,41 +522,41 @@ Giải phóng khóa hóa đơn.
 
 ## 9. Error Handling
 
-| HTTP | Code | Khi dùng |
+| HTTP | Code | Khi dÃ¹ng |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Giỏ hàng sai, thiếu snapshot, giá trị không hợp lệ |
-| 401 | `AUTH_REQUIRED` | Thiếu hoặc sai access token |
-| 403 | `PERMISSION_DENIED` | Thiếu permission |
-| 403 | `WORKSTATION_INVALID` | Workstation không hợp lệ |
-| 404 | `RESOURCE_NOT_FOUND` | Không tìm thấy customer/product/order trong organization |
-| 409 | `RESOURCE_CONFLICT` | Báo giá không còn active, đơn đang bị khóa hoặc mã chứng từ xung đột |
-| 422 | `CHECKOUT_FAILED` | Checkout không thể hoàn tất do lỗi nghiệp vụ có thể giải thích |
-| 500 | `INTERNAL_ERROR` | Lỗi hệ thống không công khai chi tiết |
+| 400 | `VALIDATION_ERROR` | Giá» hÃ ng sai, thiáº¿u snapshot, giÃ¡ trá»‹ khÃ´ng há»£p lá»‡ |
+| 401 | `AUTH_REQUIRED` | Thiáº¿u hoáº·c sai access token |
+| 403 | `PERMISSION_DENIED` | Thiáº¿u permission |
+| 403 | `WORKSTATION_INVALID` | Workstation khÃ´ng há»£p lá»‡ |
+| 404 | `RESOURCE_NOT_FOUND` | KhÃ´ng tÃ¬m tháº¥y customer/product/order trong organization |
+| 409 | `RESOURCE_CONFLICT` | BÃ¡o giÃ¡ khÃ´ng cÃ²n active, Ä‘Æ¡n Ä‘ang bá»‹ khÃ³a hoáº·c mÃ£ chá»©ng tá»« xung Ä‘á»™t |
+| 422 | `CHECKOUT_FAILED` | Checkout khÃ´ng thá»ƒ hoÃ n táº¥t do lá»—i nghiá»‡p vá»¥ cÃ³ thá»ƒ giáº£i thÃ­ch |
+| 500 | `INTERNAL_ERROR` | Lá»—i há»‡ thá»‘ng khÃ´ng cÃ´ng khai chi tiáº¿t |
 
 ---
 
-## 10. Logging và metric
+## 10. Logging vÃ  metric
 
-Backend nên log:
+Backend nÃªn log:
 
-- tạo báo giá
-- cập nhật báo giá
-- hủy báo giá
-- chuyển báo giá thành hóa đơn
-- checkout hóa đơn thành công/thất bại
-- sửa hóa đơn tạo bản mới
-- lock/unlock hóa đơn cũ
+- táº¡o bÃ¡o giÃ¡
+- cáº­p nháº­t bÃ¡o giÃ¡
+- há»§y bÃ¡o giÃ¡
+- chuyá»ƒn bÃ¡o giÃ¡ thÃ nh hÃ³a Ä‘Æ¡n
+- checkout hÃ³a Ä‘Æ¡n thÃ nh cÃ´ng/tháº¥t báº¡i
+- sá»­a hÃ³a Ä‘Æ¡n táº¡o báº£n má»›i
+- lock/unlock hÃ³a Ä‘Æ¡n cÅ©
 
-Metric gợi ý:
+Metric gá»£i Ã½:
 
-- số báo giá tạo mới
-- số báo giá chuyển hóa đơn
-- số hóa đơn checkout thành công
-- lỗi checkout theo nhóm validation/payment/inventory
-- lỗi validate giỏ hàng
+- sá»‘ bÃ¡o giÃ¡ táº¡o má»›i
+- sá»‘ bÃ¡o giÃ¡ chuyá»ƒn hÃ³a Ä‘Æ¡n
+- sá»‘ hÃ³a Ä‘Æ¡n checkout thÃ nh cÃ´ng
+- lá»—i checkout theo nhÃ³m validation/payment/inventory
+- lá»—i validate giá» hÃ ng
 - latency `/pos/cart/validate`
 - latency `/orders/checkout`
 
 ---
 
-← [Quay về POS README](./README.md)
+â† [Quay vá» POS README](./README.md)

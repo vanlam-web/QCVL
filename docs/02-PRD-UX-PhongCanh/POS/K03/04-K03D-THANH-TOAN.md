@@ -55,7 +55,7 @@ Nhân viên bấm [BÁO GIÁ]
 | **Loại** | Tác vụ chính |
 | **Màu** | Màu chủ đạo (VD: xanh dương / xanh lá đậm) |
 | **Kích thước** | Lớn nhất trong khối K03 |
-| **Phím tắt** | `F9` |
+| **Phím tắt** | `F9` (kích hoạt luồng thanh toán trong khối K03 Panel) |
 
 ---
 
@@ -71,13 +71,13 @@ Nhân viên bấm [BÁO GIÁ]
 
 ### Luồng chi tiết bước THANH TOÁN
 
-```
-Nhân viên bấm [THANH TOÁN] (F9)
-  → Dialog thanh toán hiện ra
+```text
+Nhân viên bấm [THANH TOÁN] (F9) trong khối K03 Panel
+  → Hệ thống kiểm tra và kích hoạt các trường nhập liệu trong khu vực "Thanh toán chính" của K03 Panel
       → Hiển thị: Tổng tiền | Chiết khấu | Khách cần trả | Khách thanh toán | Tổng nợ | Thanh toán nợ cũ | Tiền thừa / Còn nợ
-          → Nhân viên nhập số tiền khách đưa
+          → Nhân viên nhập số tiền khách đưa và chọn phương thức thanh toán
               → Hệ thống tính: Tiền thừa / Còn nợ
-                  → Nhân viên bấm [XÁC NHẬN]
+                  → Nhân viên bấm [THANH TOÁN] (lần 2, nút ở cuối panel)
                       → Đơn được lưu
                       → Kho vật tư được trừ
                       → Dòng tiền thực thu được ghi vào Sổ Quỹ nếu có
@@ -102,6 +102,19 @@ Nhân viên bấm [THANH TOÁN] (F9)
 ---
 
 ## IV. DIALOG THANH TOÁN
+
+Layout thanh toán trên POS tham khảo cách gom nhóm của KiotViet nhưng chỉ giữ nghiệp vụ QCVL:
+
+- Panel nằm ở cột/phần bên phải khi nhân viên bấm **Thanh toán**, trình bày theo thẻ dọc để nhìn nhanh.
+- Nhóm thông tin trên cùng hiển thị khách đang chọn; nếu chưa chọn khách thì là **Khách lẻ**.
+- Nhóm dòng tiền hiển thị **Tổng tiền hàng**, **Chiết khấu**, **Khách cần trả** nổi bật, và **Tiền thừa / Còn nợ**.
+- Nhóm nhập tiền hiển thị **Khách thanh toán** theo đúng tổng tiền mặt + chuyển khoản đang nhập.
+- Nhóm phương thức có **Tiền mặt**, **Chuyển khoản** và **Kết hợp**. Không hiển thị **Thẻ** hoặc **Ví** trong QCVL MVP.
+- Khi chọn **Tiền mặt**, UI ưu tiên ô tiền mặt và các nút nhanh như **TRẢ ĐỦ**, **NỢ TOÀN BỘ** hoặc mệnh giá phổ biến nếu màn hình đủ chỗ.
+- Khi chọn **Chuyển khoản**, UI ưu tiên ô chuyển khoản và tài khoản ngân hàng nhận tiền. QR/đối soát tự động kiểu KiotViet không thuộc MVP; nếu sau này cần QR thật phải mở spec riêng.
+- Khi chọn **Kết hợp**, UI hiển thị cả ô tiền mặt và ô chuyển khoản để nhân viên tự chia tiền; nếu chuyển khoản lớn hơn `0` thì vẫn bắt buộc chọn tài khoản nhận tiền.
+- Nếu khách đang có nợ cũ, bên dưới **Khách thanh toán** hiển thị dòng gọn **Tổng nợ cũ** và nút/ô **Trả thêm nợ cũ**. Ô **Thanh toán nợ cũ** mặc định ẩn, chỉ xổ ra khi nhân viên bấm trả thêm nợ cũ.
+- Nút **Báo giá** và **Tạo hóa đơn** giữ nguyên tên, vị trí cuối panel và hành vi hiện có của QCVL.
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -128,7 +141,7 @@ Nhân viên bấm [THANH TOÁN] (F9)
 - Trường **Tổng nợ hiện tại** chỉ hiển thị khi đã chọn khách có hồ sơ công nợ.
 - Trường **Thanh toán nợ cũ** mặc định `0`; nếu nhập lớn hơn `0`, hệ thống ghi nhận thêm một khoản thu nợ cũ.
 - Tiền thanh toán nợ cũ được tự động cấn vào các hóa đơn còn nợ theo thứ tự cũ nhất trước.
-- Phương thức thanh toán gồm **Tiền mặt**, **Chuyển khoản** và **Kết hợp**.
+- Phương thức thanh toán hiển thị gồm **Tiền mặt**, **Chuyển khoản** và **Kết hợp**. **Thẻ** và **Ví** không hiển thị trong QCVL MVP.
 - Nếu chọn **Tiền mặt**, chỉ nhập tiền mặt; hệ thống ghi vào quỹ tiền mặt.
 - Nếu chọn **Chuyển khoản**, chỉ nhập tiền chuyển khoản, bắt buộc chọn tài khoản nhận tiền; có thể nhập mã giao dịch/ghi chú chuyển khoản; hệ thống ghi vào đúng quỹ ngân hàng đã chọn.
 - Nếu chọn **Kết hợp**, nhập cả tiền mặt và chuyển khoản; tổng thực thu là tổng hai khoản.

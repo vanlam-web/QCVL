@@ -66,6 +66,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           document_type: 'sale_invoice' as const,
           transaction_price: 300000,
           cost_price: 107751.2,
+          ending_qty: 18.344,
           partner_name: 'Khách lẻ',
         },
       ],
@@ -628,8 +629,9 @@ it('shows stock card tab as a KV-style movement table with placeholders for miss
   expect(within(stockCardTable).getByText('300 000')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('107 751,2')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('-1,656')).toBeInTheDocument()
+  expect(within(stockCardTable).getByText('18,344')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('Khách lẻ')).toBeInTheDocument()
-  expect(within(stockCardTable).getAllByText('Chưa có')).toHaveLength(1)
+  expect(within(stockCardTable).queryByText('Chưa có')).not.toBeInTheDocument()
   expect(within(detail).getByRole('navigation', { name: 'Phân trang thẻ kho MICA-3MM' })).toHaveTextContent('1 - 1 trong 1 dòng')
 })
 

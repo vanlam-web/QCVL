@@ -1175,7 +1175,7 @@ export function CatalogPage({
                                             <td>{movement.transaction_price === null || movement.transaction_price === undefined ? 'Chưa có' : formatStockCardMoney(movement.transaction_price)}</td>
                                             <td>{movement.cost_price === null || movement.cost_price === undefined ? 'Chưa có' : formatStockCardMoney(movement.cost_price)}</td>
                                             <td>{formatQuantity(movement.quantity_delta)}</td>
-                                            <td>Chưa có</td>
+                                            <td>{movement.ending_qty === null || movement.ending_qty === undefined ? 'Chưa có' : formatQuantity(movement.ending_qty)}</td>
                                             <td>{movement.partner_name || 'Chưa có'}</td>
                                           </tr>
                                         ))}

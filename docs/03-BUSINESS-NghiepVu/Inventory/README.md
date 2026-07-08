@@ -32,7 +32,7 @@
 - [Sales Pricing](../Sales/POS-PRICING.md)
 - [Sales Checkout](../Sales/POS-CHECKOUT.md)
 - [PRD-UX Khui vật tư](../../02-PRD-UX-PhongCanh/POS/K01/01d-K01-KHUI.md)
-- [Draft phân tích KV](../../superpowers/specs/2026-06-30-kv-product-export-inventory-draft.md)
+- Git history
 - [Database](../../04-DATABASE/)
 - [Backend](../../05-BACKEND-MayChu/)
 

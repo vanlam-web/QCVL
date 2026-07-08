@@ -88,7 +88,7 @@ Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/onl
 
 ## 6. Tham chieu
 
-- Audit KiotViet: [2026-07-01-kv-web-qc-oms-audit.md](../superpowers/specs/2026-07-01-kv-web-qc-oms-audit.md)
+- Audit KiotViet: Git history
 - Luong ban hang: [POS-ORDER-LIFECYCLE.md](../03-BUSINESS-NghiepVu/Sales/POS-ORDER-LIFECYCLE.md)
 - Chung tu ban hang: [SalesDocuments/README.md](../02-PRD-UX-PhongCanh/SalesDocuments/README.md)
 - So quy: [CASHBOOK.md](../03-BUSINESS-NghiepVu/Finance/CASHBOOK.md)

@@ -50,6 +50,17 @@ V1 hiện tại:
 | Tìm kiếm nhanh | Tìm theo mã khách, tên khách, SĐT nếu có |
 | Trạng thái | V1 chỉ hiển thị `Đang hoạt động` |
 
+Ô tìm khách hàng phải có gợi ý xổ xuống khi nhập từ khóa:
+
+- dùng chung `ManagementCompactSearch`
+- gọi API `/api/v1/customers` với `search` theo mã khách, tên khách, SĐT và các bộ lọc đang chọn
+- nội dung tìm kiếm bỏ dấu tiếng Việt: gõ `khach le` vẫn tìm ra `Khách lẻ`
+- tối đa 8 khách gợi ý dưới ô nhập
+- dòng gợi ý hiển thị mã + tên khách, dòng phụ là SĐT nếu có, mép phải là nợ hiện tại nếu API trả về
+- bấm vào gợi ý sẽ lọc danh sách theo đúng mã khách đã chọn
+- bấm Enter vẫn lọc theo nội dung đang nhập
+- không có kết quả thì hiện `Không có kết quả phù hợp`
+
 Ngoài phạm vi V1:
 
 | Bộ lọc | Quy tắc |

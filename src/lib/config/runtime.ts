@@ -1,5 +1,5 @@
 const sharedServerHost = import.meta.env.VITE_SHARED_SERVER_HOST ?? '100.84.228.125'
-const fallbackApiBaseUrl = `http://${sharedServerHost}:3100`
+const fallbackApiBaseUrl = `http://${sharedServerHost}:3200`
 
 export const runtimeConfig = {
   sharedServerHost,
@@ -27,7 +27,6 @@ function parseSampleRate(value: string | undefined) {
 function normalizeApiBaseUrl(value: string | undefined, fallback: string) {
   const trimmed = value?.trim()
   if (!trimmed) return fallback
-  if (trimmed.includes('supabase.co') || trimmed.includes('127.0.0.1:54321')) return fallback
   if (trimmed.endsWith('/functions/v1')) return fallback
   return trimmed.replace(/\/$/, '')
 }

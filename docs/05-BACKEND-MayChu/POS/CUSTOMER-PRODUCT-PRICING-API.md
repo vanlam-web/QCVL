@@ -1,4 +1,4 @@
-# CUSTOMER-PRODUCT-PRICING-API — API Customer, Product và Pricing POS
+﻿# CUSTOMER-PRODUCT-PRICING-API â€” API Customer, Product vÃ  Pricing POS
 
 > **Base path:** `/api/v1`
 > **Business:** [POS-CUSTOMER.md](../../03-BUSINESS-NghiepVu/Sales/POS-CUSTOMER.md), [POS-PRICING.md](../../03-BUSINESS-NghiepVu/Sales/POS-PRICING.md)
@@ -6,53 +6,53 @@
 
 ---
 
-## 1. Phạm vi
+## 1. Pháº¡m vi
 
-Tài liệu này là Source of Truth cho API Customer, Product và Pricing phục vụ POS Phase 1.
+TÃ i liá»‡u nÃ y lÃ  Source of Truth cho API Customer, Product vÃ  Pricing phá»¥c vá»¥ POS Phase 1.
 
-Bao gồm:
+Bao gá»“m:
 
-- tìm, tạo và cập nhật khách hàng
-- đọc nhóm khách
-- tìm sản phẩm đang bán trên POS
-- lấy giá theo khách/nhóm khách/bảng giá chung
-- đọc lịch sử giá gần đây theo khách hàng + sản phẩm
-- quản lý danh mục sản phẩm và bảng giá tối thiểu cho Phase 1
+- tÃ¬m, táº¡o vÃ  cáº­p nháº­t khÃ¡ch hÃ ng
+- Ä‘á»c nhÃ³m khÃ¡ch
+- tÃ¬m sáº£n pháº©m Ä‘ang bÃ¡n trÃªn POS
+- láº¥y giÃ¡ theo khÃ¡ch/nhÃ³m khÃ¡ch/báº£ng giÃ¡ chung
+- Ä‘á»c lá»‹ch sá»­ giÃ¡ gáº§n Ä‘Ã¢y theo khÃ¡ch hÃ ng + sáº£n pháº©m
+- quáº£n lÃ½ danh má»¥c sáº£n pháº©m vÃ  báº£ng giÃ¡ tá»‘i thiá»ƒu cho Phase 1
 
-Không bao gồm:
+KhÃ´ng bao gá»“m:
 
-- tạo đơn hàng, báo giá, hóa đơn hoặc checkout
-- ghi lịch sử giá từ chứng từ bán hàng
-- tồn kho, BOM, cuộn/tấm/lot vật tư
-- kết nối máy sản xuất hoặc Realtime queue
+- táº¡o Ä‘Æ¡n hÃ ng, bÃ¡o giÃ¡, hÃ³a Ä‘Æ¡n hoáº·c checkout
+- ghi lá»‹ch sá»­ giÃ¡ tá»« chá»©ng tá»« bÃ¡n hÃ ng
+- tá»“n kho, BOM, cuá»™n/táº¥m/lot váº­t tÆ°
+- káº¿t ná»‘i mÃ¡y sáº£n xuáº¥t hoáº·c Realtime queue
 
 ---
 
-## 2. Auth và response chuẩn
+## 2. Auth vÃ  response chuáº©n
 
-Mọi endpoint trong file này yêu cầu:
+Má»i endpoint trong file nÃ y yÃªu cáº§u:
 
 ```http
-Authorization: Bearer <supabase_access_token>
+Authorization: Bearer <qcvl_access_token>
 X-Workstation-Id: <uuid>
-X-Request-Id: <client-generated-id>   # không bắt buộc
+X-Request-Id: <client-generated-id>   # khÃ´ng báº¯t buá»™c
 ```
 
-Áp dụng response chuẩn tại [FOUNDATION-API.md](../FOUNDATION-API.md#2-response-chuẩn).
+Ãp dá»¥ng response chuáº©n táº¡i [FOUNDATION-API.md](../FOUNDATION-API.md#2-response-chuáº©n).
 
-Tất cả dữ liệu đọc/ghi phải được giới hạn trong organization của actor.
+Táº¥t cáº£ dá»¯ liá»‡u Ä‘á»c/ghi pháº£i Ä‘Æ°á»£c giá»›i háº¡n trong organization cá»§a actor.
 
 ---
 
 ## 3. Permission
 
-| Nhóm API | Permission |
+| NhÃ³m API | Permission |
 |---|---|
-| Tìm khách, tạo nhanh khách, sửa thông tin khách phục vụ POS | `perm.create_order` |
-| Tìm sản phẩm đang bán, lấy giá mặc định, đọc lịch sử giá gần đây | `perm.create_order` |
-| Quản lý sản phẩm, nhóm khách, bảng giá và chi tiết bảng giá | `perm.edit_price_book` |
+| TÃ¬m khÃ¡ch, táº¡o nhanh khÃ¡ch, sá»­a thÃ´ng tin khÃ¡ch phá»¥c vá»¥ POS | `perm.create_order` |
+| TÃ¬m sáº£n pháº©m Ä‘ang bÃ¡n, láº¥y giÃ¡ máº·c Ä‘á»‹nh, Ä‘á»c lá»‹ch sá»­ giÃ¡ gáº§n Ä‘Ã¢y | `perm.create_order` |
+| Quáº£n lÃ½ sáº£n pháº©m, nhÃ³m khÃ¡ch, báº£ng giÃ¡ vÃ  chi tiáº¿t báº£ng giÃ¡ | `perm.edit_price_book` |
 
-Backend phải kiểm tra permission ở mọi endpoint, không phụ thuộc việc Frontend ẩn nút.
+Backend pháº£i kiá»ƒm tra permission á»Ÿ má»i endpoint, khÃ´ng phá»¥ thuá»™c viá»‡c Frontend áº©n nÃºt.
 
 ---
 
@@ -60,23 +60,23 @@ Backend phải kiểm tra permission ở mọi endpoint, không phụ thuộc vi
 
 ### `GET /customers`
 
-Tìm khách hàng trong organization hiện tại.
+TÃ¬m khÃ¡ch hÃ ng trong organization hiá»‡n táº¡i.
 
 **Permission:** `perm.create_order`
 
 **Query:**
 
-| Tham số | Kiểu | Bắt buộc | Mô tả |
+| Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `search` | `string` | Không | Tìm theo mã khách, tên khách hoặc SĐT |
-| `page` | `number` | Không | Mặc định `1` |
-| `page_size` | `number` | Không | Mặc định `20`, tối đa `100` |
+| `search` | `string` | KhÃ´ng | TÃ¬m theo mÃ£ khÃ¡ch, tÃªn khÃ¡ch hoáº·c SÄT |
+| `page` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `1` |
+| `page_size` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `20`, tá»‘i Ä‘a `100` |
 
 **Validation:**
 
 - `page >= 1`
 - `1 <= page_size <= 100`
-- `search` được trim; chuỗi rỗng sau trim tương đương không truyền search
+- `search` Ä‘Æ°á»£c trim; chuá»—i rá»—ng sau trim tÆ°Æ¡ng Ä‘Æ°Æ¡ng khÃ´ng truyá»n search
 
 **Response data:**
 
@@ -86,12 +86,12 @@ Tìm khách hàng trong organization hiện tại.
     {
       "id": "uuid",
       "code": "KH000001",
-      "name": "Công ty ABC",
+      "name": "CÃ´ng ty ABC",
       "phone": "0901234567",
       "customer_group": {
         "id": "uuid",
         "code": "DAILY",
-        "name": "Đại lý"
+        "name": "Äáº¡i lÃ½"
       }
     }
   ],
@@ -103,7 +103,7 @@ Tìm khách hàng trong organization hiện tại.
 
 ### `POST /customers`
 
-Tạo khách hàng từ POS.
+Táº¡o khÃ¡ch hÃ ng tá»« POS.
 
 **Permission:** `perm.create_order`
 
@@ -112,31 +112,31 @@ Tạo khách hàng từ POS.
 ```json
 {
   "code": "KH000123",
-  "name": "Công ty ABC",
+  "name": "CÃ´ng ty ABC",
   "phone": "0901234567",
   "customer_group_id": "uuid"
 }
 ```
 
-`code`, `phone`, `customer_group_id` được phép bỏ trống.
+`code`, `phone`, `customer_group_id` Ä‘Æ°á»£c phÃ©p bá» trá»‘ng.
 
 **Validation:**
 
-- `name` bắt buộc, trim xong không rỗng.
-- Nếu có `code`, trim xong không rỗng và không trùng trong organization.
-- Nếu thiếu `code`, Backend tự sinh mã dạng `KH000001`, tăng dần trong organization.
-- Nếu có `phone`, Backend chuẩn hóa thành `phone_normalized` và không cho trùng trong organization.
-- Nếu có `customer_group_id`, nhóm khách phải tồn tại, active và cùng organization.
+- `name` báº¯t buá»™c, trim xong khÃ´ng rá»—ng.
+- Náº¿u cÃ³ `code`, trim xong khÃ´ng rá»—ng vÃ  khÃ´ng trÃ¹ng trong organization.
+- Náº¿u thiáº¿u `code`, Backend tá»± sinh mÃ£ dáº¡ng `KH000001`, tÄƒng dáº§n trong organization.
+- Náº¿u cÃ³ `phone`, Backend chuáº©n hÃ³a thÃ nh `phone_normalized` vÃ  khÃ´ng cho trÃ¹ng trong organization.
+- Náº¿u cÃ³ `customer_group_id`, nhÃ³m khÃ¡ch pháº£i tá»“n táº¡i, active vÃ  cÃ¹ng organization.
 
 **Workflow:**
 
-1. Xác thực actor, workstation và permission.
+1. XÃ¡c thá»±c actor, workstation vÃ  permission.
 2. Trim input.
-3. Chuẩn hóa SĐT nếu có.
-4. Tự sinh mã khách nếu thiếu `code`.
-5. Kiểm tra trùng mã khách và SĐT.
+3. Chuáº©n hÃ³a SÄT náº¿u cÃ³.
+4. Tá»± sinh mÃ£ khÃ¡ch náº¿u thiáº¿u `code`.
+5. Kiá»ƒm tra trÃ¹ng mÃ£ khÃ¡ch vÃ  SÄT.
 6. Ghi `public.customers`.
-7. Trả khách hàng vừa tạo.
+7. Tráº£ khÃ¡ch hÃ ng vá»«a táº¡o.
 
 **Response data:**
 
@@ -144,7 +144,7 @@ Tạo khách hàng từ POS.
 {
   "id": "uuid",
   "code": "KH000123",
-  "name": "Công ty ABC",
+  "name": "CÃ´ng ty ABC",
   "phone": "0901234567",
   "customer_group_id": "uuid"
 }
@@ -152,7 +152,7 @@ Tạo khách hàng từ POS.
 
 ### `PATCH /customers/{id}`
 
-Cập nhật thông tin khách hàng phục vụ POS.
+Cáº­p nháº­t thÃ´ng tin khÃ¡ch hÃ ng phá»¥c vá»¥ POS.
 
 **Permission:** `perm.create_order`
 
@@ -161,7 +161,7 @@ Cập nhật thông tin khách hàng phục vụ POS.
 ```json
 {
   "code": "KH000123",
-  "name": "Công ty ABC",
+  "name": "CÃ´ng ty ABC",
   "phone": "0901234567",
   "customer_group_id": "uuid"
 }
@@ -169,12 +169,12 @@ Cập nhật thông tin khách hàng phục vụ POS.
 
 **Validation:**
 
-- Khách hàng phải tồn tại trong organization.
-- Nếu sửa `name`, trim xong không rỗng.
-- Nếu sửa `code`, không được trùng trong organization.
-- Nếu sửa `phone`, SĐT chuẩn hóa không được trùng với khách khác trong organization.
-- `customer_group_id = null` nghĩa là khách không gán nhóm và dùng bảng giá chung.
-- Nếu `customer_group_id` khác null, nhóm khách phải active và cùng organization.
+- KhÃ¡ch hÃ ng pháº£i tá»“n táº¡i trong organization.
+- Náº¿u sá»­a `name`, trim xong khÃ´ng rá»—ng.
+- Náº¿u sá»­a `code`, khÃ´ng Ä‘Æ°á»£c trÃ¹ng trong organization.
+- Náº¿u sá»­a `phone`, SÄT chuáº©n hÃ³a khÃ´ng Ä‘Æ°á»£c trÃ¹ng vá»›i khÃ¡ch khÃ¡c trong organization.
+- `customer_group_id = null` nghÄ©a lÃ  khÃ¡ch khÃ´ng gÃ¡n nhÃ³m vÃ  dÃ¹ng báº£ng giÃ¡ chung.
+- Náº¿u `customer_group_id` khÃ¡c null, nhÃ³m khÃ¡ch pháº£i active vÃ  cÃ¹ng organization.
 
 ---
 
@@ -182,7 +182,7 @@ Cập nhật thông tin khách hàng phục vụ POS.
 
 ### `GET /customer-groups`
 
-Lấy danh sách nhóm khách active để gán cho khách hàng.
+Láº¥y danh sÃ¡ch nhÃ³m khÃ¡ch active Ä‘á»ƒ gÃ¡n cho khÃ¡ch hÃ ng.
 
 **Permission:** `perm.create_order`
 
@@ -194,7 +194,7 @@ Lấy danh sách nhóm khách active để gán cho khách hàng.
     {
       "id": "uuid",
       "code": "DAILY",
-      "name": "Đại lý",
+      "name": "Äáº¡i lÃ½",
       "price_list_id": "uuid"
     }
   ]
@@ -203,7 +203,7 @@ Lấy danh sách nhóm khách active để gán cho khách hàng.
 
 ### `POST /customer-groups`
 
-Tạo nhóm khách.
+Táº¡o nhÃ³m khÃ¡ch.
 
 **Permission:** `perm.edit_price_book`
 
@@ -212,26 +212,26 @@ Tạo nhóm khách.
 ```json
 {
   "code": "DAILY",
-  "name": "Đại lý",
+  "name": "Äáº¡i lÃ½",
   "price_list_id": "uuid"
 }
 ```
 
 **Validation:**
 
-- `code` và `name` trim xong không rỗng.
-- `code` không trùng trong organization.
-- `price_list_id` phải tồn tại, active và cùng organization.
+- `code` vÃ  `name` trim xong khÃ´ng rá»—ng.
+- `code` khÃ´ng trÃ¹ng trong organization.
+- `price_list_id` pháº£i tá»“n táº¡i, active vÃ  cÃ¹ng organization.
 
 ### `PATCH /customer-groups/{id}`
 
-Cập nhật nhóm khách.
+Cáº­p nháº­t nhÃ³m khÃ¡ch.
 
 **Permission:** `perm.edit_price_book`
 
-Cho phép sửa `code`, `name`, `price_list_id`, `is_active`.
+Cho phÃ©p sá»­a `code`, `name`, `price_list_id`, `is_active`.
 
-Nếu chuyển `is_active = false`, khách hàng đang thuộc nhóm này vẫn giữ liên kết hiện tại; nhóm inactive chỉ không được gán mới.
+Náº¿u chuyá»ƒn `is_active = false`, khÃ¡ch hÃ ng Ä‘ang thuá»™c nhÃ³m nÃ y váº«n giá»¯ liÃªn káº¿t hiá»‡n táº¡i; nhÃ³m inactive chá»‰ khÃ´ng Ä‘Æ°á»£c gÃ¡n má»›i.
 
 ---
 
@@ -239,28 +239,28 @@ Nếu chuyển `is_active = false`, khách hàng đang thuộc nhóm này vẫn 
 
 ### `GET /products`
 
-Tìm sản phẩm/dịch vụ đang bán trên POS.
+TÃ¬m sáº£n pháº©m/dá»‹ch vá»¥ Ä‘ang bÃ¡n trÃªn POS.
 
-**Permission:** `perm.create_order` hoặc `perm.edit_price_book`
+**Permission:** `perm.create_order` hoáº·c `perm.edit_price_book`
 
 **Query:**
 
-| Tham số | Kiểu | Bắt buộc | Mô tả |
+| Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `search` | `string` | Không | Tìm theo mã hoặc tên sản phẩm |
-| `status` | `string` | Không | POS mặc định chỉ dùng `active`; chỉ endpoint quản lý được dùng `inactive` hoặc `all` |
-| `product_group_id` | `uuid` | Không | Lọc theo nhóm hàng trong module Hàng hóa |
-| `product_kind` | `string` | Không | Lọc loại hàng: `goods`, `service`, `auxiliary_material`, `roll`, `sheet`, `combo` |
-| `page` | `number` | Không | Mặc định `1` |
-| `page_size` | `number` | Không | Mặc định `20`, tối đa `100` |
+| `search` | `string` | KhÃ´ng | TÃ¬m theo mÃ£ hoáº·c tÃªn sáº£n pháº©m |
+| `status` | `string` | KhÃ´ng | POS máº·c Ä‘á»‹nh chá»‰ dÃ¹ng `active`; chá»‰ endpoint quáº£n lÃ½ Ä‘Æ°á»£c dÃ¹ng `inactive` hoáº·c `all` |
+| `product_group_id` | `uuid` | KhÃ´ng | Lá»c theo nhÃ³m hÃ ng trong module HÃ ng hÃ³a |
+| `product_kind` | `string` | KhÃ´ng | Lá»c loáº¡i hÃ ng: `goods`, `service`, `auxiliary_material`, `roll`, `sheet`, `combo` |
+| `page` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `1` |
+| `page_size` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `20`, tá»‘i Ä‘a `100` |
 
-**Validation và rule:**
+**Validation vÃ  rule:**
 
-- Nếu actor chỉ có `perm.create_order`, Backend luôn ép `status = active`.
-- Nếu actor có `perm.edit_price_book`, `status` được phép là `active`, `inactive` hoặc `all`.
-- `search` trim xong rỗng thì bỏ qua.
-- Tìm kiếm hỗ trợ không dấu theo chiến lược kỹ thuật được chốt khi triển khai search.
-- Không hỗ trợ QR/barcode trong Phase 1.
+- Náº¿u actor chá»‰ cÃ³ `perm.create_order`, Backend luÃ´n Ã©p `status = active`.
+- Náº¿u actor cÃ³ `perm.edit_price_book`, `status` Ä‘Æ°á»£c phÃ©p lÃ  `active`, `inactive` hoáº·c `all`.
+- `search` trim xong rá»—ng thÃ¬ bá» qua.
+- TÃ¬m kiáº¿m há»— trá»£ khÃ´ng dáº¥u theo chiáº¿n lÆ°á»£c ká»¹ thuáº­t Ä‘Æ°á»£c chá»‘t khi triá»ƒn khai search.
+- KhÃ´ng há»— trá»£ QR/barcode trong Phase 1.
 
 **Response data:**
 
@@ -273,13 +273,13 @@ Tìm sản phẩm/dịch vụ đang bán trên POS.
       "name": "Mica 3mm",
       "status": "active",
       "product_group_id": "uuid",
-      "product_group": { "id": "uuid", "code": "GENERAL", "name": "Giá chung" },
+      "product_group": { "id": "uuid", "code": "GENERAL", "name": "GiÃ¡ chung" },
       "unit_name": "m",
       "sell_method": "linear_m",
       "unit_conversions": [
         {
           "unit_id": "uuid",
-          "unit_name": "m tới",
+          "unit_name": "m tá»›i",
           "stock_qty_per_unit": 0.5,
           "is_default_purchase_unit": true,
           "is_default_sale_unit": true
@@ -295,7 +295,7 @@ Tìm sản phẩm/dịch vụ đang bán trên POS.
 
 ### `POST /products`
 
-Tạo sản phẩm/dịch vụ.
+Táº¡o sáº£n pháº©m/dá»‹ch vá»¥.
 
 **Permission:** `perm.edit_price_book`
 
@@ -314,7 +314,7 @@ Tạo sản phẩm/dịch vụ.
   "latest_purchase_cost": 125000,
   "unit_conversions": [
     {
-      "unit_name": "m tới",
+      "unit_name": "m tá»›i",
       "stock_qty_per_unit": 0.5,
       "is_default_purchase_unit": true,
       "is_default_sale_unit": true
@@ -325,28 +325,28 @@ Tạo sản phẩm/dịch vụ.
 
 **Validation:**
 
-- `code`, `name`, `unit_name` trim xong không rỗng.
-- `code` không trùng trong organization.
-- `status` thuộc `active | inactive`.
-- `sell_method` thuộc `quantity | area_m2 | linear_m | sheet | combo`.
-- `inventory_shape` thuộc `normal | roll | sheet`; nếu bỏ trống mặc định là `normal`.
-- `product_kind` thuộc `goods | service | auxiliary_material | roll | sheet | combo`; nếu bỏ trống Backend tự suy ra từ `sell_method`, `inventory_shape` và `track_inventory`.
-- `track_inventory` là boolean; nếu bỏ trống Backend tự suy ra theo loại tồn/cách tính bán.
-- `latest_purchase_cost` là số lớn hơn hoặc bằng `0`; nếu bỏ trống thì chưa ghi giá vốn gần nhất.
-- `product_group_id` nếu bỏ trống thì Backend gán nhóm mặc định `Giá chung`.
-- `unit_conversions` là danh sách đơn vị phụ kiểu KiotViet; mỗi dòng có `unit_name`, `stock_qty_per_unit > 0`, và cờ mặc định mua/bán. Ví dụ `Ram = 100 tờ`, `m tới = 0.5 m`, `Tấc = 0.042 đơn vị cơ bản`.
+- `code`, `name`, `unit_name` trim xong khÃ´ng rá»—ng.
+- `code` khÃ´ng trÃ¹ng trong organization.
+- `status` thuá»™c `active | inactive`.
+- `sell_method` thuá»™c `quantity | area_m2 | linear_m | sheet | combo`.
+- `inventory_shape` thuá»™c `normal | roll | sheet`; náº¿u bá» trá»‘ng máº·c Ä‘á»‹nh lÃ  `normal`.
+- `product_kind` thuá»™c `goods | service | auxiliary_material | roll | sheet | combo`; náº¿u bá» trá»‘ng Backend tá»± suy ra tá»« `sell_method`, `inventory_shape` vÃ  `track_inventory`.
+- `track_inventory` lÃ  boolean; náº¿u bá» trá»‘ng Backend tá»± suy ra theo loáº¡i tá»“n/cÃ¡ch tÃ­nh bÃ¡n.
+- `latest_purchase_cost` lÃ  sá»‘ lá»›n hÆ¡n hoáº·c báº±ng `0`; náº¿u bá» trá»‘ng thÃ¬ chÆ°a ghi giÃ¡ vá»‘n gáº§n nháº¥t.
+- `product_group_id` náº¿u bá» trá»‘ng thÃ¬ Backend gÃ¡n nhÃ³m máº·c Ä‘á»‹nh `GiÃ¡ chung`.
+- `unit_conversions` lÃ  danh sÃ¡ch Ä‘Æ¡n vá»‹ phá»¥ kiá»ƒu KiotViet; má»—i dÃ²ng cÃ³ `unit_name`, `stock_qty_per_unit > 0`, vÃ  cá» máº·c Ä‘á»‹nh mua/bÃ¡n. VÃ­ dá»¥ `Ram = 100 tá»`, `m tá»›i = 0.5 m`, `Táº¥c = 0.042 Ä‘Æ¡n vá»‹ cÆ¡ báº£n`.
 
 ### `GET /product-groups`
 
-Danh sách nhóm hàng.
+Danh sÃ¡ch nhÃ³m hÃ ng.
 
-**Permission:** `perm.create_order`, `perm.edit_price_book` hoặc `perm.manage_inventory`
+**Permission:** `perm.create_order`, `perm.edit_price_book` hoáº·c `perm.manage_inventory`
 
 **Query:**
 
-| Tham số | Kiểu | Bắt buộc | Mô tả |
+| Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `active_only` | `boolean` | Không | Mặc định chỉ trả nhóm đang hoạt động |
+| `active_only` | `boolean` | KhÃ´ng | Máº·c Ä‘á»‹nh chá»‰ tráº£ nhÃ³m Ä‘ang hoáº¡t Ä‘á»™ng |
 
 **Response data:**
 
@@ -356,7 +356,7 @@ Danh sách nhóm hàng.
     {
       "id": "uuid",
       "code": "GENERAL",
-      "name": "Giá chung",
+      "name": "GiÃ¡ chung",
       "is_default": true,
       "is_active": true
     }
@@ -366,7 +366,7 @@ Danh sách nhóm hàng.
 
 ### `POST /product-groups`
 
-Tạo nhóm hàng.
+Táº¡o nhÃ³m hÃ ng.
 
 **Permission:** `perm.edit_price_book`
 
@@ -374,41 +374,41 @@ Tạo nhóm hàng.
 
 ```json
 {
-  "name": "Vật tư",
+  "name": "Váº­t tÆ°",
   "code": "VAT-TU"
 }
 ```
 
-`code` không bắt buộc; nếu bỏ trống Backend tự sinh code từ tên nhóm. Mỗi organization có một nhóm mặc định `Giá chung`.
+`code` khÃ´ng báº¯t buá»™c; náº¿u bá» trá»‘ng Backend tá»± sinh code tá»« tÃªn nhÃ³m. Má»—i organization cÃ³ má»™t nhÃ³m máº·c Ä‘á»‹nh `GiÃ¡ chung`.
 
-`GET /products` hỗ trợ query `product_kind = goods | service | auxiliary_material | roll | sheet | combo`. Backend lọc theo `products.product_kind` để `Vật tư phụ` được lưu thật, không lẫn với hàng thường:
+`GET /products` há»— trá»£ query `product_kind = goods | service | auxiliary_material | roll | sheet | combo`. Backend lá»c theo `products.product_kind` Ä‘á»ƒ `Váº­t tÆ° phá»¥` Ä‘Æ°á»£c lÆ°u tháº­t, khÃ´ng láº«n vá»›i hÃ ng thÆ°á»ng:
 
 - `service`: `inventory_shape = normal`, `sell_method = quantity`, `track_inventory = false`.
-- `auxiliary_material`: vật tư phụ; vẫn có tồn như hàng thường nhưng được nhận diện riêng cho BOM/khui vật tư.
-- `goods`: `inventory_shape = normal`, `track_inventory = true`, không phải combo.
+- `auxiliary_material`: váº­t tÆ° phá»¥; váº«n cÃ³ tá»“n nhÆ° hÃ ng thÆ°á»ng nhÆ°ng Ä‘Æ°á»£c nháº­n diá»‡n riÃªng cho BOM/khui váº­t tÆ°.
+- `goods`: `inventory_shape = normal`, `track_inventory = true`, khÃ´ng pháº£i combo.
 - `roll`: `inventory_shape = roll`.
 - `sheet`: `inventory_shape = sheet`.
 - `combo`: `sell_method = combo`.
 
-**Ghi chú UI Hàng hóa:**
+**Ghi chÃº UI HÃ ng hÃ³a:**
 
-- Form `+ Tạo hàng hóa` dùng một modal chung, chọn loại hàng ở đầu form: hàng thường, dịch vụ, vật tư phụ, hàng cuộn, hàng tấm, combo - đóng gói.
-- Dịch vụ là phân loại riêng trong UI/filter, nhưng Backend nhận diện bằng cấu hình tồn hiện có: `inventory_shape = normal`, `sell_method = quantity`, `track_inventory = false`; UI ẩn phần tồn kho khi tạo.
-- Hàng cuộn lưu `inventory_shape = roll`, hàng tấm lưu `inventory_shape = sheet`.
-- Combo lưu `sell_method = combo`, `track_inventory = false`; UI ẩn phần tồn kho và hiện khu vực vật tư cấu thành. Khi tạo combo, frontend gọi `POST /products` trước rồi gọi `POST /products/{product_id}/bom` để lưu BOM cho sản phẩm vừa tạo. Khi bán combo, tồn trừ vào vật tư cấu thành theo BOM active, không trừ theo chính mã combo. Mỗi dòng BOM không gửi `component_type`; vật tư phụ được nhận diện từ loại hàng của vật tư sau khi có metadata lưu loại hàng riêng.
-- Thành phần combo vẫn có thể sửa sau ở chi tiết hàng hóa; mỗi lần lưu tạo BOM/version hiện hành theo contract BOM.
-- `Lưu & tạo thêm` dùng cùng endpoint `POST /products`, tạo xong reset form ở frontend và giữ modal mở.
-- Modal tạo hàng không có vùng ảnh hàng hóa, không có tab mô tả disabled và không có checkbox `Bán trực tiếp`; sản phẩm/dịch vụ đang hoạt động mặc định được bán trực tiếp. Module này không dùng nút `In tem mã`.
+- Form `+ Táº¡o hÃ ng hÃ³a` dÃ¹ng má»™t modal chung, chá»n loáº¡i hÃ ng á»Ÿ Ä‘áº§u form: hÃ ng thÆ°á»ng, dá»‹ch vá»¥, váº­t tÆ° phá»¥, hÃ ng cuá»™n, hÃ ng táº¥m, combo - Ä‘Ã³ng gÃ³i.
+- Dá»‹ch vá»¥ lÃ  phÃ¢n loáº¡i riÃªng trong UI/filter, nhÆ°ng Backend nháº­n diá»‡n báº±ng cáº¥u hÃ¬nh tá»“n hiá»‡n cÃ³: `inventory_shape = normal`, `sell_method = quantity`, `track_inventory = false`; UI áº©n pháº§n tá»“n kho khi táº¡o.
+- HÃ ng cuá»™n lÆ°u `inventory_shape = roll`, hÃ ng táº¥m lÆ°u `inventory_shape = sheet`.
+- Combo lÆ°u `sell_method = combo`, `track_inventory = false`; UI áº©n pháº§n tá»“n kho vÃ  hiá»‡n khu vá»±c váº­t tÆ° cáº¥u thÃ nh. Khi táº¡o combo, frontend gá»i `POST /products` trÆ°á»›c rá»“i gá»i `POST /products/{product_id}/bom` Ä‘á»ƒ lÆ°u BOM cho sáº£n pháº©m vá»«a táº¡o. Khi bÃ¡n combo, tá»“n trá»« vÃ o váº­t tÆ° cáº¥u thÃ nh theo BOM active, khÃ´ng trá»« theo chÃ­nh mÃ£ combo. Má»—i dÃ²ng BOM khÃ´ng gá»­i `component_type`; váº­t tÆ° phá»¥ Ä‘Æ°á»£c nháº­n diá»‡n tá»« loáº¡i hÃ ng cá»§a váº­t tÆ° sau khi cÃ³ metadata lÆ°u loáº¡i hÃ ng riÃªng.
+- ThÃ nh pháº§n combo váº«n cÃ³ thá»ƒ sá»­a sau á»Ÿ chi tiáº¿t hÃ ng hÃ³a; má»—i láº§n lÆ°u táº¡o BOM/version hiá»‡n hÃ nh theo contract BOM.
+- `LÆ°u & táº¡o thÃªm` dÃ¹ng cÃ¹ng endpoint `POST /products`, táº¡o xong reset form á»Ÿ frontend vÃ  giá»¯ modal má»Ÿ.
+- Modal táº¡o hÃ ng khÃ´ng cÃ³ vÃ¹ng áº£nh hÃ ng hÃ³a, khÃ´ng cÃ³ tab mÃ´ táº£ disabled vÃ  khÃ´ng cÃ³ checkbox `BÃ¡n trá»±c tiáº¿p`; sáº£n pháº©m/dá»‹ch vá»¥ Ä‘ang hoáº¡t Ä‘á»™ng máº·c Ä‘á»‹nh Ä‘Æ°á»£c bÃ¡n trá»±c tiáº¿p. Module nÃ y khÃ´ng dÃ¹ng nÃºt `In tem mÃ£`.
 
 ### `PATCH /products/{id}`
 
-Cập nhật sản phẩm/dịch vụ.
+Cáº­p nháº­t sáº£n pháº©m/dá»‹ch vá»¥.
 
 **Permission:** `perm.edit_price_book`
 
-Cho phép sửa `code`, `name`, `status`, `unit_name`, `sell_method`.
+Cho phÃ©p sá»­a `code`, `name`, `status`, `unit_name`, `sell_method`.
 
-Không xóa vật lý sản phẩm đã có lịch sử; ngưng bán dùng `status = inactive`.
+KhÃ´ng xÃ³a váº­t lÃ½ sáº£n pháº©m Ä‘Ã£ cÃ³ lá»‹ch sá»­; ngÆ°ng bÃ¡n dÃ¹ng `status = inactive`.
 
 ---
 
@@ -416,15 +416,15 @@ Không xóa vật lý sản phẩm đã có lịch sử; ngưng bán dùng `stat
 
 ### `GET /price-lists`
 
-Lấy danh sách bảng giá.
+Láº¥y danh sÃ¡ch báº£ng giÃ¡.
 
 **Permission:** `perm.edit_price_book`
 
 **Query:**
 
-| Tham số | Kiểu | Bắt buộc | Mô tả |
+| Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `active_only` | `boolean` | Không | Mặc định `true` |
+| `active_only` | `boolean` | KhÃ´ng | Máº·c Ä‘á»‹nh `true` |
 
 **Response data:**
 
@@ -434,7 +434,7 @@ Lấy danh sách bảng giá.
     {
       "id": "uuid",
       "code": "DEFAULT",
-      "name": "Bảng giá chung",
+      "name": "Báº£ng giÃ¡ chung",
       "is_default": true,
       "is_active": true
     }
@@ -444,7 +444,7 @@ Lấy danh sách bảng giá.
 
 ### `POST /price-lists`
 
-Tạo bảng giá.
+Táº¡o báº£ng giÃ¡.
 
 **Permission:** `perm.edit_price_book`
 
@@ -453,30 +453,30 @@ Tạo bảng giá.
 ```json
 {
   "code": "DAILY",
-  "name": "Bảng giá đại lý",
+  "name": "Báº£ng giÃ¡ Ä‘áº¡i lÃ½",
   "is_default": false
 }
 ```
 
 **Validation:**
 
-- `code`, `name` trim xong không rỗng.
-- `code` không trùng trong organization.
-- Nếu `is_default = true`, Backend phải đảm bảo organization chỉ có một bảng giá chung active.
+- `code`, `name` trim xong khÃ´ng rá»—ng.
+- `code` khÃ´ng trÃ¹ng trong organization.
+- Náº¿u `is_default = true`, Backend pháº£i Ä‘áº£m báº£o organization chá»‰ cÃ³ má»™t báº£ng giÃ¡ chung active.
 
 ### `PATCH /price-lists/{id}`
 
-Cập nhật bảng giá.
+Cáº­p nháº­t báº£ng giÃ¡.
 
 **Permission:** `perm.edit_price_book`
 
-Cho phép sửa `code`, `name`, `is_default`, `is_active`.
+Cho phÃ©p sá»­a `code`, `name`, `is_default`, `is_active`.
 
-Không cho inactive bảng giá đang là bảng giá chung duy nhất của organization.
+KhÃ´ng cho inactive báº£ng giÃ¡ Ä‘ang lÃ  báº£ng giÃ¡ chung duy nháº¥t cá»§a organization.
 
 ### `PUT /price-lists/{id}/items/{product_id}`
 
-Tạo hoặc cập nhật giá của một sản phẩm trong bảng giá.
+Táº¡o hoáº·c cáº­p nháº­t giÃ¡ cá»§a má»™t sáº£n pháº©m trong báº£ng giÃ¡.
 
 **Permission:** `perm.edit_price_book`
 
@@ -490,17 +490,17 @@ Tạo hoặc cập nhật giá của một sản phẩm trong bảng giá.
 
 **Validation:**
 
-- Bảng giá và sản phẩm phải cùng organization.
+- Báº£ng giÃ¡ vÃ  sáº£n pháº©m pháº£i cÃ¹ng organization.
 - `unit_price >= 0`.
-- Với sản phẩm `sell_method = linear_m`, `unit_price` là giá cho `1 m tới`.
+- Vá»›i sáº£n pháº©m `sell_method = linear_m`, `unit_price` lÃ  giÃ¡ cho `1 m tá»›i`.
 
 ### `DELETE /price-lists/{id}/items/{product_id}`
 
-Xóa giá riêng của một sản phẩm khỏi bảng giá.
+XÃ³a giÃ¡ riÃªng cá»§a má»™t sáº£n pháº©m khá»i báº£ng giÃ¡.
 
 **Permission:** `perm.edit_price_book`
 
-Sau khi xóa, nếu bảng giá nhóm không còn giá cho sản phẩm, luồng POS fallback về bảng giá chung.
+Sau khi xÃ³a, náº¿u báº£ng giÃ¡ nhÃ³m khÃ´ng cÃ²n giÃ¡ cho sáº£n pháº©m, luá»“ng POS fallback vá» báº£ng giÃ¡ chung.
 
 ---
 
@@ -508,7 +508,7 @@ Sau khi xóa, nếu bảng giá nhóm không còn giá cho sản phẩm, luồng
 
 ### `POST /pricing/resolve`
 
-Lấy giá mặc định cho một hoặc nhiều sản phẩm theo khách hàng hiện tại.
+Láº¥y giÃ¡ máº·c Ä‘á»‹nh cho má»™t hoáº·c nhiá»u sáº£n pháº©m theo khÃ¡ch hÃ ng hiá»‡n táº¡i.
 
 **Permission:** `perm.create_order`
 
@@ -521,17 +521,17 @@ Lấy giá mặc định cho một hoặc nhiều sản phẩm theo khách hàng
 }
 ```
 
-`customer_id` được phép null hoặc bỏ trống.
+`customer_id` Ä‘Æ°á»£c phÃ©p null hoáº·c bá» trá»‘ng.
 
 **Workflow:**
 
-1. Xác thực actor, workstation và permission.
-2. Kiểm tra mọi sản phẩm tồn tại, active và cùng organization.
-3. Nếu có `customer_id`, tải khách hàng cùng organization.
-4. Nếu khách có nhóm active, lấy bảng giá của nhóm; nếu không, dùng bảng giá chung.
-5. Với mỗi sản phẩm, tìm giá trong bảng giá đã chọn.
-6. Nếu không có giá trong bảng giá đã chọn, fallback về bảng giá chung.
-7. Trả giá và nguồn giá.
+1. XÃ¡c thá»±c actor, workstation vÃ  permission.
+2. Kiá»ƒm tra má»i sáº£n pháº©m tá»“n táº¡i, active vÃ  cÃ¹ng organization.
+3. Náº¿u cÃ³ `customer_id`, táº£i khÃ¡ch hÃ ng cÃ¹ng organization.
+4. Náº¿u khÃ¡ch cÃ³ nhÃ³m active, láº¥y báº£ng giÃ¡ cá»§a nhÃ³m; náº¿u khÃ´ng, dÃ¹ng báº£ng giÃ¡ chung.
+5. Vá»›i má»—i sáº£n pháº©m, tÃ¬m giÃ¡ trong báº£ng giÃ¡ Ä‘Ã£ chá»n.
+6. Náº¿u khÃ´ng cÃ³ giÃ¡ trong báº£ng giÃ¡ Ä‘Ã£ chá»n, fallback vá» báº£ng giÃ¡ chung.
+7. Tráº£ giÃ¡ vÃ  nguá»“n giÃ¡.
 
 **Response data:**
 
@@ -548,7 +548,7 @@ Lấy giá mặc định cho một hoặc nhiều sản phẩm theo khách hàng
 }
 ```
 
-`price_source` có thể là:
+`price_source` cÃ³ thá»ƒ lÃ :
 
 - `customer_group`
 - `default_price_list`
@@ -560,13 +560,13 @@ Lấy giá mặc định cho một hoặc nhiều sản phẩm theo khách hàng
 
 ### `GET /customers/{customer_id}/products/{product_id}/recent-prices`
 
-Đọc tối đa 5 giá sửa tay gần nhất cho cặp khách hàng + sản phẩm.
+Äá»c tá»‘i Ä‘a 5 giÃ¡ sá»­a tay gáº§n nháº¥t cho cáº·p khÃ¡ch hÃ ng + sáº£n pháº©m.
 
 **Permission:** `perm.create_order`
 
 **Validation:**
 
-- Khách hàng và sản phẩm phải tồn tại trong cùng organization.
+- KhÃ¡ch hÃ ng vÃ  sáº£n pháº©m pháº£i tá»“n táº¡i trong cÃ¹ng organization.
 
 **Response data:**
 
@@ -581,23 +581,23 @@ Lấy giá mặc định cho một hoặc nhiều sản phẩm theo khách hàng
 }
 ```
 
-API này chỉ đọc lịch sử. Việc ghi lịch sử giá phát sinh từ order/checkout khi chứng từ bán hàng được lưu thành công.
+API nÃ y chá»‰ Ä‘á»c lá»‹ch sá»­. Viá»‡c ghi lá»‹ch sá»­ giÃ¡ phÃ¡t sinh tá»« order/checkout khi chá»©ng tá»« bÃ¡n hÃ ng Ä‘Æ°á»£c lÆ°u thÃ nh cÃ´ng.
 
 ---
 
 ## 10. Error Handling
 
-| HTTP | Code | Khi dùng |
+| HTTP | Code | Khi dÃ¹ng |
 |---|---|---|
-| 400 | `VALIDATION_ERROR` | Input sai định dạng, thiếu trường bắt buộc hoặc giá trị ngoài enum |
-| 401 | `AUTH_REQUIRED` | Thiếu hoặc sai access token |
-| 403 | `PERMISSION_DENIED` | Thiếu permission yêu cầu |
-| 403 | `WORKSTATION_INVALID` | Workstation không hợp lệ |
-| 404 | `RESOURCE_NOT_FOUND` | Không tìm thấy customer/product/price list trong organization |
-| 409 | `RESOURCE_CONFLICT` | Trùng mã khách, SĐT, mã sản phẩm, mã nhóm hoặc mã bảng giá |
-| 500 | `INTERNAL_ERROR` | Lỗi hệ thống không công khai chi tiết |
+| 400 | `VALIDATION_ERROR` | Input sai Ä‘á»‹nh dáº¡ng, thiáº¿u trÆ°á»ng báº¯t buá»™c hoáº·c giÃ¡ trá»‹ ngoÃ i enum |
+| 401 | `AUTH_REQUIRED` | Thiáº¿u hoáº·c sai access token |
+| 403 | `PERMISSION_DENIED` | Thiáº¿u permission yÃªu cáº§u |
+| 403 | `WORKSTATION_INVALID` | Workstation khÃ´ng há»£p lá»‡ |
+| 404 | `RESOURCE_NOT_FOUND` | KhÃ´ng tÃ¬m tháº¥y customer/product/price list trong organization |
+| 409 | `RESOURCE_CONFLICT` | TrÃ¹ng mÃ£ khÃ¡ch, SÄT, mÃ£ sáº£n pháº©m, mÃ£ nhÃ³m hoáº·c mÃ£ báº£ng giÃ¡ |
+| 500 | `INTERNAL_ERROR` | Lá»—i há»‡ thá»‘ng khÃ´ng cÃ´ng khai chi tiáº¿t |
 
-Validation lỗi có thể trả thêm:
+Validation lá»—i cÃ³ thá»ƒ tráº£ thÃªm:
 
 ```json
 {
@@ -610,25 +610,25 @@ Validation lỗi có thể trả thêm:
 
 ---
 
-## 11. Logging và metric
+## 11. Logging vÃ  metric
 
-Backend nên log các thao tác ghi quan trọng:
+Backend nÃªn log cÃ¡c thao tÃ¡c ghi quan trá»ng:
 
-- tạo/sửa khách hàng
-- tạo/sửa nhóm khách
-- tạo/sửa sản phẩm
-- tạo/sửa bảng giá
-- tạo/sửa/xóa chi tiết bảng giá
+- táº¡o/sá»­a khÃ¡ch hÃ ng
+- táº¡o/sá»­a nhÃ³m khÃ¡ch
+- táº¡o/sá»­a sáº£n pháº©m
+- táº¡o/sá»­a báº£ng giÃ¡
+- táº¡o/sá»­a/xÃ³a chi tiáº¿t báº£ng giÃ¡
 
-Log không ghi token, secret hoặc dữ liệu nhạy cảm không cần thiết.
+Log khÃ´ng ghi token, secret hoáº·c dá»¯ liá»‡u nháº¡y cáº£m khÃ´ng cáº§n thiáº¿t.
 
-Metric gợi ý:
+Metric gá»£i Ã½:
 
-- số request tìm sản phẩm
-- số request resolve giá
-- số lỗi conflict khi tạo khách hoặc tạo sản phẩm
-- latency của `/pricing/resolve`
+- sá»‘ request tÃ¬m sáº£n pháº©m
+- sá»‘ request resolve giÃ¡
+- sá»‘ lá»—i conflict khi táº¡o khÃ¡ch hoáº·c táº¡o sáº£n pháº©m
+- latency cá»§a `/pricing/resolve`
 
 ---
 
-← [Quay về POS README](./README.md)
+â† [Quay vá» POS README](./README.md)

@@ -1,4 +1,4 @@
-# TARGET STATE QC-OMS - He thong duy nhat
+﻿# TARGET STATE QC-OMS - He thong duy nhat
 
 > Trang thai: Da chot dinh huong theo Owner - 2026-06-28
 > Source of Truth: muc tieu san pham cuoi cung cua QC-OMS.
@@ -37,7 +37,7 @@ He thong can phan tach ro ba mien du lieu:
 | San xuat | May in, may cat, agent doc log/file | File san xuat, trang thai may, thoi gian chay, lan in lai |
 | Doi soat | QC-OMS tinh tu POS va San xuat | Chenh lech, hao hut thuc, canh bao, bao cao |
 
-Hai mien POS va San xuat duoc thiet ke doc lap ve nghia vu va quyen ghi, nhung nen nam trong cung PostgreSQL/Supabase cua QC-OMS de doi soat an toan.
+Hai mien POS va San xuat duoc thiet ke doc lap ve nghia vu va quyen ghi, nhung nen nam trong cung PostgreSQL/backend cu da go cua QC-OMS de doi soat an toan.
 
 Khong nen tach thanh hai database vat ly khac nhau neu chua co ly do van hanh bat buoc. Cach dung dung la tach schema/bang/module:
 

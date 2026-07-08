@@ -1,0 +1,206 @@
+* {
+  scrollbar-color: var(--color-scrollbar-thumb) transparent;
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar {
+  width: 0.375rem;
+  height: 0.375rem;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--color-scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-scrollbar-thumb-hover);
+}
+
+body {
+  margin: 0;
+  background: var(--color-surface);
+  font-family: var(--font-body);
+  color: var(--color-text);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+input:not([type="radio"]):not([type="checkbox"]):focus,
+input:not([type="radio"]):not([type="checkbox"]):focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible,
+.button:focus-visible:not(:disabled):not(.button-danger),
+.management-compact-search:focus-within,
+.pos-invoice-tab:focus-within,
+.pos-cart-footer:focus-within,
+label:focus-within {
+  border-color: var(--color-selected-border);
+}
+
+input:not([type="radio"]):not([type="checkbox"]):focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+.button:focus-visible {
+  outline: none;
+}
+
+button {
+  border-radius: var(--radius-sm);
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 1.8rem;
+  border: 1px solid transparent;
+  padding: 0 var(--space-2);
+  font-weight: 700;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 120ms ease;
+  white-space: nowrap;
+}
+
+.button-primary {
+  border: 1px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+}
+
+.button-secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.button-danger {
+  border: 1px solid var(--color-danger);
+  background: transparent;
+  color: var(--color-danger);
+}
+
+.button-primary:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+
+.button-secondary:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--color-primary) 58%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 32%, transparent);
+}
+
+.button-danger:not(:disabled):hover {
+  background: color-mix(in srgb, var(--color-danger) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-danger) 24%, transparent);
+}
+
+.button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.button:disabled,
+.management-action-icon:disabled,
+.management-row-action:disabled,
+.management-icon-button:disabled,
+.management-compact-create-action:disabled {
+  opacity: 0.45;
+}
+
+.management-action-icon,
+.management-row-action,
+.management-icon-button,
+.management-compact-create-action,
+.management-table-footer button,
+.customer-search button,
+.pos-search-add-button,
+.pos-icon-button,
+.pos-topbar-tabs button[aria-label="Táº¡o hÃ³a Ä‘Æ¡n má»›i"],
+.pos-checkout-drawer-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  min-height: 1.6rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  padding: 0;
+}
+
+.management-compact-create-action svg {
+  transition: transform 180ms ease;
+}
+
+.management-compact-create-action-clear svg {
+  transform: rotate(45deg);
+}
+
+.management-action-icon:hover,
+.management-row-action:hover,
+.management-icon-button:hover,
+.management-compact-create-action:hover,
+.management-table-footer button:hover,
+.customer-search button:hover,
+.pos-search-add-button:hover,
+.pos-icon-button:hover,
+.pos-topbar-tabs button[aria-label="Táº¡o hÃ³a Ä‘Æ¡n má»›i"]:hover,
+.pos-checkout-drawer-close:hover {
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  color: var(--color-primary);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 36%, transparent);
+}
+
+.management-action-icon:focus-visible,
+.management-row-action:focus-visible,
+.management-icon-button:focus-visible,
+.management-compact-create-action:focus-visible,
+.management-table-footer button:focus-visible,
+.customer-search button:focus-visible,
+.pos-search-add-button:focus-visible,
+.pos-icon-button:focus-visible,
+.pos-topbar-tabs button[aria-label="Táº¡o hÃ³a Ä‘Æ¡n má»›i"]:focus-visible,
+.pos-checkout-drawer-close:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--color-selected-border);
+}
+
+

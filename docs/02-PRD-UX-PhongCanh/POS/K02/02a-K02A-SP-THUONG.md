@@ -50,6 +50,8 @@ Khi một mặt hàng được chọn vào giỏ, cấu trúc giao diện ngoài
 - Dòng đã sửa giá thủ công phải có dấu hiệu nhận biết để khi đổi khách hoặc đổi bảng giá không bị tự tính đè.
 - Có nút nhỏ cạnh ô đơn giá để mở danh sách **5 giá gần đây** của đúng cặp khách hàng + sản phẩm.
 - Danh sách giá gần đây chỉ là gợi ý chọn nhanh; giá mặc định của dòng mới vẫn luôn lấy từ bảng giá hiện hành.
+- Ô **Đơn giá** trên dòng giỏ hàng phải đủ rộng cho số tiền có dấu cách phân nhóm nghìn, ví dụ `600 000`; khi focus không được cắt hoặc che mất chữ số cuối cùng.
+- Ô tiền trên dòng giỏ hàng căn phải, không hiển thị nút tăng/giảm số của trình duyệt, và giữ padding phải đủ để viền focus không đè lên số.
 
 **Quy tắc cộng dồn:** Nếu sản phẩm **đã có** trong giỏ, chọn lại sẽ **tự cộng +1** vào SL dòng cũ.
 

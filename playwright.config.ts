@@ -1,21 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
-import { loadPlaywrightConfigSupabaseEnv, resolveE2eApiBaseUrl } from "./tests/e2e/supabase-env";
 
 process.env.E2E_ADMIN_EMAIL ??= "admin@qc.local";
 process.env.E2E_ADMIN_PASSWORD ??= "123456";
 
-const supabase = loadPlaywrightConfigSupabaseEnv();
-const apiBaseUrl = resolveE2eApiBaseUrl(supabase);
+const apiBaseUrl = process.env.E2E_API_BASE_URL ?? "http://127.0.0.1:3100";
 const webServerEnv = {
   ...process.env,
-  SUPABASE_URL: supabase.SUPABASE_URL,
-  SUPABASE_ANON_KEY: supabase.SUPABASE_ANON_KEY,
-  SUPABASE_SERVICE_ROLE_KEY: supabase.SUPABASE_SERVICE_ROLE_KEY,
-  VITE_SUPABASE_URL: supabase.SUPABASE_URL,
-  VITE_SUPABASE_ANON_KEY: supabase.SUPABASE_ANON_KEY,
   VITE_API_BASE_URL: apiBaseUrl,
   VITE_APP_ENV: "e2e",
   QC_OMS_ALLOWED_ORIGINS: "http://127.0.0.1:5174",
+  DATABASE_URL: process.env.DATABASE_URL ?? "postgresql://postgres:postgres@127.0.0.1:54322/postgres",
 };
 
 export default defineConfig({
@@ -28,7 +22,7 @@ export default defineConfig({
   },
   webServer: [
     {
-      command: "npx supabase functions serve api",
+      command: "npm run api:dev",
       url: `${apiBaseUrl}/api/v1/health`,
       env: webServerEnv,
       reuseExistingServer: !process.env.CI,

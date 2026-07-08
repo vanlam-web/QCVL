@@ -1,132 +1,52 @@
-# BACKUP-RESTORE — Sao lưu và khôi phục
+# BACKUP-RESTORE
 
-> **Vai trò:** Baseline trước production.
-> **Phạm vi:** Chính sách backup/restore cho dữ liệu QC-OMS.
+> Pham vi: backup/restore cho QCVL PostgreSQL va file van hanh.
 
----
+## Du Lieu Can Backup
 
-## 1. Mục tiêu
-
-QC-OMS quản lý dữ liệu bán hàng, tồn kho, công nợ và sổ quỹ. Mất dữ liệu hoặc restore sai có thể làm lệch tiền/kho.
-
-Backup chỉ có giá trị khi restore được kiểm tra định kỳ.
-
----
-
-## 2. Dữ liệu cần backup
-
-| Nhóm | Bắt buộc |
+| Nhom | Bat buoc |
 |---|---|
-| Database production | Có |
-| Supabase Auth users/config liên quan | Có nếu nhà cung cấp hỗ trợ export/restore |
-| File/storage bill hoặc attachment nếu sau này có | Có |
-| Environment/secrets | Không backup vào repo; lưu trong secret manager/quy trình riêng |
-| Logs vận hành | Lưu theo retention phù hợp, không thay thế database backup |
+| NAS PostgreSQL database | Co |
+| File/storage bill hoac attachment neu sau nay co | Co |
+| Environment/secrets | Khong backup vao repo; luu trong secret manager/quy trinh rieng |
+| Logs van hanh | Luu theo retention phu hop, khong thay the database backup |
 
----
+## RPO/RTO Baseline
 
-## 3. RPO/RTO baseline
-
-Trước khi production thật, dùng baseline tạm:
-
-| Chỉ số | Baseline |
+| Chi so | Baseline |
 |---|---|
-| RPO | Tối đa mất dữ liệu 24 giờ |
-| RTO | Khôi phục service trong 4 giờ làm việc |
+| RPO | Toi da mat du lieu 24 gio |
+| RTO | Khoi phuc service trong 4 gio lam viec |
 
-Khi hệ thống dùng hàng ngày, cần xem lại:
+Khi he thong dung hang ngay, xem lai theo doanh thu/ngay, so hoa don/ngay, va kha nang snapshot/backup cua NAS PostgreSQL.
 
-- doanh thu/ngày
-- số hóa đơn/ngày
-- mức chấp nhận nhập lại thủ công
-- khả năng Supabase/project hiện tại hỗ trợ PITR hay backup lịch
+## Backup Schedule
 
-Nếu doanh thu hoặc số chứng từ tăng, cần giảm RPO xuống mức thấp hơn.
+- Backup database tu dong hang ngay.
+- Giu backup toi thieu 14 ngay.
+- Truoc migration lon: tao backup/snapshot thu cong neu ha tang ho tro.
+- Theo doi backup fail va canh bao.
 
----
+## Restore Drill
 
-## 4. Backup schedule
+Toi thieu moi thang hoac truoc production milestone lon:
 
-Baseline đề xuất:
+1. Chon mot backup gan nhat.
+2. Restore vao moi truong rieng, khong de production.
+3. Chay migration/cau hinh can thiet neu co.
+4. Kiem tra dang nhap test.
+5. Kiem tra khach hang, san pham, hoa don, payment receipts, cashbook, stock movements.
+6. Ghi lai thoi gian restore, loi gap phai va ket qua.
 
-- Backup database tự động hằng ngày.
-- Giữ backup tối thiểu 14 ngày.
-- Trước migration lớn: tạo backup/snapshot thủ công nếu hạ tầng hỗ trợ.
-- Theo dõi backup fail và cảnh báo.
+## Khong Duoc Lam
 
-Không chỉ tin vào thông báo backup thành công; phải có restore drill.
+- Khong restore de production chi de thu.
+- Khong dung backup production cho dev ca nhan neu chua an danh du lieu nhay cam.
+- Khong commit dump database, file backup, `.env`, token, hoac credential vao repo.
+- Khong xoa backup cu truoc khi backup moi duoc xac nhan.
 
----
+## Tham Chieu
 
-## 5. Restore drill
-
-Tối thiểu mỗi tháng hoặc trước production milestone lớn:
-
-1. Chọn một backup gần nhất.
-2. Restore vào môi trường riêng, không đè production.
-3. Chạy migration/cấu hình cần thiết nếu có.
-4. Kiểm tra đăng nhập test.
-5. Kiểm tra dữ liệu mẫu:
-   - khách hàng
-   - sản phẩm
-   - hóa đơn
-   - payment receipts
-   - cashbook
-   - stock movements
-6. Ghi lại thời gian restore, lỗi gặp phải và kết quả.
-
-Restore drill không được dùng production database đích.
-
----
-
-## 6. Quy trình khi cần restore production
-
-Chỉ restore production khi:
-
-- production database hỏng/mất dữ liệu nghiêm trọng
-- corrective migration không đủ
-- đã xác định backup cần restore
-- đã thông báo người vận hành/Owner
-
-Quy trình:
-
-1. Dừng hoặc khóa ghi production nếu cần để tránh dữ liệu tiếp tục lệch.
-2. Ghi nhận thời điểm sự cố.
-3. Chọn backup phù hợp theo RPO.
-4. Restore vào môi trường tạm để kiểm tra nhanh.
-5. Nếu hợp lệ, thực hiện restore production theo quy trình hạ tầng.
-6. Chạy smoke test production.
-7. Ghi nhận dữ liệu có thể bị mất từ thời điểm backup đến sự cố.
-8. Nếu cần, nhập bù thủ công các hóa đơn/thu chi/tồn kho bị mất.
-
----
-
-## 7. Dữ liệu sau restore cần đối soát
-
-Sau restore, kiểm tra tối thiểu:
-
-- số hóa đơn mới nhất
-- công nợ khách lớn
-- sổ quỹ tiền mặt/ngân hàng
-- tồn kho mặt hàng chính
-- phiếu thu/chi ngày hiện tại
-- user đăng nhập và quyền
-
-Nếu restore mất dữ liệu trong ngày, phải có danh sách chứng từ cần nhập lại từ giấy/in bill/chat/bank.
-
----
-
-## 8. Không được làm
-
-- Không restore đè production chỉ để thử.
-- Không dùng backup production cho dev cá nhân nếu chứa dữ liệu nhạy cảm mà chưa có quy trình ẩn danh.
-- Không commit dump database, file backup, `.env`, service role key hoặc credential vào repo.
-- Không xóa backup cũ trước khi backup mới được xác nhận.
-
----
-
-## 9. Tham chiếu
-
+- [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md)
 - [PRODUCTION.md](./PRODUCTION.md)
-- [ENVIRONMENTS-CI.md](./ENVIRONMENTS-CI.md)
 - [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md)

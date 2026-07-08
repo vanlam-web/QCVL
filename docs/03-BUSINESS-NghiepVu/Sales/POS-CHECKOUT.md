@@ -77,17 +77,21 @@ MVP không lưu phần dư thành khách trả trước.
 
 ### BR-CHK-02C: Phương thức thanh toán
 
-POS hỗ trợ ba phương thức thanh toán:
+POS ghi nhận và UI hiển thị ba kiểu thanh toán nghiệp vụ: **Tiền mặt**, **Chuyển khoản** và **Kết hợp**.
+
+QCVL MVP không hiển thị hoặc ghi nhận **Thẻ** và **Ví**. QR ting ting, bank partner, NAPAS, MoMo/ZaloPay cũng không thuộc MVP.
 
 | Phương thức | Cách nhập | Ghi nhận |
 |---|---|---|
 | Tiền mặt | Nhập số tiền mặt | Ghi vào quỹ tiền mặt |
 | Chuyển khoản | Nhập số tiền chuyển khoản, chọn tài khoản ngân hàng nhận tiền, có thể kèm mã giao dịch/ghi chú | Ghi vào đúng tài khoản ngân hàng |
-| Kết hợp | Nhập tiền mặt và chuyển khoản vào một tài khoản ngân hàng | Tách ghi tiền mặt và tài khoản ngân hàng tương ứng |
+| Kết hợp | Nhập cả tiền mặt và chuyển khoản vào cùng lần thanh toán | Tách ghi tiền mặt và tài khoản ngân hàng tương ứng |
 
 Tổng thực thu = tiền mặt + chuyển khoản.
 
-Tiền trả nợ cũ dùng cùng phương thức thanh toán đang chọn trong dialog. Nếu chọn kết hợp, hệ thống ghi tổng tiền mặt vào quỹ tiền mặt và tổng tiền chuyển khoản vào quỹ ngân hàng.
+Khi chọn **Kết hợp**, hệ thống hiển thị cả ô tiền mặt và ô chuyển khoản để nhân viên tự chia số tiền khách trả.
+
+Tiền trả nợ cũ dùng cùng phương thức thanh toán đang nhập trong dialog. Nếu có cả hai khoản, hệ thống ghi tổng tiền mặt vào quỹ tiền mặt và tổng tiền chuyển khoản vào quỹ ngân hàng.
 
 Trong MVP, một lần thanh toán chỉ có tối đa một tài khoản ngân hàng cho phần chuyển khoản.
 

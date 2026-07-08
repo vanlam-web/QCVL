@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react'
-import { UserCircle } from 'lucide-react'
+import { BarChart3, LogOut, Settings, UserCircle } from 'lucide-react'
 import type { PermissionCode } from '../users/types'
 import { permissions as permissionCodes } from '../users/permissions'
 
@@ -39,12 +39,12 @@ export function ProfileMenu({
   }, [open])
 
   return (
-    <div ref={ref} className={compact ? 'profile-menu profile-menu-compact' : 'profile-menu'}>
+    <div ref={ref} className={compact ? 'account-menu profile-menu profile-menu-compact' : 'account-menu profile-menu'}>
       <button
         aria-controls={id}
         aria-expanded={open}
         aria-label={compact ? 'Tài khoản' : undefined}
-        className={compact ? 'management-icon-button' : 'button button-secondary'}
+        className={compact ? 'account-menu-trigger management-icon-button' : 'button button-secondary'}
         onClick={() => setOpen((value) => !value)}
         title={compact ? displayName : undefined}
         type="button"
@@ -52,21 +52,27 @@ export function ProfileMenu({
         {compact ? <UserCircle aria-hidden="true" size={20} /> : `👤 ${displayName}`}
       </button>
       {open ? (
-        <div id={id} role="menu">
-          <button className="button button-secondary" role="menuitem" onClick={onOpenDashboard} type="button">
-            Trang chủ
+        <div className="account-menu-popover" id={id} role="menu">
+          <button className="account-menu-profile" role="menuitem" onClick={onOpenDashboard} type="button">
+            <span aria-hidden="true" className="account-menu-profile-avatar">
+              <UserCircle size={20} />
+            </span>
+            <span className="account-menu-profile-label" title={displayName}>
+              {displayName}
+            </span>
           </button>
-          {permissions.includes(permissionCodes.viewShiftReport) ? (
-            <button className="button button-secondary" role="menuitem">
-              Báo cáo ca
-            </button>
-          ) : null}
+          <button className="button button-secondary" role="menuitem" type="button">
+            <BarChart3 aria-hidden="true" size={16} />
+            Báo cáo ca
+          </button>
           {permissions.includes(permissionCodes.accessAdminPanel) ? (
             <button className="button button-secondary" role="menuitem" onClick={onOpenAdmin} type="button">
+              <Settings aria-hidden="true" size={16} />
               Quản trị
             </button>
           ) : null}
           <button className="button button-secondary" role="menuitem" onClick={onSignOut} type="button">
+            <LogOut aria-hidden="true" size={16} />
             Đăng xuất
           </button>
         </div>

@@ -197,6 +197,7 @@ it('creates, disables, and updates permissions for users', async () => {
   await userEvent.selectOptions(within(userFilter).getByRole('combobox', { name: 'Trạng thái' }), 'active')
   await userEvent.click(within(userFilter).getByRole('button', { name: 'Lọc' }))
   expect(service.listUsers).toHaveBeenCalledWith({ search: 'Admin', status: 'active' })
+  await userEvent.click(userFilter.querySelector('.management-compact-create-action-clear') as HTMLButtonElement)
   await userEvent.click(screen.getByRole('button', { name: 'Tạo người dùng' }))
   const createUserForm = screen.getByRole('form', { name: 'Tạo người dùng' })
   fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Tên hiển thị' }), {

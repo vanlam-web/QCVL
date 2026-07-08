@@ -1,4 +1,4 @@
-# Legacy QuanLyXuong - Ngu canh de QC-OMS hieu he cu
+﻿# Legacy QuanLyXuong - Ngu canh de QC-OMS hieu he cu
 
 > Trang thai: tai lieu ngu canh di tru - 2026-06-28
 > Pham vi: mo ta he QuanLyXuong cu nhu mot legacy external system. Khong phai kien truc muc tieu cua QC-OMS.
@@ -154,7 +154,7 @@ Luc do QuanLyXuong client/server/Dashboard/Auto_CRM cu duoc tat.
 
 ## 6. Huong thay the trong QC-OMS
 
-Bang du lieu muc tieu nen nam trong cung PostgreSQL/Supabase cua QC-OMS, tach module:
+Bang du lieu muc tieu nen nam trong cung PostgreSQL/backend cu da go cua QC-OMS, tach module:
 
 ```text
 sales_*       = POS, don hang, hoa don, thanh toan, cong no

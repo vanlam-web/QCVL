@@ -30,8 +30,8 @@ Khi chat, docs và code khác nhau, dùng thứ tự:
 
 1. Quyết định mới nhất của Owner trong chat.
 2. Source of Truth đã commit trên `main` hoặc branch spec.
-3. Implementation plan trong `docs/superpowers/plans`.
-4. Code hiện tại.
+3. Code hien tai.
+4. Git history cho plan/spec cu khi can truy vet.
 
 Nếu code lệch docs hoặc quyết định Owner, coi là implementation drift cho tới khi Spec/Owner chốt lại.
 
@@ -236,4 +236,4 @@ Không tự mở nếu Owner chưa chốt:
 3. [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
 4. [REVIEW-ISSUES.md](./REVIEW-ISSUES.md) nếu việc đến từ Review.
 5. Source of Truth theo module đang làm.
-6. Plan lịch sử trong `docs/superpowers/plans` nếu cần truy vết.
+6. Git history cho plan/spec cu neu can truy vet.

@@ -78,6 +78,7 @@ export interface ProductStockMovement {
   document_type?: 'sale_invoice' | 'purchase_receipt' | 'stocktake' | 'manual' | 'material_opening' | null
   transaction_price?: number | null
   cost_price?: number | null
+  ending_qty?: number | null
   partner_name?: string | null
 }
 

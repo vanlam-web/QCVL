@@ -38,6 +38,10 @@ const dimensionLine: CheckoutCartLine = {
   linear_m: 2.4,
 }
 
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
   return {
     validateCart: vi.fn(),
@@ -83,13 +87,186 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
   }
 }
 
+it('shows only QCVL cash bank transfer and mixed payment choices', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  expect(screen.getByRole('radio', { name: 'Tiền mặt' })).toBeChecked()
+  expect(screen.getByRole('radio', { name: 'Chuyển khoản' })).toBeInTheDocument()
+  expect(screen.getByRole('radio', { name: 'Kết hợp' })).toBeInTheDocument()
+  expect(screen.queryByRole('radio', { name: 'Thẻ' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('radio', { name: 'Ví' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Báo giá' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Tạo hóa đơn' })).toBeInTheDocument()
+})
+
+it('keeps customer payment inline in cash mode and reveals bank account fields in transfer mode', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '0')
+  expect(screen.getByLabelText('Khách thanh toán')).toHaveValue('0')
+  expect(screen.getByText('Còn nợ')).toBeInTheDocument()
+  expect(screen.getAllByText('240 000').length).toBeGreaterThan(0)
+
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
+  expect(screen.getByLabelText('Khách thanh toán')).toHaveValue('240000')
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Chuyển khoản' }))
+  expect(screen.getByLabelText('Khách thanh toán')).toHaveValue('240 000')
+  expect(screen.getByRole('button', { name: 'Tài khoản nhận chuyển khoản Chọn tài khoản' })).toBeInTheDocument()
+  expect(screen.queryByLabelText('Chuyển khoản trả hóa đơn')).not.toBeInTheDocument()
+})
+
+it('splits mixed payment into cash and bank rows with bank account selector', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Kết hợp' }))
+
+  expect(screen.queryByLabelText('Khách thanh toán')).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Thanh toán tiền mặt')).toHaveValue('240 000')
+  expect(screen.getByLabelText('Thanh toán ngân hàng')).toHaveValue('0')
+  expect(screen.getByRole('button', { name: 'Tài khoản nhận chuyển khoản Chọn tài khoản' })).toBeInTheDocument()
+})
+
+it('fills the remaining mixed payment into bank only until bank amount is edited', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Kết hợp' }))
+  await userEvent.clear(screen.getByLabelText('Thanh toán tiền mặt'))
+  await userEvent.type(screen.getByLabelText('Thanh toán tiền mặt'), '100000')
+
+  expect(screen.getByLabelText('Thanh toán ngân hàng')).toHaveValue('140 000')
+
+  await userEvent.clear(screen.getByLabelText('Thanh toán ngân hàng'))
+  await userEvent.type(screen.getByLabelText('Thanh toán ngân hàng'), '50000')
+  await userEvent.clear(screen.getByLabelText('Thanh toán tiền mặt'))
+  await userEvent.type(screen.getByLabelText('Thanh toán tiền mặt'), '120000')
+
+  expect(screen.getByLabelText('Thanh toán ngân hàng')).toHaveValue('50 000')
+})
+
+it('auto-selects the pinned bank account when bank payment is opened', async () => {
+  window.localStorage.setItem('finance.bankAccounts.pinnedIds', JSON.stringify(['bank-1']))
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Chuyển khoản' }))
+
+  expect(await screen.findByRole('button', { name: 'Tài khoản nhận chuyển khoản MB01 - MB Bank' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Tài khoản nhận chuyển khoản MB01 - MB Bank' }))
+  expect(screen.getByRole('button', { name: 'Bỏ ghim tài khoản MB01 - MB Bank' })).toHaveAttribute('aria-pressed', 'true')
+})
+
+it('pins a bank account from the account dropdown for future checkout sessions', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Chuyển khoản' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Tài khoản nhận chuyển khoản Chọn tài khoản' }))
+  const pinButton = screen.getByRole('button', { name: 'Ghim tài khoản MB01 - MB Bank' })
+
+  await userEvent.click(pinButton)
+
+  expect(JSON.parse(window.localStorage.getItem('finance.bankAccounts.pinnedIds') ?? '[]')).toEqual(['bank-1'])
+  expect(pinButton).toHaveAttribute('aria-pressed', 'true')
+})
+
+it('uses the pinned bank account in mixed payment mode', async () => {
+  window.localStorage.setItem('finance.bankAccounts.pinnedIds', JSON.stringify(['bank-1']))
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Kết hợp' }))
+
+  expect(await screen.findByRole('button', { name: 'Tài khoản nhận chuyển khoản MB01 - MB Bank' })).toBeInTheDocument()
+})
+
+it('submits mixed cash and bank transfer payment when combination mode is selected', async () => {
+  const service = makeOrderService()
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Kết hợp' }))
+  await userEvent.clear(screen.getByLabelText('Thanh toán tiền mặt'))
+  await userEvent.type(screen.getByLabelText('Thanh toán tiền mặt'), '100000')
+  await userEvent.clear(screen.getByLabelText('Thanh toán ngân hàng'))
+  await userEvent.type(screen.getByLabelText('Thanh toán ngân hàng'), '140000')
+  await userEvent.click(screen.getByRole('button', { name: 'Tài khoản nhận chuyển khoản Chọn tài khoản' }))
+  await userEvent.click(screen.getByRole('option', { name: 'MB01 - MB Bank' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(service.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      payment: expect.objectContaining({
+        cash_amount: 100000,
+        bank_amount: 140000,
+        bank_account_id: 'bank-1',
+      }),
+    }),
+  )
+})
+
+it('keeps old debt payment collapsed until the user expands it', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  expect(await screen.findByText('Tổng nợ cũ')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Thanh toán nợ cũ')).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Trả thêm nợ cũ' }))
+  expect(screen.getByLabelText('Thanh toán nợ cũ')).toBeInTheDocument()
+})
+
+it('does not show a redundant payment drawer heading', () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  expect(screen.getByRole('region', { name: 'Thanh toán' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Thanh toán' })).not.toBeInTheDocument()
+})
+
+it('shows compact payment header metadata and line summary', () => {
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={makeOrderService()}
+      sellerName="Văn Viết Phương Lâm"
+      orderCreatedAt="2026-07-08T07:29:00.000Z"
+    />,
+  )
+
+  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('Văn Viết Phương Lâm')
+  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('08/07/2026')
+  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('14:29')
+  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' }).textContent).toBe(
+    'Văn Viết Phương Lâm14:2908/07/2026',
+  )
+  expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
+  expect(screen.queryByText('Khách cần trả')).toBeInTheDocument()
+  expect(screen.getByText('Cong ty ABC')).toBeInTheDocument()
+  expect(document.querySelector('.checkout-summary-kv')).not.toBeInTheDocument()
+})
+
+it('keeps payment drawer compact without quick amount chips and with footer actions in one row', () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  expect(screen.queryByText('Thu khác')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Gợi ý tiền mặt')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Tiền mặt trả hóa đơn')).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: '50 000' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Thao tác cuối đơn')).toHaveClass('checkout-action-row')
+  expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
+})
+
+it('shows the cart line count next to the goods total label', () => {
+  render(<CheckoutPanel cartLines={[line, { ...line, id: 'line-2' }]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  expect(screen.getByText('Tiền hàng (2)')).toBeInTheDocument()
+})
+
 it('calculates cart total and submits cash checkout', async () => {
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
   expect(screen.getAllByText('240 000').length).toBeGreaterThan(0)
-  await userEvent.clear(screen.getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '240000')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(service.checkout).toHaveBeenCalledWith(
@@ -216,13 +393,11 @@ it('subtracts line discounts from payable total and checkout payload', async () 
     />,
   )
 
-  expect(screen.getByText('Tiền hàng')).toBeInTheDocument()
-  expect(screen.getByText('Chiết khấu')).toBeInTheDocument()
-  expect(screen.getByText('Khách cần trả')).toBeInTheDocument()
-  expect(screen.getByText('200 000')).toBeInTheDocument()
+  expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
+  expect(screen.getAllByText('200 000').length).toBeGreaterThan(0)
 
-  await userEvent.clear(screen.getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '200000')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '200000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(service.checkout).toHaveBeenCalledWith(
@@ -238,27 +413,46 @@ it('subtracts line discounts from payable total and checkout payload', async () 
   )
 })
 
+it('lets checkout discount be edited inline and sends it as item discount', async () => {
+  const service = makeOrderService()
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
+
+  await userEvent.clear(screen.getByLabelText('Giảm giá'))
+  await userEvent.type(screen.getByLabelText('Giảm giá'), '40000')
+  expect(screen.getByLabelText('Giảm giá')).toHaveValue('40000')
+  expect(screen.getAllByText('200 000').length).toBeGreaterThan(0)
+
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '200000')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(service.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [expect.objectContaining({ product_id: 'p-1', discount_amount: 40000 })],
+      payment: expect.objectContaining({ cash_amount: 200000 }),
+    }),
+  )
+})
+
 it('requires a bank account when bank amount is entered', async () => {
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
-  await userEvent.clear(screen.getByLabelText('Chuyển khoản trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Chuyển khoản trả hóa đơn'), '240000')
+  await userEvent.click(screen.getByRole('radio', { name: 'Chuyển khoản' }))
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Chọn tài khoản nhận chuyển khoản')
   expect(service.checkout).not.toHaveBeenCalled()
 })
 
-it('offers recent prices for the selected customer and product', async () => {
+it('does not duplicate recent prices inside the checkout drawer', () => {
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
-  await userEvent.click(screen.getByRole('button', { name: 'Giá gần đây Mica 3mm' }))
-
-  expect(service.listRecentCustomerProductPrices).toHaveBeenCalledWith('customer-1', 'p-1')
-  expect(await screen.findByText('HD000099')).toBeInTheDocument()
-  expect(screen.getByText('110 000')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Giá gần đây Mica 3mm' })).not.toBeInTheDocument()
+  expect(service.listRecentCustomerProductPrices).not.toHaveBeenCalled()
 })
 
 it('shows checkout inventory warnings without blocking success', async () => {
@@ -280,8 +474,8 @@ it('shows checkout inventory warnings without blocking success', async () => {
   })
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
-  await userEvent.clear(screen.getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '240000')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   const receipt = await screen.findByLabelText('Kết quả checkout')
@@ -293,8 +487,8 @@ it('requires retail debt note when no customer is selected and invoice has debt'
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={null} orderService={service} />)
 
-  await userEvent.clear(screen.getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '100000')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '100000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Nhập ghi chú nợ khách lẻ')
@@ -304,8 +498,8 @@ it('requires retail debt note when no customer is selected and invoice has debt'
 it('asks whether customer surplus is returned or applied to old debt', async () => {
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
 
-  await userEvent.clear(screen.getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '300000')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '300000')
 
   expect(await screen.findByText('Khách trả dư 60 000')).toBeInTheDocument()
   expect(screen.getByRole('radio', { name: 'Trả lại khách' })).toBeChecked()
@@ -334,7 +528,10 @@ it('loads and displays customer debt for selected customers', async () => {
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
   expect(service.getCustomerDebt).toHaveBeenCalledWith('customer-1')
-  expect(await screen.findByText('Tổng nợ hiện tại')).toBeInTheDocument()
+  expect(await screen.findByText('Tổng nợ cũ')).toBeInTheDocument()
+  const customerLine = screen.getByText('Cong ty ABC').closest('.checkout-customer-line')
+  expect(customerLine).not.toHaveTextContent('Nợ:')
+  expect(within(customerLine as HTMLElement).getByText('Tổng nợ 150 000')).toHaveClass('checkout-customer-debt')
   const debtList = screen.getByLabelText('Hóa đơn còn nợ')
   expect(within(debtList).getByText('150 000')).toBeInTheDocument()
   expect(screen.getByText('HD000099')).toBeInTheDocument()
@@ -344,10 +541,11 @@ it('submits old debt collection separately from the current invoice payment', as
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
 
-  await userEvent.clear(await screen.findByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(screen.getByLabelText('Tiền mặt trả hóa đơn'), '240000')
-  await userEvent.clear(screen.getByLabelText('Thu nợ cũ'))
-  await userEvent.type(screen.getByLabelText('Thu nợ cũ'), '50000')
+  await userEvent.clear(await screen.findByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
+  await userEvent.click(await screen.findByRole('button', { name: 'Trả thêm nợ cũ' }))
+  await userEvent.clear(screen.getByLabelText('Thanh toán nợ cũ'))
+  await userEvent.type(screen.getByLabelText('Thanh toán nợ cũ'), '50000')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(service.checkout).toHaveBeenCalledWith(
@@ -365,7 +563,7 @@ it('hides old debt collection when no customer is selected', async () => {
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={null} orderService={service} />)
 
-  expect(screen.queryByLabelText('Thu nợ cũ')).not.toBeInTheDocument()
-  expect(screen.queryByText('Tổng nợ hiện tại')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Thanh toán nợ cũ')).not.toBeInTheDocument()
+  expect(screen.queryByText('Tổng nợ cũ')).not.toBeInTheDocument()
   await waitFor(() => expect(service.listFinanceAccounts).toHaveBeenCalled())
 })

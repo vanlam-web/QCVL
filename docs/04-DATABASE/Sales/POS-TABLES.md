@@ -496,7 +496,7 @@ Ghi lịch sử đổi trạng thái của báo giá và hóa đơn để truy v
 
 ### Mục đích
 
-K02-D dùng hàng đợi máy sản xuất để đưa thông báo/file vào POS và thêm dòng vào nháp local. Schema production queue đã có ở migration [202607010001_production_queue.sql](../../../supabase/migrations/202607010001_production_queue.sql), gồm `production_queue_items`, `production_queue_events`, claim và restore transaction.
+K02-D dùng hàng đợi máy sản xuất để đưa thông báo/file vào POS và thêm dòng vào nháp local. Schema production queue cần triển khai trong PostgreSQL runtime của QCVL, gồm `production_queue_items`, `production_queue_events`, claim và restore transaction.
 
 Sales chỉ lưu kết quả khi nhân viên lưu báo giá hoặc checkout hóa đơn. Thông báo máy sản xuất không tự tạo `orders`, không tự trừ kho và không tự ghi doanh thu.
 

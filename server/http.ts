@@ -84,56 +84,40 @@ const productGroups = [
   { id: 'pg-service', code: 'DV', name: 'Dich vu', is_default: false, is_active: true },
 ]
 
-const products = [
-  {
-    id: 'product-mica-3mm',
-    code: 'MICA-3MM',
-    name: 'Mica trong 3mm',
+const products = Array.from({ length: 20 }, (_, index) => {
+  const number = index + 1
+  const code = number === 1 ? 'MICA-3MM' : number === 2 ? 'DECAL-PP' : number === 3 ? 'CUT-CNC' : `DEV20-SP-${pad(number)}`
+  const name =
+    number === 1
+      ? 'Mica trong 3mm'
+      : number === 2
+        ? 'Decal PP'
+        : number === 3
+          ? 'Cat CNC'
+          : `San pham demo ${pad(number)}`
+  const isCombo = number % 7 === 0
+  const isAuxiliary = number % 6 === 0
+  const isService = number === 3 || number % 5 === 0
+  const isRoll = number === 2 || number % 4 === 0
+  const inventoryShape = isService || isCombo || isAuxiliary ? 'normal' : isRoll ? 'roll' : number % 3 === 0 ? 'sheet' : 'normal'
+  const productKind = isCombo ? 'combo' : isAuxiliary ? 'auxiliary_material' : isService ? 'service' : isRoll ? 'roll' : 'goods'
+  return {
+    id: `product-${pad(number)}`,
+    code,
+    name,
     status: 'active',
-    product_kind: 'sheet',
-    unit_name: 'tam',
-    sell_method: 'sheet',
-    latest_purchase_cost: 250000,
-    latest_purchase_cost_at: nowIso,
-    product_group_id: 'pg-mica',
-    product_group: { id: 'pg-mica', code: 'MICA', name: 'Mica' },
-    inventory_shape: 'sheet',
-    track_inventory: true,
+    product_kind: productKind,
+    unit_name: isService ? 'lan' : isRoll ? 'm2' : 'tam',
+    sell_method: isService ? 'quantity' : isRoll ? 'area_m2' : 'sheet',
+    latest_purchase_cost: isService ? null : 150000 + number * 10000,
+    latest_purchase_cost_at: isService ? null : nowIso,
+    product_group_id: isService ? 'pg-service' : 'pg-mica',
+    product_group: isService ? { id: 'pg-service', code: 'DV', name: 'Dich vu' } : { id: 'pg-mica', code: 'MICA', name: 'Mica' },
+    inventory_shape: inventoryShape,
+    track_inventory: !isService,
     unit_conversions: [],
-  },
-  {
-    id: 'product-decal',
-    code: 'DECAL-PP',
-    name: 'Decal PP',
-    status: 'active',
-    product_kind: 'roll',
-    unit_name: 'm2',
-    sell_method: 'area_m2',
-    latest_purchase_cost: 18000,
-    latest_purchase_cost_at: nowIso,
-    product_group_id: 'pg-mica',
-    product_group: { id: 'pg-mica', code: 'MICA', name: 'Mica' },
-    inventory_shape: 'roll',
-    track_inventory: true,
-    unit_conversions: [],
-  },
-  {
-    id: 'product-cut',
-    code: 'CUT-CNC',
-    name: 'Cat CNC',
-    status: 'active',
-    product_kind: 'service',
-    unit_name: 'lan',
-    sell_method: 'quantity',
-    latest_purchase_cost: null,
-    latest_purchase_cost_at: null,
-    product_group_id: 'pg-service',
-    product_group: { id: 'pg-service', code: 'DV', name: 'Dich vu' },
-    inventory_shape: 'normal',
-    track_inventory: false,
-    unit_conversions: [],
-  },
-] as const
+  }
+})
 
 const priceLists = [
   { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le', is_default: true, is_active: true },
@@ -145,36 +129,25 @@ const customerGroups = [
   { id: 'cg-vip', code: 'SI', name: 'Khach si', price_list_id: 'pl-vip', is_active: true },
 ]
 
-const customers = [
-  {
-    id: 'customer-an',
-    code: 'KH0001',
-    name: 'Cong ty An Phat',
-    phone: '0909000001',
-    tax_code: '0312345678',
-    address: 'Binh Tan, TP.HCM',
-    customer_group_id: 'cg-vip',
-    customer_group: { id: 'cg-vip', code: 'SI', name: 'Khach si' },
+const customers = Array.from({ length: 20 }, (_, index) => {
+  const number = index + 1
+  const isRetail = number === 1
+  const vip = number % 4 === 0
+  return {
+    id: isRetail ? 'customer-retail' : `customer-${pad(number)}`,
+    code: isRetail ? 'KH000001' : `DEV20-KH-${pad(number)}`,
+    name: isRetail ? 'Khách lẻ' : `Khach demo ${pad(number)}`,
+    phone: isRetail ? null : `090${String(8000000 + number).padStart(7, '0')}`,
+    tax_code: isRetail ? null : `03123456${String(number).padStart(2, '0')}`,
+    address: isRetail ? null : `Dia chi demo ${number}, TP.HCM`,
+    customer_group_id: vip ? 'cg-vip' : 'cg-retail',
+    customer_group: vip ? { id: 'cg-vip', code: 'SI', name: 'Khach si' } : { id: 'cg-retail', code: 'LE', name: 'Khach le' },
     created_by: { id: 'admin', name: 'Admin' },
     created_at: nowIso,
-    total_sales_amount: 2450000,
-    total_debt_amount: 450000,
-  },
-  {
-    id: 'customer-le',
-    code: 'KH0002',
-    name: 'Khach le',
-    phone: null,
-    tax_code: null,
-    address: null,
-    customer_group_id: 'cg-retail',
-    customer_group: { id: 'cg-retail', code: 'LE', name: 'Khach le' },
-    created_by: { id: 'admin', name: 'Admin' },
-    created_at: nowIso,
-    total_sales_amount: 680000,
-    total_debt_amount: 0,
-  },
-]
+    total_sales_amount: isRetail ? 0 : 600000 + number * 175000,
+    total_debt_amount: isRetail ? 0 : number % 3 === 0 ? 0 : 100000 + number * 25000,
+  }
+})
 
 const financeAccounts = [
   {
@@ -203,128 +176,29 @@ const financeAccounts = [
   },
 ] as const
 
-const suppliers = [
-  {
-    id: 'supplier-minh',
-    code: 'NCC0001',
-    name: 'Vat tu Minh Phat',
-    phone: '0911000001',
-    email: 'minhphat@example.local',
-    address: 'Quan 12, TP.HCM',
-    tax_code: '0300000001',
+const suppliers = Array.from({ length: 20 }, (_, index) => {
+  const number = index + 1
+  return {
+    id: `supplier-${pad(number)}`,
+    code: `DEV20-NCC-${pad(number)}`,
+    name: `Nha cung cap demo ${pad(number)}`,
+    phone: `091${String(7000000 + number).padStart(7, '0')}`,
+    email: number % 2 === 0 ? `ncc${pad(number)}@demo.local` : null,
+    address: `Dia chi NCC demo ${number}, TP.HCM`,
+    tax_code: number % 3 === 0 ? null : `03000000${String(number).padStart(2, '0')}`,
     linked_customer_id: null,
     linked_customer: null,
     notes: null,
     status: 'active',
-    current_payable_amount: 1200000,
-    total_purchase_amount: 8200000,
-  },
-  {
-    id: 'supplier-hung',
-    code: 'NCC0002',
-    name: 'Nhua Hung Thinh',
-    phone: '0911000002',
-    email: null,
-    address: 'Tan Phu, TP.HCM',
-    tax_code: null,
-    linked_customer_id: null,
-    linked_customer: null,
-    notes: null,
-    status: 'active',
-    current_payable_amount: 0,
-    total_purchase_amount: 3200000,
-  },
-] as const
+    current_payable_amount: number % 4 === 0 ? 0 : 500000 + number * 50000,
+    total_purchase_amount: 2000000 + number * 400000,
+  }
+})
 
-const purchaseReceipt = {
-  id: 'pr-0001',
-  code: 'PN0001',
-  supplier_id: 'supplier-minh',
-  supplier: { id: 'supplier-minh', code: 'NCC0001', name: 'Vat tu Minh Phat' },
-  received_at: nowIso,
-  status: 'posted',
-  supplier_document_no: 'HD-NCC-001',
-  subtotal_amount: 2200000,
-  discount_amount: 0,
-  payable_amount: 2200000,
-  paid_amount: 1000000,
-  remaining_amount: 1200000,
-  notes: null,
-  created_by: 'Admin',
-  created_at: nowIso,
-  updated_at: nowIso,
-  items: [
-    {
-      id: 'pr-item-1',
-      product_id: 'product-mica-3mm',
-      product: { id: 'product-mica-3mm', code: 'MICA-3MM', name: 'Mica trong 3mm' },
-      line_no: 1,
-      inventory_shape: 'sheet',
-      unit_name_snapshot: 'tam',
-      quantity: 8,
-      unit_cost: 250000,
-      discount_amount: 0,
-      line_amount: 2000000,
-      physical_payload: null,
-    },
-  ],
-  supplier_payments: [],
-}
+const purchaseReceipts = Array.from({ length: 20 }, (_, index) => makePurchaseReceipt(index + 1))
+const purchaseReceipt = purchaseReceipts[0]
 
-const salesDocument = {
-  id: 'order-0001',
-  code: 'HD0001',
-  order_type: 'invoice',
-  status: 'completed',
-  created_at: nowIso,
-  customer: { id: 'customer-an', code: 'KH0001', name: 'Cong ty An Phat', phone: '0909000001' },
-  seller: { id: 'admin', name: 'Admin' },
-  subtotal_amount: 1200000,
-  discount_amount: 50000,
-  total_amount: 1150000,
-  paid_amount: 700000,
-  debt_amount: 450000,
-  payment_status: 'partial',
-  note: 'Don demo tren NAS',
-}
-
-const salesDocumentDetail = {
-  ...salesDocument,
-  price_list: { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le' },
-  change_returned_amount: 0,
-  items: [
-    {
-      id: 'order-item-1',
-      line_no: 1,
-      product: { id: 'product-mica-3mm', code: 'MICA-3MM', name: 'Mica trong 3mm', unit_name: 'tam', sell_method: 'sheet' },
-      quantity: 2,
-      width_m: null,
-      height_m: null,
-      linear_m: null,
-      unit_price: 600000,
-      line_subtotal_amount: 1200000,
-      discount_amount: 50000,
-      line_total: 1150000,
-      price_source: 'default_price_list',
-      note: null,
-    },
-  ],
-  payment_receipts: [],
-  debt_entries: [
-    {
-      id: 'debt-1',
-      entry_type: 'invoice_debt',
-      amount_delta: 450000,
-      balance_after_order: 450000,
-      balance_after_customer: 450000,
-      created_at: nowIso,
-    },
-  ],
-  stock_movements: [
-    { id: 'sm-1', product_id: 'product-mica-3mm', movement_type: 'sale', quantity_delta: -2, created_at: nowIso, unit_name: 'tam', note: null },
-  ],
-  history: [{ at: nowIso, action: 'created', actor_name: 'Admin', note: null }],
-}
+const salesDocuments = Array.from({ length: 20 }, (_, index) => makeSalesDocument(index + 1))
 
 const inventoryProducts = products.map((product, index) => ({
   product_id: product.id,
@@ -333,56 +207,361 @@ const inventoryProducts = products.map((product, index) => ({
   status: product.status,
   inventory_shape: product.inventory_shape,
   stock_unit: product.unit_name,
-  available_qty: [18, 76.5, 0][index] ?? 0,
+  available_qty: product.track_inventory ? 10 + index * 3.5 : 0,
   is_negative: false,
 }))
 
-const stockMovements = [
-  { id: 'sm-1', product_id: 'product-mica-3mm', movement_type: 'purchase', quantity_delta: 8, created_at: nowIso },
-  { id: 'sm-2', product_id: 'product-mica-3mm', movement_type: 'sale', quantity_delta: -2, created_at: nowIso },
-]
+const stockMovements = products.flatMap((product) => (
+  Array.from({ length: 20 }, (_, index) => {
+    const number = index + 1
+    const movementType = number % 5 === 0 ? 'stocktake_adjustment' : number % 2 === 0 ? 'sale' : 'purchase'
+    const document = movementType === 'purchase'
+      ? purchaseReceipts[(number - 1) % purchaseReceipts.length]
+      : movementType === 'sale'
+        ? salesDocuments.find((item) => item.order_type === 'invoice') ?? salesDocuments[0]
+        : makeStocktake()
+    return {
+      id: `sm-${product.id}-${pad(number)}`,
+      product_id: product.id,
+      movement_type: movementType,
+      quantity_delta: movementType === 'purchase' ? 4 + number : movementType === 'sale' ? -((number % 4) + 1) : number % 2 === 0 ? 2 : -1,
+      created_at: nowIso,
+      document_code: document.code,
+      document_type: movementType === 'purchase' ? 'purchase_receipt' : movementType === 'sale' ? 'sale_invoice' : 'stocktake',
+      transaction_price: movementType === 'sale' ? 600000 : null,
+      cost_price: product.latest_purchase_cost,
+      ending_qty: 10 + number,
+      partner_name: movementType === 'purchase'
+        ? purchaseReceipts[(number - 1) % purchaseReceipts.length].supplier.name
+        : movementType === 'sale'
+          ? 'Khách lẻ'
+          : 'Kiểm kho',
+    }
+  })
+))
 
-const cashbookEntries = [
-  {
-    id: 'cashbook-1',
-    code: 'PT0001',
-    status: 'posted',
-    direction: 'in',
-    amount_delta: 700000,
-    finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
-    is_business_accounted: true,
-    source_type: 'payment_receipt_method',
-    created_at: nowIso,
-    note: 'Thu tien ban hang',
-    counterparty: { type: 'customer', name: 'Cong ty An Phat', phone: '0909000001' },
-  },
-  {
-    id: 'cashbook-2',
-    code: 'PC0001',
-    status: 'posted',
-    direction: 'out',
-    amount_delta: -1000000,
-    finance_account: { id: 'bank-main', code: 'VCB', name: 'Vietcombank', account_type: 'bank' },
-    is_business_accounted: true,
-    source_type: 'cashbook_voucher',
-    created_at: nowIso,
-    note: 'Tra tien NCC',
-    counterparty: { type: 'supplier', name: 'Vat tu Minh Phat', phone: '0911000001' },
-  },
-] as const
+const cashbookEntries = Array.from({ length: 20 }, (_, index) => makeCashbookEntry(index + 1))
+const customerDebtItems = customers
+  .filter((customer) => customer.total_debt_amount > 0)
+  .map((customer, index) => ({
+    customer_id: customer.id,
+    customer_code: customer.code,
+    customer_name: customer.name,
+    total_debt: customer.total_debt_amount,
+    oldest_order_code: salesDocuments[index % salesDocuments.length].code,
+    open_invoice_count: 1 + (index % 3),
+  }))
 
-const productionQueueItems = [
-  {
-    id: 'pq-1',
-    production_machine: { id: 'machine-1', code: 'CNC-01', name: 'May CNC 01' },
-    raw_file_name: 'bang-hieu-an-phat.cdr',
+const productionQueueItems = Array.from({ length: 20 }, (_, index) => {
+  const number = index + 1
+  const product = products[index % products.length]
+  const customer = customers[(index % (customers.length - 1)) + 1] ?? customers[0]
+  return {
+    id: `pq-${pad(number)}`,
+    production_machine: {
+      id: number % 3 === 0 ? 'machine-cnc' : number % 2 === 0 ? 'machine-decal' : 'machine-bat',
+      code: number % 3 === 0 ? 'CNC-01' : number % 2 === 0 ? 'DECAL-01' : 'BAT-01',
+      name: number % 3 === 0 ? 'May CNC 01' : number % 2 === 0 ? 'May in decal 01' : 'May in bat 01',
+    },
+    raw_file_name: `${customer.code}_${product.code}_120x60_x${(number % 3) + 1}.cdr`,
     received_at: nowIso,
     status: 'queued',
     parse_status: 'ok',
     parse_error: null,
-    parsed: { customer_code: 'KH0001', width_m: 1.2, height_m: 0.8 },
-  },
-] as const
+    parsed: { customer_code: customer.code, width_m: 1.2, height_m: 0.6 },
+  }
+})
+
+function pad(value: number) {
+  return String(value).padStart(3, '0')
+}
+
+function makePurchaseReceipt(number: number) {
+  const supplier = suppliers[(number - 1) % suppliers.length]
+  const product = products[(number - 1) % products.length]
+  const quantity = (number % 4) + 1
+  const unitCost = product.latest_purchase_cost ?? 120000
+  const lineAmount = quantity * unitCost
+  const paidAmount = number % 3 === 0 ? lineAmount : Math.floor(lineAmount / 2)
+  return {
+    id: `pr-${pad(number)}`,
+    code: `DEV20-PN-${pad(number)}`,
+    supplier_id: supplier.id,
+    supplier: { id: supplier.id, code: supplier.code, name: supplier.name },
+    received_at: nowIso,
+    status: number % 5 === 0 ? 'draft' : 'posted',
+    supplier_document_no: `HD-NCC-${pad(number)}`,
+    subtotal_amount: lineAmount,
+    discount_amount: 0,
+    payable_amount: lineAmount,
+    paid_amount: paidAmount,
+    remaining_amount: Math.max(lineAmount - paidAmount, 0),
+    notes: null,
+    created_by: 'Admin',
+    created_at: nowIso,
+    updated_at: nowIso,
+    items: [
+      {
+        id: `pr-item-${pad(number)}`,
+        product_id: product.id,
+        product: { id: product.id, code: product.code, name: product.name },
+        line_no: 1,
+        inventory_shape: product.inventory_shape,
+        unit_name_snapshot: product.unit_name,
+        quantity,
+        unit_cost: unitCost,
+        discount_amount: 0,
+        line_amount: lineAmount,
+        physical_payload: null,
+      },
+    ],
+    supplier_payments: [],
+  }
+}
+
+function makeSalesDocument(number: number) {
+  const customer = customers[(number - 1) % Math.min(customers.length, 5)] ?? customers[0]
+  const isQuote = number % 2 === 0
+  const subtotal = 500000 + number * 75000
+  const discount = number % 4 === 0 ? 50000 : 0
+  const total = subtotal - discount
+  const paid = isQuote ? 0 : number % 3 === 0 ? total : Math.floor(total / 2)
+  const debtAmount = Math.max(total - paid, 0)
+  return {
+    id: `order-${pad(number)}`,
+    code: `DEV20-${isQuote ? 'BG' : 'HD'}-${pad(number)}`,
+    order_type: isQuote ? 'quote' : 'invoice',
+    status: isQuote ? (number % 4 === 0 ? 'converted' : 'active') : 'completed',
+    created_at: nowIso,
+    customer: { id: customer.id, code: customer.code, name: customer.name, phone: customer.phone },
+    seller: { id: 'admin', name: 'Admin' },
+    subtotal_amount: subtotal,
+    discount_amount: discount,
+    total_amount: total,
+    paid_amount: paid,
+    debt_amount: isQuote ? 0 : debtAmount,
+    payment_status: isQuote ? 'not_applicable' : debtAmount > 0 ? 'partial' : 'paid',
+    note: `Don demo ${pad(number)}`,
+  }
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+}
+
+function filterSalesDocuments(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? '')
+  const type = url.searchParams.get('type')
+  const status = url.searchParams.get('status')
+  const customerId = url.searchParams.get('customer_id')
+  const paymentStatus = url.searchParams.get('payment_status')
+
+  return salesDocuments.filter((document) => {
+    if (type && document.order_type !== type) return false
+    if (status && document.status !== status) return false
+    if (customerId && document.customer.id !== customerId) return false
+    if (paymentStatus && document.payment_status !== paymentStatus) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${document.code} ${document.customer.code ?? ''} ${document.customer.name}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterProducts(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? '')
+  const status = url.searchParams.get('status')
+  const sellMethod = url.searchParams.get('sell_method')
+  const inventoryShape = url.searchParams.get('inventory_shape')
+  const productKind = url.searchParams.get('product_kind')
+  const productGroupId = url.searchParams.get('product_group_id')
+
+  return products.filter((product) => {
+    if (status && status !== 'all' && product.status !== status) return false
+    if (sellMethod && product.sell_method !== sellMethod) return false
+    if (inventoryShape && product.inventory_shape !== inventoryShape) return false
+    if (productKind && product.product_kind !== productKind) return false
+    if (productGroupId && product.product_group_id !== productGroupId) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${product.code} ${product.name}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterCustomers(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const customerGroupId = url.searchParams.get('customer_group_id')
+
+  return customers.filter((customer) => {
+    if (customerGroupId && customerGroupId !== 'all' && customer.customer_group_id !== customerGroupId) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${customer.code} ${customer.name} ${customer.phone ?? ''}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function makeOrderFromCheckout(body: {
+  customer_id?: string
+  note?: string
+  items?: Array<{ quantity?: number; unit_price?: number; discount_amount?: number }>
+  payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
+}, orderType: 'invoice' | 'quote') {
+  const number = salesDocuments.length + 1
+  const customer = customers.find((item) => item.id === body.customer_id) ?? customers[0]
+  const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
+  const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
+  const total = Math.max(subtotal - discount, 0)
+  const cashAmount = Number(body.payment?.cash_amount ?? 0)
+  const bankAmount = Number(body.payment?.bank_amount ?? 0)
+  const oldDebtPayment = Number(body.payment?.old_debt_payment_amount ?? 0)
+  const changeReturned = Number(body.payment?.change_returned_amount ?? 0)
+  const paid = orderType === 'quote' ? 0 : Math.min(total, Math.max(cashAmount + bankAmount - oldDebtPayment - changeReturned, 0))
+  const debtAmount = orderType === 'quote' ? 0 : Math.max(total - paid, 0)
+
+  return {
+    id: `order-pos-${pad(number)}`,
+    code: `${orderType === 'quote' ? 'BG-POS' : 'HD-POS'}-${pad(number)}`,
+    order_type: orderType,
+    status: orderType === 'quote' ? 'active' : 'completed',
+    created_at: nowIso,
+    customer: { id: customer.id, code: customer.code, name: customer.name, phone: customer.phone },
+    seller: { id: 'admin', name: 'Admin' },
+    subtotal_amount: subtotal,
+    discount_amount: discount,
+    total_amount: total,
+    paid_amount: paid,
+    debt_amount: debtAmount,
+    payment_status: orderType === 'quote' ? 'not_applicable' : debtAmount > 0 ? 'partial' : 'paid',
+    note: body.note ?? '',
+  }
+}
+
+function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
+  const entries: typeof cashbookEntries = []
+  const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
+  const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
+  const methods = [
+    { amount: cashAmount, account: financeAccounts[0] },
+    { amount: bankAmount, account: financeAccounts.find((account) => account.id === payment.bank_account_id) ?? financeAccounts[1] },
+  ]
+
+  for (const method of methods) {
+    if (method.amount <= 0) continue
+    entries.push({
+      id: `cashbook-pos-${randomUUID()}`,
+      code: `PT-POS-${pad(cashbookEntries.length + entries.length + 1)}`,
+      status: 'posted',
+      direction: 'in',
+      amount_delta: method.amount,
+      finance_account: { id: method.account.id, code: method.account.code, name: method.account.name, account_type: method.account.account_type },
+      is_business_accounted: true,
+      source_type: 'payment_receipt_method',
+      created_at: nowIso,
+      note: `Thu tien ${order.code}`,
+      counterparty: { type: 'customer', name: order.customer.name, phone: order.customer.phone },
+    })
+  }
+
+  cashbookEntries.unshift(...entries)
+  return entries
+}
+
+function makeSalesDocumentDetail(document: ReturnType<typeof makeSalesDocument>) {
+  const product = products[0]
+  return {
+    ...document,
+    price_list: { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le' },
+    change_returned_amount: 0,
+    items: [
+      {
+        id: `${document.id}-item-1`,
+        line_no: 1,
+        product: { id: product.id, code: product.code, name: product.name, unit_name: product.unit_name, sell_method: product.sell_method },
+        quantity: 1,
+        width_m: null,
+        height_m: null,
+        linear_m: null,
+        unit_price: document.subtotal_amount,
+        line_subtotal_amount: document.subtotal_amount,
+        discount_amount: document.discount_amount,
+        line_total: document.total_amount,
+        price_source: 'default_price_list',
+        note: null,
+      },
+    ],
+    payment_receipts: [],
+    debt_entries: document.debt_amount > 0
+      ? [
+          {
+            id: `${document.id}-debt-1`,
+            entry_type: 'invoice_debt',
+            amount_delta: document.debt_amount,
+            balance_after_order: document.debt_amount,
+            balance_after_customer: document.debt_amount,
+            created_at: nowIso,
+          },
+        ]
+      : [],
+    stock_movements: [
+      { id: `${document.id}-sm-1`, product_id: product.id, movement_type: 'sale', quantity_delta: -1, created_at: nowIso, unit_name: product.unit_name, note: null },
+    ],
+    history: [{ at: nowIso, action: 'created', actor_name: 'Admin', note: null }],
+  }
+}
+
+function makeCashbookEntry(number: number) {
+  const isIn = number % 2 === 1
+  const amount = 150000 + number * 25000
+  const account = financeAccounts[number % 3 === 0 ? 1 : 0]
+  const customer = customers[(number % (customers.length - 1)) + 1] ?? customers[0]
+  const supplier = suppliers[(number - 1) % suppliers.length]
+  return {
+    id: `cashbook-${pad(number)}`,
+    code: `${isIn ? 'DEV20-PT' : 'DEV20-PC'}-${pad(number)}`,
+    status: 'posted',
+    direction: isIn ? 'in' : 'out',
+    amount_delta: isIn ? amount : -amount,
+    finance_account: { id: account.id, code: account.code, name: account.name, account_type: account.account_type },
+    is_business_accounted: true,
+    source_type: isIn ? 'payment_receipt_method' : 'cashbook_voucher',
+    created_at: nowIso,
+    note: isIn ? `Thu tien demo ${pad(number)}` : `Chi tien demo ${pad(number)}`,
+    counterparty: isIn
+      ? { type: 'customer', name: customer.name, phone: customer.phone }
+      : { type: 'supplier', name: supplier.name, phone: supplier.phone },
+  }
+}
+
+function makeCustomerDebtDetail(customerId: string) {
+  const debt = customerDebtItems.find((item) => item.customer_id === customerId)
+  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [] }
+  const document = salesDocuments.find((item) => item.code === debt.oldest_order_code) ?? salesDocuments[0]
+  return {
+    customer_id: customerId,
+    total_debt: debt.total_debt,
+    invoices: [
+      {
+        order_id: document.id,
+        order_code: document.code,
+        created_at: nowIso,
+        total_amount: document.total_amount,
+        paid_amount: document.paid_amount,
+        debt_amount: document.debt_amount,
+        remaining_debt: debt.total_debt,
+      },
+    ],
+  }
+}
 
 export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
   return async (request) => {
@@ -476,7 +655,7 @@ async function getDevApiResponse(
   }
 
   if (method === 'GET' && path === '/api/v1/product-groups') return { found: true, data: { items: productGroups } }
-  if (method === 'GET' && path === '/api/v1/products') return { found: true, data: paged(products, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/products') return { found: true, data: paged(filterProducts(url), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(path)) return { found: true, data: null }
   if (method === 'POST' && path === '/api/v1/products') return { found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/products\/[^/]+$/.test(path)) return { found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }
@@ -485,8 +664,13 @@ async function getDevApiResponse(
   }
 
   if (method === 'GET' && path === '/api/v1/customer-groups') return { found: true, data: { items: customerGroups } }
-  if (method === 'GET' && path === '/api/v1/customers') return { found: true, data: paged(customers, page, pageSize) }
-  if (method === 'POST' && path === '/api/v1/customers') return { found: true, data: { ...customers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
+  if (method === 'GET' && path === '/api/v1/customers') return { found: true, data: paged(filterCustomers(url), page, pageSize) }
+  if (method === 'POST' && path === '/api/v1/customers') {
+    const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
+    const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
+    customers.push(created)
+    return { found: true, data: created, status: 201 }
+  }
   if (method === 'GET' && /^\/api\/v1\/customers\/[^/]+\/products\/[^/]+\/recent-prices$/.test(path)) {
     return { found: true, data: { items: [{ unitPrice: 600000, soldAt: nowIso, orderCode: 'HD0001' }] } }
   }
@@ -508,7 +692,11 @@ async function getDevApiResponse(
   if (method === 'GET' && path === '/api/v1/inventory/products') return { found: true, data: paged(inventoryProducts, page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/inventory\/products\/[^/]+$/.test(path)) return { found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }
   if (method === 'PATCH' && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(path)) return { found: true, data: makeStocktake() }
-  if (method === 'GET' && path === '/api/v1/inventory/stock-movements') return { found: true, data: paged(stockMovements, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/inventory/stock-movements') {
+    const productId = url.searchParams.get('product_id')
+    const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
+    return { found: true, data: paged(items, page, pageSize) }
+  }
   if (method === 'GET' && path === '/api/v1/inventory/stocktakes') return { found: true, data: paged([makeStocktake()], page, pageSize) }
   if (method === 'GET' && path === '/api/v1/inventory/rolls') return { found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }
   if (method === 'GET' && path === '/api/v1/inventory/sheets') return { found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }
@@ -525,30 +713,41 @@ async function getDevApiResponse(
   if (method === 'POST' && path === '/api/v1/suppliers') return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/suppliers\/[^/]+$/.test(path)) return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }
   if (method === 'GET' && /^\/api\/v1\/suppliers\/[^/]+\/payable-receipts$/.test(path)) {
-    return { found: true, data: { items: [{ id: purchaseReceipt.id, code: purchaseReceipt.code, supplier_document_no: purchaseReceipt.supplier_document_no, received_at: purchaseReceipt.received_at, payable_amount: purchaseReceipt.payable_amount, paid_amount: purchaseReceipt.paid_amount, remaining_amount: purchaseReceipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: purchaseReceipt.remaining_amount }] } }
+    return { found: true, data: { items: purchaseReceipts.slice(0, 10).map((receipt) => ({ id: receipt.id, code: receipt.code, supplier_document_no: receipt.supplier_document_no, received_at: receipt.received_at, payable_amount: receipt.payable_amount, paid_amount: receipt.paid_amount, remaining_amount: receipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: receipt.remaining_amount })) } }
   }
   if (method === 'POST' && /^\/api\/v1\/suppliers\/[^/]+\/payments$/.test(path)) return { found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }
 
-  if (method === 'GET' && path === '/api/v1/purchase/receipts') return { found: true, data: paged([purchaseReceipt], page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: purchaseReceipt }
+  if (method === 'GET' && path === '/api/v1/purchase/receipts') return { found: true, data: paged(purchaseReceipts, page, pageSize) }
+  if (method === 'GET' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
   if (method === 'POST' && path === '/api/v1/purchase/receipts') return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }
   if (method === 'POST' && /^\/api\/v1\/purchase\/receipts\/[^/]+\/post$/.test(path)) return { found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }
 
   if (method === 'POST' && path === '/api/v1/pos/cart/validate') return { found: true, data: { valid: true } }
-  if (method === 'POST' && path === '/api/v1/orders/checkout') return { found: true, data: { order: { id: randomUUID(), code: 'HD0002', order_type: 'invoice', status: 'completed', total_amount: 0, paid_amount: 0, debt_amount: 0, payment_status: 'paid' }, payment_receipt: null, inventory_warnings: [] }, status: 201 }
-  if (method === 'POST' && path === '/api/v1/orders/quotes') return { found: true, data: { id: randomUUID(), code: 'BG0001', order_type: 'quote', status: 'active', total_amount: 0 }, status: 201 }
+  if (method === 'POST' && path === '/api/v1/orders/checkout') {
+    const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
+    const order = makeOrderFromCheckout(body, 'invoice')
+    salesDocuments.unshift(order)
+    const paymentEntries = addCashbookEntriesFromCheckout(order, body.payment)
+    return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
+  }
+  if (method === 'POST' && path === '/api/v1/orders/quotes') {
+    const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
+    const quote = makeOrderFromCheckout(body, 'quote')
+    salesDocuments.unshift(quote)
+    return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
+  }
   if (method === 'GET' && /^\/api\/v1\/orders\/quotes\/[^/]+\/reopen-payload$/.test(path)) return { found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }
 
-  if (method === 'GET' && path === '/api/v1/sales-documents') return { found: true, data: paged([salesDocument], page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) return { found: true, data: salesDocumentDetail }
+  if (method === 'GET' && path === '/api/v1/sales-documents') return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
+  if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === getIdFromPath(path)) ?? salesDocuments[0]) }
 
   if (method === 'GET' && path === '/api/v1/finance/accounts') return { found: true, data: { items: financeAccounts } }
-  if (method === 'GET' && path === '/api/v1/finance/customer-debts') return { found: true, data: paged([{ customer_id: 'customer-an', customer_code: 'KH0001', customer_name: 'Cong ty An Phat', total_debt: 450000, oldest_order_code: 'HD0001', open_invoice_count: 1 }], page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) return { found: true, data: { customer_id: getFinanceCustomerId(path), total_debt: 450000, invoices: [{ order_id: 'order-0001', order_code: 'HD0001', created_at: nowIso, total_amount: 1150000, paid_amount: 700000, debt_amount: 450000, remaining_debt: 450000 }] } }
+  if (method === 'GET' && path === '/api/v1/finance/customer-debts') return { found: true, data: paged(customerDebtItems, page, pageSize) }
+  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) return { found: true, data: makeCustomerDebtDetail(getFinanceCustomerId(path)) }
   if (method === 'POST' && path === '/api/v1/finance/debt-collections') return { found: true, data: { payment_receipt_id: randomUUID(), allocated_amount: 100000 }, status: 201 }
   if (method === 'GET' && path === '/api/v1/finance/cashbook/balances') return { found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }
-  if (method === 'GET' && path === '/api/v1/finance/cashbook/vouchers') return { found: true, data: { items: [{ id: 'voucher-1', code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 }], total: 1 } }
+  if (method === 'GET' && path === '/api/v1/finance/cashbook/vouchers') return { found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }
   if (method === 'GET' && path === '/api/v1/finance/cashbook') return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: cashbookEntries, page, page_size: pageSize, total: cashbookEntries.length } }
   if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) return { found: true, data: { ...cashbookEntries[0], created_by: { id: currentUser.user.id, name: currentUser.user.display_name }, payment_method: 'cash', source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001' }, allocations: [{ order_id: 'order-0001', order_code: 'HD0001', order_total_amount: 1150000, collected_before: 0, allocated_amount: 700000, remaining_after: 450000 }] } }
   if (method === 'POST' && path === '/api/v1/finance/cashbook-vouchers') return { found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }
@@ -631,7 +830,8 @@ function toUserListItem(currentUser: CurrentUserData) {
 }
 
 function paged<T>(items: readonly T[], page: number, pageSize: number) {
-  return { items, page, page_size: pageSize, total: items.length }
+  const start = Math.max(0, page - 1) * pageSize
+  return { items: items.slice(start, start + pageSize), page, page_size: pageSize, total: items.length }
 }
 
 function getIdFromPath(path: string) {
@@ -793,7 +993,7 @@ function responseHeaders(traceId?: string) {
   const headers = new Headers({
     'access-control-allow-origin': '*',
     'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-    'access-control-allow-headers': 'authorization,content-type,x-request-id,x-workstation-id',
+    'access-control-allow-headers': 'authorization,content-type,x-request-id,x-client-device-id,x-workstation-id',
     'content-type': 'application/json',
   })
   if (traceId) headers.set('x-request-id', traceId)

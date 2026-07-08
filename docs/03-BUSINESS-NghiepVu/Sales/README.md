@@ -28,7 +28,7 @@ BOM/Combo chưa phải nghiệp vụ đã chốt sâu trong MVP. Hiện tại ch
 - Nếu chọn **Lưu Combo mới**, cấu trúc đó được lưu thành combo mới trong danh mục để dùng lại sau.
 - Combo lồng nhau/deep-scan phức tạp để phase sau.
 
-Draft điều phối: [2026-07-01-bom-combo-mvp-boundary-draft.md](../../superpowers/specs/2026-07-01-bom-combo-mvp-boundary-draft.md).
+Draft điều phối: Git history.
 
 ---
 

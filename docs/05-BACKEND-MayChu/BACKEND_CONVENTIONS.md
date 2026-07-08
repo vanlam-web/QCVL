@@ -1,21 +1,21 @@
-# Quy ước phát triển Backend QC-OMS
+﻿# Quy Æ°á»›c phÃ¡t triá»ƒn Backend QC-OMS
 
-Tuân theo [DOCUMENT_RULES.md](../DOCUMENT_RULES.md), [ARCHITECTURE.md](../ARCHITECTURE.md) và [_RULES.md](./_RULES.md).
+TuÃ¢n theo [DOCUMENT_RULES.md](../DOCUMENT_RULES.md), [ARCHITECTURE.md](../ARCHITECTURE.md) vÃ  [_RULES.md](./_RULES.md).
 
-## 1. Phạm vi
+## 1. Pháº¡m vi
 
-Backend chỉ hiện thực nghiệp vụ đã được xác định tại 03-BUSINESS và cấu trúc dữ liệu tại 04-DATABASE. Không tự tạo Business Rule hoặc Database Schema mới.
+Backend chá»‰ hiá»‡n thá»±c nghiá»‡p vá»¥ Ä‘Ã£ Ä‘Æ°á»£c xÃ¡c Ä‘á»‹nh táº¡i 03-BUSINESS vÃ  cáº¥u trÃºc dá»¯ liá»‡u táº¡i 04-DATABASE. KhÃ´ng tá»± táº¡o Business Rule hoáº·c Database Schema má»›i.
 
 ## 2. API
 
-- Dùng REST API với prefix `/api/v1/`.
-- Resource dùng danh từ số nhiều, ví dụ `/api/v1/orders`.
-- API thay đổi không tương thích phải dùng version mới; không phá API cũ khi chưa có kế hoạch ngừng hỗ trợ.
-- Frontend chỉ dùng Supabase SDK trực tiếp cho Auth và Realtime subscription.
-- Dữ liệu nghiệp vụ phải đọc/ghi qua `/api/v1`; UI không gọi trực tiếp `supabase.from()`, RPC hoặc Admin API.
-- Realtime chỉ phát tín hiệu/trạng thái sau khi dữ liệu đã được ghi thành công; không thay thế API command.
+- DÃ¹ng REST API vá»›i prefix `/api/v1/`.
+- Resource dÃ¹ng danh tá»« sá»‘ nhiá»u, vÃ­ dá»¥ `/api/v1/orders`.
+- API thay Ä‘á»•i khÃ´ng tÆ°Æ¡ng thÃ­ch pháº£i dÃ¹ng version má»›i; khÃ´ng phÃ¡ API cÅ© khi chÆ°a cÃ³ káº¿ hoáº¡ch ngá»«ng há»— trá»£.
+- Frontend chá»‰ dÃ¹ng QCVL Node API SDK trá»±c tiáº¿p cho Auth vÃ  Realtime subscription.
+- Dá»¯ liá»‡u nghiá»‡p vá»¥ pháº£i Ä‘á»c/ghi qua `/api/v1`; UI khÃ´ng gá»i trá»±c tiáº¿p `direct database access`, RPC hoáº·c Admin API.
+- Realtime chá»‰ phÃ¡t tÃ­n hiá»‡u/tráº¡ng thÃ¡i sau khi dá»¯ liá»‡u Ä‘Ã£ Ä‘Æ°á»£c ghi thÃ nh cÃ´ng; khÃ´ng thay tháº¿ API command.
 
-Ví dụ:
+VÃ­ dá»¥:
 
 ```text
 GET    /api/v1/orders
@@ -24,50 +24,50 @@ PUT    /api/v1/orders/{id}
 DELETE /api/v1/orders/{id}
 ```
 
-## 3. Request và Response
+## 3. Request vÃ  Response
 
-- Backend phải validate toàn bộ input; validation Frontend chỉ phục vụ UX.
-- Không tin dữ liệu, quyền hoặc trạng thái do Client gửi lên.
+- Backend pháº£i validate toÃ n bá»™ input; validation Frontend chá»‰ phá»¥c vá»¥ UX.
+- KhÃ´ng tin dá»¯ liá»‡u, quyá»n hoáº·c tráº¡ng thÃ¡i do Client gá»­i lÃªn.
 
-Response thành công:
+Response thÃ nh cÃ´ng:
 
 ```json
 {"success": true, "data": {}, "message": "", "trace_id": ""}
 ```
 
-Response lỗi:
+Response lá»—i:
 
 ```json
 {"success": false, "code": "", "message": "", "trace_id": ""}
 ```
 
-Không trả stack trace hoặc lỗi hệ thống trực tiếp cho Client.
+KhÃ´ng tráº£ stack trace hoáº·c lá»—i há»‡ thá»‘ng trá»±c tiáº¿p cho Client.
 
-## 4. Authentication và Permission
+## 4. Authentication vÃ  Permission
 
-- Mọi API cần xác định rõ yêu cầu Authentication, Authorization và Permission.
-- Quyền phải được kiểm tra tại Backend, không phụ thuộc việc Frontend có ẩn nút hay không.
-- Áp dụng nguyên tắc quyền tối thiểu.
+- Má»i API cáº§n xÃ¡c Ä‘á»‹nh rÃµ yÃªu cáº§u Authentication, Authorization vÃ  Permission.
+- Quyá»n pháº£i Ä‘Æ°á»£c kiá»ƒm tra táº¡i Backend, khÃ´ng phá»¥ thuá»™c viá»‡c Frontend cÃ³ áº©n nÃºt hay khÃ´ng.
+- Ãp dá»¥ng nguyÃªn táº¯c quyá»n tá»‘i thiá»ƒu.
 
-## 5. Use Case và Transaction
+## 5. Use Case vÃ  Transaction
 
-- Một Use Case nghiệp vụ tương ứng một workflow thực thi rõ ràng.
-- Không gộp các nghiệp vụ độc lập chỉ để tái sử dụng endpoint.
-- Thao tác ghi nhiều bảng liên quan phải dùng transaction phù hợp.
-- Không để dữ liệu ở trạng thái trung gian có thể quan sát được.
+- Má»™t Use Case nghiá»‡p vá»¥ tÆ°Æ¡ng á»©ng má»™t workflow thá»±c thi rÃµ rÃ ng.
+- KhÃ´ng gá»™p cÃ¡c nghiá»‡p vá»¥ Ä‘á»™c láº­p chá»‰ Ä‘á»ƒ tÃ¡i sá»­ dá»¥ng endpoint.
+- Thao tÃ¡c ghi nhiá»u báº£ng liÃªn quan pháº£i dÃ¹ng transaction phÃ¹ há»£p.
+- KhÃ´ng Ä‘á»ƒ dá»¯ liá»‡u á»Ÿ tráº¡ng thÃ¡i trung gian cÃ³ thá»ƒ quan sÃ¡t Ä‘Æ°á»£c.
 
-## 6. Event và Idempotency
+## 6. Event vÃ  Idempotency
 
-- Event Handler phải chạy lại an toàn khi có khả năng nhận lại sự kiện.
-- Các thao tác retry phải có idempotency key hoặc cơ chế chống trùng tương đương.
-- Tên event dùng quá khứ, ví dụ `OrderCreated`.
+- Event Handler pháº£i cháº¡y láº¡i an toÃ n khi cÃ³ kháº£ nÄƒng nháº­n láº¡i sá»± kiá»‡n.
+- CÃ¡c thao tÃ¡c retry pháº£i cÃ³ idempotency key hoáº·c cÆ¡ cháº¿ chá»‘ng trÃ¹ng tÆ°Æ¡ng Ä‘Æ°Æ¡ng.
+- TÃªn event dÃ¹ng quÃ¡ khá»©, vÃ­ dá»¥ `OrderCreated`.
 
-## 7. Error và Logging
+## 7. Error vÃ  Logging
 
-- Lỗi nghiệp vụ phải có error code ổn định, message phù hợp và trace ID.
-- Ghi log các thao tác quan trọng như đăng nhập, tạo/sửa/hủy đơn và thanh toán.
-- Không ghi password, token, secret hoặc dữ liệu nhạy cảm không cần thiết.
-- Backend định nghĩa log và metric phát ra; 07-DEPLOYMENT sở hữu thu thập, lưu giữ, dashboard và cảnh báo.
+- Lá»—i nghiá»‡p vá»¥ pháº£i cÃ³ error code á»•n Ä‘á»‹nh, message phÃ¹ há»£p vÃ  trace ID.
+- Ghi log cÃ¡c thao tÃ¡c quan trá»ng nhÆ° Ä‘Äƒng nháº­p, táº¡o/sá»­a/há»§y Ä‘Æ¡n vÃ  thanh toÃ¡n.
+- KhÃ´ng ghi password, token, secret hoáº·c dá»¯ liá»‡u nháº¡y cáº£m khÃ´ng cáº§n thiáº¿t.
+- Backend Ä‘á»‹nh nghÄ©a log vÃ  metric phÃ¡t ra; 07-DEPLOYMENT sá»Ÿ há»¯u thu tháº­p, lÆ°u giá»¯, dashboard vÃ  cáº£nh bÃ¡o.
 
 ## 8. Naming
 
@@ -78,14 +78,14 @@ Permission: order.create
 Event:      OrderCreated
 ```
 
-Tên phải phản ánh đúng domain và hành động, tránh viết tắt không có quy ước.
+TÃªn pháº£i pháº£n Ã¡nh Ä‘Ãºng domain vÃ  hÃ nh Ä‘á»™ng, trÃ¡nh viáº¿t táº¯t khÃ´ng cÃ³ quy Æ°á»›c.
 
 ## 9. Source of Truth
 
 - Business Rule: 03-BUSINESS.
 - Database Structure: 04-DATABASE.
-- Backend workflow và API: 05-BACKEND.
-- Kết nối hệ thống ngoài: 06-INTEGRATION.
-- Hạ tầng và vận hành: 07-DEPLOYMENT.
+- Backend workflow vÃ  API: 05-BACKEND.
+- Káº¿t ná»‘i há»‡ thá»‘ng ngoÃ i: 06-INTEGRATION.
+- Háº¡ táº§ng vÃ  váº­n hÃ nh: 07-DEPLOYMENT.
 
-Khi có mâu thuẫn, áp dụng thứ tự tại [DOCUMENT_RULES.md](../DOCUMENT_RULES.md).
+Khi cÃ³ mÃ¢u thuáº«n, Ã¡p dá»¥ng thá»© tá»± táº¡i [DOCUMENT_RULES.md](../DOCUMENT_RULES.md).

@@ -44,6 +44,18 @@ describe('CustomerPanel', () => {
     expect(onSelectCustomer).toHaveBeenCalledWith(customer)
   })
 
+  it('searches customers from the visible search button', async () => {
+    const service = serviceStub()
+
+    render(<CustomerPanel service={service} selectedCustomer={null} onSelectCustomer={vi.fn()} />)
+
+    await userEvent.type(screen.getByPlaceholderText('Tìm khách hàng (F4)'), 'khach')
+    await userEvent.click(screen.getByRole('button', { name: 'Tìm khách hàng' }))
+
+    expect(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' })).toBeInTheDocument()
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach' })
+  })
+
   it('creates and selects a quick customer without requiring phone', async () => {
     const created = { ...customer, id: 'customer-2', code: 'KH000002', name: 'Cong ty ABC' }
     const service = serviceStub({ createCustomer: vi.fn(async () => created) })

@@ -136,7 +136,7 @@ it('clears completed GET cache before write requests', async () => {
 it('rejects base URLs that already include the API route prefix', async () => {
   expect(() =>
     createApiClient({
-      baseUrl: 'https://example.supabase.co/functions/v1/api',
+      baseUrl: 'https://api.example.local/api',
       getAccessToken: async () => null,
       fetch: (async () =>
         new Response(JSON.stringify({ success: true, data: {}, trace_id: 'trace' }), {

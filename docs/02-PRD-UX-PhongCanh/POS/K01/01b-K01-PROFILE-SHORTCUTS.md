@@ -1,72 +1,66 @@
-# 01b-K01-PROFILE-SHORTCUTS.md — K01: Cụm Tiện Ích, Profile & Phím Tắt
+# 01b-K01-PROFILE-SHORTCUTS.md - K01: Tiện ích, profile và phím tắt
 
-> **Thuộc khối:** [01-K01-TOPBAR.md](./01-K01-TOPBAR.md) — Mục II.4 (Khu vực 4)
->
-> **Trở về:** [01-K01-TOPBAR.md](./01-K01-TOPBAR.md) | [Master Map](../01-POS-LAYOUT.md)
+> Thuộc: [01-K01-TOPBAR.md](./01-K01-TOPBAR.md)
+> Cập nhật: 2026-07-08.
 
----
+## 1. Phạm vi
 
-## I. PHẠM VI FILE
+File này là Source of Truth cho cụm tiện ích góc phải POS và phím tắt chung.
 
-> **Source of Truth (SoT):** Cụm tiện ích góc phải Top Bar (Khu vực 4) + ma trận phím tắt điều khiển chung của POS.
-> Mọi file khác (đặc biệt `01-K01-TOPBAR.md` §IV) **không định nghĩa lại** phím tắt; chỉ tham chiếu về file này.
+`Khui vật tư` nằm trong cụm này. Nghiệp vụ khui chi tiết nằm ở [01d-K01-KHUI.md](./01d-K01-KHUI.md).
 
-Nút **[🍾 KHUI VẬT TƯ]** thuộc Khu vực 3 và có Source of Truth riêng tại [01d-K01-KHUI.md](./01d-K01-KHUI.md).
+## 2. Cụm tiện ích
 
----
+| Nút | Tác vụ | Ghi chú |
+| --- | --- | --- |
+| `Khui vật tư` | Mở modal khui thủ công | Icon-only trong POS |
+| `Lịch sử` | Mở đơn gần đây | Phục vụ tra cứu/in lại nhanh |
+| `Trạng thái kết nối` | Báo trạng thái backend/realtime | Không phải nút đồng bộ nghiệp vụ |
+| `Theme` | Đổi giao diện | Nếu bật trong UI |
+| `Profile` | Mở menu tài khoản | Dùng chung style AppShell |
 
-## II. CỤM TIỆN ÍCH HỒ SƠ & HỆ THỐNG
+Không tách `Khui vật tư` thành khu vực K01 riêng.
 
-Không dùng nút đồng bộ thủ công. Dữ liệu máy sản xuất được cập nhật tự động; cụm góc phải chỉ hiển thị trạng thái và các thao tác hỗ trợ.
+## 3. Menu tài khoản POS
 
-### Đèn báo trạng thái kết nối
+Menu tài khoản POS dùng `.account-menu-popover`, cùng visual với menu tài khoản ở dashboard/AppShell.
 
-| Trạng thái | Màu | Ý nghĩa |
-|---|---|---|
-| Disconnected | 🔴 Đỏ | Mất kết nối Internet hoặc mất tín hiệu realtime → cảnh báo nhân viên hạn chế thao tác lệnh máy sản xuất |
-| Connecting / Retrying | 🟡 Vàng | Đang cố gắng kết nối lại |
-| Connected | 🟢 Xanh | Kết nối thông suốt — dữ liệu lệnh in/cắt tự động nhảy lên POS |
+Thứ tự:
 
-### Nút Tải lại Cứu hộ [🔄]
+```text
+Admin hoặc tên hiển thị
+Báo cáo ca
+Quản trị
+Đăng xuất
+```
 
-- Kích thước nhỏ, nằm cạnh đèn báo.
-- Chỉ dùng để tải lại giao diện khi trình duyệt bị đơ hoặc state hiển thị bất thường.
-- Không phải nút đồng bộ nghiệp vụ.
+Quy định:
 
-### Icon Lịch sử [🕒]
+- Dòng đầu là identity row, mở trang tài khoản hoặc dashboard tùy route hiện có.
+- `Báo cáo ca` tạm thời có thể no-op cho tới khi module báo cáo ca hoàn chỉnh.
+- `Quản trị` mở `/admin` khi có quyền.
+- `Đăng xuất` thoát phiên.
+- Menu đóng khi click ra ngoài hoặc nhấn `Esc`.
+- Menu phải nổi trên drawer thanh toán/panel POS.
 
-- Click mở Drawer từ cạnh phải.
-- Hiển thị **10 đơn hàng gần nhất** vừa thanh toán để tra cứu hoặc in lại nhanh.
+## 4. Trạng thái kết nối
 
-### Nút [👤 Tên tài khoản / Mã máy trạm đăng nhập]
+| Trạng thái | Ý nghĩa |
+| --- | --- |
+| Disconnected | Mất kết nối backend/realtime |
+| Connecting / Retrying | Đang kết nối lại |
+| Connected | Kết nối thông suốt |
 
-- Hiển thị nhãn theo format `👤 [Tên tài khoản / Mã máy trạm đăng nhập]`.
-- Gắn người dùng hiện tại vào các thao tác tạo đơn, chỉnh đơn, thanh toán.
+Màu trạng thái dùng token semantic, không hardcode màu theo trang.
 
-### Dropdown Profile
+## 5. Phím tắt
 
-| Icon | Tác vụ | Mô tả | Quyền yêu cầu |
-|---|---|---|---|
-| 📈 | **Xem báo cáo ca** | Xem nhanh tổng tiền mặt/chuyển khoản đã thu trong ca | `perm.view_shift_report` |
-| ⚙️ | **Đến trang Quản lý** | Chuyển sang trang back-office quản trị | `perm.access_admin_panel` |
-| 🚪 | **Đăng xuất** | Thoát phiên làm việc, xóa session | Mọi tài khoản active |
-
-> Ràng buộc UI: Dropdown đóng khi click ra ngoài hoặc nhấn `Esc`. Mục không có quyền tương ứng không hiển thị.
-
----
-
-## III. MA TRẬN PHÍM TẮT ĐIỀU KHIỂN
-
-| Phím tắt             | Tác vụ kích hoạt                          | Hành vi |
-| -------------------- | ----------------------------------------- | ------- |
-| `F3`                 | Focus ô tìm kiếm                          | Tự động bôi đen toàn bộ text đang có |
-| `F4`                 | Focus ô Tìm/Thêm khách hàng               | Focus ô input tại K03-A — xem chi tiết: [K03-A Đối tác](../K03/01-K03A-DOI-TAC.md) |
-| `F8`                 | Mở bảng giá/chiết khấu theo đối tác       | Focus hoặc mở dropdown `Bảng giá` tại K03-A cho đối tác đang chọn — xem chi tiết: [K03-A Đối tác](../K03/01-K03A-DOI-TAC.md) |
-| `F9`                 | Kích hoạt THANH TOÁN                      | Tương đương click nút `[THANH TOÁN]` tại K03-D — xem chi tiết: [K03-D Thanh toán](../K03/04-K03D-THANH-TOAN.md) |
-| `Ctrl + Alt + N`     | Mở thêm hóa đơn mới                      | Tương đương click nút `[+]` |
-| `Ctrl + Tab`         | Chuyển sang tab bên phải                  | Duyệt qua các tab theo thứ tự vòng lặp |
-| `Ctrl + Shift + Tab` | Chuyển sang tab bên trái                  | Duyệt ngược danh sách tab |
-
----
-
-← [01-K01-TOPBAR.md](./01-K01-TOPBAR.md)
+| Phím | Tác vụ |
+| --- | --- |
+| `F3` | Focus tìm hàng |
+| `F4` | Focus tìm khách |
+| `F8` | Focus/mở bảng giá nếu có |
+| `F9` | Mở thanh toán |
+| `Ctrl + Alt + N` | Mở hóa đơn mới |
+| `Ctrl + Tab` | Chuyển tab phải |
+| `Ctrl + Shift + Tab` | Chuyển tab trái |

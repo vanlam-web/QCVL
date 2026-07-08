@@ -31,7 +31,7 @@ Register-ScheduledTask `
   -Trigger @($AtStartup, $AtLogon) `
   -Principal $Principal `
   -Settings $Settings `
-  -Description "Start Docker, local Supabase, and QC-OMS app for shared development." `
+  -Description "Start QC-OMS app for shared development." `
   -Force | Out-Null
 
 Write-Host "Registered scheduled task: $TaskName"

@@ -160,8 +160,8 @@ When chat, docs, plans, and code differ, use this order:
 
 1. Latest Owner decision in chat.
 2. Source of Truth docs/spec committed on the relevant branch or `main`.
-3. Implementation plans in `docs/superpowers/plans`.
-4. Current code.
+3. Current code.
+4. Git history for old plan/spec trace only when needed.
 
 If code differs from Owner decision or Source of Truth, treat it as implementation drift until Spec or Owner resolves it.
 

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Pencil, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -147,6 +147,8 @@ export function PurchaseReceiptsPage({
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(purchaseReceiptPageSize)
   const [search, setSearch] = useState('')
+  const [receiptSearchSuggestions, setReceiptSearchSuggestions] = useState<PurchaseReceipt[]>([])
+  const [receiptSearchSuggestionsOpen, setReceiptSearchSuggestionsOpen] = useState(false)
   const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>('posted')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -169,6 +171,7 @@ export function PurchaseReceiptsPage({
   const [supplierPaymentFinanceAccountId, setSupplierPaymentFinanceAccountId] = useState('')
   const [rollLengthTexts, setRollLengthTexts] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
+  const receiptSearchRequestId = useRef(0)
 
   const totals = useMemo(() => {
     const subtotal = form.items.reduce((sum, line) => sum + lineAmount(line), 0)
@@ -293,6 +296,7 @@ export function PurchaseReceiptsPage({
 
   async function filterReceipts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setReceiptSearchSuggestionsOpen(false)
     setPage(1)
     if (isExactPurchaseReceiptCode(search)) {
       setStatus('all')
@@ -305,6 +309,51 @@ export function PurchaseReceiptsPage({
     }
     await loadReceipts({
       search: search.trim() || undefined,
+      status,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined,
+      created_by: createdBy === 'all' ? undefined : createdBy,
+      page: 1,
+      page_size: pageSize,
+    })
+  }
+
+  async function suggestReceipts(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = receiptSearchRequestId.current + 1
+    receiptSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setReceiptSearchSuggestions([])
+      setReceiptSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listReceipts({
+        search: query,
+        status,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        created_by: createdBy === 'all' ? undefined : createdBy,
+        page: 1,
+        page_size: 8,
+      })
+      if (receiptSearchRequestId.current !== requestId) return
+      setReceiptSearchSuggestions(result.items)
+      setReceiptSearchSuggestionsOpen(true)
+    } catch {
+      if (receiptSearchRequestId.current !== requestId) return
+      setReceiptSearchSuggestions([])
+      setReceiptSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectReceiptSuggestion(receipt: PurchaseReceipt) {
+    setSearch(receipt.code)
+    setReceiptSearchSuggestionsOpen(false)
+    setPage(1)
+    await loadReceipts({
+      search: receipt.code,
       status,
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
@@ -1183,11 +1232,28 @@ export function PurchaseReceiptsPage({
             label="Tìm phiếu/NCC"
             leadingIcon={<Search aria-hidden="true" size={16} />}
             placeholder="Tìm mã phiếu, NCC"
+            suggestions={
+              receiptSearchSuggestionsOpen
+                ? receiptSearchSuggestions.map((receipt) => ({
+                    id: receipt.id,
+                    primary: `${receipt.code} ${receipt.supplier.name}`,
+                    secondary: `${receipt.supplier.code} - ${receipt.supplier.name}`,
+                    meta: money(receipt.payable_amount),
+                    ariaLabel: `${receipt.code} ${receipt.supplier.name}`,
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý phiếu nhập"
+            emptySuggestion="Không có kết quả phù hợp"
             trailingAction={
               <ManagementCompactCreateAction ariaLabel="Tạo phiếu nhập" onClick={() => void openCreateReceipt()} />
             }
             value={search}
-            onChange={setSearch}
+            onChange={(nextSearch) => void suggestReceipts(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const receipt = receiptSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (receipt) void selectReceiptSuggestion(receipt)
+            }}
           />
         </ManagementCompactToolbar>
       }

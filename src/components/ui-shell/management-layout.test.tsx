@@ -1,7 +1,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { useState, type FormEvent } from 'react'
 import {
   ManagementActionIconButton,
@@ -21,7 +21,7 @@ import {
 } from './management-layout'
 
 it('keeps retired management toolbar patterns out of the shared source', () => {
-  const css = readFileSync(join(process.cwd(), 'src/styles/index.css'), 'utf8')
+  const css = readCssWithImports(join(process.cwd(), 'src/styles/index.css'))
   const layout = readFileSync(join(process.cwd(), 'src/components/ui-shell/management-layout.tsx'), 'utf8')
   const retiredPatterns = [
     'DataToolbar',
@@ -43,6 +43,16 @@ it('keeps retired management toolbar patterns out of the shared source', () => {
     expect(layout).not.toContain(pattern)
   }
 })
+
+function readCssWithImports(path: string, seen = new Set<string>()): string {
+  if (seen.has(path)) return ''
+  seen.add(path)
+  const content = readFileSync(path, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
+  return content.replace(/@import\s+"([^"]+)";/g, (statement, importPath: string) => {
+    if (!importPath.startsWith('.')) return statement
+    return readCssWithImports(join(dirname(path), importPath), seen)
+  })
+}
 
 it('renders a KV-style management page with filter sidebar and list surface', () => {
   render(
@@ -154,6 +164,36 @@ it('renders reusable compact search toolbar with an icon action inside the searc
   expect(onSearchChange).toHaveBeenLastCalledWith('HD000010')
   expect(onFilter).toHaveBeenCalledTimes(1)
   expect(onSubmit).toHaveBeenCalled()
+})
+
+it('turns the compact create action into a rotating clear action while searching', async () => {
+  function CompactCreateHarness() {
+    const [value, setValue] = useState('')
+
+    return (
+      <ManagementCompactSearch
+        label="Tìm khách hàng"
+        placeholder="Tìm mã, tên, số điện thoại"
+        trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách hàng" onClick={vi.fn()} />}
+        value={value}
+        onChange={setValue}
+      />
+    )
+  }
+
+  render(<CompactCreateHarness />)
+
+  const searchInput = screen.getByLabelText('Tìm khách hàng')
+  expect(screen.getByRole('button', { name: 'Tạo khách hàng' })).toHaveClass('management-compact-create-action')
+
+  await userEvent.type(searchInput, 'kl')
+  const clearAction = screen.getByRole('button', { name: 'Xóa tìm kiếm' })
+  expect(clearAction).toHaveClass('management-compact-create-action-clear')
+  expect(clearAction.querySelector('.lucide-plus')).not.toBeNull()
+
+  await userEvent.click(clearAction)
+  expect(searchInput).toHaveValue('')
+  expect(screen.getByRole('button', { name: 'Tạo khách hàng' })).toBeInTheDocument()
 })
 
 it('renders the shared compact create action as the standard plus button', () => {

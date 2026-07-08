@@ -1,86 +1,82 @@
-# REVIEW-ISSUES — Review Thread Issue Tracker
+﻿# REVIEW-ISSUES â€” Review Thread Issue Tracker
 
-> **Vai trò:** Tracker issue cho Review Thread.
-> **Cập nhật:** 2026-07-08.
+> **Vai trÃ²:** Tracker issue cho Review Thread.
+> **Cáº­p nháº­t:** 2026-07-08.
 
-File này chỉ giữ issue review còn mở hoặc cần theo dõi. Chi tiết dài của issue đã đóng nằm trong git history.
-
----
-
-## Cách Dùng
-
-Review ghi issue ở đây khi phát hiện việc cần Spec / Implement / Owner xử lý.
-
-Mỗi issue cần có:
-
-- bằng chứng
-- người/luồng phụ trách
-- việc cần làm
-- lệnh re-check
-- tình trạng hiện tại
-
-Issue không thay thế PR comments, implementation plan, hoặc Source of Truth docs.
+File nÃ y chá»‰ giá»¯ issue review cÃ²n má»Ÿ hoáº·c cáº§n theo dÃµi. Chi tiáº¿t dÃ i cá»§a issue Ä‘Ã£ Ä‘Ã³ng náº±m trong git history.
 
 ---
 
-## Giá Trị Tình Trạng
+## CÃ¡ch DÃ¹ng
 
-| Tình trạng | Ý nghĩa |
+Review ghi issue á»Ÿ Ä‘Ã¢y khi phÃ¡t hiá»‡n viá»‡c cáº§n Spec / Implement / Owner xá»­ lÃ½.
+
+Má»—i issue cáº§n cÃ³:
+
+- báº±ng chá»©ng
+- ngÆ°á»i/luá»“ng phá»¥ trÃ¡ch
+- viá»‡c cáº§n lÃ m
+- lá»‡nh re-check
+- tÃ¬nh tráº¡ng hiá»‡n táº¡i
+
+Issue khÃ´ng thay tháº¿ PR comments, implementation plan, hoáº·c Source of Truth docs.
+
+---
+
+## GiÃ¡ Trá»‹ TÃ¬nh Tráº¡ng
+
+| TÃ¬nh tráº¡ng | Ã nghÄ©a |
 |---|---|
-| `Open` | Review đã xác nhận issue và cần follow-up |
-| `Waiting for Spec` | Cần Spec chốt hành vi hoặc Source of Truth |
-| `Waiting for Implement` | Cần Implement sửa/điều tra |
-| `Waiting for Owner` | Cần Owner quyết nghiệp vụ |
-| `Ready for Re-check` | Luồng phụ trách báo đã xử lý, Review cần kiểm lại |
-| `Closed` | Review đã kiểm lại hoặc chấp nhận quyết định đóng |
+| `Open` | Review Ä‘Ã£ xÃ¡c nháº­n issue vÃ  cáº§n follow-up |
+| `Waiting for Spec` | Cáº§n Spec chá»‘t hÃ nh vi hoáº·c Source of Truth |
+| `Waiting for Implement` | Cáº§n Implement sá»­a/Ä‘iá»u tra |
+| `Waiting for Owner` | Cáº§n Owner quyáº¿t nghiá»‡p vá»¥ |
+| `Ready for Re-check` | Luá»“ng phá»¥ trÃ¡ch bÃ¡o Ä‘Ã£ xá»­ lÃ½, Review cáº§n kiá»ƒm láº¡i |
+| `Closed` | Review Ä‘Ã£ kiá»ƒm láº¡i hoáº·c cháº¥p nháº­n quyáº¿t Ä‘á»‹nh Ä‘Ã³ng |
 
 ---
 
-## Issue Đang Mở
+## Issue Äang Má»Ÿ
 
-### `REV-2026-07-08-001` — `/pos/cart/validate` documented and called by frontend but not routed in Supabase API
+### `REV-2026-07-08-001` â€” `/pos/cart/validate` documented and called by frontend but not routed in QCVL Node API API
 
-- Tình trạng: `Waiting for Implement`
-- Bằng chứng:
-  - `src/features/orders/order-service.ts` gọi `POST /api/v1/pos/cart/validate`.
-  - `docs/05-BACKEND-MayChu/POS/ORDER-API.md` định nghĩa `POST /pos/cart/validate`.
-  - `supabase/functions/api/routes/router.ts` chỉ dispatch `/api/v1/orders/checkout` và `/api/v1/orders/*` sang `handleOrders`; không dispatch `/api/v1/pos/cart/validate`.
-  - `supabase/functions/api/routes/orders.ts` không có branch xử lý `/api/v1/pos/cart/validate`.
-- Việc cần làm: Implement route/use-case tương ứng hoặc sửa frontend/spec nếu endpoint không còn dùng; ưu tiên giữ Source of Truth backend docs và thêm route để tránh 404 khi UI gọi `validateCart`.
-- Lệnh re-check:
-  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate" src supabase/functions docs/05-BACKEND-MayChu/POS/ORDER-API.md`
-  - `npm run test:functions -- supabase/tests/functions/orders_test.ts`
-  - `npm test`
-- Luồng phụ trách: Implement
+- TÃ¬nh tráº¡ng: `Waiting for Implement`
+- Báº±ng chá»©ng:
+  - `src/features/orders/order-service.ts` gá»i `POST /api/v1/pos/cart/validate`.
+  - `docs/05-BACKEND-MayChu/POS/ORDER-API.md` Ä‘á»‹nh nghÄ©a `POST /pos/cart/validate`.
+  - `server/http.ts` handles API routing; re-check current route map before changing `/pos/cart/validate`.
+  - `server/http.ts` currently has no confirmed legacy route file for `/pos/cart/validate`.
+- Viá»‡c cáº§n lÃ m: Implement route/use-case tÆ°Æ¡ng á»©ng hoáº·c sá»­a frontend/spec náº¿u endpoint khÃ´ng cÃ²n dÃ¹ng; Æ°u tiÃªn giá»¯ Source of Truth backend docs vÃ  thÃªm route Ä‘á»ƒ trÃ¡nh 404 khi UI gá»i `validateCart`.
+- Lá»‡nh re-check:
+  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate" src server docs/05-BACKEND-MayChu/POS/ORDER-API.md`  - `npm test`
+- Luá»“ng phá»¥ trÃ¡ch: Implement
 
 ---
 
-## Issue Đã Đóng Gần Đây
+## Issue ÄÃ£ ÄÃ³ng Gáº§n ÄÃ¢y
 
-| Issue | Kết quả |
+| Issue | Káº¿t quáº£ |
 |---|---|
-| `REV-2026-07-07-006` — Local DB tests blocked because Docker daemon is not running | Closed; Docker daemon started, `npx supabase start` succeeded, `npx supabase test db supabase/tests/database/001_foundation_schema.test.sql` passed 61 tests |
-| `REV-2026-07-07-007` — Browser smoke after lazy route split | Closed; in-app browser smoke for dashboard, sales documents, finance, POS, account, admin, products, price book, customers, suppliers, purchase receipts, inventory, and reports found no alerts or console errors |
-| `REV-2026-07-07-005` — Function test fixtures drift after `UserListItem` adds `username` and `phone` | Closed; catalog, inventory/finance, and orders fixtures now include `username`/`phone`; `npm run test:functions -- supabase/tests/functions/me_test.ts supabase/tests/functions/users_test.ts supabase/tests/functions/health_test.ts` pass with 106 tests |
-| `REV-2026-07-07-003` — Generated `deno.lock` stays untracked and pollutes status | Closed; `.gitignore` now ignores root `deno.lock` |
-| `REV-2026-07-07-004` — Prunable temp review worktree records pollute `git worktree list` | Closed; `git worktree prune` removed stale `/private/tmp/qc-oms-pr6x-review` records |
-| `REV-2026-07-03-003` — Production bundle exceeds Vite warning threshold | Closed; route page components lazy-load from `src/app/router.tsx`, `npm run build` pass with main chunk `488.71 kB` and no Vite chunk warning |
-| `REV-2026-07-07-001` — Root `npm test` scans ignored `.worktrees` and runs stale worktree tests | Closed; `vite.config.ts` excludes `**/.worktrees/**`, root `npm test` only runs current `src` suite |
-| `REV-2026-07-07-002` — Account route hook dependency lint warning | Closed; `AccountRoute` depends on stable `currentUserId` instead of reading `currentUser` in effect |
-| `REV-2026-07-05-002` — PR #72 docs diff-check fails on trailing whitespace | Closed; PR head `7230c04` removes trailing whitespace and `git diff --check origin/main...HEAD` passes |
-| `REV-2026-07-05-001` — PR #68 material opening foundation schema drifts from Inventory SoT | Closed; PR head `8565cd9` aligns provisional balance columns/status/unique rule and material opening shape constraints with Inventory SoT; re-check commands pass |
-| `REV-2026-07-03-001` — Catalog management unit tests fail | Closed; targeted tests pass |
-| `REV-2026-07-03-002` — Playwright e2e blocked by invalid Supabase API key | Closed; e2e pass |
-| `REV-2026-07-03-004` — Workspace has many uncommitted changes | Closed; `main...origin/main` sạch ngày 2026-07-05 |
-| `REV-2026-07-03-005` — Governance docs old multi-AI wording | Closed; wording đã chuyển Codex Spec / Implement / Review |
-| `REV-2026-07-03-006` — Documentation indexes drift | Closed; index đã cập nhật |
-| `REV-2026-07-03-007` — Historical audit/draft status unclear | Closed; root audit logs cũ đã gỡ khỏi docs sống |
+| `REV-2026-07-07-007` â€” Browser smoke after lazy route split | Closed; in-app browser smoke for dashboard, sales documents, finance, POS, account, admin, products, price book, customers, suppliers, purchase receipts, inventory, and reports found no alerts or console errors |
+| `REV-2026-07-07-003` â€” Generated `deno.lock` stays untracked and pollutes status | Closed; `.gitignore` now ignores root `deno.lock` |
+| `REV-2026-07-07-004` â€” Prunable temp review worktree records pollute `git worktree list` | Closed; `git worktree prune` removed stale `/private/tmp/qc-oms-pr6x-review` records |
+| `REV-2026-07-03-003` â€” Production bundle exceeds Vite warning threshold | Closed; route page components lazy-load from `src/app/router.tsx`, `npm run build` pass with main chunk `488.71 kB` and no Vite chunk warning |
+| `REV-2026-07-07-001` â€” Root `npm test` scans ignored `.worktrees` and runs stale worktree tests | Closed; `vite.config.ts` excludes `**/.worktrees/**`, root `npm test` only runs current `src` suite |
+| `REV-2026-07-07-002` â€” Account route hook dependency lint warning | Closed; `AccountRoute` depends on stable `currentUserId` instead of reading `currentUser` in effect |
+| `REV-2026-07-05-002` â€” PR #72 docs diff-check fails on trailing whitespace | Closed; PR head `7230c04` removes trailing whitespace and `git diff --check origin/main...HEAD` passes |
+| `REV-2026-07-05-001` â€” PR #68 material opening foundation schema drifts from Inventory SoT | Closed; PR head `8565cd9` aligns provisional balance columns/status/unique rule and material opening shape constraints with Inventory SoT; re-check commands pass |
+| `REV-2026-07-03-001` â€” Catalog management unit tests fail | Closed; targeted tests pass |
+| `REV-2026-07-03-002` â€” Playwright e2e blocked by invalid QCVL Node API API key | Closed; e2e pass |
+| `REV-2026-07-03-004` â€” Workspace has many uncommitted changes | Closed; `main...origin/main` sáº¡ch ngÃ y 2026-07-05 |
+| `REV-2026-07-03-005` â€” Governance docs old multi-AI wording | Closed; wording Ä‘Ã£ chuyá»ƒn Codex Spec / Implement / Review |
+| `REV-2026-07-03-006` â€” Documentation indexes drift | Closed; index Ä‘Ã£ cáº­p nháº­t |
+| `REV-2026-07-03-007` â€” Historical audit/draft status unclear | Closed; root audit logs cÅ© Ä‘Ã£ gá»¡ khá»i docs sá»‘ng |
 
 ---
 
 ## Format Report Back
 
-Luồng phụ trách report thẳng về Review khi đã xử lý, bị chặn, hoặc quyết định defer:
+Luá»“ng phá»¥ trÃ¡ch report tháº³ng vá» Review khi Ä‘Ã£ xá»­ lÃ½, bá»‹ cháº·n, hoáº·c quyáº¿t Ä‘á»‹nh defer:
 
 ```text
 [<Thread> -> Review]

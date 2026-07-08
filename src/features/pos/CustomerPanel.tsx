@@ -57,21 +57,23 @@ export function CustomerPanel({
       <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
         <label>
           <span>Tìm khách</span>
-          <Search aria-hidden="true" size={18} />
           <input
             value={search}
             placeholder="Tìm khách hàng (F4)"
             onChange={(event) => setSearch(event.target.value)}
           />
-          <button
-            aria-label="Tạo khách nhanh"
-            title="Tạo khách nhanh"
-            type="button"
-            onClick={() => setCreateOpen(true)}
-          >
-            <Plus aria-hidden="true" size={18} />
-          </button>
         </label>
+        <button aria-label="Tìm khách hàng" title="Tìm khách hàng" type="submit">
+          <Search aria-hidden="true" size={18} />
+        </button>
+        <button
+          aria-label="Tạo khách nhanh"
+          title="Tạo khách nhanh"
+          type="button"
+          onClick={() => setCreateOpen(true)}
+        >
+          <Plus aria-hidden="true" size={18} />
+        </button>
       </form>
 
       {createOpen ? (

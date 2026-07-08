@@ -1,438 +1,438 @@
-# KẾ HOẠCH PHÁT TRIỂN QC-OMS — FE + BE THEO TỪNG GIAI ĐOẠN
+﻿# Káº¾ HOáº CH PHÃT TRIá»‚N QC-OMS â€” FE + BE THEO Tá»ªNG GIAI ÄOáº N
 
-> **Vai trò:** Roadmap logic dài hạn; trạng thái sống và queue hiện tại nằm ở [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
-> **Ngày lập:** 2026-06-28
-> **Cập nhật:** 2026-07-05 theo checklist sống hiện tại
-> **Mục tiêu:** Sau mỗi giai đoạn phải có một luồng người dùng hoàn chỉnh, chạy bằng Frontend và Backend thật trên môi trường staging.
-
----
-
-## 1. PHẠM VI VÀ NGUYÊN TẮC
-
-Tài liệu này là roadmap điều phối phát triển liên tầng. Nó không thay thế Source of Truth của từng tầng:
-
-- Hành vi giao diện: `02-PRD-UX-PhongCanh/`.
-- Quy tắc nghiệp vụ: `03-BUSINESS-NghiepVu/`.
-- Schema dữ liệu: `04-DATABASE/`.
-- API và workflow thực thi: `05-BACKEND-MayChu/`.
-- Hệ thống bên ngoài: `06-INTEGRATION-KetHop/`.
-- Hạ tầng và vận hành: `07-DEPLOYMENT-TrienKhai/`.
-
-Nguyên tắc triển khai:
-
-1. Phát triển theo **vertical slice**: FE, BE, Database và kiểm thử được làm trong cùng giai đoạn.
-2. Không nghiệm thu màn hình chỉ dùng mock data hoặc API giả.
-3. Backend là nguồn validation và tính toán cuối cùng cho dữ liệu nghiệp vụ.
-4. Mỗi giai đoạn phải deploy được lên staging và có kịch bản demo hoàn chỉnh.
-5. Business Rule chưa rõ phải được Owner chốt trước khi triển khai.
-6. Chức năng chưa hoàn thiện phải được ẩn bằng feature flag hoặc permission kỹ thuật, không để trạng thái nửa hoạt động; riêng nghiệp vụ MVP đã mở thì preset nhân viên nội bộ phải đủ quyền thao tác chính, không chia cắt luồng hằng ngày bằng quá nhiều permission nhỏ.
-7. Không mở scope ngoài [MVP-SCOPE](./01-VISION-TamNhin/03-MVP-SCOPE.md) nếu Owner chưa chốt lại.
-8. Có thể làm sớm foundation của giai đoạn sau nếu cần để hoàn tất luồng POS bán đứt, miễn là không mở thêm nghiệp vụ ngoài MVP.
-
-Giả định thời gian trong kế hoạch dành cho nhóm 2–3 developer. Nếu chỉ có một người phát triển, thời gian có thể tăng khoảng 1,5–2 lần.
+> **Vai trÃ²:** Roadmap logic dÃ i háº¡n; tráº¡ng thÃ¡i sá»‘ng vÃ  queue hiá»‡n táº¡i náº±m á»Ÿ [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
+> **NgÃ y láº­p:** 2026-06-28
+> **Cáº­p nháº­t:** 2026-07-05 theo checklist sá»‘ng hiá»‡n táº¡i
+> **Má»¥c tiÃªu:** Sau má»—i giai Ä‘oáº¡n pháº£i cÃ³ má»™t luá»“ng ngÆ°á»i dÃ¹ng hoÃ n chá»‰nh, cháº¡y báº±ng Frontend vÃ  Backend tháº­t trÃªn mÃ´i trÆ°á»ng staging.
 
 ---
 
-## 2. KIẾN TRÚC TRIỂN KHAI ĐỀ XUẤT
+## 1. PHáº M VI VÃ€ NGUYÃŠN Táº®C
+
+TÃ i liá»‡u nÃ y lÃ  roadmap Ä‘iá»u phá»‘i phÃ¡t triá»ƒn liÃªn táº§ng. NÃ³ khÃ´ng thay tháº¿ Source of Truth cá»§a tá»«ng táº§ng:
+
+- HÃ nh vi giao diá»‡n: `02-PRD-UX-PhongCanh/`.
+- Quy táº¯c nghiá»‡p vá»¥: `03-BUSINESS-NghiepVu/`.
+- Schema dá»¯ liá»‡u: `04-DATABASE/`.
+- API vÃ  workflow thá»±c thi: `05-BACKEND-MayChu/`.
+- Há»‡ thá»‘ng bÃªn ngoÃ i: `06-INTEGRATION-KetHop/`.
+- Háº¡ táº§ng vÃ  váº­n hÃ nh: `07-DEPLOYMENT-TrienKhai/`.
+
+NguyÃªn táº¯c triá»ƒn khai:
+
+1. PhÃ¡t triá»ƒn theo **vertical slice**: FE, BE, Database vÃ  kiá»ƒm thá»­ Ä‘Æ°á»£c lÃ m trong cÃ¹ng giai Ä‘oáº¡n.
+2. KhÃ´ng nghiá»‡m thu mÃ n hÃ¬nh chá»‰ dÃ¹ng mock data hoáº·c API giáº£.
+3. Backend lÃ  nguá»“n validation vÃ  tÃ­nh toÃ¡n cuá»‘i cÃ¹ng cho dá»¯ liá»‡u nghiá»‡p vá»¥.
+4. Má»—i giai Ä‘oáº¡n pháº£i deploy Ä‘Æ°á»£c lÃªn staging vÃ  cÃ³ ká»‹ch báº£n demo hoÃ n chá»‰nh.
+5. Business Rule chÆ°a rÃµ pháº£i Ä‘Æ°á»£c Owner chá»‘t trÆ°á»›c khi triá»ƒn khai.
+6. Chá»©c nÄƒng chÆ°a hoÃ n thiá»‡n pháº£i Ä‘Æ°á»£c áº©n báº±ng feature flag hoáº·c permission ká»¹ thuáº­t, khÃ´ng Ä‘á»ƒ tráº¡ng thÃ¡i ná»­a hoáº¡t Ä‘á»™ng; riÃªng nghiá»‡p vá»¥ MVP Ä‘Ã£ má»Ÿ thÃ¬ preset nhÃ¢n viÃªn ná»™i bá»™ pháº£i Ä‘á»§ quyá»n thao tÃ¡c chÃ­nh, khÃ´ng chia cáº¯t luá»“ng háº±ng ngÃ y báº±ng quÃ¡ nhiá»u permission nhá».
+7. KhÃ´ng má»Ÿ scope ngoÃ i [MVP-SCOPE](./01-VISION-TamNhin/03-MVP-SCOPE.md) náº¿u Owner chÆ°a chá»‘t láº¡i.
+8. CÃ³ thá»ƒ lÃ m sá»›m foundation cá»§a giai Ä‘oáº¡n sau náº¿u cáº§n Ä‘á»ƒ hoÃ n táº¥t luá»“ng POS bÃ¡n Ä‘á»©t, miá»…n lÃ  khÃ´ng má»Ÿ thÃªm nghiá»‡p vá»¥ ngoÃ i MVP.
+
+Giáº£ Ä‘á»‹nh thá»i gian trong káº¿ hoáº¡ch dÃ nh cho nhÃ³m 2â€“3 developer. Náº¿u chá»‰ cÃ³ má»™t ngÆ°á»i phÃ¡t triá»ƒn, thá»i gian cÃ³ thá»ƒ tÄƒng khoáº£ng 1,5â€“2 láº§n.
+
+---
+
+## 2. KIáº¾N TRÃšC TRIá»‚N KHAI Äá»€ XUáº¤T
 
 ```text
 React + TypeScript + Vite
-        ↓
+        â†“
 Application Service / API Client
-        ↓
-Supabase Edge Functions hoặc API /api/v1
-        ↓
+        â†“
+backend cu da go Edge Functions hoáº·c API /api/v1
+        â†“
 PostgreSQL + Auth + Realtime + RLS
 ```
 
-- Frontend triển khai trên Vercel.
-- Supabase quản lý Authentication, PostgreSQL và Realtime.
-- FE không trực tiếp thực hiện các workflow quan trọng như checkout, trừ kho hoặc phân bổ công nợ.
-- Mọi workflow ghi nhiều bảng phải chạy trong transaction phù hợp.
-- Các thao tác có thể gửi lại phải có idempotency key hoặc cơ chế chống trùng tương đương.
-- Mỗi giai đoạn có migration, seed data và cấu hình staging tương ứng.
+- Frontend triá»ƒn khai trÃªn Vercel.
+- backend cu da go quáº£n lÃ½ Authentication, PostgreSQL vÃ  Realtime.
+- FE khÃ´ng trá»±c tiáº¿p thá»±c hiá»‡n cÃ¡c workflow quan trá»ng nhÆ° checkout, trá»« kho hoáº·c phÃ¢n bá»• cÃ´ng ná»£.
+- Má»i workflow ghi nhiá»u báº£ng pháº£i cháº¡y trong transaction phÃ¹ há»£p.
+- CÃ¡c thao tÃ¡c cÃ³ thá»ƒ gá»­i láº¡i pháº£i cÃ³ idempotency key hoáº·c cÆ¡ cháº¿ chá»‘ng trÃ¹ng tÆ°Æ¡ng Ä‘Æ°Æ¡ng.
+- Má»—i giai Ä‘oáº¡n cÃ³ migration, seed data vÃ  cáº¥u hÃ¬nh staging tÆ°Æ¡ng á»©ng.
 
 ---
 
-## 3. TỔNG QUAN ROADMAP
+## 3. Tá»”NG QUAN ROADMAP
 
-### 3.1. Cách đọc roadmap sau khi chốt MVP ngày 2026-07-01
+### 3.1. CÃ¡ch Ä‘á»c roadmap sau khi chá»‘t MVP ngÃ y 2026-07-01
 
-Roadmap Phase 0-8 bên dưới là **roadmap logic dài hạn theo nhóm năng lực**, không còn là thứ tự commit/branch cứng.
+Roadmap Phase 0-8 bÃªn dÆ°á»›i lÃ  **roadmap logic dÃ i háº¡n theo nhÃ³m nÄƒng lá»±c**, khÃ´ng cÃ²n lÃ  thá»© tá»± commit/branch cá»©ng.
 
-Từ Phase 1 trở đi, dự án đang thực thi theo các lát cắt nhỏ hơn:
+Tá»« Phase 1 trá»Ÿ Ä‘i, dá»± Ã¡n Ä‘ang thá»±c thi theo cÃ¡c lÃ¡t cáº¯t nhá» hÆ¡n:
 
 ```text
 1A -> 1B -> 1C -> 2A -> 2B -> 2C -> 2D -> ...
 ```
 
-Mỗi lát cắt vẫn theo nguyên tắc vertical slice: có UI/API/DB/test đủ để chạy một phần nghiệp vụ thật. Vì vậy một số foundation của Phase 4 hoặc Phase 6 trong roadmap logic đã được làm sớm để phục vụ POS bán đứt:
+Má»—i lÃ¡t cáº¯t váº«n theo nguyÃªn táº¯c vertical slice: cÃ³ UI/API/DB/test Ä‘á»§ Ä‘á»ƒ cháº¡y má»™t pháº§n nghiá»‡p vá»¥ tháº­t. VÃ¬ váº­y má»™t sá»‘ foundation cá»§a Phase 4 hoáº·c Phase 6 trong roadmap logic Ä‘Ã£ Ä‘Æ°á»£c lÃ m sá»›m Ä‘á»ƒ phá»¥c vá»¥ POS bÃ¡n Ä‘á»©t:
 
 - checkout transaction
 - inventory/finance foundation
 - production queue foundation
 - Sales Documents readonly
 
-Điều này không có nghĩa dự án bị "nhảy phase". Đây là điều chỉnh đúng theo MVP scope hiện tại:
+Äiá»u nÃ y khÃ´ng cÃ³ nghÄ©a dá»± Ã¡n bá»‹ "nháº£y phase". ÄÃ¢y lÃ  Ä‘iá»u chá»‰nh Ä‘Ãºng theo MVP scope hiá»‡n táº¡i:
 
 ```text
-POS bán đứt -> hóa đơn -> trừ kho -> thu tiền/công nợ -> sổ quỹ -> đối soát -> báo cáo quản trị
+POS bÃ¡n Ä‘á»©t -> hÃ³a Ä‘Æ¡n -> trá»« kho -> thu tiá»n/cÃ´ng ná»£ -> sá»• quá»¹ -> Ä‘á»‘i soÃ¡t -> bÃ¡o cÃ¡o quáº£n trá»‹
 ```
 
-Không mở scope ngoài MVP như Đặt hàng KiotViet, vận đơn/COD, kênh online, VAT/HĐĐT, HR/payroll hoặc campaign retail.
+KhÃ´ng má»Ÿ scope ngoÃ i MVP nhÆ° Äáº·t hÃ ng KiotViet, váº­n Ä‘Æ¡n/COD, kÃªnh online, VAT/HÄÄT, HR/payroll hoáº·c campaign retail.
 
-### 3.2. Trạng thái main hiện tại
+### 3.2. Tráº¡ng thÃ¡i main hiá»‡n táº¡i
 
-Nguồn theo dõi chi tiết: [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
+Nguá»“n theo dÃµi chi tiáº¿t: [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
 
-| Lát cắt thực thi | Trạng thái | Ghi chú |
+| LÃ¡t cáº¯t thá»±c thi | Tráº¡ng thÃ¡i | Ghi chÃº |
 |---|---|---|
-| Phase 1A | Đã merge | Foundation UI + catalog/pricing |
-| Phase 1B | Đã merge | Customer selection và customer pricing |
-| Phase 1C | Đã merge | Checkout transaction, inventory/finance foundation |
-| Phase 2A | Đã merge | POS direct checkout UI |
-| Phase 2B | Đã merge | Production queue/K02-D foundation |
-| Phase 2C | Đã merge | POS line discount handling UI/backend persistence |
-| Phase 2D | Đã merge | Sales Documents readonly list/detail |
-| Phase 3A | Đã merge | Báo giá `BG...` và mở lại vào POS draft |
-| Quote print Phase 3B | Đã merge | In/xem báo giá đơn giản |
-| PriceBook formula MVP | Đã merge | Structured formula, preview/apply, rounding |
-| Purchase P1/P2/P3/P5 | Đã merge | NCC, phiếu nhập hàng thường, post receipt, thanh toán NCC |
+| Phase 1A | ÄÃ£ merge | Foundation UI + catalog/pricing |
+| Phase 1B | ÄÃ£ merge | Customer selection vÃ  customer pricing |
+| Phase 1C | ÄÃ£ merge | Checkout transaction, inventory/finance foundation |
+| Phase 2A | ÄÃ£ merge | POS direct checkout UI |
+| Phase 2B | ÄÃ£ merge | Production queue/K02-D foundation |
+| Phase 2C | ÄÃ£ merge | POS line discount handling UI/backend persistence |
+| Phase 2D | ÄÃ£ merge | Sales Documents readonly list/detail |
+| Phase 3A | ÄÃ£ merge | BÃ¡o giÃ¡ `BG...` vÃ  má»Ÿ láº¡i vÃ o POS draft |
+| Quote print Phase 3B | ÄÃ£ merge | In/xem bÃ¡o giÃ¡ Ä‘Æ¡n giáº£n |
+| PriceBook formula MVP | ÄÃ£ merge | Structured formula, preview/apply, rounding |
+| Purchase P1/P2/P3/P5 | ÄÃ£ merge | NCC, phiáº¿u nháº­p hÃ ng thÆ°á»ng, post receipt, thanh toÃ¡n NCC |
 
-### 3.3. Mapping giữa roadmap logic và lát cắt đã làm
+### 3.3. Mapping giá»¯a roadmap logic vÃ  lÃ¡t cáº¯t Ä‘Ã£ lÃ m
 
-| Roadmap logic | Nội dung roadmap gốc | Trạng thái/lát cắt thực tế |
+| Roadmap logic | Ná»™i dung roadmap gá»‘c | Tráº¡ng thÃ¡i/lÃ¡t cáº¯t thá»±c táº¿ |
 |---|---|---|
-| Phase 0 | Đăng nhập, phân quyền, POS Shell | Đã merge |
-| Phase 1 | Hàng hóa, khách hàng, bảng giá | Đã có foundation 1A/1B và PriceBook formula MVP |
-| Phase 2 | Giỏ hàng và hóa đơn nháp | Đã có POS direct checkout UI; nháp production queue ở 2B |
-| Phase 3 | Báo giá và Bill Preview | Báo giá, mở lại báo giá, Sales Documents readonly và quote print đơn giản đã merge |
-| Phase 4 | Thanh toán, kho cơ bản và công nợ | Checkout transaction, inventory/finance foundation đã làm sớm ở 1C/2A |
-| Phase 5 | Combo/BOM và quản lý vật tư | Purchase hàng thường đã merge; cuộn/tấm vật lý và BOM sâu còn phase riêng |
-| Phase 6 | Hàng đợi máy sản xuất realtime | Production queue foundation đã làm sớm ở 2B; ingestion/realtime đầy đủ còn phase sau |
-| Phase 7 | Bill nâng cao và hỗ trợ gửi khách | Quote print đơn giản đã có; gửi tự động/nhiều mẫu còn sau |
-| Phase 8 | Production và vận hành | Supabase Cloud/dev-staging đã có; production hardening còn sau |
+| Phase 0 | ÄÄƒng nháº­p, phÃ¢n quyá»n, POS Shell | ÄÃ£ merge |
+| Phase 1 | HÃ ng hÃ³a, khÃ¡ch hÃ ng, báº£ng giÃ¡ | ÄÃ£ cÃ³ foundation 1A/1B vÃ  PriceBook formula MVP |
+| Phase 2 | Giá» hÃ ng vÃ  hÃ³a Ä‘Æ¡n nhÃ¡p | ÄÃ£ cÃ³ POS direct checkout UI; nhÃ¡p production queue á»Ÿ 2B |
+| Phase 3 | BÃ¡o giÃ¡ vÃ  Bill Preview | BÃ¡o giÃ¡, má»Ÿ láº¡i bÃ¡o giÃ¡, Sales Documents readonly vÃ  quote print Ä‘Æ¡n giáº£n Ä‘Ã£ merge |
+| Phase 4 | Thanh toÃ¡n, kho cÆ¡ báº£n vÃ  cÃ´ng ná»£ | Checkout transaction, inventory/finance foundation Ä‘Ã£ lÃ m sá»›m á»Ÿ 1C/2A |
+| Phase 5 | Combo/BOM vÃ  quáº£n lÃ½ váº­t tÆ° | Purchase hÃ ng thÆ°á»ng Ä‘Ã£ merge; cuá»™n/táº¥m váº­t lÃ½ vÃ  BOM sÃ¢u cÃ²n phase riÃªng |
+| Phase 6 | HÃ ng Ä‘á»£i mÃ¡y sáº£n xuáº¥t realtime | Production queue foundation Ä‘Ã£ lÃ m sá»›m á»Ÿ 2B; ingestion/realtime Ä‘áº§y Ä‘á»§ cÃ²n phase sau |
+| Phase 7 | Bill nÃ¢ng cao vÃ  há»— trá»£ gá»­i khÃ¡ch | Quote print Ä‘Æ¡n giáº£n Ä‘Ã£ cÃ³; gá»­i tá»± Ä‘á»™ng/nhiá»u máº«u cÃ²n sau |
+| Phase 8 | Production vÃ  váº­n hÃ nh | backend cu da go Cloud/dev-staging Ä‘Ã£ cÃ³; production hardening cÃ²n sau |
 
-### 3.4. Roadmap logic dài hạn
+### 3.4. Roadmap logic dÃ i háº¡n
 
-| Giai đoạn | Kết quả sử dụng được | Thời gian dự kiến |
+| Giai Ä‘oáº¡n | Káº¿t quáº£ sá»­ dá»¥ng Ä‘Æ°á»£c | Thá»i gian dá»± kiáº¿n |
 |---|---|---|
-| 0 | Đăng nhập, phân quyền và POS Shell | 1–2 tuần |
-| 1 | Tìm hàng, khách hàng và bảng giá | 2 tuần |
-| 2 | Giỏ hàng và hóa đơn nháp | 2–3 tuần |
-| 3 | Báo giá và Bill Preview cơ bản | 1–2 tuần |
-| 4 | Thanh toán, kho cơ bản và công nợ | 3 tuần |
-| 5 | Combo/BOM và quản lý vật tư | 2–3 tuần |
-| 6 | Hàng đợi máy sản xuất Realtime | 2–3 tuần |
-| 7 | Bill nâng cao và hỗ trợ gửi khách | 2 tuần |
-| 8 | Production, giám sát và khôi phục | 2 tuần |
+| 0 | ÄÄƒng nháº­p, phÃ¢n quyá»n vÃ  POS Shell | 1â€“2 tuáº§n |
+| 1 | TÃ¬m hÃ ng, khÃ¡ch hÃ ng vÃ  báº£ng giÃ¡ | 2 tuáº§n |
+| 2 | Giá» hÃ ng vÃ  hÃ³a Ä‘Æ¡n nhÃ¡p | 2â€“3 tuáº§n |
+| 3 | BÃ¡o giÃ¡ vÃ  Bill Preview cÆ¡ báº£n | 1â€“2 tuáº§n |
+| 4 | Thanh toÃ¡n, kho cÆ¡ báº£n vÃ  cÃ´ng ná»£ | 3 tuáº§n |
+| 5 | Combo/BOM vÃ  quáº£n lÃ½ váº­t tÆ° | 2â€“3 tuáº§n |
+| 6 | HÃ ng Ä‘á»£i mÃ¡y sáº£n xuáº¥t Realtime | 2â€“3 tuáº§n |
+| 7 | Bill nÃ¢ng cao vÃ  há»— trá»£ gá»­i khÃ¡ch | 2 tuáº§n |
+| 8 | Production, giÃ¡m sÃ¡t vÃ  khÃ´i phá»¥c | 2 tuáº§n |
 
-Mốc phát hành logic ban đầu:
+Má»‘c phÃ¡t hÃ nh logic ban Ä‘áº§u:
 
-- **MVP nội bộ:** Giai đoạn 0–4, khoảng 9–12 tuần.
-- **Pilot tại xưởng:** Giai đoạn 5–7, thêm khoảng 6–8 tuần.
-- **Production ổn định:** Giai đoạn 8, tổng khoảng 17–22 tuần.
-- **SaaS đa xưởng:** Chỉ bắt đầu sau khi bản nội bộ vận hành ổn định.
+- **MVP ná»™i bá»™:** Giai Ä‘oáº¡n 0â€“4, khoáº£ng 9â€“12 tuáº§n.
+- **Pilot táº¡i xÆ°á»Ÿng:** Giai Ä‘oáº¡n 5â€“7, thÃªm khoáº£ng 6â€“8 tuáº§n.
+- **Production á»•n Ä‘á»‹nh:** Giai Ä‘oáº¡n 8, tá»•ng khoáº£ng 17â€“22 tuáº§n.
+- **SaaS Ä‘a xÆ°á»Ÿng:** Chá»‰ báº¯t Ä‘áº§u sau khi báº£n ná»™i bá»™ váº­n hÃ nh á»•n Ä‘á»‹nh.
 
 ---
 
-## 4. CHI TIẾT TỪNG GIAI ĐOẠN
+## 4. CHI TIáº¾T Tá»ªNG GIAI ÄOáº N
 
-### Giai đoạn 0 — Nền tảng và đăng nhập
+### Giai Ä‘oáº¡n 0 â€” Ná»n táº£ng vÃ  Ä‘Äƒng nháº­p
 
-**Tính năng bàn giao:** Người dùng đăng nhập, vào màn hình POS theo preset quyền MVP và đăng xuất an toàn.
-
-**Frontend**
-
-- Khởi tạo React, TypeScript, Vite và Tailwind CSS.
-- Trang đăng nhập, POS Shell và routing.
-- Route guard và trang `Không có quyền truy cập` cho tài khoản hạn chế đặc biệt hoặc truy cập nhầm vùng quản trị.
-- Hiển thị tài khoản, mã máy trạm và trạng thái kết nối.
-
-**Backend và Database**
-
-- Supabase Auth.
-- Hồ sơ người dùng, permissions và máy trạm.
-- API lấy hồ sơ người dùng hiện tại.
-- RLS và kiểm tra permission phía Backend.
-- Audit đăng nhập và thay đổi quyền.
-
-**Điều kiện nghiệm thu**
-
-- Đăng nhập thành công và thất bại đúng hành vi.
-- Tài khoản nội bộ mặc định truy cập được POS; tài khoản hạn chế đặc biệt thiếu quyền thì không truy cập được POS.
-- Refresh không làm mất phiên hợp lệ.
-- Có staging URL và pipeline build/test/deploy.
-
-### Giai đoạn 1 — Hàng hóa, khách hàng và bảng giá
-
-**Tính năng bàn giao:** Thu ngân tìm sản phẩm bằng `F3`, tạo/chọn khách bằng `F4` và nhận đúng giá bán.
+**TÃ­nh nÄƒng bÃ n giao:** NgÆ°á»i dÃ¹ng Ä‘Äƒng nháº­p, vÃ o mÃ n hÃ¬nh POS theo preset quyá»n MVP vÃ  Ä‘Äƒng xuáº¥t an toÃ n.
 
 **Frontend**
 
-- Tìm sản phẩm không dấu và lưới sản phẩm K03-C.
-- Tìm, thêm và sửa khách hàng K03-A.
-- Chọn bảng giá và hiển thị chiết khấu.
-- Nhắc bổ sung SĐT K03-B.
-- Back-office tối thiểu để quản lý sản phẩm và bảng giá.
+- Khá»Ÿi táº¡o React, TypeScript, Vite vÃ  Tailwind CSS.
+- Trang Ä‘Äƒng nháº­p, POS Shell vÃ  routing.
+- Route guard vÃ  trang `KhÃ´ng cÃ³ quyá»n truy cáº­p` cho tÃ i khoáº£n háº¡n cháº¿ Ä‘áº·c biá»‡t hoáº·c truy cáº­p nháº§m vÃ¹ng quáº£n trá»‹.
+- Hiá»ƒn thá»‹ tÃ i khoáº£n, mÃ£ mÃ¡y tráº¡m vÃ  tráº¡ng thÃ¡i káº¿t ná»‘i.
 
-**Backend và Database**
+**Backend vÃ  Database**
 
-- Schema sản phẩm, khách hàng, bảng giá và chi tiết bảng giá.
-- API tìm kiếm sản phẩm và khách hàng.
-- API CRUD khách hàng.
-- API xác định giá theo khách hàng.
-- Chuẩn hóa và kiểm tra trùng SĐT, mã khách hàng.
+- backend cu da go Auth.
+- Há»“ sÆ¡ ngÆ°á»i dÃ¹ng, permissions vÃ  mÃ¡y tráº¡m.
+- API láº¥y há»“ sÆ¡ ngÆ°á»i dÃ¹ng hiá»‡n táº¡i.
+- RLS vÃ  kiá»ƒm tra permission phÃ­a Backend.
+- Audit Ä‘Äƒng nháº­p vÃ  thay Ä‘á»•i quyá»n.
 
-**Điều kiện nghiệm thu**
+**Äiá»u kiá»‡n nghiá»‡m thu**
 
-- Tạo khách mới và tự động chọn vào hóa đơn hiện tại.
-- Đổi khách làm cập nhật các dòng dùng giá tự động.
-- Dòng đã sửa giá thủ công được giữ nguyên.
-- Không tạo trùng SĐT hoặc mã khách hàng.
+- ÄÄƒng nháº­p thÃ nh cÃ´ng vÃ  tháº¥t báº¡i Ä‘Ãºng hÃ nh vi.
+- TÃ i khoáº£n ná»™i bá»™ máº·c Ä‘á»‹nh truy cáº­p Ä‘Æ°á»£c POS; tÃ i khoáº£n háº¡n cháº¿ Ä‘áº·c biá»‡t thiáº¿u quyá»n thÃ¬ khÃ´ng truy cáº­p Ä‘Æ°á»£c POS.
+- Refresh khÃ´ng lÃ m máº¥t phiÃªn há»£p lá»‡.
+- CÃ³ staging URL vÃ  pipeline build/test/deploy.
 
-### Giai đoạn 2 — Giỏ hàng và hóa đơn nháp
+### Giai Ä‘oáº¡n 1 â€” HÃ ng hÃ³a, khÃ¡ch hÃ ng vÃ  báº£ng giÃ¡
 
-**Tính năng bàn giao:** Thu ngân tạo nhiều hóa đơn nháp, thêm sản phẩm và tính tiền chính xác.
+**TÃ­nh nÄƒng bÃ n giao:** Thu ngÃ¢n tÃ¬m sáº£n pháº©m báº±ng `F3`, táº¡o/chá»n khÃ¡ch báº±ng `F4` vÃ  nháº­n Ä‘Ãºng giÃ¡ bÃ¡n.
 
 **Frontend**
 
-- K01 đa tab, tối đa 10 tab.
-- Dòng hàng thường và dòng hàng m².
-- Ghi chú dòng hàng và ghi chú đơn.
-- Tổng m² và tổng tiền cập nhật realtime.
-- Khôi phục tab sau reload hoặc khởi động lại máy.
-- Cảnh báo khi đóng tab có dữ liệu.
+- TÃ¬m sáº£n pháº©m khÃ´ng dáº¥u vÃ  lÆ°á»›i sáº£n pháº©m K03-C.
+- TÃ¬m, thÃªm vÃ  sá»­a khÃ¡ch hÃ ng K03-A.
+- Chá»n báº£ng giÃ¡ vÃ  hiá»ƒn thá»‹ chiáº¿t kháº¥u.
+- Nháº¯c bá»• sung SÄT K03-B.
+- Back-office tá»‘i thiá»ƒu Ä‘á»ƒ quáº£n lÃ½ sáº£n pháº©m vÃ  báº£ng giÃ¡.
+
+**Backend vÃ  Database**
+
+- Schema sáº£n pháº©m, khÃ¡ch hÃ ng, báº£ng giÃ¡ vÃ  chi tiáº¿t báº£ng giÃ¡.
+- API tÃ¬m kiáº¿m sáº£n pháº©m vÃ  khÃ¡ch hÃ ng.
+- API CRUD khÃ¡ch hÃ ng.
+- API xÃ¡c Ä‘á»‹nh giÃ¡ theo khÃ¡ch hÃ ng.
+- Chuáº©n hÃ³a vÃ  kiá»ƒm tra trÃ¹ng SÄT, mÃ£ khÃ¡ch hÃ ng.
+
+**Äiá»u kiá»‡n nghiá»‡m thu**
+
+- Táº¡o khÃ¡ch má»›i vÃ  tá»± Ä‘á»™ng chá»n vÃ o hÃ³a Ä‘Æ¡n hiá»‡n táº¡i.
+- Äá»•i khÃ¡ch lÃ m cáº­p nháº­t cÃ¡c dÃ²ng dÃ¹ng giÃ¡ tá»± Ä‘á»™ng.
+- DÃ²ng Ä‘Ã£ sá»­a giÃ¡ thá»§ cÃ´ng Ä‘Æ°á»£c giá»¯ nguyÃªn.
+- KhÃ´ng táº¡o trÃ¹ng SÄT hoáº·c mÃ£ khÃ¡ch hÃ ng.
+
+### Giai Ä‘oáº¡n 2 â€” Giá» hÃ ng vÃ  hÃ³a Ä‘Æ¡n nhÃ¡p
+
+**TÃ­nh nÄƒng bÃ n giao:** Thu ngÃ¢n táº¡o nhiá»u hÃ³a Ä‘Æ¡n nhÃ¡p, thÃªm sáº£n pháº©m vÃ  tÃ­nh tiá»n chÃ­nh xÃ¡c.
+
+**Frontend**
+
+- K01 Ä‘a tab, tá»‘i Ä‘a 10 tab.
+- DÃ²ng hÃ ng thÆ°á»ng vÃ  dÃ²ng hÃ ng mÂ².
+- Ghi chÃº dÃ²ng hÃ ng vÃ  ghi chÃº Ä‘Æ¡n.
+- Tá»•ng mÂ² vÃ  tá»•ng tiá»n cáº­p nháº­t realtime.
+- KhÃ´i phá»¥c tab sau reload hoáº·c khá»Ÿi Ä‘á»™ng láº¡i mÃ¡y.
+- Cáº£nh bÃ¡o khi Ä‘Ã³ng tab cÃ³ dá»¯ liá»‡u.
 
 **Backend**
 
-- Endpoint tính và validation giỏ hàng.
-- Phân loại sản phẩm theo đơn vị tính.
-- Tính hàng thường và hàng m² theo Business Rule hiện hành.
-- Kiểm tra giá, kích thước và permission kỹ thuật; preset nội bộ MVP mặc định có quyền giảm giá/sửa giá thủ công nếu Owner chưa chốt kiểm soát riêng.
+- Endpoint tÃ­nh vÃ  validation giá» hÃ ng.
+- PhÃ¢n loáº¡i sáº£n pháº©m theo Ä‘Æ¡n vá»‹ tÃ­nh.
+- TÃ­nh hÃ ng thÆ°á»ng vÃ  hÃ ng mÂ² theo Business Rule hiá»‡n hÃ nh.
+- Kiá»ƒm tra giÃ¡, kÃ­ch thÆ°á»›c vÃ  permission ká»¹ thuáº­t; preset ná»™i bá»™ MVP máº·c Ä‘á»‹nh cÃ³ quyá»n giáº£m giÃ¡/sá»­a giÃ¡ thá»§ cÃ´ng náº¿u Owner chÆ°a chá»‘t kiá»ƒm soÃ¡t riÃªng.
 
-**Điều kiện nghiệm thu**
+**Äiá»u kiá»‡n nghiá»‡m thu**
 
-- FE và BE cho cùng kết quả tính tiền.
-- Hàng thường chọn lại được cộng số lượng.
-- Hàng m² luôn tạo dòng riêng.
-- Dữ liệu giữa các tab độc lập.
-- Reload không làm mất hóa đơn nháp.
+- FE vÃ  BE cho cÃ¹ng káº¿t quáº£ tÃ­nh tiá»n.
+- HÃ ng thÆ°á»ng chá»n láº¡i Ä‘Æ°á»£c cá»™ng sá»‘ lÆ°á»£ng.
+- HÃ ng mÂ² luÃ´n táº¡o dÃ²ng riÃªng.
+- Dá»¯ liá»‡u giá»¯a cÃ¡c tab Ä‘á»™c láº­p.
+- Reload khÃ´ng lÃ m máº¥t hÃ³a Ä‘Æ¡n nhÃ¡p.
 
-### Giai đoạn 3 — Báo giá và Bill Preview
+### Giai Ä‘oáº¡n 3 â€” BÃ¡o giÃ¡ vÃ  Bill Preview
 
-**Tính năng bàn giao:** Thu ngân lưu báo giá, mở lại để sửa và xem/in bill báo giá.
-
-**Frontend**
-
-- Nút `BÁO GIÁ`.
-- Danh sách và tìm kiếm báo giá.
-- Mở lại báo giá thành hóa đơn nháp.
-- Bill Preview và in bill cơ bản.
-
-**Backend và Database**
-
-- Schema đơn hàng, dòng hàng và lịch sử trạng thái.
-- Sinh mã `BG...`.
-- API tạo, đọc và cập nhật báo giá.
-- Lưu snapshot giá và thông tin hàng tại thời điểm báo giá.
-- Không phát sinh kho, tiền, công nợ hoặc doanh thu.
-
-**Điều kiện nghiệm thu**
-
-- Báo giá được lưu và mở lại chính xác.
-- Có thể sửa rồi lưu lại.
-- Không xuất hiện stock movement hoặc cash transaction.
-
-### Giai đoạn 4 — Thanh toán, kho cơ bản và công nợ
-
-**Tính năng bàn giao:** Thu ngân thanh toán bằng tiền mặt, chuyển khoản hoặc kết hợp; kho, sổ quỹ và công nợ được cập nhật đồng thời.
+**TÃ­nh nÄƒng bÃ n giao:** Thu ngÃ¢n lÆ°u bÃ¡o giÃ¡, má»Ÿ láº¡i Ä‘á»ƒ sá»­a vÃ  xem/in bill bÃ¡o giÃ¡.
 
 **Frontend**
 
-- Dialog thanh toán K03-D.
-- Trả đủ, nợ toàn bộ và trả một phần.
-- Khách lẻ nợ với ghi chú bắt buộc.
-- Thanh toán nợ cũ.
-- Xem lịch sử hóa đơn và công nợ.
+- NÃºt `BÃO GIÃ`.
+- Danh sÃ¡ch vÃ  tÃ¬m kiáº¿m bÃ¡o giÃ¡.
+- Má»Ÿ láº¡i bÃ¡o giÃ¡ thÃ nh hÃ³a Ä‘Æ¡n nhÃ¡p.
+- Bill Preview vÃ  in bill cÆ¡ báº£n.
 
-**Backend và Database**
+**Backend vÃ  Database**
 
-- Schema payment, sổ quỹ, công nợ và phân bổ trả nợ.
-- Kho cơ bản, số dư tồn và lịch sử biến động kho.
-- Transaction checkout nguyên tử.
-- Idempotency chống thanh toán hai lần.
-- Cấn trừ nợ vào hóa đơn cũ nhất trước.
-- Sinh mã `HD...` và giữ liên kết với báo giá nguồn.
+- Schema Ä‘Æ¡n hÃ ng, dÃ²ng hÃ ng vÃ  lá»‹ch sá»­ tráº¡ng thÃ¡i.
+- Sinh mÃ£ `BG...`.
+- API táº¡o, Ä‘á»c vÃ  cáº­p nháº­t bÃ¡o giÃ¡.
+- LÆ°u snapshot giÃ¡ vÃ  thÃ´ng tin hÃ ng táº¡i thá»i Ä‘iá»ƒm bÃ¡o giÃ¡.
+- KhÃ´ng phÃ¡t sinh kho, tiá»n, cÃ´ng ná»£ hoáº·c doanh thu.
 
-**Điều kiện nghiệm thu**
+**Äiá»u kiá»‡n nghiá»‡m thu**
 
-- Một lần xác nhận chỉ tạo một hóa đơn.
-- Lỗi giữa chừng rollback toàn bộ transaction.
-- Tiền thực thu khớp sổ quỹ.
-- Công nợ khớp từng hóa đơn.
-- Kho được trừ đúng.
-- Báo giá chuyển thành hóa đơn và vẫn truy vết được.
+- BÃ¡o giÃ¡ Ä‘Æ°á»£c lÆ°u vÃ  má»Ÿ láº¡i chÃ­nh xÃ¡c.
+- CÃ³ thá»ƒ sá»­a rá»“i lÆ°u láº¡i.
+- KhÃ´ng xuáº¥t hiá»‡n stock movement hoáº·c cash transaction.
 
-> Hoàn thành giai đoạn này đạt mốc **MVP nội bộ**.
+### Giai Ä‘oáº¡n 4 â€” Thanh toÃ¡n, kho cÆ¡ báº£n vÃ  cÃ´ng ná»£
 
-### Giai đoạn 5 — Combo/BOM và quản lý vật tư
-
-**Tính năng bàn giao:** Thu ngân bán Combo, chỉnh BOM và hệ thống trừ đúng từng vật tư thành phần.
+**TÃ­nh nÄƒng bÃ n giao:** Thu ngÃ¢n thanh toÃ¡n báº±ng tiá»n máº·t, chuyá»ƒn khoáº£n hoáº·c káº¿t há»£p; kho, sá»• quá»¹ vÃ  cÃ´ng ná»£ Ä‘Æ°á»£c cáº­p nháº­t Ä‘á»“ng thá»i.
 
 **Frontend**
 
-- Dòng Combo/BOM và chỉnh BOM cấp 1.
-- Combo cấp 2 hiển thị dạng khóa.
-- Tổng chi phí vật tư.
-- Popup khui vật tư tự do.
-- Cảnh báo khui cuộn hoặc tấm.
+- Dialog thanh toÃ¡n K03-D.
+- Tráº£ Ä‘á»§, ná»£ toÃ n bá»™ vÃ  tráº£ má»™t pháº§n.
+- KhÃ¡ch láº» ná»£ vá»›i ghi chÃº báº¯t buá»™c.
+- Thanh toÃ¡n ná»£ cÅ©.
+- Xem lá»‹ch sá»­ hÃ³a Ä‘Æ¡n vÃ  cÃ´ng ná»£.
 
-**Backend và Database**
+**Backend vÃ  Database**
 
-- Schema BOM và thành phần BOM.
+- Schema payment, sá»• quá»¹, cÃ´ng ná»£ vÃ  phÃ¢n bá»• tráº£ ná»£.
+- Kho cÆ¡ báº£n, sá»‘ dÆ° tá»“n vÃ  lá»‹ch sá»­ biáº¿n Ä‘á»™ng kho.
+- Transaction checkout nguyÃªn tá»­.
+- Idempotency chá»‘ng thanh toÃ¡n hai láº§n.
+- Cáº¥n trá»« ná»£ vÃ o hÃ³a Ä‘Æ¡n cÅ© nháº¥t trÆ°á»›c.
+- Sinh mÃ£ `HD...` vÃ  giá»¯ liÃªn káº¿t vá»›i bÃ¡o giÃ¡ nguá»“n.
+
+**Äiá»u kiá»‡n nghiá»‡m thu**
+
+- Má»™t láº§n xÃ¡c nháº­n chá»‰ táº¡o má»™t hÃ³a Ä‘Æ¡n.
+- Lá»—i giá»¯a chá»«ng rollback toÃ n bá»™ transaction.
+- Tiá»n thá»±c thu khá»›p sá»• quá»¹.
+- CÃ´ng ná»£ khá»›p tá»«ng hÃ³a Ä‘Æ¡n.
+- Kho Ä‘Æ°á»£c trá»« Ä‘Ãºng.
+- BÃ¡o giÃ¡ chuyá»ƒn thÃ nh hÃ³a Ä‘Æ¡n vÃ  váº«n truy váº¿t Ä‘Æ°á»£c.
+
+> HoÃ n thÃ nh giai Ä‘oáº¡n nÃ y Ä‘áº¡t má»‘c **MVP ná»™i bá»™**.
+
+### Giai Ä‘oáº¡n 5 â€” Combo/BOM vÃ  quáº£n lÃ½ váº­t tÆ°
+
+**TÃ­nh nÄƒng bÃ n giao:** Thu ngÃ¢n bÃ¡n Combo, chá»‰nh BOM vÃ  há»‡ thá»‘ng trá»« Ä‘Ãºng tá»«ng váº­t tÆ° thÃ nh pháº§n.
+
+**Frontend**
+
+- DÃ²ng Combo/BOM vÃ  chá»‰nh BOM cáº¥p 1.
+- Combo cáº¥p 2 hiá»ƒn thá»‹ dáº¡ng khÃ³a.
+- Tá»•ng chi phÃ­ váº­t tÆ°.
+- Popup khui váº­t tÆ° tá»± do.
+- Cáº£nh bÃ¡o khui cuá»™n hoáº·c táº¥m.
+
+**Backend vÃ  Database**
+
+- Schema BOM vÃ  thÃ nh pháº§n BOM.
 - Deep-scan BOM khi checkout.
-- Quy đổi m² sang mét dài hoặc tấm.
-- Quản lý lô, phiên vật tư dở và hao hụt.
-- Nhật ký người khui, vật tư, lý do và thời điểm.
+- Quy Ä‘á»•i mÂ² sang mÃ©t dÃ i hoáº·c táº¥m.
+- Quáº£n lÃ½ lÃ´, phiÃªn váº­t tÆ° dá»Ÿ vÃ  hao há»¥t.
+- Nháº­t kÃ½ ngÆ°á»i khui, váº­t tÆ°, lÃ½ do vÃ  thá»i Ä‘iá»ƒm.
 
-**Điều kiện nghiệm thu**
+**Äiá»u kiá»‡n nghiá»‡m thu**
 
-- Combo checkout thành công và trừ đủ vật tư con.
-- Không cho tạo vòng lặp BOM.
-- Thiếu tồn xử lý đúng chính sách cảnh báo.
-- Mọi thao tác khui đều truy vết được.
+- Combo checkout thÃ nh cÃ´ng vÃ  trá»« Ä‘á»§ váº­t tÆ° con.
+- KhÃ´ng cho táº¡o vÃ²ng láº·p BOM.
+- Thiáº¿u tá»“n xá»­ lÃ½ Ä‘Ãºng chÃ­nh sÃ¡ch cáº£nh bÃ¡o.
+- Má»i thao tÃ¡c khui Ä‘á»u truy váº¿t Ä‘Æ°á»£c.
 
-### Giai đoạn 6 — Hàng đợi máy sản xuất Realtime
+### Giai Ä‘oáº¡n 6 â€” HÃ ng Ä‘á»£i mÃ¡y sáº£n xuáº¥t Realtime
 
-**Tính năng bàn giao:** Máy sản xuất hoặc trình mô phỏng gửi file; POS nhận realtime và đưa file vào đúng hóa đơn nháp.
-
-**Frontend**
-
-- Các block máy sản xuất và badge realtime.
-- Danh sách chờ và lịch sử.
-- Thêm, hủy và khôi phục thông báo.
-- Sửa kích thước sai.
-- Phản hồi xung đột khi nhiều POS cùng xử lý.
-
-**Backend, Database và Integration**
-
-- Schema máy sản xuất, sự kiện và lịch sử hàng đợi.
-- Endpoint nhận thông báo từ máy.
-- Parser tên file theo đặc tả K02-D.
-- Atomic claim chống xử lý trùng.
-- Realtime broadcast và lưu lịch sử 10 ngày.
-
-**Điều kiện nghiệm thu**
-
-- Sự kiện từ máy xuất hiện trên mọi POS.
-- Hai POS không xử lý được cùng một thông báo.
-- Parse đúng khách, hàng, kích thước và số lượng.
-- Thông báo khôi phục trở lại toàn bộ POS.
-
-### Giai đoạn 7 — Bill nâng cao và hỗ trợ gửi khách
-
-**Tính năng bàn giao:** Người dùng quản lý nhiều mẫu bill, in và chuẩn bị ảnh bill để gửi qua kênh khách đã cấu hình.
+**TÃ­nh nÄƒng bÃ n giao:** MÃ¡y sáº£n xuáº¥t hoáº·c trÃ¬nh mÃ´ phá»ng gá»­i file; POS nháº­n realtime vÃ  Ä‘Æ°a file vÃ o Ä‘Ãºng hÃ³a Ä‘Æ¡n nhÃ¡p.
 
 **Frontend**
 
-- Quản lý tab bill và máy in.
-- Nhớ cấu hình theo khách hàng.
-- Sinh và xem trước ảnh bill.
-- Copy ảnh vào Clipboard.
-- Mở nơi gửi đã cấu hình.
+- CÃ¡c block mÃ¡y sáº£n xuáº¥t vÃ  badge realtime.
+- Danh sÃ¡ch chá» vÃ  lá»‹ch sá»­.
+- ThÃªm, há»§y vÃ  khÃ´i phá»¥c thÃ´ng bÃ¡o.
+- Sá»­a kÃ­ch thÆ°á»›c sai.
+- Pháº£n há»“i xung Ä‘á»™t khi nhiá»u POS cÃ¹ng xá»­ lÃ½.
 
-**Backend và Database**
+**Backend, Database vÃ  Integration**
 
-- Schema mẫu bill và cấu hình bill theo khách.
-- API lấy và lưu cấu hình bill.
-- Thống kê mẫu bill được sử dụng.
-- Backend rendering dự phòng nếu Frontend không đảm bảo layout.
+- Schema mÃ¡y sáº£n xuáº¥t, sá»± kiá»‡n vÃ  lá»‹ch sá»­ hÃ ng Ä‘á»£i.
+- Endpoint nháº­n thÃ´ng bÃ¡o tá»« mÃ¡y.
+- Parser tÃªn file theo Ä‘áº·c táº£ K02-D.
+- Atomic claim chá»‘ng xá»­ lÃ½ trÃ¹ng.
+- Realtime broadcast vÃ  lÆ°u lá»‹ch sá»­ 10 ngÃ y.
 
-**Điều kiện nghiệm thu**
+**Äiá»u kiá»‡n nghiá»‡m thu**
 
-- In được một hoặc nhiều bill.
-- Cấu hình được nhớ theo khách.
-- Không tự gửi khi nhân viên chưa xác nhận.
-- Lỗi mở ứng dụng không làm mất bill.
+- Sá»± kiá»‡n tá»« mÃ¡y xuáº¥t hiá»‡n trÃªn má»i POS.
+- Hai POS khÃ´ng xá»­ lÃ½ Ä‘Æ°á»£c cÃ¹ng má»™t thÃ´ng bÃ¡o.
+- Parse Ä‘Ãºng khÃ¡ch, hÃ ng, kÃ­ch thÆ°á»›c vÃ  sá»‘ lÆ°á»£ng.
+- ThÃ´ng bÃ¡o khÃ´i phá»¥c trá»Ÿ láº¡i toÃ n bá»™ POS.
 
-### Giai đoạn 8 — Production và vận hành
+### Giai Ä‘oáº¡n 7 â€” Bill nÃ¢ng cao vÃ  há»— trá»£ gá»­i khÃ¡ch
 
-**Tính năng bàn giao:** Hệ thống đủ an toàn để chạy thật tại xưởng và có thể khôi phục khi gặp sự cố.
+**TÃ­nh nÄƒng bÃ n giao:** NgÆ°á»i dÃ¹ng quáº£n lÃ½ nhiá»u máº«u bill, in vÃ  chuáº©n bá»‹ áº£nh bill Ä‘á»ƒ gá»­i qua kÃªnh khÃ¡ch Ä‘Ã£ cáº¥u hÃ¬nh.
 
-- Hoàn thiện RLS và permission.
-- Audit log cho các thao tác quan trọng.
-- Backup tự động và diễn tập restore.
-- Monitoring, tracing và cảnh báo lỗi.
-- Kiểm thử E2E toàn bộ luồng bán hàng.
-- Kiểm thử đồng thời nhiều POS.
-- Kiểm thử hiệu năng tìm kiếm và checkout.
-- Quy trình rollback.
-- Hướng dẫn vận hành cho thu ngân và quản trị viên.
+**Frontend**
 
-**Điều kiện nghiệm thu**
+- Quáº£n lÃ½ tab bill vÃ  mÃ¡y in.
+- Nhá»› cáº¥u hÃ¬nh theo khÃ¡ch hÃ ng.
+- Sinh vÃ  xem trÆ°á»›c áº£nh bill.
+- Copy áº£nh vÃ o Clipboard.
+- Má»Ÿ nÆ¡i gá»­i Ä‘Ã£ cáº¥u hÃ¬nh.
 
-- Có dashboard sức khỏe hệ thống và cảnh báo hoạt động.
-- Backup được tạo tự động và restore thử thành công.
-- Có thể rollback một phiên bản lỗi.
-- Các luồng E2E trọng yếu chạy ổn định trên production-like environment.
+**Backend vÃ  Database**
+
+- Schema máº«u bill vÃ  cáº¥u hÃ¬nh bill theo khÃ¡ch.
+- API láº¥y vÃ  lÆ°u cáº¥u hÃ¬nh bill.
+- Thá»‘ng kÃª máº«u bill Ä‘Æ°á»£c sá»­ dá»¥ng.
+- Backend rendering dá»± phÃ²ng náº¿u Frontend khÃ´ng Ä‘áº£m báº£o layout.
+
+**Äiá»u kiá»‡n nghiá»‡m thu**
+
+- In Ä‘Æ°á»£c má»™t hoáº·c nhiá»u bill.
+- Cáº¥u hÃ¬nh Ä‘Æ°á»£c nhá»› theo khÃ¡ch.
+- KhÃ´ng tá»± gá»­i khi nhÃ¢n viÃªn chÆ°a xÃ¡c nháº­n.
+- Lá»—i má»Ÿ á»©ng dá»¥ng khÃ´ng lÃ m máº¥t bill.
+
+### Giai Ä‘oáº¡n 8 â€” Production vÃ  váº­n hÃ nh
+
+**TÃ­nh nÄƒng bÃ n giao:** Há»‡ thá»‘ng Ä‘á»§ an toÃ n Ä‘á»ƒ cháº¡y tháº­t táº¡i xÆ°á»Ÿng vÃ  cÃ³ thá»ƒ khÃ´i phá»¥c khi gáº·p sá»± cá»‘.
+
+- HoÃ n thiá»‡n RLS vÃ  permission.
+- Audit log cho cÃ¡c thao tÃ¡c quan trá»ng.
+- Backup tá»± Ä‘á»™ng vÃ  diá»…n táº­p restore.
+- Monitoring, tracing vÃ  cáº£nh bÃ¡o lá»—i.
+- Kiá»ƒm thá»­ E2E toÃ n bá»™ luá»“ng bÃ¡n hÃ ng.
+- Kiá»ƒm thá»­ Ä‘á»“ng thá»i nhiá»u POS.
+- Kiá»ƒm thá»­ hiá»‡u nÄƒng tÃ¬m kiáº¿m vÃ  checkout.
+- Quy trÃ¬nh rollback.
+- HÆ°á»›ng dáº«n váº­n hÃ nh cho thu ngÃ¢n vÃ  quáº£n trá»‹ viÃªn.
+
+**Äiá»u kiá»‡n nghiá»‡m thu**
+
+- CÃ³ dashboard sá»©c khá»e há»‡ thá»‘ng vÃ  cáº£nh bÃ¡o hoáº¡t Ä‘á»™ng.
+- Backup Ä‘Æ°á»£c táº¡o tá»± Ä‘á»™ng vÃ  restore thá»­ thÃ nh cÃ´ng.
+- CÃ³ thá»ƒ rollback má»™t phiÃªn báº£n lá»—i.
+- CÃ¡c luá»“ng E2E trá»ng yáº¿u cháº¡y á»•n Ä‘á»‹nh trÃªn production-like environment.
 
 ---
 
 ## 5. DEFINITION OF DONE CHUNG
 
-Một giai đoạn chỉ hoàn thành khi đáp ứng toàn bộ điều kiện sau:
+Má»™t giai Ä‘oáº¡n chá»‰ hoÃ n thÃ nh khi Ä‘Ã¡p á»©ng toÃ n bá»™ Ä‘iá»u kiá»‡n sau:
 
-- FE sử dụng Backend thật, không dùng mock để nghiệm thu.
-- Có migration và seed data tái lập được môi trường.
-- Backend kiểm tra authentication, permission và validation.
-- Có unit test cho Business Rule được triển khai.
-- Có integration test cho API và Database.
-- Có ít nhất một luồng E2E chạy trên trình duyệt.
-- Deploy thành công lên staging.
-- Log và lỗi đủ để truy vết sự cố.
-- Owner chạy thử và chấp nhận kết quả.
-- Tài liệu liên quan ở các tầng 02–07 được cập nhật.
+- FE sá»­ dá»¥ng Backend tháº­t, khÃ´ng dÃ¹ng mock Ä‘á»ƒ nghiá»‡m thu.
+- CÃ³ migration vÃ  seed data tÃ¡i láº­p Ä‘Æ°á»£c mÃ´i trÆ°á»ng.
+- Backend kiá»ƒm tra authentication, permission vÃ  validation.
+- CÃ³ unit test cho Business Rule Ä‘Æ°á»£c triá»ƒn khai.
+- CÃ³ integration test cho API vÃ  Database.
+- CÃ³ Ã­t nháº¥t má»™t luá»“ng E2E cháº¡y trÃªn trÃ¬nh duyá»‡t.
+- Deploy thÃ nh cÃ´ng lÃªn staging.
+- Log vÃ  lá»—i Ä‘á»§ Ä‘á»ƒ truy váº¿t sá»± cá»‘.
+- Owner cháº¡y thá»­ vÃ  cháº¥p nháº­n káº¿t quáº£.
+- TÃ i liá»‡u liÃªn quan á»Ÿ cÃ¡c táº§ng 02â€“07 Ä‘Æ°á»£c cáº­p nháº­t.
 
 ---
 
-## 6. RỦI RO VÀ ĐIỀU KIỆN PHẢI CHỐT
+## 6. Rá»¦I RO VÃ€ ÄIá»€U KIá»†N PHáº¢I CHá»T
 
-Các nội dung sau phải được giải quyết trước hoặc trong giai đoạn tương ứng:
+CÃ¡c ná»™i dung sau pháº£i Ä‘Æ°á»£c giáº£i quyáº¿t trÆ°á»›c hoáº·c trong giai Ä‘oáº¡n tÆ°Æ¡ng á»©ng:
 
-| Nội dung | Quyết định / thời điểm xem lại |
+| Ná»™i dung | Quyáº¿t Ä‘á»‹nh / thá»i Ä‘iá»ƒm xem láº¡i |
 |---|---|
-| Cách tổ chức Backend | ✅ Chốt: Supabase Edge Functions + REST `/api/v1`; FE chỉ dùng SDK trực tiếp cho Auth/Realtime |
-| Schema bảng giá | ✅ Đã có PriceBook formula MVP; mở rộng nhóm hàng/filter cần slice riêng |
-| Cơ chế lưu nháp | ✅ Chốt hiện tại: LocalStorage theo máy tại `POS/ARCHITECTURE.md`; server draft chỉ mở khi có SoT mới |
-| ERD Sales, Inventory và Finance | ✅ Đã có foundation; mỗi slice mới phải rà lại schema liên quan |
-| Chính sách tồn âm và cảnh báo thiếu kho | ✅ MVP cho bán thiếu/tồn âm có cảnh báo nhẹ; quy chuẩn cuộn/tấm làm dần |
-| Hợp đồng dữ liệu thực tế với máy in/CNC | Production queue foundation đã có; ingestion/match tự động là phạm vi mở rộng cần spec riêng |
-| Khả năng mở Zalo/Facebook theo môi trường máy POS | Ngoài MVP hiện tại; chỉ xem lại khi Owner chốt gửi khách tự động |
-| RPO, RTO và chính sách lưu backup | Xem lại trước production thật |
+| CÃ¡ch tá»• chá»©c Backend | âœ… Chá»‘t: backend cu da go Edge Functions + REST `/api/v1`; FE chá»‰ dÃ¹ng SDK trá»±c tiáº¿p cho Auth/Realtime |
+| Schema báº£ng giÃ¡ | âœ… ÄÃ£ cÃ³ PriceBook formula MVP; má»Ÿ rá»™ng nhÃ³m hÃ ng/filter cáº§n slice riÃªng |
+| CÆ¡ cháº¿ lÆ°u nhÃ¡p | âœ… Chá»‘t hiá»‡n táº¡i: LocalStorage theo mÃ¡y táº¡i `POS/ARCHITECTURE.md`; server draft chá»‰ má»Ÿ khi cÃ³ SoT má»›i |
+| ERD Sales, Inventory vÃ  Finance | âœ… ÄÃ£ cÃ³ foundation; má»—i slice má»›i pháº£i rÃ  láº¡i schema liÃªn quan |
+| ChÃ­nh sÃ¡ch tá»“n Ã¢m vÃ  cáº£nh bÃ¡o thiáº¿u kho | âœ… MVP cho bÃ¡n thiáº¿u/tá»“n Ã¢m cÃ³ cáº£nh bÃ¡o nháº¹; quy chuáº©n cuá»™n/táº¥m lÃ m dáº§n |
+| Há»£p Ä‘á»“ng dá»¯ liá»‡u thá»±c táº¿ vá»›i mÃ¡y in/CNC | Production queue foundation Ä‘Ã£ cÃ³; ingestion/match tá»± Ä‘á»™ng lÃ  pháº¡m vi má»Ÿ rá»™ng cáº§n spec riÃªng |
+| Kháº£ nÄƒng má»Ÿ Zalo/Facebook theo mÃ´i trÆ°á»ng mÃ¡y POS | NgoÃ i MVP hiá»‡n táº¡i; chá»‰ xem láº¡i khi Owner chá»‘t gá»­i khÃ¡ch tá»± Ä‘á»™ng |
+| RPO, RTO vÃ  chÃ­nh sÃ¡ch lÆ°u backup | Xem láº¡i trÆ°á»›c production tháº­t |
 
 ---
 
-## 7. THỨ TỰ THỰC HIỆN
+## 7. THá»¨ Tá»° THá»°C HIá»†N
 
 ```text
-Nền tảng
-   ↓
-Danh mục + Khách hàng
-   ↓
-Giỏ hàng + Nháp
-   ↓
-Báo giá
-   ↓
-Thanh toán + Kho + Công nợ        ← MVP nội bộ
-   ↓
-BOM + Vật tư
-   ↓
-Máy trạm Realtime
-   ↓
-Bill nâng cao
-   ↓
+Ná»n táº£ng
+   â†“
+Danh má»¥c + KhÃ¡ch hÃ ng
+   â†“
+Giá» hÃ ng + NhÃ¡p
+   â†“
+BÃ¡o giÃ¡
+   â†“
+Thanh toÃ¡n + Kho + CÃ´ng ná»£        â† MVP ná»™i bá»™
+   â†“
+BOM + Váº­t tÆ°
+   â†“
+MÃ¡y tráº¡m Realtime
+   â†“
+Bill nÃ¢ng cao
+   â†“
 Production
 ```
 
-Không bắt đầu giai đoạn kế tiếp nếu tiêu chí nghiệm thu cốt lõi của giai đoạn hiện tại chưa đạt, trừ khi phần công việc chạy song song không phụ thuộc và không làm thay đổi Source of Truth đang chờ chốt.
+KhÃ´ng báº¯t Ä‘áº§u giai Ä‘oáº¡n káº¿ tiáº¿p náº¿u tiÃªu chÃ­ nghiá»‡m thu cá»‘t lÃµi cá»§a giai Ä‘oáº¡n hiá»‡n táº¡i chÆ°a Ä‘áº¡t, trá»« khi pháº§n cÃ´ng viá»‡c cháº¡y song song khÃ´ng phá»¥ thuá»™c vÃ  khÃ´ng lÃ m thay Ä‘á»•i Source of Truth Ä‘ang chá» chá»‘t.

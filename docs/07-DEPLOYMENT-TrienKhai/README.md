@@ -1,43 +1,40 @@
-# PHẦN 7: TRIỂN KHAI (DEPLOYMENT)
+# PHAN 7: TRIEN KHAI (DEPLOYMENT)
 
-> Source of Truth cho môi trường, build/deploy, vận hành production, monitoring, backup/restore và rollback.
->
-> File này chỉ là index. Việc đang làm / queue hiện tại nằm ở [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md).
+> Source of Truth cho moi truong, build/deploy, van hanh, backup/restore va rollback.
 
-## Đọc Trước Khi Sửa Deployment
+## Doc Truoc Khi Sua Deployment
 
-| Cần biết | File |
+| Can biet | File |
 |---|---|
-| Quy tắc tầng Deployment | [_RULES.md](./_RULES.md) |
-| Quy ước triển khai chung | [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) |
-| Việc đang làm / queue hiện tại | [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md) |
-| Backend/API liên quan | [../05-BACKEND-MayChu/README.md](../05-BACKEND-MayChu/README.md) |
-| Integration liên quan | [../06-INTEGRATION-KetHop/README.md](../06-INTEGRATION-KetHop/README.md) |
+| Quy tac tang Deployment | [_RULES.md](./_RULES.md) |
+| Quy uoc trien khai chung | [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) |
+| NAS dev hien tai | [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) |
 
-## Entry Chính
+## Runtime QCVL
 
-| File | Vai trò |
+QCVL runtime hien tai la Node API + PostgreSQL tren NAS.
+
+- Docker duoc giu cho NAS app/PostgreSQL containers.
+- Khong dung Supabase cho auth, API, realtime, seed data, test, hoac local dev.
+- Khong dung Docker local de chay Supabase.
+- Neu can demo/test data, ghi vao PostgreSQL/API runtime cua QCVL.
+- Docs chi giu o workspace local/git. NAS chi giu runtime app, build output, source/config can cho container build/start, PostgreSQL data va env runtime.
+
+## Entry Chinh
+
+| File | Vai tro |
 |---|---|
-| [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) | Quy ước Docker, CI/CD, backup, monitoring, disaster recovery |
-| [ENVIRONMENTS-CI.md](./ENVIRONMENTS-CI.md) | Local, dev cloud, staging, production baseline và CI/CD |
-| [PHASE-0-RUNBOOK.md](./PHASE-0-RUNBOOK.md) | Runbook kiểm thử/vận hành Phase 0 |
-| [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) | Trạng thái triển khai NAS dev hiện tại của dự án QCVL |
-| [SHARED-DEV-SERVER.md](./SHARED-DEV-SERVER.md) | Shared-dev LAN/Tailscale fallback khi cần |
-| [PRODUCTION.md](./PRODUCTION.md) | Vận hành production, smoke test, rollback, monitoring tối thiểu |
-| [BACKUP-RESTORE.md](./BACKUP-RESTORE.md) | Chính sách backup, RPO/RTO và restore drill |
+| [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) | Trang thai trien khai NAS dev hien tai cua QCVL |
+| [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) | Quy uoc Docker NAS, CI/CD, backup, monitoring |
+| [PRODUCTION.md](./PRODUCTION.md) | Van hanh production, smoke test, rollback, monitoring |
+| [BACKUP-RESTORE.md](./BACKUP-RESTORE.md) | Chinh sach backup, RPO/RTO va restore drill |
 
-## Phạm Vi Tầng
+## Pham Vi Tang
 
-| Loại | Ghi ở Deployment |
+| Loai | Ghi o Deployment |
 |---|---|
-| Chỉ ghi | Deployment architecture, environment, CI/CD, monitoring, logging, backup/restore, rollback, disaster recovery |
-| Chỉ tham chiếu | Business, database, backend/API, integration |
-| Không ghi | Vision, feature spec, UI/wireframe, business rule, schema, API spec đầy đủ, frontend/backend source code |
+| Chi ghi | Deployment architecture, environment, CI/CD, monitoring, logging, backup/restore, rollback |
+| Chi tham chieu | Business, database, backend/API, integration |
+| Khong ghi | Vision, feature spec, UI/wireframe, business rule, schema chi tiet, frontend/backend source code |
 
-## Quy Ước
-
-- Deployment domain chỉ chi tiết khi Backend/Integration liên quan đã đủ rõ.
-- Không dùng README này làm bảng trạng thái môi trường.
-- Khi thêm môi trường hoặc runbook mới, thêm file riêng và link vào index này.
-
-← [Quay về README chính](../README.md)
+<- [Quay ve README chinh](../README.md)

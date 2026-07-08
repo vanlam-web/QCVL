@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import process from 'node:process'
 import { execFileSync } from 'node:child_process'
-import { createClient } from '@supabase/supabase-js'
 
 const args = parseArgs(process.argv.slice(2))
 
@@ -28,13 +27,11 @@ if (dryRun) {
 }
 
 const apiBaseUrl = process.env.VITE_API_BASE_URL
-const supabaseUrl = process.env.VITE_SUPABASE_URL
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY
 const email = process.env.KIOTVIET_IMPORT_EMAIL
 const password = process.env.KIOTVIET_IMPORT_PASSWORD
 
-if (!apiBaseUrl || !supabaseUrl || !supabaseAnonKey || !email || !password) {
-  fail('Import mode requires VITE_API_BASE_URL, VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, KIOTVIET_IMPORT_EMAIL, KIOTVIET_IMPORT_PASSWORD')
+if (!apiBaseUrl || !email || !password) {
+  fail('Import mode requires VITE_API_BASE_URL, KIOTVIET_IMPORT_EMAIL, KIOTVIET_IMPORT_PASSWORD')
 }
 
 if (invalid.length > 0) {
@@ -42,11 +39,7 @@ if (invalid.length > 0) {
   fail('Import stopped because invalid rows exist')
 }
 
-const authClient = createClient(supabaseUrl, supabaseAnonKey)
-const { data: signIn, error: signInError } = await authClient.auth.signInWithPassword({ email, password })
-if (signInError) fail(`Sign in failed: ${signInError.message}`)
-
-const token = signIn.session.access_token
+const token = await login(apiBaseUrl, email, password)
 const groupIds = await importGroups(apiBaseUrl, token, valid)
 await importProducts(apiBaseUrl, token, valid, groupIds)
 
@@ -276,6 +269,20 @@ async function importGroups(apiBaseUrl, token, items) {
     groupIds.set(created.name, created.id)
   }
   return groupIds
+}
+
+async function login(apiBaseUrl, email, password) {
+  const response = await fetch(`${apiBaseUrl}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+  const payload = await response.json().catch(() => null)
+  const token = payload?.data?.access_token
+  if (!response.ok || payload?.success === false || typeof token !== 'string') {
+    fail(`Sign in failed: ${response.status} ${JSON.stringify(payload)}`)
+  }
+  return token
 }
 
 async function importProducts(apiBaseUrl, token, items, groupIds) {

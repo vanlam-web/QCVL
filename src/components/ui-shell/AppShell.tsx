@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Bell, LogOut, Settings, ShoppingCart, UserCircle } from 'lucide-react'
+import { BarChart3, Bell, LogOut, Settings, ShoppingCart, UserCircle } from 'lucide-react'
 import type { CurrentUserData } from '../../lib/api/types'
 import { ThemeToggle } from './ThemeProvider'
 import { appRoutes } from '../../app/routes'
@@ -80,7 +80,7 @@ export function AppShell({
     <div className="app-shell">
       <header className="app-topbar">
         <NavLink aria-label="Mở tổng quan" className="app-brand" title="Logo" to={appRoutes.dashboard}>
-          <span aria-hidden="true">QC</span>
+          <img alt="" className="app-brand-logo" src="/brand-logo.png" />
         </NavLink>
 
         <nav aria-label="Điều hướng chính" className="shell-nav">
@@ -125,6 +125,10 @@ export function AppShell({
                       {currentAccountLabel}
                     </span>
                   </NavLink>
+                  <button className="button button-secondary" role="menuitem" type="button">
+                    <BarChart3 aria-hidden="true" size={16} />
+                    Báo cáo ca
+                  </button>
                   {canOpenAdmin ? (
                     <NavLink className="button button-secondary" role="menuitem" to={appRoutes.admin}>
                       <Settings aria-hidden="true" size={16} />

@@ -146,7 +146,7 @@ beforeEach(() => {
 })
 
 async function openCheckoutDrawer() {
-  await userEvent.click(screen.getByRole('button', { name: 'Thanh toán' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Thanh toán' }))
   return screen.getByLabelText('Ngăn thanh toán')
 }
 
@@ -185,13 +185,13 @@ it('renders POS landmarks, profile identity, and active product grid', async () 
   )
 
   expect(screen.getByLabelText('K01 topbar')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'QC' }).querySelector('.pos-brand-logo')).toHaveAttribute('src', '/brand-logo.png')
   expect(screen.getByLabelText('K02 giỏ hàng')).toBeInTheDocument()
   expect(screen.getByLabelText('K03 sản phẩm')).toBeInTheDocument()
   expect(screen.getByLabelText('K01 tìm kiếm')).toBeInTheDocument()
   expect(screen.getByLabelText('K01 tab hóa đơn')).toBeInTheDocument()
-  expect(screen.getByLabelText('K01 khui vật tư')).toBeInTheDocument()
   expect(screen.getByLabelText('K01 tiện ích')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Khui vật tư' })).toBeEnabled()
+  expect(within(screen.getByLabelText('K01 tiện ích')).getByRole('button', { name: 'Khui vật tư' })).toBeEnabled()
   const cartWorkspace = screen.getByLabelText('K02 giỏ hàng')
   const salesWorkspace = screen.getByLabelText('K03 sản phẩm')
   expect(within(cartWorkspace).queryByLabelText('Khách hàng')).not.toBeInTheDocument()
@@ -218,6 +218,28 @@ it('loads only the quick grid product page on POS startup', async () => {
   await screen.findByRole('button', { name: /Mica 3mm/ })
 
   expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 12 })
+})
+
+it('replaces the K03 product panel with the checkout drawer while payment is open', async () => {
+  renderPosShell()
+
+  expect(await screen.findByLabelText('K03 sản phẩm')).toBeInTheDocument()
+
+  await openCheckoutDrawer()
+
+  expect(screen.getByLabelText('Ngăn thanh toán')).toBeInTheDocument()
+  expect(screen.queryByLabelText('K03 sản phẩm')).not.toBeInTheDocument()
+})
+
+it('closes the checkout drawer when clicking outside it', async () => {
+  renderPosShell()
+
+  await openCheckoutDrawer()
+
+  await userEvent.click(screen.getByLabelText('K02 giỏ hàng'))
+
+  expect(screen.queryByLabelText('Ngăn thanh toán')).not.toBeInTheDocument()
+  expect(await screen.findByLabelText('K03 sản phẩm')).toBeInTheDocument()
 })
 
 it('does not reload products when customer prices refresh', async () => {
@@ -539,6 +561,7 @@ it('keeps K01 utility actions visible beside connection and profile', async () =
   renderPosShell()
 
   const actions = screen.getByLabelText('K01 tiện ích')
+  expect(within(actions).getByRole('button', { name: 'Khui vật tư' })).toBeInTheDocument()
   expect(within(actions).getByRole('button', { name: 'Lịch sử 10 đơn gần nhất' })).toBeInTheDocument()
   expect(within(actions).queryByRole('button', { name: 'Tải lại giao diện' })).not.toBeInTheDocument()
   expect(within(actions).getByLabelText('connection status')).toHaveAttribute('title', 'Đã kết nối')
@@ -714,10 +737,10 @@ it('expands price columns for long money values without changing the measure for
   await userEvent.type(priceInput, '2222222222222220')
 
   expect(priceInput).toHaveValue('2 222 222 222 222 220')
-  expect(priceInput).toHaveStyle({ width: '18.75ch' })
+  expect(priceInput).toHaveStyle({ width: '19.55ch' })
   expect(priceInput.closest('.pos-cart-lines')).toHaveStyle({
-    '--pos-line-price-width': '12rem',
-    '--pos-line-total-width': '12rem',
+    '--pos-line-price-width': '12.51rem',
+    '--pos-line-total-width': '12.51rem',
   })
 })
 
@@ -763,8 +786,8 @@ it('lets the cashier enter width, height, and count for m2 products', async () =
   expect(within(cart).getAllByText('158 400').length).toBeGreaterThan(0)
 
   const checkoutDrawer = await openCheckoutDrawer()
-  await userEvent.clear(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'), '158400')
+  await userEvent.clear(within(checkoutDrawer).getByLabelText('Khách thanh toán'))
+  await userEvent.type(within(checkoutDrawer).getByLabelText('Khách thanh toán'), '158400')
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(orderService.checkout).toHaveBeenCalledWith(
@@ -1092,8 +1115,8 @@ it('lets operators with apply_discount enter a line discount', async () => {
   expect(within(cart).getAllByText('80 000').length).toBeGreaterThan(0)
 
   const checkoutDrawer = await openCheckoutDrawer()
-  await userEvent.clear(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'), '80000')
+  await userEvent.clear(within(checkoutDrawer).getByLabelText('Khách thanh toán'))
+  await userEvent.type(within(checkoutDrawer).getByLabelText('Khách thanh toán'), '80000')
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(orderService.checkout).toHaveBeenCalledWith(
@@ -1238,6 +1261,8 @@ it('adds a production queue payload to the local draft cart without checkout', a
 
   renderPosShell({ catalogService, orderService, productionQueueService })
 
+  await userEvent.click(await screen.findByRole('button', { name: /In decal/ }))
+
   await userEvent.click(
     await screen.findByRole('button', { name: 'Thêm KH000001_DECAL-PP_120x50_x2 vào nháp' }),
   )
@@ -1290,8 +1315,8 @@ it('reopened quote keeps snapshot price and checks out as a normal draft', async
   expect(screen.getByText('Giá hiện tại khác báo giá.')).toBeInTheDocument()
 
   const checkoutDrawer = await openCheckoutDrawer()
-  await userEvent.clear(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'))
-  await userEvent.type(within(checkoutDrawer).getByLabelText('Tiền mặt trả hóa đơn'), '99000')
+  await userEvent.clear(within(checkoutDrawer).getByLabelText('Khách thanh toán'))
+  await userEvent.type(within(checkoutDrawer).getByLabelText('Khách thanh toán'), '99000')
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(orderService.checkout).toHaveBeenCalledWith(

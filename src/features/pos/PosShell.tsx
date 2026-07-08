@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { PackageOpen, Pencil, Plus } from 'lucide-react'
+import { PackageOpen, Pencil, Plus, Search } from 'lucide-react'
 import { ConnectionStatus } from '../../components/ConnectionStatus'
 import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
@@ -44,6 +44,7 @@ type DiscountMode = 'amount' | 'percent'
 interface PosInvoiceTab {
   id: string
   number: number
+  createdAt: string
   cartLines: CheckoutCartLine[]
   selectedCustomer: Customer | null
   orderNote: string
@@ -81,6 +82,7 @@ export function PosShell({
   const [error, setError] = useState<string | null>(null)
   const [productSearch, setProductSearch] = useState('')
   const [checkoutOpen, setCheckoutOpen] = useState(false)
+  const checkoutDrawerRef = useRef<HTMLElement | null>(null)
   const [productCreateOpen, setProductCreateOpen] = useState(false)
   const [productCreateSaving, setProductCreateSaving] = useState(false)
   const [productCreateError, setProductCreateError] = useState<string | null>(null)
@@ -238,6 +240,18 @@ export function PosShell({
   useEffect(() => {
     persistInvoiceTabs(tabs)
   }, [tabs])
+
+  useEffect(() => {
+    if (!checkoutOpen) return
+
+    function closeCheckoutOnOutsidePointer(event: PointerEvent) {
+      if (checkoutDrawerRef.current?.contains(event.target as Node)) return
+      setCheckoutOpen(false)
+    }
+
+    window.addEventListener('pointerdown', closeCheckoutOnOutsidePointer)
+    return () => window.removeEventListener('pointerdown', closeCheckoutOnOutsidePointer)
+  }, [checkoutOpen])
 
   useEffect(() => {
     let active = true
@@ -803,10 +817,13 @@ export function PosShell({
             type="button"
             onClick={onOpenDashboard}
           >
-            QC
+            <img alt="" className="pos-brand-logo" src="/brand-logo.png" />
           </button>
-          <label>
-            <span>Tìm hàng (F3)</span>
+          <label className="management-compact-search pos-topbar-search-control">
+            <span className="pos-topbar-search-label">Tìm hàng (F3)</span>
+            <span className="management-compact-search-leading">
+              <Search aria-hidden="true" size={16} />
+            </span>
             <input
               ref={productSearchRef}
               value={productSearch}
@@ -820,15 +837,17 @@ export function PosShell({
               onChange={(event) => setProductSearch(event.target.value)}
               onKeyDown={handleProductSearchKeyDown}
             />
-            <button
-              aria-label="Tạo hàng hóa"
-              className="pos-search-add-button"
-              title="Tạo hàng hóa"
-              type="button"
-              onClick={() => setProductCreateOpen(true)}
-            >
-              <Plus aria-hidden="true" size={18} />
-            </button>
+            <span className="management-compact-search-trailing">
+              <button
+                aria-label="Tạo hàng hóa"
+                className="pos-search-add-button"
+                title="Tạo hàng hóa"
+                type="button"
+                onClick={() => setProductCreateOpen(true)}
+              >
+                <Plus aria-hidden="true" size={18} />
+              </button>
+            </span>
           </label>
           {productSearch.trim().length > 0 ? (
             <ul aria-label="Kết quả tìm hàng" className="pos-search-results" role="listbox">
@@ -895,18 +914,16 @@ export function PosShell({
             +
           </button>
         </section>
-        <section aria-label="K01 khui vật tư" className="pos-topbar-material">
+        <section aria-label="K01 tiện ích" className="pos-topbar-actions">
           <button
             aria-label="Khui vật tư"
-            className="management-icon-button"
+            className="pos-icon-button"
             title="Khui vật tư"
             type="button"
             onClick={() => setManualOpeningOpen(true)}
           >
             <PackageOpen aria-hidden="true" size={18} />
           </button>
-        </section>
-        <section aria-label="K01 tiện ích" className="pos-topbar-actions">
           <button aria-label="Lịch sử 10 đơn gần nhất" className="pos-icon-button" type="button">
             🕒
           </button>
@@ -1312,34 +1329,36 @@ export function PosShell({
           </div>
         </footer>
       </section>
-      <section aria-label="K03 sản phẩm" className="pos-payment">
-        <CustomerPanel
-          key={selectedCustomer?.id ?? 'no-customer'}
-          service={catalogService}
-          selectedCustomer={selectedCustomer}
-          onSelectCustomer={(customer) =>
-            updateActiveTab((tab) => ({ ...tab, selectedCustomer: customer }))
-          }
-        />
-        {error ? <p role="alert">{error}</p> : null}
-        <ProductGrid
-          products={products}
-          prices={prices}
-          loading={loadingProducts}
-          onSelectProduct={selectProduct}
-          footerAction={
-            <button className="pos-checkout-launcher button button-primary" type="button" onClick={() => setCheckoutOpen(true)}>
-              Thanh toán
-            </button>
-          }
-        />
-      </section>
+      {!checkoutOpen ? (
+        <section aria-label="K03 sản phẩm" className="pos-payment">
+          <CustomerPanel
+            key={selectedCustomer?.id ?? 'no-customer'}
+            service={catalogService}
+            selectedCustomer={selectedCustomer}
+            onSelectCustomer={(customer) =>
+              updateActiveTab((tab) => ({ ...tab, selectedCustomer: customer }))
+            }
+          />
+          {error ? <p role="alert">{error}</p> : null}
+          <ProductGrid
+            products={products}
+            prices={prices}
+            loading={loadingProducts}
+            onSelectProduct={selectProduct}
+            footerAction={
+              <button className="pos-checkout-launcher button button-primary" type="button" onClick={() => setCheckoutOpen(true)}>
+                Thanh toán
+              </button>
+            }
+          />
+        </section>
+      ) : null}
       <ProductionQueuePanel
         service={productionQueueService}
         onAddToDraft={handleProductionQueueDraft}
       />
       {checkoutOpen ? (
-        <aside aria-label="Ngăn thanh toán" className="pos-checkout-drawer">
+        <aside ref={checkoutDrawerRef} aria-label="Ngăn thanh toán" className="pos-checkout-drawer">
           <button
             aria-label="Đóng thanh toán"
             className="pos-checkout-drawer-close"
@@ -1354,11 +1373,14 @@ export function PosShell({
             orderService={orderService}
             sourceQuote={sourceQuote}
             orderNote={activeTab.orderNote}
+            sellerName={currentUser.user.display_name}
+            orderCreatedAt={activeTab.createdAt}
             quoteBlockedReason={quoteBlockedReason(cartLines)}
             onCheckoutSuccess={() => {
               setCheckoutOpen(false)
               updateActiveTab((tab) => ({
                 ...tab,
+                createdAt: new Date().toISOString(),
                 sourceQuote: undefined,
                 cartLines: [],
                 selectedCustomer: null,
@@ -1615,6 +1637,7 @@ function makeInvoiceTab(number: number): PosInvoiceTab {
   return {
     id: `invoice-${number}`,
     number,
+    createdAt: new Date().toISOString(),
     cartLines: [],
     selectedCustomer: null,
     orderNote: '',
@@ -1723,7 +1746,7 @@ function moneyInputWidthCh(value: number, min = 4, max = 24) {
   const text = formatMoney(value)
   const digits = text.replace(/\s/g, '').length
   const spaces = text.length - digits
-  return Math.min(Math.max(digits + spaces * 0.45 + 0.5, min), max)
+  return Math.min(Math.max(digits + spaces * 0.45 + 1.3, min), max)
 }
 
 function cartColumnStyle(lines: CheckoutCartLine[]): CSSProperties {
@@ -1772,6 +1795,7 @@ function restoreInvoiceTabs(): PosInvoiceTab[] {
       .map((tab) => ({
         ...makeInvoiceTab(tab.number),
         id: typeof tab.id === 'string' ? tab.id : `invoice-${tab.number}`,
+        createdAt: typeof tab.createdAt === 'string' ? tab.createdAt : new Date().toISOString(),
         cartLines: tab.cartLines.map(normalizeRestoredCartLine),
         selectedCustomer: tab.selectedCustomer ?? null,
         orderNote: typeof tab.orderNote === 'string' ? tab.orderNote : '',

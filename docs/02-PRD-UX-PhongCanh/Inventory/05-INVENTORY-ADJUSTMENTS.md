@@ -1,6 +1,6 @@
 # 05-INVENTORY-ADJUSTMENTS — Hủy/điều chỉnh vật tư tối giản
 
-> **Nguồn:** Chốt từ draft `docs/superpowers/specs/2026-07-01-kv-inventory-adjustments-returns-draft.md`
+> **Nguồn:** Chốt từ draft Git history
 
 ---
 

@@ -1,140 +1,168 @@
 # QCVL NAS Dev Runbook
 
-> Last updated: 2026-07-08
+> Cập nhật: 2026-07-08.
 
-This file records the current QCVL NAS setup after the clean fork was created from QC-OMS work. It is the current deployment reference for the NAS development instance.
+## 1. Trạng thái hiện hành
 
-## Current Status
-
-| Item | Value |
-|---|---|
-| Project name | QCVL |
-| Local workspace | `D:\Phần mềm\QCVL` |
-| Git remote | `https://github.com/vanlam-web/QCVL.git` |
-| Main branch | `main` |
-| NAS app URL | `http://100.84.228.125:3200` |
-| NAS app share | `\\100.84.228.125\docker\QCVL\app` |
-| NAS container app port | container `3100`, host `3200` |
+| Mục | Giá trị |
+| --- | --- |
+| Workspace local | `D:\Phần mềm\QCVL` |
+| Dev URL local | `http://127.0.0.1:3201` hoặc `http://127.0.0.1:3202` |
+| NAS URL | `http://100.84.228.125:3200` |
+| NAS share root | `\\100.84.228.125\docker\QCVL` |
+| Live frontend path | `\\100.84.228.125\docker\QCVL\app\dist` |
+| Live backend path | `\\100.84.228.125\docker\QCVL\app\dist-server` |
+| NAS app container | `qcvl-app` |
 | NAS database | PostgreSQL 16 container `qcvl-postgres` |
-| NAS database host port | `55433` |
-| Runtime mode | `nas-dev` |
+| Runtime | React/Vite frontend + QCVL Node API + PostgreSQL |
 
-The app currently runs as a Node/Vite/React app with a lightweight Node API on the NAS. Supabase is not the runtime source for auth/API in the NAS build.
+Browser chỉ được gọi API qua `http://100.84.228.125:3200`. Port `3100` là port trong container, không dùng trong frontend bundle.
 
-## Current User-Facing Routes
+## 2. Quyết định kiến trúc
 
-These routes are expected to load on the NAS build:
+QCVL không dùng Supabase.
 
-```text
-/login
-/dashboard
-/account
-/pos
-/admin
-/products
-/price-book
-/customers
-/suppliers
-/purchase/receipts
-/inventory
-/finance
-/reports
-/sales-documents
-/sales-documents/:id/quote-print
-/forbidden
-```
+Không dùng:
 
-Recent verified route/menu change:
+- Supabase CLI.
+- Supabase local Docker.
+- Supabase Edge Functions.
+- Supabase Auth.
+- Supabase SDK.
+- `VITE_SUPABASE_*`, `SUPABASE_*`.
+- `supabase/` folder hoặc npm script `supabase:*`.
 
-- `/inventory` exists and is visible in the main menu as `Kiểm kho`.
-- `Kiểm kho` requires `perm.manage_inventory`.
+Đang dùng:
 
-## Build And Deploy
+- Frontend React/Vite.
+- Backend QCVL Node API trong `server/`.
+- PostgreSQL trên NAS.
+- Docker chỉ dùng cho container app/PostgreSQL trên NAS.
 
-Build locally for NAS:
+Demo/test data phải ghi vào PostgreSQL/API runtime của QCVL, không ghi vào Supabase.
+
+## 3. Dev URL và NAS URL
+
+| URL | Mục đích | Cách cập nhật |
+| --- | --- | --- |
+| `http://127.0.0.1:3201` / `http://127.0.0.1:3202` | Preview local | Chạy từ workspace local |
+| `http://100.84.228.125:3200` | NAS dev cho owner kiểm tra | Build local rồi copy lên NAS |
+
+## 3A. Quy định đưa lên đâu
+
+| Loại | Đưa lên NAS? | Đưa lên Git? | Giữ ở máy local? | Ghi chú |
+| --- | --- | --- | --- | --- |
+| Frontend build `dist/` | Có | Không bắt buộc | Có sau build | Copy vào `\\100.84.228.125\docker\QCVL\app\dist` |
+| Backend build `dist-server/` | Có | Không bắt buộc | Có sau build | Copy vào `\\100.84.228.125\docker\QCVL\app\dist-server` |
+| Runtime source `server/`, `src/`, `public/` | Có khi NAS còn tự build lúc restart | Có | Có | NAS compose hiện chạy `npm ci && npm run build:all && npm run api:start`, nên vẫn cần source/config build |
+| Build config `package.json`, `package-lock.json`, `tsconfig*`, `vite.config.ts`, `index.html` | Có | Có | Có | Cần cho NAS build/restart |
+| Database/runtime scripts `database/`, `scripts/db-migrate.mjs`, `scripts/seed-dev20-data.mjs` | Có khi cần migrate/seed NAS | Có | Có | Không copy test/import script lên NAS |
+| Tài liệu `docs/` | Không | Có | Có | Docs chỉ giữ ở local/git, không đưa lên NAS |
+| Test/dev tooling `.github/`, `tests/`, `eslint.config.js`, `playwright.config.ts`, `vite.config.test.ts`, `AI_TEAM_RULES.md`, `Dockerfile`, `docker-compose.nas.yml`, script test/import | Không | Có nếu thuộc repo | Có | Không cần cho runtime NAS hiện tại |
+| NAS root `.env`, `docker-compose.yml`, `postgres/` | Có, chỉ ở NAS | Không commit secret/data | Không cần local | `.env` có secret; `postgres/` là dữ liệu runtime |
+| `node_modules/` | Có trên NAS do `npm ci` tạo | Không | Có local | Không copy thủ công nếu không cần |
+
+Quy tắc:
+
+- Sửa local không tự xuất hiện trên NAS.
+- Kiểm tra local trước khi cần.
+- Khi owner nói đưa lên NAS, build và copy một lần vào `\\100.84.228.125\docker\QCVL\app`.
+- Docs chỉ giữ ở workspace local/git, không copy lên NAS.
+- Nếu chỉ sửa docs, không cần build frontend và không cần đụng NAS.
+- Nếu frontend gọi `http://100.84.228.125:3100/api/...`, build đang sai env hoặc fallback sai; sửa về `http://100.84.228.125:3200` rồi build/deploy lại.
+- Sau build NAS phải chạy `npm run verify:nas-bundle` để chặn bundle gọi nhầm `:3100`.
+- Không tạo/copy thêm bản `dist`, `dist-server`, `server`, `docs` ở ngoài `app`; Docker NAS chỉ mount `\\100.84.228.125\docker\QCVL\app`.
+
+## 4. Build và deploy
+
+Build:
 
 ```powershell
 $env:VITE_API_BASE_URL='http://100.84.228.125:3200'
 $env:VITE_APP_ENV='nas-dev'
 Remove-Item Env:\VITE_ENABLE_PWA -ErrorAction SilentlyContinue
-cmd /c npm run build
+cmd /c npm run build:all
 ```
 
-Deploy built frontend to NAS:
+Verify bundle:
+
+```powershell
+npm run verify:nas-bundle
+```
+
+Copy lên NAS:
 
 ```powershell
 robocopy 'D:\Phần mềm\QCVL\dist' '\\100.84.228.125\docker\QCVL\app\dist' /MIR /NFL /NDL /NJH /NJS /NP
+robocopy 'D:\Phần mềm\QCVL\dist-server' '\\100.84.228.125\docker\QCVL\app\dist-server' /MIR /NFL /NDL /NJH /NJS /NP
+robocopy 'D:\Phần mềm\QCVL\server' '\\100.84.228.125\docker\QCVL\app\server' /E /NFL /NDL /NJH /NJS /NP
+robocopy 'D:\Phần mềm\QCVL\src' '\\100.84.228.125\docker\QCVL\app\src' /E /NFL /NDL /NJH /NJS /NP
+robocopy 'D:\Phần mềm\QCVL\public' '\\100.84.228.125\docker\QCVL\app\public' /E /NFL /NDL /NJH /NJS /NP
+robocopy 'D:\Phần mềm\QCVL\database' '\\100.84.228.125\docker\QCVL\app\database' /E /NFL /NDL /NJH /NJS /NP
+Copy-Item 'D:\Phần mềm\QCVL\package.json' '\\100.84.228.125\docker\QCVL\app\package.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\package-lock.json' '\\100.84.228.125\docker\QCVL\app\package-lock.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\index.html' '\\100.84.228.125\docker\QCVL\app\index.html' -Force
+Copy-Item 'D:\Phần mềm\QCVL\vite.config.ts' '\\100.84.228.125\docker\QCVL\app\vite.config.ts' -Force
+Copy-Item 'D:\Phần mềm\QCVL\tsconfig.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\tsconfig.app.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.app.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\tsconfig.node.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.node.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\tsconfig.server.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.server.json' -Force
+Copy-Item 'D:\Phần mềm\QCVL\scripts\db-migrate.mjs' '\\100.84.228.125\docker\QCVL\app\scripts\db-migrate.mjs' -Force
+Copy-Item 'D:\Phần mềm\QCVL\scripts\seed-dev20-data.mjs' '\\100.84.228.125\docker\QCVL\app\scripts\seed-dev20-data.mjs' -Force
 ```
 
-When deploying source changes for the NAS container build, copy the changed source file(s) to:
+`robocopy` exit code `0`, `1`, `2`, `3` là thành công. Lớn hơn `3` là lỗi.
 
-```text
-\\100.84.228.125\docker\QCVL\app
-```
+Restart `qcvl-app` khi có thay đổi backend/server/runtime. Nếu chỉ copy frontend static, thường không cần restart.
 
-The NAS `docker-compose.nas.yml` maps:
-
-```text
-host 3200 -> container 3100
-host 55433 -> postgres 5432
-```
-
-## Verification Commands
-
-Run before claiming a UI/source change is ready:
+Smoke sau deploy:
 
 ```powershell
-cmd /c npm run typecheck
-cmd /c npm run test
-cmd /c npm run build
+$env:QCVL_SMOKE_PASSWORD='<mật khẩu tài khoản admin QCVL>'
+npm run smoke:nas
+Remove-Item Env:\QCVL_SMOKE_PASSWORD -ErrorAction SilentlyContinue
 ```
 
-Focused test example for menu/shell work:
+Smoke phải pass trước khi báo owner rằng NAS đã sẵn sàng. Script fail nếu:
 
-```powershell
-cmd /c npx vitest run src/components/ui-shell/AppShell.test.tsx
-```
+- Bất kỳ API response `>= 400`.
+- Browser gọi `100.84.228.125:3100`.
+- Trang hiện `Máy chủ gặp lỗi` hoặc `Mã lỗi:`.
 
-Browser smoke checks used for NAS:
+## 5. Demo data bắt buộc
+
+- NAS và dev local phải có bộ demo đủ để test các trang chính.
+- Khách mặc định phải là `KH000001 - Khách lẻ`.
+- Nếu POS tạo báo giá/hóa đơn khi chưa chọn khách, backend phải gắn vào `KH000001 - Khách lẻ`.
+- Không tạo bucket công nợ với `customer_id = null`.
+- Dữ liệu demo cần có tối thiểu khách hàng, hàng hóa, nhà cung cấp, chứng từ bán, phiếu thu/chi, tồn kho.
+
+## 6. Smoke check sau deploy
+
+Mở:
 
 ```text
 http://100.84.228.125:3200/login
 http://100.84.228.125:3200/dashboard
 http://100.84.228.125:3200/pos
-http://100.84.228.125:3200/inventory
+http://100.84.228.125:3200/products
+http://100.84.228.125:3200/customers
+http://100.84.228.125:3200/sales-documents
+http://100.84.228.125:3200/finance
 ```
 
-## Auth Notes
+Kiểm tra thêm nếu vừa sửa POS:
 
-- `admin` login is normalized to the local admin account shape used by QCVL.
-- Current NAS login is handled by the QCVL Node API, not by Supabase Auth.
-- Do not commit passwords or NAS secrets to docs.
+- K01 tiện ích có nút `Khui vật tư`.
+- Không còn khu riêng `K01 khui vật tư`.
+- POS search dùng `.management-compact-search`.
+- POS profile menu dùng `.account-menu-popover`.
+- Tạo hóa đơn ghi vào chứng từ và sổ quỹ khi có thanh toán.
 
-## Known Legacy From QC-OMS
+## 7. Lỗi có mã request
 
-QCVL still contains many historical docs, scripts, dependencies, and wording from the older Supabase-based QC-OMS architecture. Those files are useful context, but they are not all current runtime truth for the NAS dev instance.
+Nếu UI báo `Máy chủ gặp lỗi... Mã lỗi: req-...`:
 
-Treat this file plus the actual code/config as the current NAS deployment truth until the older docs are cleaned.
-
-Known legacy areas:
-
-- Some docs still describe Supabase Auth, Supabase Edge Functions, Supabase Realtime, and Vercel staging.
-- Some package scripts and dependencies still reference Supabase for older tests/import flows.
-- The POS connection dot currently reflects the old realtime access-channel state. In the NAS app, no realtime client is wired, so that dot can show red even when the NAS API is working.
-
-## Network Notes
-
-- NAS Tailscale IP: `100.84.228.125`.
-- Tailscale direct path was verified after forwarding UDP `41641` to the NAS LAN IP.
-- SMB over Tailscale is expected to be slower than LAN because the bottleneck is mostly NAS-site internet upload and protocol overhead.
-
-## Source Separation
-
-There are two related local folders:
-
-| Folder | Meaning |
-|---|---|
-| `D:\Phần mềm\QCVL` | Clean QCVL project, current NAS dev target |
-| `D:\Phần mềm\QC-OMS` | Older migration/work branch context, not the clean QCVL mainline |
-
-Do not merge dirty `QC-OMS` branches into `QCVL/main` unless a specific reviewed change is needed.
+- Mã đó dùng để tra log backend tương ứng request.
+- Cần xem log `qcvl-app` hoặc server log theo mã request.
+- Không đoán lỗi từ UI nếu chưa đọc log.

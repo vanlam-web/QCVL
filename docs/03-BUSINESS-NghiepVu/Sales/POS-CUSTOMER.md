@@ -1,6 +1,6 @@
 # POS-CUSTOMER — Nghiệp vụ khách hàng POS
 
-> **Nguồn:** Chốt từ draft `docs/superpowers/specs/2026-06-30-customer-product-pricing-design.md`
+> **Nguồn:** Chốt từ draft Git history
 
 ---
 

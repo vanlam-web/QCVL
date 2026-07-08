@@ -21,19 +21,12 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:e2e:list
-      - run: npm run build
-      - name: Start local Supabase
-        run: npm run supabase:start
-      - name: Replay Supabase migrations
-        run: npm run supabase:reset
-      - name: Run database migration tests
-        run: npm run test:db
-      - run: npm run test:functions
+      - run: npm run build:all
       - name: Secret scan
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nE '(service_role|SUPABASE_SERVICE_ROLE_KEY|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD)=.+' -- ':!package-lock.json'; then
+          if git grep -nE '(service_role|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD|DATABASE_URL)=.+' -- ':!package-lock.json'; then
             echo "Potential committed secret assignment found."
             exit 1
           fi

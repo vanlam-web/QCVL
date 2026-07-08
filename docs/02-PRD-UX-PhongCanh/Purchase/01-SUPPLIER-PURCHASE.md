@@ -79,6 +79,15 @@ Nếu NCC cũng là khách hàng, tab Thông tin hiển thị liên kết tới 
 
 Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm kiếm phải ưu tiên tìm chính xác và không bị mất do bộ lọc tháng hiện tại.
 
+Ô tìm `Tìm phiếu/NCC` phải có gợi ý xổ xuống khi nhập từ khóa, giống kiểu tìm sản phẩm ở POS:
+
+- gọi API tìm theo mã phiếu nhập, tên/mã NCC, số chứng từ NCC với bộ lọc trạng thái/ngày/người tạo đang chọn
+- tối đa 8 dòng gợi ý dưới ô nhập
+- dòng gợi ý hiển thị: mã phiếu + tên NCC, dòng phụ mã NCC - tên NCC, mép phải là `Cần trả NCC`
+- bấm vào gợi ý sẽ lọc danh sách theo đúng mã phiếu nhập đã chọn
+- bấm Enter hoặc nút lọc vẫn lọc bình thường theo nội dung đang nhập
+- không có kết quả thì hiện `Không có kết quả phù hợp`
+
 ### Cột mặc định
 
 | Cột | Ghi chú |

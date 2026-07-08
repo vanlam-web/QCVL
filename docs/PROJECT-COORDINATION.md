@@ -1,97 +1,95 @@
-# PROJECT-COORDINATION — Board Điều Phối
+﻿# PROJECT-COORDINATION â€” Board Äiá»u Phá»‘i
 
-> **Vai trò:** Board cho việc đang mở giữa các luồng Spec / Implement / Review.
-> **Cập nhật:** 2026-07-08.
+> **Vai trÃ²:** Board cho viá»‡c Ä‘ang má»Ÿ giá»¯a cÃ¡c luá»“ng Spec / Implement / Review.
+> **Cáº­p nháº­t:** 2026-07-08.
 
-File này chỉ dùng khi có item đang cần nhiều luồng phối hợp. Nếu không có item đang mở, xem queue sống ở [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) và issue review ở [REVIEW-ISSUES.md](./REVIEW-ISSUES.md).
-
----
-
-## Mục Đích
-
-Board này giúp Owner không phải tự chuyển lời giữa các luồng.
-
-Mỗi việc đang mở phải trả lời được:
-
-- mục tiêu nghiệp vụ là gì
-- luồng nào đang giữ việc
-- luồng nào nhận bước tiếp theo
-- branch / PR / commit liên quan
-- có cần Owner quyết định hay không
+File nÃ y chá»‰ dÃ¹ng khi cÃ³ item Ä‘ang cáº§n nhiá»u luá»“ng phá»‘i há»£p. Náº¿u khÃ´ng cÃ³ item Ä‘ang má»Ÿ, xem queue sá»‘ng á»Ÿ [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) vÃ  issue review á»Ÿ [REVIEW-ISSUES.md](./REVIEW-ISSUES.md).
 
 ---
 
-## Mẫu Item
+## Má»¥c ÄÃ­ch
+
+Board nÃ y giÃºp Owner khÃ´ng pháº£i tá»± chuyá»ƒn lá»i giá»¯a cÃ¡c luá»“ng.
+
+Má»—i viá»‡c Ä‘ang má»Ÿ pháº£i tráº£ lá»i Ä‘Æ°á»£c:
+
+- má»¥c tiÃªu nghiá»‡p vá»¥ lÃ  gÃ¬
+- luá»“ng nÃ o Ä‘ang giá»¯ viá»‡c
+- luá»“ng nÃ o nháº­n bÆ°á»›c tiáº¿p theo
+- branch / PR / commit liÃªn quan
+- cÃ³ cáº§n Owner quyáº¿t Ä‘á»‹nh hay khÃ´ng
+
+---
+
+## Máº«u Item
 
 ```text
-Việc:
+Viá»‡c:
 - ID:
-- Mục tiêu nghiệp vụ:
-- Luồng đang giữ: Spec / Implement / Review / Owner
-- Luồng nhận tiếp: Spec / Implement / Review / Owner
-- Tình trạng: Drafting / Implementing / Waiting Spec / Waiting Review / Must Fix / Ready to Merge / Merged / Blocked / Deferred
+- Má»¥c tiÃªu nghiá»‡p vá»¥:
+- Luá»“ng Ä‘ang giá»¯: Spec / Implement / Review / Owner
+- Luá»“ng nháº­n tiáº¿p: Spec / Implement / Review / Owner
+- TÃ¬nh tráº¡ng: Drafting / Implementing / Waiting Spec / Waiting Review / Must Fix / Ready to Merge / Merged / Blocked / Deferred
 - Branch / PR / commit:
 - Source of Truth:
-- Báo cáo gần nhất:
-- Bước tiếp theo:
-- Cần Owner quyết định: Có / Không
-- Rủi ro:
+- BÃ¡o cÃ¡o gáº§n nháº¥t:
+- BÆ°á»›c tiáº¿p theo:
+- Cáº§n Owner quyáº¿t Ä‘á»‹nh: CÃ³ / KhÃ´ng
+- Rá»§i ro:
 ```
 
-Không xem là đã handoff nếu thiếu `Luồng đang giữ`, `Luồng nhận tiếp`, hoặc `Bước tiếp theo`.
+KhÃ´ng xem lÃ  Ä‘Ã£ handoff náº¿u thiáº¿u `Luá»“ng Ä‘ang giá»¯`, `Luá»“ng nháº­n tiáº¿p`, hoáº·c `BÆ°á»›c tiáº¿p theo`.
 
 ---
 
-## Board Đang Mở
+## Board Äang Má»Ÿ
 
-Việc:
+Viá»‡c:
 - ID: `COORD-2026-07-07-PRODUCT-INVENTORY-POS`
-- Mục tiêu nghiệp vụ: Hoàn tất luồng Hàng hóa, Kiểm kho và POS theo thứ tự đã chốt: Hàng hóa → Kiểm kho hàng thường → Cuộn/tấm/khui object-level → POS trừ kho thật.
-- Luồng đang giữ: Implement
-- Luồng nhận tiếp: Implement
-- Tình trạng: Implementing
-- Branch / PR / commit: current `main`; historical branch `codex/products-inventory-pos-completion` không có trong checkout hiện tại.
+- Má»¥c tiÃªu nghiá»‡p vá»¥: HoÃ n táº¥t luá»“ng HÃ ng hÃ³a, Kiá»ƒm kho vÃ  POS theo thá»© tá»± Ä‘Ã£ chá»‘t: HÃ ng hÃ³a â†’ Kiá»ƒm kho hÃ ng thÆ°á»ng â†’ Cuá»™n/táº¥m/khui object-level â†’ POS trá»« kho tháº­t.
+- Luá»“ng Ä‘ang giá»¯: Implement
+- Luá»“ng nháº­n tiáº¿p: Implement
+- TÃ¬nh tráº¡ng: Implementing
+- Branch / PR / commit: current `main`; historical branch `codex/products-inventory-pos-completion` khÃ´ng cÃ³ trong checkout hiá»‡n táº¡i.
 - Source of Truth:
-  - [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md)
-  - [2026-07-07-products-inventory-pos-completion.md](./superpowers/plans/2026-07-07-products-inventory-pos-completion.md)
-  - [Inventory layout](./02-PRD-UX-PhongCanh/Inventory/01-INVENTORY-LAYOUT.md)
+  - [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md)  - [Inventory layout](./02-PRD-UX-PhongCanh/Inventory/01-INVENTORY-LAYOUT.md)
   - [Stocktake](./02-PRD-UX-PhongCanh/Inventory/04-STOCKTAKE.md)
-  - [Khui vật tư](./02-PRD-UX-PhongCanh/POS/K01/01d-K01-KHUI.md)
-- Báo cáo gần nhất: Task 8 đã tick đủ trong plan: DB test `supabase/tests/database/015_material_opening_normal.test.sql` chứng minh `open_normal_material_tx` tạo `inventory_material_openings`, ghi `stock_movements.material_opening_id` khi cần và không tạo `stocktakes`; function/UI test đã phủ normal, roll, sheet material opening. Task 9 đã xong normal checkout `sale_deduction` và combo BOM component deduction; roll/sheet POS object-level deduction vẫn pending ở Step 3. Review cũng ghi drift `REV-2026-07-08-001`: frontend/docs có `/api/v1/pos/cart/validate` nhưng Supabase router chưa route endpoint này.
-- Bước tiếp theo: Implement chốt Task 9 Step 3 bằng một trong hai hướng: POS gửi object roll/sheet được chọn để checkout trừ đúng object, hoặc backend từ chối rõ checkout roll/sheet khi thiếu object; đồng thời xử lý `REV-2026-07-08-001`.
-- Cần Owner quyết định: Không ở bước hiện tại. Chưa deploy cloud theo quyết định gom batch.
-- Rủi ro: Kho/stock movement/POS là vùng dữ liệu lâu dài; mọi slice schema/API/stock movement cần Spec gate và verification trước merge.
+  - [Khui váº­t tÆ°](./02-PRD-UX-PhongCanh/POS/K01/01d-K01-KHUI.md)
+- BÃ¡o cÃ¡o gáº§n nháº¥t: Task 8 Ä‘Ã£ tick Ä‘á»§ trong plan: DB test `server/tests/database/015_material_opening_normal.test.sql` chá»©ng minh `open_normal_material_tx` táº¡o `inventory_material_openings`, ghi `stock_movements.material_opening_id` khi cáº§n vÃ  khÃ´ng táº¡o `stocktakes`; function/UI test Ä‘Ã£ phá»§ normal, roll, sheet material opening. Task 9 Ä‘Ã£ xong normal checkout `sale_deduction` vÃ  combo BOM component deduction; roll/sheet POS object-level deduction váº«n pending á»Ÿ Step 3. Review cÅ©ng ghi drift `REV-2026-07-08-001`: frontend/docs cÃ³ `/api/v1/pos/cart/validate` nhÆ°ng QCVL Node API router chÆ°a route endpoint nÃ y.
+- BÆ°á»›c tiáº¿p theo: Implement chá»‘t Task 9 Step 3 báº±ng má»™t trong hai hÆ°á»›ng: POS gá»­i object roll/sheet Ä‘Æ°á»£c chá»n Ä‘á»ƒ checkout trá»« Ä‘Ãºng object, hoáº·c backend tá»« chá»‘i rÃµ checkout roll/sheet khi thiáº¿u object; Ä‘á»“ng thá»i xá»­ lÃ½ `REV-2026-07-08-001`.
+- Cáº§n Owner quyáº¿t Ä‘á»‹nh: KhÃ´ng á»Ÿ bÆ°á»›c hiá»‡n táº¡i. ChÆ°a deploy cloud theo quyáº¿t Ä‘á»‹nh gom batch.
+- Rá»§i ro: Kho/stock movement/POS lÃ  vÃ¹ng dá»¯ liá»‡u lÃ¢u dÃ i; má»i slice schema/API/stock movement cáº§n Spec gate vÃ  verification trÆ°á»›c merge.
 
 ---
 
-## Mẫu Báo Cáo Giữa Luồng
+## Máº«u BÃ¡o CÃ¡o Giá»¯a Luá»“ng
 
 ```text
-Tình trạng:
+TÃ¬nh tráº¡ng:
 - ...
 
-Luồng đang giữ:
+Luá»“ng Ä‘ang giá»¯:
 - Spec / Implement / Review / Owner
 
-Luồng nhận tiếp:
+Luá»“ng nháº­n tiáº¿p:
 - Spec / Implement / Review / Owner
 
-Bước tiếp theo:
+BÆ°á»›c tiáº¿p theo:
 - ...
 
-Cần Owner quyết định:
-- Có / Không
+Cáº§n Owner quyáº¿t Ä‘á»‹nh:
+- CÃ³ / KhÃ´ng
 ```
 
-Nếu cần Owner quyết định, chỉ hỏi một câu nghiệp vụ ngắn và kèm đề xuất mặc định.
+Náº¿u cáº§n Owner quyáº¿t Ä‘á»‹nh, chá»‰ há»i má»™t cÃ¢u nghiá»‡p vá»¥ ngáº¯n vÃ  kÃ¨m Ä‘á» xuáº¥t máº·c Ä‘á»‹nh.
 
 ---
 
-## Khi Nào Xoá Khỏi Board
+## Khi NÃ o XoÃ¡ Khá»i Board
 
-Một item rời board khi:
+Má»™t item rá»i board khi:
 
-- đã merge và đã report lại đúng luồng
-- đã defer có lý do và trigger quay lại
-- bị block bởi quyết định Owner và đã báo rõ
-- được thay bằng item mới có link/reference
+- Ä‘Ã£ merge vÃ  Ä‘Ã£ report láº¡i Ä‘Ãºng luá»“ng
+- Ä‘Ã£ defer cÃ³ lÃ½ do vÃ  trigger quay láº¡i
+- bá»‹ block bá»Ÿi quyáº¿t Ä‘á»‹nh Owner vÃ  Ä‘Ã£ bÃ¡o rÃµ
+- Ä‘Æ°á»£c thay báº±ng item má»›i cÃ³ link/reference

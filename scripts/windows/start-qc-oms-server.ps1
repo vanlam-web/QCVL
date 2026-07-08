@@ -1,6 +1,5 @@
 param(
   [string]$ProjectRoot = "\\192.168.1.188\AI\QC-OMS",
-  [int]$DockerTimeoutSeconds = 180,
   [int]$AppPort = 3000
 )
 
@@ -30,15 +29,6 @@ function Test-PortListening {
   return $null -ne $connection
 }
 
-function Test-SupabaseApi {
-  try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri "http://127.0.0.1:54321/rest/v1/" -TimeoutSec 5
-    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
-  } catch {
-    return $false
-  }
-}
-
 function Invoke-InProject {
   param([string]$Command)
   Push-Location -LiteralPath "$env:SystemDrive\"
@@ -50,40 +40,6 @@ function Invoke-InProject {
 }
 
 Write-Log "Starting QC-OMS server from $ProjectRoot"
-
-$dockerDesktop = Join-Path $Env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
-if (Test-Path -LiteralPath $dockerDesktop) {
-  Write-Log "Starting Docker Desktop if needed"
-  Start-Process -FilePath $dockerDesktop -WindowStyle Hidden -ErrorAction SilentlyContinue
-} else {
-  Write-Log "Docker Desktop executable was not found at $dockerDesktop"
-}
-
-Write-Log "Waiting for Docker to become ready"
-$deadline = (Get-Date).AddSeconds($DockerTimeoutSeconds)
-do {
-  docker info *> $null
-  if ($LASTEXITCODE -eq 0) {
-    Write-Log "Docker is ready"
-    break
-  }
-
-  Start-Sleep -Seconds 5
-} while ((Get-Date) -lt $deadline)
-
-if ($LASTEXITCODE -ne 0) {
-  throw "Docker did not become ready within $DockerTimeoutSeconds seconds"
-}
-
-if (Test-SupabaseApi) {
-  Write-Log "Supabase API is already responding"
-} else {
-  Write-Log "Starting local Supabase"
-  Invoke-InProject "npx.cmd supabase start" 2>&1 | Tee-Object -FilePath $LogFile -Append
-  if ($LASTEXITCODE -ne 0 -and -not (Test-SupabaseApi)) {
-    throw "Supabase failed to start"
-  }
-}
 
 if (Test-PortListening -Port $AppPort) {
   Write-Log "Port $AppPort is already listening; QC-OMS app may already be running"

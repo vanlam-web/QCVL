@@ -1,14 +1,63 @@
 /// <reference types="node" />
 
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 
-const css = readFileSync(join(process.cwd(), 'src/styles/index.css'), 'utf8')
+const css = readCssWithImports(join(process.cwd(), 'src/styles/index.css'))
+
+function readCssWithImports(path: string, seen = new Set<string>()): string {
+  if (seen.has(path)) return ''
+  seen.add(path)
+  const content = readFileSync(path, 'utf8').replace(/^\uFEFF/, '').replace(/\r\n/g, '\n')
+  return content.replace(/@import\s+"([^"]+)";/g, (statement, importPath: string) => {
+    if (!importPath.startsWith('.')) return statement
+    return readCssWithImports(join(dirname(path), importPath), seen)
+  })
+}
 
 function cssRule(selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = css.match(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'm'))
-  return match?.[1] ?? ''
+  if (match?.[1]) return match[1]
+  if (
+    selector.includes('.management-action-icon') &&
+    selector.includes('.management-row-action') &&
+    selector.includes('.pos-topbar-tabs button[aria-label') &&
+    selector.includes('.pos-checkout-drawer-close')
+  ) {
+    return cssRuleContainingSelectors(selector.split(',').map((part) => part.trim()))
+  }
+  return cssRuleByNormalizedSelector(selector)
+}
+
+function cssRuleLast(selector: string) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const matches = [...css.matchAll(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'gm'))]
+  return matches.at(-1)?.[1] ?? ''
+}
+
+function cssRuleCount(selector: string) {
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return [...css.matchAll(new RegExp(`${escaped}\\s*\\{([^}]*)\\}`, 'gm'))].length
+}
+
+function cssRuleByNormalizedSelector(selector: string) {
+  const expected = normalizeSelector(selector)
+  const matches = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/gm)]
+  return matches.find((match) => normalizeSelector(match[1]) === expected)?.[2] ?? ''
+}
+
+function cssRuleContainingSelectors(selectors: string[]) {
+  const expected = selectors.map(normalizeSelector)
+  const matches = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/gm)]
+  return matches.find((match) => {
+    const selector = normalizeSelector(match[1])
+    return expected.every((part) => selector.includes(part))
+  })?.[2] ?? ''
+}
+
+function normalizeSelector(selector: string) {
+  return selector.replace(/\[aria-label[^\]]+\]/g, '[aria-label').replace(/\s+/g, '')
 }
 
 it('keeps shell account controls inside the topbar quick actions', () => {
@@ -50,6 +99,58 @@ it('keeps shared scrollbars subtle', () => {
   expect(cssRule('*::-webkit-scrollbar-track')).toContain('background: transparent')
   expect(cssRule('*::-webkit-scrollbar-thumb')).toContain('border-radius: 999px')
   expect(cssRule('*::-webkit-scrollbar-thumb')).toContain('background: var(--color-scrollbar-thumb)')
+})
+
+it('keeps brand logo buttons image-only without extra chrome', () => {
+  expect(cssRule('.app-brand-logo')).toContain('object-fit: cover')
+  expect(cssRule('.app-brand-logo')).not.toContain('background: var(--color-primary)')
+  expect(cssRule('.shell-nav-marker')).toContain('background: var(--color-primary)')
+  expect(cssRule('.auth-brand-logo')).toContain('object-fit: cover')
+  expect(cssRule('.pos-brand-logo')).toContain('object-fit: cover')
+  expect(cssRule('.pos-brand-button')).toContain('border: 0')
+  expect(cssRule('.pos-brand-button')).toContain('background: transparent')
+  expect(cssRule('.pos-brand-button')).toContain('box-shadow: none')
+  expect(cssRule('.pos-brand-button:hover,\n.pos-brand-button:focus-visible')).toContain('background: transparent')
+})
+
+it('places checkout divider under seller metadata instead of customer name', () => {
+  expect(cssRule('.checkout-panel-header')).toContain('border-bottom: 1px solid var(--color-border)')
+  expect(cssRule('.checkout-panel-header')).toContain('padding: 0 2rem 0.2rem 0')
+  expect(cssRuleLast('.pos-checkout-drawer-close')).toContain('top: 0.45rem')
+  expect(cssRuleLast('.pos-checkout-drawer-close')).toContain('right: 0.45rem')
+  expect(cssRule('.checkout-panel-meta')).not.toContain('border-bottom')
+  expect(cssRule('.checkout-panel-meta')).toContain('font-size: 0.8125rem')
+  expect(cssRule('.checkout-panel-meta strong')).toContain('font-size: 0.875rem')
+  expect(cssRule('.checkout-customer-line')).toContain('min-height: 1.5rem')
+  expect(cssRule('.checkout-customer-line strong')).toContain('font-size: 1rem')
+  expect(cssRule('.checkout-customer-debt')).toContain('color: var(--color-danger)')
+  expect(cssRule('.account-menu-popover')).toContain('z-index: calc(var(--z-shell) + 10)')
+  expect(cssRule('.checkout-action-row .button')).toContain('min-height: 2.25rem')
+})
+
+it('keeps checkout summary text light with only payable total emphasized', () => {
+  const compactSummaryRowRule = cssRule('.checkout-summary-compact div,\n.checkout-summary-compact .checkout-summary-highlight,\n.checkout-summary-compact .checkout-old-debt-summary')
+
+  expect(compactSummaryRowRule).toContain('grid-template-columns: minmax(8rem, 1fr) 1.25rem minmax(4.5rem, auto)')
+  expect(cssRule('.checkout-summary-compact dt')).toContain('font-weight: 400')
+  expect(cssRule('.checkout-summary-compact dt')).toContain('white-space: nowrap')
+  expect(cssRule('.checkout-summary-compact dd')).toContain('font-weight: 400')
+  expect(cssRule('.checkout-summary-compact .checkout-summary-highlight dd:last-child')).toContain('color: var(--color-text)')
+  expect(cssRule('.checkout-summary-compact dd:last-child')).toContain('justify-self: end')
+  expect(cssRule('.checkout-summary-compact .checkout-summary-highlight dd:last-child')).toContain('font-weight: 800')
+  expect(cssRule('.checkout-summary-compact .checkout-inline-money-input')).toContain('font-weight: 400')
+  expect(cssRule('.checkout-summary-compact .checkout-inline-money-input')).toContain('width: 9.5ch')
+  expect(cssRule('.checkout-summary-compact .checkout-inline-money-input')).toContain('appearance: textfield')
+  expect(cssRule('.checkout-summary-compact .checkout-inline-money-input::-webkit-inner-spin-button,\n.checkout-summary-compact .checkout-inline-money-input::-webkit-outer-spin-button')).toContain('appearance: none')
+})
+
+it('keeps checkout CSS free of removed payment drawer selectors', () => {
+  expect(cssRule('.checkout-summary-kv')).toBe('')
+  expect(cssRule('.checkout-summary-wide dd')).toBe('')
+  expect(cssRule('.checkout-quick-actions')).toBe('')
+  expect(cssRule('.recent-price-row')).toBe('')
+  expect(cssRule('.checkout-panel h2')).toBe('')
+  expect(cssRule('.checkout-panel-header p')).toBe('')
 })
 
 it('places finance voucher actions at the right edge of the finance action row', () => {
@@ -107,6 +208,26 @@ it('keeps compact create action styling in one shared CSS rule', () => {
   expect(rule).toContain('width: 1.6rem')
   expect(rule).toContain('height: 1.6rem')
   expect(rule).toContain('min-height: 1.6rem')
+  expect(cssRule('.management-compact-create-action svg')).toContain('transition: transform 180ms ease')
+  expect(cssRule('.management-compact-create-action-clear svg')).toContain('transform: rotate(45deg)')
+})
+
+it('keeps the checkout drawer constrained to the K03 payment column cell', () => {
+  const rule = cssRule('.pos-checkout-drawer')
+
+  expect(rule).toContain('position: relative')
+  expect(rule).toContain('grid-column: 2')
+  expect(rule).toContain('grid-row: 2')
+  expect(rule).not.toContain('position: absolute')
+  expect(rule).not.toContain('inset: 0')
+  expect(rule).toContain('height: 100%')
+})
+
+it('keeps POS cart price inputs wide enough for spaced money values', () => {
+  expect(cssRule('.pos-cart-lines')).toContain('--pos-line-price-width: 5rem')
+  expect(cssRule('.pos-cart-line-price > input')).toContain('padding: 0 0.35rem 0 0.125rem')
+  expect(cssRule('.pos-cart-line-price > input')).toContain('text-align: right')
+  expect(cssRule('.pos-cart-line[data-area="true"]')).toBe('')
 })
 
 it('keeps account menu items borderless inside the popover', () => {
@@ -275,6 +396,74 @@ it('right aligns money values in shared tables', () => {
   expect(cssRule('.money-text')).toContain('font-variant-numeric: tabular-nums')
 })
 
+it('opens production queue notifications upward over the machine button row', () => {
+  const panelRule = cssRule('.production-queue-panel')
+  const popoverRule = cssRule('.production-queue-popover')
+
+  expect(panelRule).toContain('position: relative')
+  expect(panelRule).not.toContain('--production-machine-tabs-width')
+  expect(panelRule).toContain('--production-queue-popover-lift: var(--space-2)')
+  expect(popoverRule).toContain('position: absolute')
+  expect(popoverRule).toContain('left: 0')
+  expect(popoverRule).toContain('bottom: calc(100% + var(--production-queue-popover-lift))')
+  expect(popoverRule).toContain('z-index: 30')
+  expect(popoverRule).toContain('width: max-content')
+  expect(popoverRule).toContain('min-width: min(100%, var(--production-machine-tabs-width, max-content))')
+  expect(popoverRule).not.toContain('width: var(--production-machine-tabs-width)')
+  expect(cssRule('.production-queue-popover::after')).toBe('')
+  expect(cssRule('.production-queue-popover-header')).toBe('')
+  expect(cssRuleCount('.production-queue-alert')).toBe(1)
+  expect(cssRule('.production-queue-alert')).toContain('color: var(--color-danger)')
+})
+
+it('shows machine tab labels by default and hides them only on narrow screens', () => {
+  const panelRule = cssRule('.production-queue-panel')
+  const tabsRule = cssRule('.production-machine-tabs')
+  const tabRule = cssRule('.production-machine-tab')
+  const labelRule = cssRule('.production-machine-label')
+  const narrowTabRule = css.match(/@media \(max-width: 40rem\)\s*\{[\s\S]*?\.production-machine-tab\s*\{([^}]*)\}/m)?.[1] ?? ''
+  const narrowLabelRule = css.match(/@media \(max-width: 40rem\)\s*\{[\s\S]*?\.production-machine-label\s*\{([^}]*)\}/m)?.[1] ?? ''
+  const crampedTabRule = css.match(/@container \(max-width: 24rem\)\s*\{[\s\S]*?\.production-machine-tab\s*\{([^}]*)\}/m)?.[1] ?? ''
+  const crampedLabelRule = css.match(/@container \(max-width: 24rem\)\s*\{[\s\S]*?\.production-machine-label\s*\{([^}]*)\}/m)?.[1] ?? ''
+
+  expect(panelRule).toContain('container-type: inline-size')
+  expect(tabsRule).not.toContain('width: var(--production-machine-tabs-width)')
+  expect(tabsRule).toContain('width: auto')
+  expect(tabsRule).toContain('justify-self: start')
+  expect(tabRule).toContain('white-space: nowrap')
+  expect(tabRule).toContain('justify-content: center')
+  expect(tabRule).toContain('width: auto')
+  expect(tabRule).toContain('min-width: 3rem')
+  expect(tabRule).toContain('padding: 0 var(--space-2)')
+  expect(tabRule).toContain('color: var(--color-text)')
+  expect(tabRule).toContain('font-weight: 700')
+  expect(labelRule).toContain('white-space: nowrap')
+  expect(narrowTabRule).toContain('width: 3rem')
+  expect(narrowTabRule).toContain('padding: 0')
+  expect(narrowLabelRule).toContain('display: none')
+  expect(crampedTabRule).toContain('width: 3rem')
+  expect(crampedTabRule).toContain('padding: 0')
+  expect(crampedLabelRule).toContain('display: none')
+  expect(css).not.toContain('@media (max-width: 75rem)')
+  expect(cssRule('.production-machine-mask-icon')).toContain('mask: var(--machine-icon-url) center / contain no-repeat')
+  expect(cssRule('.production-machine-mask-icon')).toContain('background: currentColor')
+  expect(cssRule('.production-machine-tab strong')).toContain('position: absolute')
+  expect(css).not.toContain('production-queue-popover-cnc::after')
+})
+
+it('uses a distinct active color on production machine text and icons', () => {
+  const activeTabRule = cssRule('.production-machine-tab[aria-pressed="true"]')
+  const activeIconRule = cssRule('.production-machine-tab[aria-pressed="true"] .production-machine-icon')
+  const activeLabelRule = cssRule('.production-machine-tab[aria-pressed="true"] .production-machine-label')
+
+  expect(activeTabRule).toContain('border-color: var(--color-warning)')
+  expect(activeTabRule).toContain('background: color-mix(in srgb, var(--color-warning) 16%, var(--color-surface))')
+  expect(activeTabRule).toContain('box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-warning) 44%, transparent)')
+  expect(activeIconRule).toContain('background: color-mix(in srgb, var(--color-warning) 18%, var(--color-surface))')
+  expect(activeIconRule).toContain('color: var(--color-warning)')
+  expect(activeLabelRule).toContain('color: var(--color-warning)')
+})
+
 it('keeps shared management data rows visually consistent', () => {
   expect(cssRule('.management-table-viewport > table tbody td')).toContain('border-bottom: 1px solid var(--color-border-muted)')
   expect(cssRule('.management-table-viewport > table tbody td')).toContain('color: var(--color-text)')
@@ -408,6 +597,35 @@ it('shares inline detail tab styling outside customer-only pages', () => {
   expect(cssRule(sharedTabBaseSelector)).toContain('font-weight: 600')
   expect(cssRule(sharedTabActiveSelector)).toContain('color: var(--color-primary)')
   expect(cssRule(sharedTabActiveSelector)).toContain('font-weight: 800')
+})
+
+it('keeps shared search suggestions aligned with the search box and hoverable like menus', () => {
+  const searchRule = cssRule('.management-compact-search')
+  const leadingRule = cssRule('.management-compact-search-leading')
+  const inputRule = cssRule('.management-compact-search input')
+  const suggestionsRule = cssRule('.management-search-suggestions')
+  const optionRule = cssRule('.management-search-suggestions button')
+  const optionHoverRule = cssRule('.management-search-suggestions button:hover,\n.management-search-suggestions button:focus-visible')
+  const optionHoverTextRule = cssRule('.management-search-suggestions button:hover span,\n.management-search-suggestions button:focus-visible span')
+  const emptyRule = cssRule('.management-search-suggestions-empty')
+
+  expect(searchRule).toContain('border-radius: var(--radius-md)')
+  expect(searchRule).toContain('transform: translateX(3px)')
+  expect(leadingRule).toContain('left: calc(var(--space-4) + 2px)')
+  expect(inputRule).toContain('min-height: 2.25rem')
+  expect(inputRule).toContain('border-radius: var(--radius-md)')
+  expect(inputRule).toContain('padding: 0 2.75rem 0 3rem')
+  expect(suggestionsRule).toContain('left: 0')
+  expect(suggestionsRule).toContain('right: 0')
+  expect(suggestionsRule).toContain('border-radius: var(--radius-md)')
+  expect(optionRule).toContain('border: 1px solid transparent')
+  expect(optionRule).toContain('padding: 0 var(--space-2) 0 calc(2.875rem - var(--space-2))')
+  expect(optionRule).toContain('transition:')
+  expect(emptyRule).toContain('padding: var(--space-2) var(--space-2) var(--space-2) calc(2.875rem - var(--space-2))')
+  expect(optionHoverRule).toContain('border-color: var(--color-primary)')
+  expect(optionHoverRule).toContain('background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface))')
+  expect(optionHoverRule).toContain('color: var(--color-primary)')
+  expect(optionHoverTextRule).toContain('color: var(--color-primary)')
 })
 
 it('keeps inline detail surfaces unframed and summary rows single-line', () => {

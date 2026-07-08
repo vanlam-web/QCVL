@@ -1,14 +1,14 @@
-# QC-OMS Implementation Checklist
+﻿# QC-OMS Implementation Checklist
 
-> **Vai trò:** Log baseline implement gần nhất, không phải roadmap sống dài hạn.
-> **Nguồn trạng thái sống:** [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
-> **Cập nhật:** 2026-07-05.
+> **Vai trÃ²:** Log baseline implement gáº§n nháº¥t, khÃ´ng pháº£i roadmap sá»‘ng dÃ i háº¡n.
+> **Nguá»“n tráº¡ng thÃ¡i sá»‘ng:** [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
+> **Cáº­p nháº­t:** 2026-07-05.
 
 ---
 
-## Baseline Đã Kiểm
+## Baseline ÄÃ£ Kiá»ƒm
 
-| Nhóm | Kết quả |
+| NhÃ³m | Káº¿t quáº£ |
 |---|---|
 | Lint | Pass |
 | Typecheck | Pass |
@@ -16,29 +16,29 @@
 | Function tests | Pass |
 | DB tests | Pass |
 | E2E | Pass |
-| Build | Pass, route-level chunks dưới ngưỡng cảnh báo Vite |
+| Build | Pass, route-level chunks dÆ°á»›i ngÆ°á»¡ng cáº£nh bÃ¡o Vite |
 
 ---
 
-## Module UI Đã Có Trong Baseline
+## Module UI ÄÃ£ CÃ³ Trong Baseline
 
-| Module | Nội dung chính |
+| Module | Ná»™i dung chÃ­nh |
 |---|---|
-| Inventory | Route `/inventory`, danh sách tồn, detail sản phẩm, stock movement, chỉnh tồn hàng thường |
-| Finance | Route `/finance`, tài khoản/quỹ, sổ quỹ, công nợ khách hàng, thu nợ, danh sách voucher readonly |
-| Reports | Route `/reports`, báo cáo cuối ngày, bán hàng, công nợ, kho |
-| BOM | BOM v1 một cấp cho normal inventory components, lưu active BOM, snapshot/trừ component khi checkout |
+| Inventory | Route `/inventory`, danh sÃ¡ch tá»“n, detail sáº£n pháº©m, stock movement, chá»‰nh tá»“n hÃ ng thÆ°á»ng |
+| Finance | Route `/finance`, tÃ i khoáº£n/quá»¹, sá»• quá»¹, cÃ´ng ná»£ khÃ¡ch hÃ ng, thu ná»£, danh sÃ¡ch voucher readonly |
+| Reports | Route `/reports`, bÃ¡o cÃ¡o cuá»‘i ngÃ y, bÃ¡n hÃ ng, cÃ´ng ná»£, kho |
+| BOM | BOM v1 má»™t cáº¥p cho normal inventory components, lÆ°u active BOM, snapshot/trá»« component khi checkout |
 
 ---
 
-## Lệnh Kiểm Khi Chạm Baseline
+## Lá»‡nh Kiá»ƒm Khi Cháº¡m Baseline
 
 ```bash
 npm run lint
 npm run typecheck
 npm test
-npm run test:functions
-npm run test:db
+npm run api:build
+npm run db:migrate
 npm run test:e2e
 npm run build
 ```

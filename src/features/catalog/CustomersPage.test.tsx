@@ -288,7 +288,8 @@ it('searches and creates a customer from the search action', async () => {
   expect(screen.queryByText('Tìm: Phong')).not.toBeInTheDocument()
 
   expect(screen.queryByRole('dialog', { name: 'Tạo khách hàng' })).not.toBeInTheDocument()
-  await userEvent.click(within(searchForm).getByRole('button', { name: 'Tạo khách hàng' }))
+  await userEvent.click(within(searchForm).getByRole('button', { name: 'Xóa tìm kiếm' }))
+  await userEvent.click(within(searchForm).getByRole('button', { name: /T.o kh.ch h.ng/i }))
   const dialog = screen.getByRole('dialog', { name: 'Tạo khách hàng' })
   expect(dialog).toHaveClass('management-modal-dialog')
   expect(dialog.closest('.management-modal-backdrop')).not.toBeNull()
@@ -310,6 +311,58 @@ it('searches and creates a customer from the search action', async () => {
     tax_code: '0311111111',
     address: '99 Lê Lợi',
     customer_group_id: null,
+  })
+})
+
+it.each([
+  ['mã', 'KH000888'],
+  ['tên', 'Anh Nam'],
+  ['số điện thoại', '0908123456'],
+])('shows matching customer suggestions by %s while typing', async (_label, keyword) => {
+  const suggestedCustomer = {
+    id: 'customer-suggested',
+    code: 'KH000888',
+    name: 'Anh Nam',
+    phone: '0908123456',
+    tax_code: null,
+    address: null,
+    customer_group_id: null,
+    customer_group: null,
+    created_by: { id: 'user-admin', name: 'Admin' },
+    created_at: '2026-07-08T08:00:00Z',
+    total_sales_amount: 320000,
+    total_debt_amount: 125000,
+  }
+  const service = makeService({
+    listCustomers: vi.fn(async (input = {}) => {
+      if (input.search && input.page_size === 8) {
+        return { items: [suggestedCustomer], page: 1, page_size: 8, total: 1 }
+      }
+      if (input.search === 'KH000888') {
+        return { items: [suggestedCustomer], page: 1, page_size: 15, total: 1 }
+      }
+      return { items: [suggestedCustomer], page: 1, page_size: 15, total: 1 }
+    }),
+  })
+
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000888')
+  const searchForm = screen.getByRole('search', { name: 'Lọc khách hàng' })
+  const searchInput = within(searchForm).getByLabelText('Tìm khách hàng')
+  await userEvent.type(searchInput, keyword)
+
+  const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý khách hàng' })
+  expect(within(suggestions).getByRole('option', { name: /KH000888 Anh Nam 0908123456/i })).toBeInTheDocument()
+  expect(within(suggestions).getByText('0908123456')).toBeInTheDocument()
+  expect(within(suggestions).getByText('125 000')).toBeInTheDocument()
+
+  await userEvent.click(within(suggestions).getByRole('option', { name: /KH000888/i }))
+
+  expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: 'KH000888',
   })
 })
 

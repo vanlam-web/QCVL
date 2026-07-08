@@ -30,7 +30,10 @@ export function LoginPage() {
   return (
     <main className="auth-shell">
       <form aria-label="Đăng nhập" noValidate onSubmit={submit}>
-        <h1>QCVL</h1>
+        <h1>
+          <img alt="" className="auth-brand-logo" src="/brand-logo.png" />
+          <span>QCVL</span>
+        </h1>
         <label>
           Tài khoản
           <input value={login} onChange={(event) => setLogin(event.target.value)} />

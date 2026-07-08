@@ -2,14 +2,14 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProfileMenu } from './ProfileMenu'
 
-it('shows permission-allowed items and signs out', async () => {
+it('shows account-style menu items and signs out', async () => {
   const onSignOut = vi.fn()
   const onOpenAdmin = vi.fn()
   const onOpenDashboard = vi.fn()
   render(
     <ProfileMenu
       displayName="Cashier"
-      permissions={['perm.view_shift_report']}
+      permissions={[]}
       onSignOut={onSignOut}
       onOpenAdmin={onOpenAdmin}
       onOpenDashboard={onOpenDashboard}
@@ -17,6 +17,7 @@ it('shows permission-allowed items and signs out', async () => {
   )
 
   await userEvent.click(screen.getByRole('button', { name: '👤 Cashier' }))
+  expect(screen.getByRole('menuitem', { name: 'Cashier' })).toHaveClass('account-menu-profile')
   expect(screen.getByRole('menuitem', { name: 'Báo cáo ca' })).toBeInTheDocument()
   expect(screen.queryByRole('menuitem', { name: 'Quản trị' })).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('menuitem', { name: 'Đăng xuất' }))
@@ -36,7 +37,7 @@ it('opens the dashboard from the profile menu', async () => {
   )
 
   await userEvent.click(screen.getByRole('button', { name: '👤 Cashier' }))
-  await userEvent.click(screen.getByRole('menuitem', { name: 'Trang chủ' }))
+  await userEvent.click(screen.getByRole('menuitem', { name: 'Cashier' }))
   expect(onOpenDashboard).toHaveBeenCalled()
 })
 

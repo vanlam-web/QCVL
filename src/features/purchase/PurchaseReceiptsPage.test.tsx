@@ -220,6 +220,48 @@ it('filters purchase receipts by search status and dates', async () => {
   })
 })
 
+it('shows matching purchase receipts below the search box while typing', async () => {
+  const suggestedReceipt = {
+    ...receipt,
+    id: 'receipt-suggested',
+    code: 'PN000674',
+    supplier: { id: 'supplier-1', code: 'NCC000031', name: 'Nguyá»…n Phong' },
+    payable_amount: 240000,
+  }
+  const service = makeService({
+    listReceipts: vi.fn(async (input = {}) => {
+      if (input.search === 'PN000674' && input.page_size === 8) {
+        return { items: [suggestedReceipt], page: 1, page_size: 8, total: 1 }
+      }
+      if (input.search === 'PN000674') {
+        return { items: [suggestedReceipt], page: 1, page_size: 15, total: 1 }
+      }
+      return { items: [receipt], page: 1, page_size: 15, total: 1 }
+    }),
+  })
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  const filterForm = screen.getByRole('search', { name: 'Lọc phiếu nhập' })
+  const searchInput = within(filterForm).getByLabelText('Tìm phiếu/NCC')
+  await userEvent.type(searchInput, 'PN000674')
+
+  const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý phiếu nhập' })
+  expect(within(suggestions).getByRole('option', { name: /PN000674/i })).toBeInTheDocument()
+  expect(within(suggestions).getByText(/NCC000031/)).toBeInTheDocument()
+  expect(within(suggestions).getByText('240 000')).toBeInTheDocument()
+
+  await userEvent.click(within(suggestions).getByRole('option', { name: /PN000674/i }))
+
+  expect(service.listReceipts).toHaveBeenLastCalledWith({
+    search: 'PN000674',
+    status: 'posted',
+    page: 1,
+    page_size: 15,
+  })
+})
+
 it('reactively filters purchase receipts by supplier invoice and creator fields that exist in the project', async () => {
   const service = makeService()
 

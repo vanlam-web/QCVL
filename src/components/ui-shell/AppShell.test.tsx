@@ -69,6 +69,7 @@ it('renders POS as a quick action and keeps module navigation for management pag
   const quickActions = screen.getByLabelText('Thao tác nhanh')
 
   expect(banner).toContainElement(navigation)
+  expect(document.querySelector('.app-brand-logo')).toHaveAttribute('src', '/brand-logo.png')
   expect(screen.getByRole('link', { name: 'Mở tổng quan' })).toHaveAttribute('href', '/dashboard')
   expect(within(navigation).queryByRole('link', { name: /Tổng quan/i })).not.toBeInTheDocument()
   expect(quickActions.closest('.app-topbar')).not.toBeNull()
@@ -143,6 +144,7 @@ it('keeps theme and account controls before POS in the topbar quick actions', as
   expect(profileItem).toHaveClass('account-menu-profile')
   expect(within(profileItem).getByText('0947900909')).toHaveClass('account-menu-profile-label')
   expect(within(userActions).queryByText(/xác (thực|minh) 2 lớp/i)).not.toBeInTheDocument()
+  expect(within(userActions).getByRole('menuitem', { name: 'Báo cáo ca' })).toBeInTheDocument()
   expect(within(userActions).getByRole('menuitem', { name: 'Quản trị' })).toHaveAttribute('href', '/admin')
   await userEvent.click(within(userActions).getByRole('menuitem', { name: 'Đăng xuất' }))
 

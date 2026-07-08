@@ -19,7 +19,7 @@ $Shortcut = $Shell.CreateShortcut($ShortcutPath)
 $Shortcut.TargetPath = $PowerShell
 $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$StartScript`" -ProjectRoot `"$ProjectRoot`""
 $Shortcut.WorkingDirectory = $ProjectRoot
-$Shortcut.Description = "Start Docker, local Supabase, and QC-OMS app for shared development."
+$Shortcut.Description = "Start QC-OMS app for shared development."
 $Shortcut.Save()
 
 Write-Host "Installed startup shortcut: $ShortcutPath"
