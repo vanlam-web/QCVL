@@ -54,6 +54,7 @@ it('renders adaptive navigation with purchase supplier entries and active route'
   expect(screen.getByRole('navigation', { name: 'Điều hướng chính' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: /Hàng hóa/i })).toHaveAttribute('href', '/products')
   expect(screen.queryByRole('link', { name: /^Kho$/i })).not.toBeInTheDocument()
+  expect(screen.getByRole('link', { name: /Kiểm kho/i })).toHaveAttribute('href', '/inventory')
   expect(screen.getByRole('link', { name: /Nhà cung cấp/i })).toHaveAttribute('href', '/suppliers')
   expect(screen.getByRole('link', { name: /Nhập hàng/i })).toHaveAttribute('aria-current', 'page')
   expect(screen.queryByRole('link', { name: /Phiếu nhập/i })).not.toBeInTheDocument()
@@ -82,11 +83,19 @@ it('renders POS as a quick action and keeps module navigation for management pag
   expect(within(navigation).getByRole('link', { name: /Khách hàng/i })).toHaveAttribute('href', '/customers')
   expect(within(navigation).getByRole('link', { name: /Hàng hóa/i })).toHaveAttribute('href', '/products')
   expect(within(navigation).queryByRole('link', { name: /^Kho$/i })).not.toBeInTheDocument()
+  expect(within(navigation).getByRole('link', { name: /Kiểm kho/i })).toHaveAttribute('href', '/inventory')
   expect(within(navigation).getByRole('link', { name: /Bảng giá/i })).toHaveAttribute('href', '/price-book')
   expect(within(navigation).getByRole('link', { name: /Nhà cung cấp/i })).toHaveAttribute('href', '/suppliers')
   expect(within(navigation).getByRole('link', { name: /Nhập hàng/i })).toHaveAttribute('href', '/purchase/receipts')
   expect(within(navigation).queryByRole('link', { name: /Quản trị/i })).not.toBeInTheDocument()
   expect(within(navigation).queryByRole('button', { name: /Đổi sang giao diện/i })).not.toBeInTheDocument()
+})
+
+it('marks inventory nav item active on the stocktake page', () => {
+  renderShell('/inventory')
+
+  expect(screen.getByRole('link', { name: /Kiểm kho/i })).toHaveAttribute('href', '/inventory')
+  expect(screen.getByRole('link', { name: /Kiểm kho/i })).toHaveAttribute('aria-current', 'page')
 })
 
 it('keeps theme toggle visible inside shell', async () => {

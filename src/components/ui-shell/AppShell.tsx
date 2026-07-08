@@ -35,6 +35,7 @@ const shellNavItems: ShellNavItem[] = [
   },
   { label: 'Khách hàng', shortLabel: 'KH', path: appRoutes.customers, marker: 'KH', permissions: [permissions.createOrder] },
   { label: 'Hàng hóa', shortLabel: 'HH', path: appRoutes.products, marker: 'HH', permissions: [permissions.manageInventory] },
+  { label: 'Kiểm kho', shortLabel: 'KK', path: appRoutes.inventory, marker: 'KK', permissions: [permissions.manageInventory] },
   { label: 'Bảng giá', shortLabel: 'Giá', path: appRoutes.priceBook, marker: 'BG', permissions: [permissions.editPriceBook] },
   { label: 'Nhà cung cấp', shortLabel: 'NCC', path: appRoutes.suppliers, marker: 'NC', permissions: [permissions.manageInventory] },
   {
