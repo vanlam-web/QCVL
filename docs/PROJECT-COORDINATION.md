@@ -50,7 +50,7 @@ Việc:
 - Luồng đang giữ: Implement
 - Luồng nhận tiếp: Implement
 - Tình trạng: Implementing
-- Branch / PR / commit: current `main` at `bc3fd85`; historical branch `codex/products-inventory-pos-completion` không có trong checkout hiện tại.
+- Branch / PR / commit: current `main`; historical branch `codex/products-inventory-pos-completion` không có trong checkout hiện tại.
 - Source of Truth:
   - [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md)
   - [2026-07-07-products-inventory-pos-completion.md](./superpowers/plans/2026-07-07-products-inventory-pos-completion.md)
