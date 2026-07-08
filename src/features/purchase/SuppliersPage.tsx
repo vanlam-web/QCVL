@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Pencil, Plus, Save, Search, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -55,6 +55,8 @@ export function SuppliersPage({
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
   const [search, setSearch] = useState('')
+  const [supplierSearchSuggestions, setSupplierSearchSuggestions] = useState<Supplier[]>([])
+  const [supplierSearchSuggestionsOpen, setSupplierSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<SupplierStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<SupplierStatus | 'all'>('active')
@@ -82,6 +84,7 @@ export function SuppliersPage({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [paymentFinanceAccountId, setPaymentFinanceAccountId] = useState('')
   const [paymentNote, setPaymentNote] = useState('')
+  const supplierSearchRequestId = useRef(0)
 
   const bankAccounts = financeAccounts.filter((account) => account.is_active && account.account_type === 'bank')
   const payableTotal = suppliers?.reduce((sum, supplier) => sum + supplier.current_payable_amount, 0) ?? 0
@@ -184,9 +187,60 @@ export function SuppliersPage({
 
   async function filterSuppliers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setSupplierSearchSuggestionsOpen(false)
     setPage(1)
     await loadSuppliers({
       search: search.trim(),
+      status,
+      totalPurchaseMinValue: totalPurchaseMin,
+      totalPurchaseMaxValue: totalPurchaseMax,
+      currentPayableMinValue: currentPayableMin,
+      currentPayableMaxValue: currentPayableMax,
+      page: 1,
+    })
+  }
+
+  async function suggestSuppliers(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = supplierSearchRequestId.current + 1
+    supplierSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setSupplierSearchSuggestions([])
+      setSupplierSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const totalPurchaseMinFilter = numberFilterValue(totalPurchaseMin)
+      const totalPurchaseMaxFilter = numberFilterValue(totalPurchaseMax)
+      const currentPayableMinFilter = numberFilterValue(currentPayableMin)
+      const currentPayableMaxFilter = numberFilterValue(currentPayableMax)
+      const result = await service.listSuppliers({
+        search: query,
+        status,
+        page: 1,
+        page_size: 8,
+        ...(totalPurchaseMinFilter === undefined ? {} : { total_purchase_min: totalPurchaseMinFilter }),
+        ...(totalPurchaseMaxFilter === undefined ? {} : { total_purchase_max: totalPurchaseMaxFilter }),
+        ...(currentPayableMinFilter === undefined ? {} : { current_payable_min: currentPayableMinFilter }),
+        ...(currentPayableMaxFilter === undefined ? {} : { current_payable_max: currentPayableMaxFilter }),
+      })
+      if (supplierSearchRequestId.current !== requestId) return
+      setSupplierSearchSuggestions(result.items)
+      setSupplierSearchSuggestionsOpen(true)
+    } catch {
+      if (supplierSearchRequestId.current !== requestId) return
+      setSupplierSearchSuggestions([])
+      setSupplierSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectSupplierSuggestion(supplier: Supplier) {
+    setSearch(supplier.code)
+    setSupplierSearchSuggestionsOpen(false)
+    setPage(1)
+    await loadSuppliers({
+      search: supplier.code,
       status,
       totalPurchaseMinValue: totalPurchaseMin,
       totalPurchaseMaxValue: totalPurchaseMax,
@@ -574,7 +628,24 @@ export function SuppliersPage({
               <ManagementCompactCreateAction ariaLabel="Tạo nhà cung cấp" onClick={() => void openCreateSupplier()} />
             }
             value={search}
-            onChange={setSearch}
+            suggestions={
+              supplierSearchSuggestionsOpen
+                ? supplierSearchSuggestions.map((supplier) => ({
+                    id: supplier.id,
+                    primary: `${supplier.code} ${supplier.name}`,
+                    secondary: supplier.phone ?? supplier.email ?? '',
+                    meta: <MoneyText value={supplier.current_payable_amount} />,
+                    ariaLabel: `${supplier.code} ${supplier.name} ${supplier.phone ?? ''}`.trim(),
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý nhà cung cấp"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestSuppliers(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const supplier = supplierSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (supplier) void selectSupplierSuggestion(supplier)
+            }}
           />
         </ManagementCompactToolbar>
       }

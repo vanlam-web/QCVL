@@ -31,6 +31,13 @@ KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QC-
 
 ## 3. Loại bảng giá
 
+Ô tìm trong header dùng shared compact search:
+
+- tìm bỏ dấu theo mã hàng/tên hàng trong lưới bảng giá;
+- khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm;
+- dòng gợi ý gồm mã + tên hàng, phương thức bán/đơn vị ở phần phụ;
+- bấm gợi ý lọc lưới theo đúng mã hàng đã chọn.
+
 | Loại | Quy tắc |
 |---|---|
 | Bảng giá chung | Luôn có đúng một bảng giá chung đang active trong mỗi xưởng |

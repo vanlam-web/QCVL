@@ -601,6 +601,7 @@ it('shares inline detail tab styling outside customer-only pages', () => {
 
 it('keeps shared search suggestions aligned with the search box and hoverable like menus', () => {
   const searchRule = cssRule('.management-compact-search')
+  const searchFocusRule = cssRule('.management-compact-search:focus-within')
   const leadingRule = cssRule('.management-compact-search-leading')
   const inputRule = cssRule('.management-compact-search input')
   const suggestionsRule = cssRule('.management-search-suggestions')
@@ -611,12 +612,14 @@ it('keeps shared search suggestions aligned with the search box and hoverable li
 
   expect(searchRule).toContain('border-radius: var(--radius-md)')
   expect(searchRule).toContain('transform: translateX(3px)')
+  expect(searchFocusRule).toContain('z-index: calc(var(--z-shell) + 10)')
   expect(leadingRule).toContain('left: calc(var(--space-4) + 2px)')
   expect(inputRule).toContain('min-height: 2.25rem')
   expect(inputRule).toContain('border-radius: var(--radius-md)')
   expect(inputRule).toContain('padding: 0 2.75rem 0 3rem')
   expect(suggestionsRule).toContain('left: 0')
   expect(suggestionsRule).toContain('right: 0')
+  expect(suggestionsRule).toContain('z-index: calc(var(--z-shell) + 11)')
   expect(suggestionsRule).toContain('border-radius: var(--radius-md)')
   expect(optionRule).toContain('border: 1px solid transparent')
   expect(optionRule).toContain('padding: 0 var(--space-2) 0 calc(2.875rem - var(--space-2))')

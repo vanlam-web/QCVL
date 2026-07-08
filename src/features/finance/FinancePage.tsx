@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, Download, Edit3, Info, Pin, Plus, Printer, Search, StickyNote, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
@@ -454,6 +454,8 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [debtPage, setDebtPage] = useState(1)
   const [debtPageSize, setDebtPageSize] = useState(pageSizeDefault)
   const [debtSearch, setDebtSearch] = useState('')
+  const [debtSearchSuggestions, setDebtSearchSuggestions] = useState<CustomerDebtSummary[]>([])
+  const [debtSearchSuggestionsOpen, setDebtSearchSuggestionsOpen] = useState(false)
   const [lastDebtSearch, setLastDebtSearch] = useState('')
   const [selectedDebt, setSelectedDebt] = useState<CustomerDebtSummary | null>(null)
   const [debtDetail, setDebtDetail] = useState<CustomerDebtDetail | null>(null)
@@ -522,6 +524,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [collecting, setCollecting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const debtSearchRequestId = useRef(0)
 
   const activeAccounts = accounts.filter((account) => account.is_active)
   const sortedActiveAccounts = [...activeAccounts].sort(cashFirstAccountSort)
@@ -797,8 +800,43 @@ export function FinancePage({ service }: { service: FinanceService }) {
 
   async function filterDebts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setDebtSearchSuggestionsOpen(false)
     setDebtPage(1)
     await loadDebts({ search: debtSearch, page: 1 })
+  }
+
+  async function suggestDebts(nextSearch: string) {
+    setDebtSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = debtSearchRequestId.current + 1
+    debtSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setDebtSearchSuggestions([])
+      setDebtSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listCustomerDebts({
+        search: query,
+        page: 1,
+        page_size: 8,
+      })
+      if (debtSearchRequestId.current !== requestId) return
+      setDebtSearchSuggestions(result.items)
+      setDebtSearchSuggestionsOpen(true)
+    } catch {
+      if (debtSearchRequestId.current !== requestId) return
+      setDebtSearchSuggestions([])
+      setDebtSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectDebtSuggestion(debt: CustomerDebtSummary) {
+    const selectedSearch = debt.customer_code ?? debt.customer_name
+    setDebtSearch(selectedSearch)
+    setDebtSearchSuggestionsOpen(false)
+    setDebtPage(1)
+    await loadDebts({ search: selectedSearch, page: 1 })
   }
 
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
@@ -1199,7 +1237,24 @@ export function FinancePage({ service }: { service: FinanceService }) {
                   <Plus aria-hidden="true" size={18} strokeWidth={2} />
                 </button>
               }
-              onChange={setDebtSearch}
+              suggestions={
+                debtSearchSuggestionsOpen
+                  ? debtSearchSuggestions.map((debt) => ({
+                      id: debt.customer_id ?? debt.customer_code ?? debt.customer_name,
+                      primary: `${debt.customer_code ?? ''} ${debt.customer_name}`.trim(),
+                      secondary: debt.oldest_order_code ?? '',
+                      meta: <MoneyText value={debt.total_debt} />,
+                      ariaLabel: `${debt.customer_code ?? ''} ${debt.customer_name} ${debt.oldest_order_code ?? ''}`.trim(),
+                    }))
+                  : undefined
+              }
+              suggestionsLabel="Gợi ý công nợ"
+              emptySuggestion="Không có kết quả phù hợp"
+              onChange={(nextSearch) => void suggestDebts(nextSearch)}
+              onSuggestionSelect={(suggestion) => {
+                const debt = debtSearchSuggestions.find((candidate) => (candidate.customer_id ?? candidate.customer_code ?? candidate.customer_name) === suggestion.id)
+                if (debt) void selectDebtSuggestion(debt)
+              }}
             />
           </ManagementCompactToolbar>
           <div className="finance-voucher-actions" aria-label="Tác vụ sổ quỹ">

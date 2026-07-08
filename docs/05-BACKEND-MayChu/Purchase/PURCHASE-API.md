@@ -23,6 +23,12 @@
 
 Không cần implement tất cả endpoint trong một slice. P1/P2/P3/P5 đã merge; P4 cuộn/tấm là candidate riêng theo [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md#9-lát-cắt-purchase).
 
+Search contract:
+
+- `GET /v1/suppliers` nhận `search` hoặc `q`, tìm bỏ dấu theo mã NCC, tên NCC, SĐT, email, mã số thuế và ghi chú.
+- `GET /v1/purchase/receipts` nhận `search` hoặc `q`, tìm bỏ dấu theo mã phiếu nhập, mã/tên NCC, số chứng từ NCC và ghi chú.
+- Các endpoint list phải kết hợp search với filter trạng thái/ngày/tổng tiền hiện có, không trả tất cả khi có search.
+
 ## 2. Supplier/customer link
 
 Hồ sơ NCC có thể liên kết tới khách hàng khi cùng một đối tác vừa mua vừa bán với xưởng.

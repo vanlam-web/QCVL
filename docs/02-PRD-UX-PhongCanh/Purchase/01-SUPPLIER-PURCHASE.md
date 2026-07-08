@@ -30,6 +30,8 @@ Ghi nhận từ KiotViet:
 ### Bộ lọc
 
 - tìm theo mã, tên, số điện thoại
+- ô tìm NCC dùng shared compact search, hỗ trợ nhập không dấu và xổ tối đa 8 gợi ý dưới ô nhập; dòng gợi ý gồm mã + tên NCC, SĐT/email ở dòng phụ, mép phải là nợ cần trả hiện tại
+- bấm gợi ý NCC sẽ lọc danh sách theo đúng mã NCC đã chọn
 - trạng thái: tất cả/đang hoạt động/ngừng hoạt động
 - nợ hiện tại: khoảng từ/tới
 - tổng mua: khoảng từ/tới và khoảng thời gian nếu cần

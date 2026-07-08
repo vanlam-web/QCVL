@@ -71,7 +71,7 @@ TÃ¬m sáº£n pháº©m kÃ¨m thÃ´ng tin tá»“n kho tá»•ng há»£p.
 
 | Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `search` | `string` | KhÃ´ng | TÃ¬m theo mÃ£/tÃªn sáº£n pháº©m |
+| `search` | `string` | Không | Tìm bỏ dấu theo mã, tên sản phẩm và đơn vị tồn; alias `q` được chấp nhận cho UI cũ |
 | `status` | `string` | KhÃ´ng | `active`, `inactive`, `all`; máº·c Ä‘á»‹nh `active` náº¿u gá»i tá»« POS, `all` náº¿u gá»i tá»« trang Kho |
 | `inventory_shape` | `string` | KhÃ´ng | `normal`, `roll`, `sheet` |
 | `negative_only` | `boolean` | KhÃ´ng | Chá»‰ láº¥y máº·t hÃ ng tá»“n Ã¢m |

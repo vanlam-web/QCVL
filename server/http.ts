@@ -354,6 +354,12 @@ function normalizeSearchText(value: string) {
     .replace(/đ/g, 'd')
 }
 
+function optionalNumber(value: string | null) {
+  if (value === null || value.trim() === '') return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
 function filterSalesDocuments(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? '')
   const type = url.searchParams.get('type')
@@ -367,7 +373,7 @@ function filterSalesDocuments(url: URL) {
     if (customerId && document.customer.id !== customerId) return false
     if (paymentStatus && document.payment_status !== paymentStatus) return false
     if (search) {
-      const haystack = normalizeSearchText(`${document.code} ${document.customer.code ?? ''} ${document.customer.name}`)
+      const haystack = normalizeSearchText(`${document.code} ${document.customer.code ?? ''} ${document.customer.name} ${document.note ?? ''}`)
       if (!haystack.includes(search)) return false
     }
     return true
@@ -404,6 +410,108 @@ function filterCustomers(url: URL) {
     if (customerGroupId && customerGroupId !== 'all' && customer.customer_group_id !== customerGroupId) return false
     if (search) {
       const haystack = normalizeSearchText(`${customer.code} ${customer.name} ${customer.phone ?? ''}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterInventoryProducts(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const status = url.searchParams.get('status')
+  const inventoryShape = url.searchParams.get('inventory_shape')
+
+  return inventoryProducts.filter((product) => {
+    if (status && status !== 'all' && product.status !== status) return false
+    if (inventoryShape && inventoryShape !== 'all' && product.inventory_shape !== inventoryShape) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${product.code} ${product.name} ${product.stock_unit}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterSuppliers(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const status = url.searchParams.get('status')
+  const totalPurchaseMin = optionalNumber(url.searchParams.get('total_purchase_min'))
+  const totalPurchaseMax = optionalNumber(url.searchParams.get('total_purchase_max'))
+  const currentPayableMin = optionalNumber(url.searchParams.get('current_payable_min'))
+  const currentPayableMax = optionalNumber(url.searchParams.get('current_payable_max'))
+
+  return suppliers.filter((supplier) => {
+    if (status && status !== 'all' && supplier.status !== status) return false
+    if (totalPurchaseMin !== undefined && supplier.total_purchase_amount < totalPurchaseMin) return false
+    if (totalPurchaseMax !== undefined && supplier.total_purchase_amount > totalPurchaseMax) return false
+    if (currentPayableMin !== undefined && supplier.current_payable_amount < currentPayableMin) return false
+    if (currentPayableMax !== undefined && supplier.current_payable_amount > currentPayableMax) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${supplier.code} ${supplier.name} ${supplier.phone ?? ''} ${supplier.email ?? ''} ${supplier.tax_code ?? ''} ${supplier.notes ?? ''}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterPurchaseReceipts(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const status = url.searchParams.get('status')
+  const dateFrom = url.searchParams.get('date_from')
+  const dateTo = url.searchParams.get('date_to')
+  const createdBy = url.searchParams.get('created_by')
+
+  return purchaseReceipts.filter((receipt) => {
+    if (status && status !== 'all' && receipt.status !== status) return false
+    if (dateFrom && receipt.received_at.slice(0, 10) < dateFrom) return false
+    if (dateTo && receipt.received_at.slice(0, 10) > dateTo) return false
+    if (createdBy && createdBy !== 'all' && receipt.created_by !== createdBy) return false
+    if (search) {
+      const haystack = normalizeSearchText(`${receipt.code} ${receipt.supplier.code} ${receipt.supplier.name} ${receipt.supplier_document_no ?? ''} ${receipt.notes ?? ''}`)
+      if (!haystack.includes(search)) return false
+    }
+    return true
+  })
+}
+
+function filterCustomerDebts(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+
+  return customerDebtItems.filter((debt) => {
+    if (!search) return true
+    const haystack = normalizeSearchText(`${debt.customer_code} ${debt.customer_name} ${debt.oldest_order_code}`)
+    return haystack.includes(search)
+  })
+}
+
+function filterCashbookEntries(url: URL) {
+  const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const searchScope = url.searchParams.get('search_scope') ?? 'all'
+  const financeAccountId = url.searchParams.get('finance_account_id')
+  const financeAccountType = url.searchParams.get('finance_account_type')
+  const direction = url.searchParams.get('direction')
+  const status = url.searchParams.get('status')
+  const isBusinessAccounted = url.searchParams.get('is_business_accounted')
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
+
+  return cashbookEntries.filter((entry) => {
+    if (financeAccountId && financeAccountId !== 'all' && entry.finance_account.id !== financeAccountId) return false
+    if (financeAccountType && financeAccountType !== 'all' && entry.finance_account.account_type !== financeAccountType) return false
+    if (direction && direction !== 'all' && entry.direction !== direction) return false
+    if (status && status !== 'all' && entry.status !== status) return false
+    if (isBusinessAccounted === 'true' && !entry.is_business_accounted) return false
+    if (isBusinessAccounted === 'false' && entry.is_business_accounted) return false
+    if (from && entry.created_at < from) return false
+    if (to && entry.created_at > to) return false
+    if (search) {
+      const scopedHaystacks = {
+        code: entry.code,
+        note: entry.note,
+        counterparty: `${entry.counterparty.name} ${entry.counterparty.phone ?? ''}`,
+        all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name}`,
+      }
+      const haystack = normalizeSearchText(scopedHaystacks[searchScope as keyof typeof scopedHaystacks] ?? scopedHaystacks.all)
       if (!haystack.includes(search)) return false
     }
     return true
@@ -689,7 +797,7 @@ async function getDevApiResponse(
   }
   if (method === 'POST' && path === '/api/v1/price-lists/formulas/apply') return { found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }
 
-  if (method === 'GET' && path === '/api/v1/inventory/products') return { found: true, data: paged(inventoryProducts, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/inventory/products') return { found: true, data: paged(filterInventoryProducts(url), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/inventory\/products\/[^/]+$/.test(path)) return { found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }
   if (method === 'PATCH' && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(path)) return { found: true, data: makeStocktake() }
   if (method === 'GET' && path === '/api/v1/inventory/stock-movements') {
@@ -708,7 +816,7 @@ async function getDevApiResponse(
     return { found: true, data: { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }, status: 201 }
   }
 
-  if (method === 'GET' && path === '/api/v1/suppliers') return { found: true, data: paged(suppliers, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/suppliers') return { found: true, data: paged(filterSuppliers(url), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/suppliers\/[^/]+$/.test(path)) return { found: true, data: suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }
   if (method === 'POST' && path === '/api/v1/suppliers') return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/suppliers\/[^/]+$/.test(path)) return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }
@@ -717,7 +825,7 @@ async function getDevApiResponse(
   }
   if (method === 'POST' && /^\/api\/v1\/suppliers\/[^/]+\/payments$/.test(path)) return { found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }
 
-  if (method === 'GET' && path === '/api/v1/purchase/receipts') return { found: true, data: paged(purchaseReceipts, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/purchase/receipts') return { found: true, data: paged(filterPurchaseReceipts(url), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
   if (method === 'POST' && path === '/api/v1/purchase/receipts') return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }
@@ -743,12 +851,15 @@ async function getDevApiResponse(
   if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === getIdFromPath(path)) ?? salesDocuments[0]) }
 
   if (method === 'GET' && path === '/api/v1/finance/accounts') return { found: true, data: { items: financeAccounts } }
-  if (method === 'GET' && path === '/api/v1/finance/customer-debts') return { found: true, data: paged(customerDebtItems, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/finance/customer-debts') return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) return { found: true, data: makeCustomerDebtDetail(getFinanceCustomerId(path)) }
   if (method === 'POST' && path === '/api/v1/finance/debt-collections') return { found: true, data: { payment_receipt_id: randomUUID(), allocated_amount: 100000 }, status: 201 }
   if (method === 'GET' && path === '/api/v1/finance/cashbook/balances') return { found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }
   if (method === 'GET' && path === '/api/v1/finance/cashbook/vouchers') return { found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }
-  if (method === 'GET' && path === '/api/v1/finance/cashbook') return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: cashbookEntries, page, page_size: pageSize, total: cashbookEntries.length } }
+  if (method === 'GET' && path === '/api/v1/finance/cashbook') {
+    const entries = filterCashbookEntries(url)
+    return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
+  }
   if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) return { found: true, data: { ...cashbookEntries[0], created_by: { id: currentUser.user.id, name: currentUser.user.display_name }, payment_method: 'cash', source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001' }, allocations: [{ order_id: 'order-0001', order_code: 'HD0001', order_total_amount: 1150000, collected_before: 0, allocated_amount: 700000, remaining_after: 450000 }] } }
   if (method === 'POST' && path === '/api/v1/finance/cashbook-vouchers') return { found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }
   if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/cancel$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }

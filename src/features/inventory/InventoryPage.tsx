@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, StatusChip } from '../../components/ui-shell/primitives'
@@ -61,6 +61,8 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(pageSizeDefault)
   const [search, setSearch] = useState('')
+  const [productSearchSuggestions, setProductSearchSuggestions] = useState<InventoryProduct[]>([])
+  const [productSearchSuggestionsOpen, setProductSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<InventoryProductStatus | 'all'>('active')
   const [shape, setShape] = useState<InventoryShape | 'all'>('all')
@@ -91,6 +93,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [reason, setReason] = useState('')
   const [adjusting, setAdjusting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const productSearchRequestId = useRef(0)
 
   const negativeCount = products?.filter((product) => product.is_negative).length ?? 0
   const totalQty = products?.reduce((sum, product) => sum + product.available_qty, 0) ?? 0
@@ -291,12 +294,48 @@ export function InventoryPage({ service }: { service: InventoryService }) {
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setProductSearchSuggestionsOpen(false)
     await applyFilters()
   }
 
   async function applyFilters() {
     setPage(1)
     await loadProducts({ search, status, shape, page: 1 })
+  }
+
+  async function suggestProducts(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = productSearchRequestId.current + 1
+    productSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listInventoryProducts({
+        search: query,
+        status,
+        inventory_shape: shape === 'all' ? undefined : shape,
+        page: 1,
+        page_size: 8,
+      })
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions(result.items)
+      setProductSearchSuggestionsOpen(true)
+    } catch {
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectProductSuggestion(product: InventoryProduct) {
+    setSearch(product.code)
+    setProductSearchSuggestionsOpen(false)
+    setPage(1)
+    await loadProducts({ search: product.code, status, shape, page: 1 })
   }
 
   async function openProduct(product: InventoryProduct) {
@@ -352,7 +391,24 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 placeholder="Mã hàng, tên hàng"
                 value={search}
                 leadingIcon={<Search aria-hidden="true" size={16} />}
-                onChange={setSearch}
+                suggestions={
+                  productSearchSuggestionsOpen
+                    ? productSearchSuggestions.map((product) => ({
+                        id: product.product_id,
+                        primary: `${product.code} ${product.name}`,
+                        secondary: shapeText(product.inventory_shape),
+                        meta: `${numberText(product.available_qty)} ${product.stock_unit}`,
+                        ariaLabel: `${product.code} ${product.name}`,
+                      }))
+                    : undefined
+                }
+                suggestionsLabel="Gợi ý hàng hóa"
+                emptySuggestion="Không có kết quả phù hợp"
+                onChange={(nextSearch) => void suggestProducts(nextSearch)}
+                onSuggestionSelect={(suggestion) => {
+                  const product = productSearchSuggestions.find((candidate) => candidate.product_id === suggestion.id)
+                  if (product) void selectProductSuggestion(product)
+                }}
               />
             </ManagementCompactToolbar>
           ) : view === 'stocktakes' ? (

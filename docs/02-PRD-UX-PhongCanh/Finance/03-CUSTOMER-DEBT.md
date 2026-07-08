@@ -15,6 +15,14 @@ QC-OMS quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo
 
 ## 2. Bố cục danh sách công nợ
 
+Ô `Tìm công nợ` ở header:
+
+- dùng shared compact search;
+- tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất;
+- khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm;
+- dòng gợi ý gồm mã + tên khách, dòng phụ là mã hóa đơn nợ cũ nhất, mép phải là tổng nợ;
+- bấm gợi ý lọc danh sách theo đúng mã khách.
+
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────┐
 │ Công nợ khách hàng                              [Tìm khách/mã hóa đơn] [+ Thu nợ] │

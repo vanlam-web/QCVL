@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SalesDocumentsPage } from './SalesDocumentsPage'
 import type { SalesDocumentDetail, SalesDocumentService } from './sales-document-service'
@@ -337,6 +337,33 @@ it('searches by document code and keeps filtered empty state clear', async () =>
   expect(within(sidebar).queryByText('Tìm: HD010985')).not.toBeInTheDocument()
   expect(screen.getByText('Không thấy chứng từ theo bộ lọc hiện tại.')).toBeInTheDocument()
   expect(screen.getByText('Hãy thử mở rộng thời gian hoặc bỏ bớt bộ lọc.')).toBeInTheDocument()
+})
+
+it('shows matching sales documents below search while typing without accents', async () => {
+  const service = makeService({
+    listSalesDocuments: vi.fn(async (input = {}) => ({
+      items: input.search === 'HD010985' || input.search === 'phong' ? [listItem] : [secondListItem],
+      page: 1,
+      page_size: input.page_size ?? 15,
+      total: 1,
+    })),
+  })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('HD010986')
+  await userEvent.type(screen.getByRole('textbox', { name: /Tìm chứng từ/ }), 'phong')
+
+  const suggestions = await screen.findByRole('listbox')
+  expect(within(suggestions).getByRole('option', { name: /HD010985/ })).toBeInTheDocument()
+  await userEvent.click(within(suggestions).getByRole('option', { name: /HD010985/ }))
+
+  await waitFor(() => {
+    expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
+      search: 'HD010985',
+      page: 1,
+      page_size: 15,
+    }))
+  })
 })
 
 it('uses 15-row pagination range and navigates pages through the list footer', async () => {

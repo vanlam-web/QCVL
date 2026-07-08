@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -158,6 +158,8 @@ export function CatalogPage({
   const [stocktakeNotices, setStocktakeNotices] = useState<Record<string, StocktakeNotice>>({})
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
   const [search, setSearch] = useState('')
+  const [productSearchSuggestions, setProductSearchSuggestions] = useState<Product[]>([])
+  const [productSearchSuggestionsOpen, setProductSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
@@ -186,6 +188,7 @@ export function CatalogPage({
     latestPurchaseCost: '0',
     productGroupId: '',
   })
+  const productSearchRequestId = useRef(0)
 
   async function load(filters: {
     search?: string
@@ -254,8 +257,45 @@ export function CatalogPage({
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setProductSearchSuggestionsOpen(false)
     setPage(1)
     await load({ search: search.trim(), status, product_kind: productKindFilter, product_group_id: productGroupFilter, page: 1 })
+  }
+
+  async function suggestProducts(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = productSearchRequestId.current + 1
+    productSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listProducts({
+        search: query,
+        status,
+        ...(productKindFilter === 'all' ? {} : { product_kind: productKindFilter }),
+        ...(productGroupFilter === 'all' ? {} : { product_group_id: productGroupFilter }),
+        page: 1,
+        page_size: 8,
+      })
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions(result.items)
+      setProductSearchSuggestionsOpen(true)
+    } catch {
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectProductSuggestion(product: Product) {
+    setSearch(product.code)
+    setProductSearchSuggestionsOpen(false)
+    setPage(1)
+    await load({ search: product.code, status, product_kind: productKindFilter, product_group_id: productGroupFilter, page: 1 })
   }
 
   async function applySidebarFilters(nextFilters: Partial<{
@@ -590,7 +630,24 @@ export function CatalogPage({
               <ManagementCompactCreateAction ariaLabel="Tạo hàng hóa" onClick={() => setCreateOpen(true)} />
             }
             value={search}
-            onChange={setSearch}
+            suggestions={
+              productSearchSuggestionsOpen
+                ? productSearchSuggestions.map((product) => ({
+                    id: product.id,
+                    primary: `${product.code} ${product.name}`,
+                    secondary: product.product_group?.name ?? product.unit_name,
+                    meta: product.unit_name,
+                    ariaLabel: `${product.code} ${product.name}`,
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý hàng hóa"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestProducts(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const product = productSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (product) void selectProductSuggestion(product)
+            }}
           />
         </ManagementCompactToolbar>
       }

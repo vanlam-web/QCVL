@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Copy, ExternalLink, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
@@ -160,6 +160,8 @@ export function SalesDocumentsPage({
 }) {
   const [state, setState] = useState<SalesDocumentsState | null>(null)
   const [search, setSearch] = useState('')
+  const [documentSearchSuggestions, setDocumentSearchSuggestions] = useState<SalesDocumentListItem[]>([])
+  const [documentSearchSuggestionsOpen, setDocumentSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<'all' | 'invoice' | 'quote'>('all')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all')
@@ -180,6 +182,7 @@ export function SalesDocumentsPage({
   const [detailError, setDetailError] = useState<string | null>(null)
   const [detailErrorDocumentId, setDetailErrorDocumentId] = useState<string | null>(null)
   const [openingQuoteId, setOpeningQuoteId] = useState<string | null>(null)
+  const documentSearchRequestId = useRef(0)
 
   async function loadDocuments(input: {
     search?: string
@@ -296,6 +299,7 @@ export function SalesDocumentsPage({
   async function searchDocuments(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const trimmed = search.trim()
+    setDocumentSearchSuggestionsOpen(false)
     setSelected(null)
     setLoadingDocumentId(null)
     setDetailError(null)
@@ -303,6 +307,52 @@ export function SalesDocumentsPage({
     setLastSearch(trimmed)
     setQuickTimeOpen(false)
     await loadDocuments({ search: trimmed, page: 1 })
+  }
+
+  async function suggestDocuments(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = documentSearchRequestId.current + 1
+    documentSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setDocumentSearchSuggestions([])
+      setDocumentSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listSalesDocuments({
+        search: query,
+        ...(typeFilter === 'all' ? {} : { type: typeFilter }),
+        ...(statusFilter === 'all' ? {} : { status: statusFilter }),
+        ...(paymentStatusFilter === 'all' ? {} : { payment_status: paymentStatusFilter }),
+        ...(paymentMethodFilter === 'all' ? {} : { payment_method: paymentMethodFilter }),
+        ...(sellerFilter === 'all' ? {} : { created_by: sellerFilter }),
+        ...(priceListFilter === 'all' ? {} : { price_list_id: priceListFilter }),
+        ...(timeFilter !== 'all' && dateFrom ? { from: dateFrom } : {}),
+        ...(timeFilter !== 'all' && dateTo ? { to: dateTo } : {}),
+        page: 1,
+        page_size: 8,
+      })
+      if (documentSearchRequestId.current !== requestId) return
+      setDocumentSearchSuggestions(result.items)
+      setDocumentSearchSuggestionsOpen(true)
+    } catch {
+      if (documentSearchRequestId.current !== requestId) return
+      setDocumentSearchSuggestions([])
+      setDocumentSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectDocumentSuggestion(document: SalesDocumentListItem) {
+    setSearch(document.code)
+    setDocumentSearchSuggestionsOpen(false)
+    setSelected(null)
+    setLoadingDocumentId(null)
+    setDetailError(null)
+    setDetailErrorDocumentId(null)
+    setLastSearch(document.code)
+    setQuickTimeOpen(false)
+    await loadDocuments({ search: document.code, page: 1 })
   }
 
   async function applyTypeFilter(nextType: typeof typeFilter) {
@@ -470,7 +520,24 @@ export function SalesDocumentsPage({
               ) : undefined
             }
             value={search}
-            onChange={setSearch}
+            suggestions={
+              documentSearchSuggestionsOpen
+                ? documentSearchSuggestions.map((document) => ({
+                    id: document.id,
+                    primary: `${document.code} ${document.customer.name}`,
+                    secondary: `${document.customer.code ?? ''} ${document.note ?? ''}`.trim(),
+                    meta: <MoneyText value={document.total_amount} />,
+                    ariaLabel: `${document.code} ${document.customer.name} ${document.note ?? ''}`.trim(),
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý chứng từ"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestDocuments(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const document = documentSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (document) void selectDocumentSuggestion(document)
+            }}
           />
         </ManagementCompactToolbar>
       }

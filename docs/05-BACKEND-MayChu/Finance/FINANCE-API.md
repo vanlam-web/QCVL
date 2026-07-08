@@ -133,6 +133,8 @@ Danh sÃ¡ch khÃ¡ch hÃ ng Ä‘ang cÃ³ ná»£.
 
 **Query:** `search`, `include_retail_debt`, `page`, `page_size`.
 
+`search` phải tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất để phục vụ dropdown gợi ý ở header tài chính.
+
 Response tá»•ng há»£p tá»« `customer_debt_entries`, khÃ´ng dÃ¹ng má»™t sá»‘ tá»•ng khÃ´ng truy váº¿t Ä‘Æ°á»£c.
 
 ### `GET /finance/customers/{customer_id}/debt`
@@ -273,7 +275,9 @@ Xem sá»• quá»¹ theo tá»«ng quá»¹/tÃ i khoáº£n.
 
 Chá»‰ tÃ­nh sá»‘ dÆ° hiá»‡u lá»±c tá»« `cashbook_entries.status = posted`.
 
-Khi `search` khá»›p chÃ­nh xÃ¡c mÃ£ phiáº¿u, backend pháº£i tÃ¬m trÃªn toÃ n bá»™ lá»‹ch sá»­ hoáº·c bá» qua `from/to` náº¿u client Ä‘ang dÃ¹ng filter thá»i gian máº·c Ä‘á»‹nh. KhÃ´ng tráº£ rá»—ng chá»‰ vÃ¬ mÃ£ phiáº¿u náº±m ngoÃ i thÃ¡ng hiá»‡n táº¡i.
+Khi `search` khớp chính xác mã phiếu, backend phải tìm trên toàn bộ lịch sử hoặc bỏ qua `from/to` nếu client đang dùng filter thời gian mặc định. Không trả rỗng chỉ vì mã phiếu nằm ngoài tháng hiện tại.
+
+`search` của sổ quỹ phải hỗ trợ bỏ dấu theo mã phiếu, người nộp/nhận, SĐT, ghi chú và mã/tên tài khoản quỹ.
 
 `counterparty` trÃªn list vÃ  detail pháº£i dÃ¹ng cÃ¹ng nguá»“n dá»¯ liá»‡u. DÃ²ng sinh tá»« `payment_receipt_method` láº¥y khÃ¡ch tá»« `payment_receipts.customer_id`; náº¿u phiáº¿u thu khÃ´ng cÃ³ `customer_id` nhÆ°ng cÃ³ `order_id`, dÃ¹ng `orders.customer_snapshot` Ä‘á»ƒ hiá»ƒn thá»‹ `KhÃ¡ch láº»` hoáº·c tÃªn khÃ¡ch Ä‘Ã£ lÆ°u lÃºc bÃ¡n hÃ ng. Vá»›i dá»¯ liá»‡u cÅ© thiáº¿u cáº£ `customer_id` vÃ  `order_id` nhÆ°ng dÃ²ng sá»• quá»¹ cÃ³ ghi chÃº dáº¡ng `Checkout HD...`, backend Ä‘Æ°á»£c phÃ©p suy ra hÃ³a Ä‘Æ¡n tá»« mÃ£ trong ghi chÃº Ä‘á»ƒ láº¥y `customer_snapshot` cho list vÃ  detail. Frontend cÃ³ thá»ƒ hydrate ná»n tá»« detail cho dÃ²ng cÅ© cÃ²n thiáº¿u `counterparty`, nhÆ°ng Ä‘Ã³ chá»‰ lÃ  lá»›p bÃ¹ tÆ°Æ¡ng thÃ­ch; contract Ä‘Ãºng váº«n lÃ  list tráº£ sáºµn ngÆ°á»i ná»™p/nháº­n.
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -59,6 +59,8 @@ export function PriceBookPage({
   const [formulaPreview, setFormulaPreview] = useState<PriceFormulaPreview | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState('')
+  const [productSearchSuggestions, setProductSearchSuggestions] = useState<Product[]>([])
+  const [productSearchSuggestionsOpen, setProductSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
@@ -79,6 +81,7 @@ export function PriceBookPage({
     tierAmount: '',
     adjustments: {} as Record<string, { mode: AdjustmentMode; value: string }>,
   })
+  const productSearchRequestId = useRef(0)
 
   async function load(filters: { search?: string; status?: ProductStatus | 'all'; page?: number; page_size?: number } = {}) {
     const nextSearch = filters.search ?? lastSearch
@@ -143,8 +146,43 @@ export function PriceBookPage({
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setProductSearchSuggestionsOpen(false)
     setPage(1)
     await load({ search: search.trim(), status, page: 1 })
+  }
+
+  async function suggestProducts(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = productSearchRequestId.current + 1
+    productSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listProducts({
+        search: query,
+        status,
+        page: 1,
+        page_size: 8,
+      })
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions(result.items)
+      setProductSearchSuggestionsOpen(true)
+    } catch {
+      if (productSearchRequestId.current !== requestId) return
+      setProductSearchSuggestions([])
+      setProductSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectProductSuggestion(product: Product) {
+    setSearch(product.code)
+    setProductSearchSuggestionsOpen(false)
+    setPage(1)
+    await load({ search: product.code, status, page: 1 })
   }
 
   async function goToPage(nextPage: number) {
@@ -277,7 +315,24 @@ export function PriceBookPage({
               />
             }
             value={search}
-            onChange={setSearch}
+            suggestions={
+              productSearchSuggestionsOpen
+                ? productSearchSuggestions.map((product) => ({
+                    id: product.id,
+                    primary: `${product.code} ${product.name}`,
+                    secondary: sellMethodLabels[product.sell_method],
+                    meta: product.unit_name,
+                    ariaLabel: `${product.code} ${product.name}`,
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý hàng hóa"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestProducts(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const product = productSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+              if (product) void selectProductSuggestion(product)
+            }}
           />
         </ManagementCompactToolbar>
       }

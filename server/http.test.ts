@@ -230,6 +230,39 @@ describe('createHttpHandler', () => {
     expect(body.data.items.some((item: { code: string; name: string }) => item.code === 'KH000001' && item.name === 'Khách lẻ')).toBe(true)
   })
 
+  test('searches demo management lists by the fields advertised in each search box', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const requests = await Promise.all([
+      handler(new Request('http://api.local/api/v1/sales-documents?search=don%20demo%20004&page=1&page_size=10', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/inventory/products?q=mica&page=1&page_size=10', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/suppliers?q=nha%20cung%20cap%20demo%20003&page=1&page_size=10', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/purchase/receipts?q=hd-ncc-004&page=1&page_size=10', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/finance/customer-debts?search=khach%20demo%20002&page=1&page_size=10', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/finance/cashbook?search=khach%20demo%20002&page=1&page_size=10', { headers: { authorization } })),
+    ])
+    const [salesDocuments, inventory, suppliersList, purchaseReceiptsList, customerDebts, cashbook] = await Promise.all(requests.map((response) => response.json()))
+
+    expect(requests.every((response) => response.status === 200)).toBe(true)
+    expect(salesDocuments.data.items.map((item: { note: string }) => item.note)).toContain('Don demo 004')
+    expect(inventory.data.items.every((item: { code: string; name: string }) => `${item.code} ${item.name}`.toLowerCase().includes('mica'))).toBe(true)
+    expect(suppliersList.data.items).toHaveLength(1)
+    expect(suppliersList.data.items[0].code).toBe('DEV20-NCC-003')
+    expect(purchaseReceiptsList.data.items).toHaveLength(1)
+    expect(purchaseReceiptsList.data.items[0].supplier_document_no).toBe('HD-NCC-004')
+    expect(customerDebts.data.items).toHaveLength(1)
+    expect(customerDebts.data.items[0].customer_name).toBe('Khach demo 002')
+    expect(cashbook.data.items.every((item: { counterparty: { name: string } }) => item.counterparty.name === 'Khach demo 002')).toBe(true)
+  })
+
   test('persists checkout into demo sales documents and cashbook', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

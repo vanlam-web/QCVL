@@ -428,6 +428,8 @@
 }
 
 .management-page-header {
+  position: relative;
+  z-index: calc(var(--z-shell) + 2);
   display: grid;
   align-items: center;
   grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
@@ -451,6 +453,8 @@
 }
 
 .management-layout {
+  position: relative;
+  z-index: 0;
   display: grid;
   grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
   gap: var(--space-4);
@@ -1037,6 +1041,8 @@
 }
 
 .management-compact-toolbar {
+  position: relative;
+  z-index: calc(var(--z-shell) + 2);
   display: flex;
   width: 100%;
   gap: var(--space-2);
@@ -1046,6 +1052,7 @@
 
 .management-compact-search {
   position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   flex: 0 1 28.75rem;
@@ -1055,6 +1062,10 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+}
+
+.management-compact-search:focus-within {
+  z-index: calc(var(--z-shell) + 10);
 }
 
 .management-compact-search-leading {
@@ -1090,7 +1101,7 @@
 
 .management-search-suggestions {
   position: absolute;
-  z-index: 40;
+  z-index: calc(var(--z-shell) + 11);
   top: calc(100% + var(--space-1));
   left: 0;
   right: 0;

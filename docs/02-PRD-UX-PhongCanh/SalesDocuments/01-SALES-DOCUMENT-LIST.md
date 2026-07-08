@@ -37,6 +37,8 @@ Hiện tại đã triển khai:
 
 - danh sách hóa đơn `HD...` và báo giá `BG...`
 - tìm kiếm/lọc cơ bản
+- ô tìm `Mã chứng từ, khách hàng, ghi chú` có gợi ý xổ xuống khi nhập; search bỏ dấu tiếng Việt, tìm theo mã chứng từ, mã/tên khách và ghi chú chứng từ
+- gợi ý tối đa 8 dòng, hiển thị mã chứng từ + tên khách, dòng phụ là mã khách/ghi chú, mép phải là tổng tiền; bấm gợi ý lọc danh sách theo đúng mã chứng từ
 - bộ lọc thời gian dạng chọn nhanh/tùy chỉnh theo layout filter dùng chung
 - bộ lọc trạng thái thanh toán, phương thức thanh toán, người bán/người tạo và bảng giá nếu dữ liệu/API hiện có hỗ trợ
 - exact document-code lookup không bị che bởi filter mặc định

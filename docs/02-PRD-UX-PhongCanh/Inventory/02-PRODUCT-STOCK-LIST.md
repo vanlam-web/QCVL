@@ -70,6 +70,7 @@ Màn này không thay thế POS bán hàng. Sản phẩm ngưng bán vẫn xem v
 
 | Bộ lọc | Hành vi |
 |---|---|
+| Tìm kiếm | Ô search dùng shared compact search, tìm bỏ dấu theo mã hàng/tên hàng. Khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm; dòng gợi ý gồm mã + tên hàng, nhóm/loại tồn, tồn hiện tại ở mép phải. Bấm gợi ý lọc danh sách theo đúng mã hàng. |
 | Loại hàng | Tất cả, hàng thường, dịch vụ, vật tư phụ, cuộn, tấm, combo. UI gửi `product_kind`; backend lưu ở `products.product_kind`. |
 | Nhóm hàng | Tất cả hoặc một nhóm hàng cụ thể. UI gửi `product_group_id`; nếu hàng chưa chọn nhóm thì backend gán nhóm mặc định `Giá chung`. |
 | Trạng thái hàng hóa | Đang kinh doanh, ngưng bán, tất cả |

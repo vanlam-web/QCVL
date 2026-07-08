@@ -211,7 +211,7 @@ TÃ¬m bÃ¡o giÃ¡.
 
 | Tham sá»‘ | Kiá»ƒu | Báº¯t buá»™c | MÃ´ táº£ |
 |---|---|---|---|
-| `search` | `string` | KhÃ´ng | TÃ¬m theo mÃ£ bÃ¡o giÃ¡, tÃªn/mÃ£ khÃ¡ch trong snapshot |
+| `search` | `string` | Không | Tìm bỏ dấu theo mã báo giá/hóa đơn, tên/mã khách trong snapshot và ghi chú chứng từ |
 | `status` | `string` | KhÃ´ng | `active`, `converted`, `cancelled`, máº·c Ä‘á»‹nh `active` |
 | `page` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `1` |
 | `page_size` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `20`, tá»‘i Ä‘a `100` |
