@@ -138,7 +138,7 @@ Hiện trạng sau các slice sổ quỹ ngày `06/07/2026`:
 
 - `/finance` là màn sổ quỹ chính; thân trang chỉ còn bảng sổ quỹ, inline detail dòng sổ và form phiếu thu/chi khi mở.
 - Các khối `Tài khoản quỹ`, `Công nợ khách hàng`, `Phiếu thu/chi` đã ẩn khỏi thân trang để tránh rối layout.
-- Header có ô `Tìm công nợ` theo kiểu search chung; nút `+` trong ô tìm mở popup tạo phiếu thu/chi có tab chọn loại phiếu, không còn 2 nút `+ Phiếu thu` và `+ Phiếu chi` riêng ở ngoài. Nút `Xuất file` nằm cùng hàng và canh phải trước cụm tài khoản/giao diện của shell.
+- Header có ô `Tìm sổ quỹ` theo kiểu search chung; tìm bỏ dấu theo mã phiếu, người nộp/nhận, SĐT, ghi chú và mã/tên tài khoản quỹ. Nút `+` trong ô tìm mở popup tạo phiếu thu/chi khi ô rỗng; khi có nội dung thì chuyển thành `x` để xóa tìm kiếm. Nút `Xuất file` nằm cùng hàng và canh phải trước cụm tài khoản/giao diện của shell.
 - Summary `Quỹ đầu kỳ`, `Tổng thu`, `Tổng chi`, `Tồn quỹ` nằm trong khu vực chính bên phải, ngay trên bảng sổ quỹ, và lấy từ `summary` của API sổ quỹ theo filter.
 - `Tồn quỹ` dùng `summary.ending_balance`, không dùng tổng số dư hiện tại của tất cả tài khoản.
 - Bộ lọc sổ quỹ tự áp dụng khi chọn giá trị; không có nút `Lọc sổ` hoặc `Đặt lại bộ lọc`.
@@ -159,7 +159,7 @@ Không dùng ví điện tử trong MVP nếu chưa có nghiệp vụ riêng.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────┐
-│ Sổ quỹ                                      [Tìm công nợ +]                  [Xuất]│
+│ Sổ quỹ                                      [Tìm sổ quỹ +]                   [Xuất]│
 ├───────────────────────┬────────────────────────────────────────────────────────────┤
 │ Thời gian             │ Quỹ đầu kỳ | Tổng thu | Tổng chi | Tồn quỹ                 │
 │ Quỹ tiền              │ [ ] | ☆ | Mã phiếu | Thời gian | Loại thu chi | Người      │
@@ -196,7 +196,7 @@ Ghi chú:
 - Popup `Thêm tài khoản ngân hàng` hiện là UI local trong frontend vì backend chưa có endpoint tạo tài khoản quỹ. Popup dùng shared modal compact, gồm số tài khoản, ngân hàng, chủ tài khoản, số dư ban đầu, ghi chú, checkbox bật thông báo và footer `Bỏ qua`/`Lưu`.
 - `Công nợ đối tác` cần dùng cho phiếu liên quan khách hàng/nhà cung cấp; hiện đã có trường khi tạo phiếu thủ công, chưa có filter list.
 - `Người nộp/nhận` đã hiển thị được tên trong bảng khi API list trả `counterparty`; slice sau cần bổ sung tìm theo tên, mã và số điện thoại.
-- Nếu tìm đúng mã phiếu, hệ thống phải bỏ qua filter tháng hiện tại khi filter đó che kết quả; hiện UI sổ quỹ chưa có ô tìm mã phiếu riêng.
+- Ô `Tìm sổ quỹ` ở header là ô tìm mã phiếu/người nộp/nhận/ghi chú chính. Nếu backend cũ hoặc response stale trả rộng hơn query, frontend vẫn lọc lại danh sách đang hiển thị theo cùng quy tắc bỏ dấu để tránh thấy kết quả sai trong dropdown và bảng.
 
 ---
 
@@ -248,7 +248,7 @@ Xuất file tối thiểu phải có các cột giống file KV mẫu:
 
 Sau đó thêm các cột QC-OMS cần đối soát: quỹ/tài khoản, trạng thái, ghi chú, người tạo, hạch toán KQKD.
 
-Hiện trạng UI: nút `Xuất file` nằm ở cụm tác vụ sổ quỹ bên phải; nút `+` trong ô `Tìm công nợ` mở popup tạo phiếu thu/chi.
+Hiện trạng UI: nút `Xuất file` nằm ở cụm tác vụ sổ quỹ bên phải; nút `+` trong ô `Tìm sổ quỹ` mở popup tạo phiếu thu/chi khi ô rỗng, còn khi đang nhập thì nút xoay thành `x` để xóa tìm kiếm.
 
 ---
 
@@ -256,7 +256,7 @@ Hiện trạng UI: nút `Xuất file` nằm ở cụm tác vụ sổ quỹ bên 
 
 Hiện trạng UI sau ngày `06/07/2026`:
 
-- Nút `+` trong ô `Tìm công nợ` mở popup modal ở giữa màn hình, có backdrop mờ, không chuyển trang và không đẩy layout sổ quỹ. Popup mở mặc định tab `Phiếu thu`; người dùng chuyển tab `Phiếu chi` ngay trong popup để đổi loại phiếu.
+- Nút `+` trong ô `Tìm sổ quỹ` mở popup modal ở giữa màn hình, có backdrop mờ, không chuyển trang và không đẩy layout sổ quỹ. Popup mở mặc định tab `Phiếu thu`; người dùng chuyển tab `Phiếu chi` ngay trong popup để đổi loại phiếu.
 - Modal dùng CSS chung `management-modal-*`, không tạo layout riêng cho từng trang. Kích thước khoảng 800-900px, thân form dùng grid 2 cột.
 - Header hiển thị `Tạo phiếu thu tiền mặt/ngân hàng` hoặc `Tạo phiếu chi tiền mặt/ngân hàng` theo tab và tài khoản đang chọn; bên dưới header có tab `Phiếu thu`/`Phiếu chi`; bên phải có nút đóng `X`. Tab dùng CSS chung `inline-detail-tabbar`/`inline-detail-tabs` cho trạng thái chọn và không chọn, không tạo style riêng cho finance.
 - Footer modal có 3 nút cùng hàng, canh phải: `Bỏ qua`, `Lưu & In`, `Lưu`. Hiện `Lưu & In` dùng chung luồng lưu; in thật là slice sau.

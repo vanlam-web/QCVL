@@ -299,24 +299,36 @@ describe('FinancePage', () => {
     expect(screen.queryByRole('heading', { level: 2, name: 'Sổ quỹ' })).not.toBeInTheDocument()
   })
 
-  it('filters debts and cashbook entries', async () => {
+  it('filters cashbook entries from the header search', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.type(await screen.findByLabelText('Tìm công nợ'), 'nam')
-    const createVoucherButton = screen.getByRole('button', { name: 'Tạo phiếu thu chi' })
-    expect(screen.getByLabelText('Tìm công nợ').closest('.management-compact-search')).toContainElement(createVoucherButton)
-    expect(createVoucherButton).toHaveClass('management-compact-create-action')
-    expect(createVoucherButton).toHaveTextContent('')
+    await userEvent.type(await screen.findByLabelText('Tìm sổ quỹ'), 'PT0001')
+    const clearSearchButton = screen.getByRole('button', { name: 'Xóa tìm kiếm' })
+    expect(screen.getByLabelText('Tìm sổ quỹ').closest('.management-compact-search')).toContainElement(clearSearchButton)
+    expect(clearSearchButton).toHaveClass('management-compact-create-action-clear')
+    expect(clearSearchButton).toHaveTextContent('')
     await userEvent.keyboard('{Enter}')
 
-    expect(service.listCustomerDebts).toHaveBeenLastCalledWith({ search: 'nam', page: 1, page_size: 15 })
+    expect(service.listCashbookEntries).toHaveBeenLastCalledWith({
+      search: 'PT0001',
+      search_scope: 'all',
+      from: '2026-07-01',
+      to: '2026-07-31',
+      finance_account_id: undefined,
+      finance_account_type: undefined,
+      direction: 'all',
+      status: 'posted',
+      is_business_accounted: undefined,
+      page: 1,
+      page_size: 15,
+    })
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Phiếu thu' }))
     expect(screen.queryByRole('button', { name: 'Lọc sổ' })).not.toBeInTheDocument()
 
     expect(service.listCashbookEntries).toHaveBeenLastCalledWith({
-      search: undefined,
+      search: 'PT0001',
       search_scope: 'all',
       from: '2026-07-01',
       to: '2026-07-31',

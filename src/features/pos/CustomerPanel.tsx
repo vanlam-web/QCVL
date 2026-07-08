@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Plus, Search } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Search } from 'lucide-react'
+import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer } from '../catalog/types'
@@ -18,16 +19,44 @@ export function CustomerPanel({
   const [createOpen, setCreateOpen] = useState(false)
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
+  const searchRequestId = useRef(0)
 
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
     try {
-      const response = await service.listCustomers({ search })
+      const response = await service.listCustomers({ search: search.trim() || undefined })
       setResults(response.items)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tìm được khách hàng.'))
     }
+  }
+
+  async function suggestCustomers(nextSearch: string) {
+    setSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = searchRequestId.current + 1
+    searchRequestId.current = requestId
+    if (query.length === 0) {
+      setResults([])
+      return
+    }
+    setError(null)
+    try {
+      const response = await service.listCustomers({ search: query, page: 1, page_size: 8 })
+      if (searchRequestId.current !== requestId) return
+      setResults(response.items)
+    } catch (cause) {
+      if (searchRequestId.current !== requestId) return
+      setResults([])
+      setError(formatApiError(cause, 'Không tìm được khách hàng.'))
+    }
+  }
+
+  function selectCustomer(customer: Customer) {
+    setSearch(customer.name)
+    setResults([])
+    onSelectCustomer(customer)
   }
 
   async function createCustomer(event: React.FormEvent<HTMLFormElement>) {
@@ -41,7 +70,7 @@ export function CustomerPanel({
         customer_group_id: null,
       })
       onSelectCustomer(created)
-      setResults([created])
+      setResults([])
       setSearch(created.name)
       setForm({ code: '', name: '', phone: '' })
       setCreateOpen(false)
@@ -55,25 +84,30 @@ export function CustomerPanel({
       {error ? <p role="alert">{error}</p> : null}
 
       <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
-        <label>
-          <span>Tìm khách</span>
-          <input
-            value={search}
-            placeholder="Tìm khách hàng (F4)"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <button aria-label="Tìm khách hàng" title="Tìm khách hàng" type="submit">
-          <Search aria-hidden="true" size={18} />
-        </button>
-        <button
-          aria-label="Tạo khách nhanh"
-          title="Tạo khách nhanh"
-          type="button"
-          onClick={() => setCreateOpen(true)}
-        >
-          <Plus aria-hidden="true" size={18} />
-        </button>
+        <ManagementCompactSearch
+          label="Tìm khách"
+          placeholder="Tìm khách hàng (F4)"
+          value={search}
+          leadingIcon={<Search aria-hidden="true" size={16} />}
+          trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
+          suggestions={
+            search.trim().length > 0
+              ? results.map((customer) => ({
+                  id: customer.id,
+                  primary: `${customer.code} ${customer.name}`,
+                  secondary: customer.phone ?? '',
+                  ariaLabel: `Chọn ${customer.code} ${customer.name}`,
+                }))
+              : undefined
+          }
+          suggestionsLabel="Gợi ý khách hàng"
+          emptySuggestion="Không có kết quả phù hợp"
+          onChange={(nextSearch) => void suggestCustomers(nextSearch)}
+          onSuggestionSelect={(suggestion) => {
+            const customer = results.find((item) => item.id === suggestion.id)
+            if (customer) selectCustomer(customer)
+          }}
+        />
       </form>
 
       {createOpen ? (
@@ -92,21 +126,6 @@ export function CustomerPanel({
           </label>
           <button className="button button-primary" type="submit">Tạo khách</button>
         </form>
-      ) : null}
-
-      {results.length > 0 ? (
-        <ul className="customer-results">
-          {results.map((customer) => (
-            <li key={customer.id}>
-              <button className="button button-secondary" type="button" onClick={() => {
-                setSearch(customer.name)
-                onSelectCustomer(customer)
-              }}>
-                Chọn {customer.code} {customer.name}
-              </button>
-            </li>
-          ))}
-        </ul>
       ) : null}
     </section>
   )

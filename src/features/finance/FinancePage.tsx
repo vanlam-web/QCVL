@@ -1,9 +1,10 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronDown, ChevronRight, Download, Edit3, Info, Pin, Plus, Printer, Search, StickyNote, Trash2, WalletCards, X } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight, Download, Edit3, Info, Pin, Printer, Search, StickyNote, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
 import {
+  ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDetailActionFooter,
@@ -168,6 +169,30 @@ function cashbookCounterpartyLabel(entry: CashbookEntry) {
 
 function cashbookCounterpartyDisplayName(name: string) {
   return name.trim() === 'Khách lẻ' ? 'khách lẻ' : name
+}
+
+function normalizeFinanceSearch(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .trim()
+}
+
+function cashbookEntryMatchesSearch(entry: CashbookEntry, search: string) {
+  const query = normalizeFinanceSearch(search)
+  if (query.length === 0) return true
+  const haystack = normalizeFinanceSearch([
+    entry.code,
+    entry.note ?? '',
+    entry.counterparty?.name ?? '',
+    entry.counterparty?.phone ?? '',
+    entry.finance_account.code,
+    entry.finance_account.name,
+  ].join(' '))
+  return haystack.includes(query)
 }
 
 function cashbookEntryMatchesFundMode(entry: CashbookEntry, fundMode: CashbookFundMode, accountId: string) {
@@ -453,9 +478,6 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [debtTotal, setDebtTotal] = useState(0)
   const [debtPage, setDebtPage] = useState(1)
   const [debtPageSize, setDebtPageSize] = useState(pageSizeDefault)
-  const [debtSearch, setDebtSearch] = useState('')
-  const [debtSearchSuggestions, setDebtSearchSuggestions] = useState<CustomerDebtSummary[]>([])
-  const [debtSearchSuggestionsOpen, setDebtSearchSuggestionsOpen] = useState(false)
   const [lastDebtSearch, setLastDebtSearch] = useState('')
   const [selectedDebt, setSelectedDebt] = useState<CustomerDebtSummary | null>(null)
   const [debtDetail, setDebtDetail] = useState<CustomerDebtDetail | null>(null)
@@ -463,7 +485,9 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookTotal, setCashbookTotal] = useState(0)
   const [cashbookPage, setCashbookPage] = useState(1)
   const [cashbookPageSize, setCashbookPageSize] = useState(pageSizeDefault)
-  const [cashbookSearch] = useState('')
+  const [cashbookSearch, setCashbookSearch] = useState('')
+  const [cashbookSearchSuggestions, setCashbookSearchSuggestions] = useState<CashbookEntry[]>([])
+  const [cashbookSearchSuggestionsOpen, setCashbookSearchSuggestionsOpen] = useState(false)
   const [lastCashbookSearch, setLastCashbookSearch] = useState('')
   const [cashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [lastCashbookSearchScope, setLastCashbookSearchScope] = useState<CashbookSearchScope>('all')
@@ -524,7 +548,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [collecting, setCollecting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const debtSearchRequestId = useRef(0)
+  const cashbookSearchRequestId = useRef(0)
 
   const activeAccounts = accounts.filter((account) => account.is_active)
   const sortedActiveAccounts = [...activeAccounts].sort(cashFirstAccountSort)
@@ -544,6 +568,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const selectedBankAccount = sortedBankAccounts.find((account) => account.id === cashbookAccountId)
   const fundFilteredCashbookEntries = (cashbookEntries ?? []).filter((entry) => (
     cashbookEntryMatchesFundMode(entry, cashbookFundMode, cashbookAccountId)
+    && cashbookEntryMatchesSearch(entry, cashbookSearch)
   ))
   const visibleCashbookEntries = showCashbookFavoritesOnly
     ? fundFilteredCashbookEntries.filter((entry) => cashbookFavoriteIds.includes(entry.id))
@@ -798,53 +823,66 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
   }, [hydrateCashbookCounterparties, service])
 
-  async function filterDebts(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setDebtSearchSuggestionsOpen(false)
-    setDebtPage(1)
-    await loadDebts({ search: debtSearch, page: 1 })
-  }
-
-  async function suggestDebts(nextSearch: string) {
-    setDebtSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = debtSearchRequestId.current + 1
-    debtSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setDebtSearchSuggestions([])
-      setDebtSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listCustomerDebts({
-        search: query,
-        page: 1,
-        page_size: 8,
-      })
-      if (debtSearchRequestId.current !== requestId) return
-      setDebtSearchSuggestions(result.items)
-      setDebtSearchSuggestionsOpen(true)
-    } catch {
-      if (debtSearchRequestId.current !== requestId) return
-      setDebtSearchSuggestions([])
-      setDebtSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectDebtSuggestion(debt: CustomerDebtSummary) {
-    const selectedSearch = debt.customer_code ?? debt.customer_name
-    setDebtSearch(selectedSearch)
-    setDebtSearchSuggestionsOpen(false)
-    setDebtPage(1)
-    await loadDebts({ search: selectedSearch, page: 1 })
-  }
-
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setCashbookSearchSuggestionsOpen(false)
     await applyCashbookFilters()
   }
 
+  async function suggestCashbook(nextSearch: string) {
+    setCashbookSearch(nextSearch)
+    const query = nextSearch.trim()
+    const requestId = cashbookSearchRequestId.current + 1
+    cashbookSearchRequestId.current = requestId
+    if (query.length === 0) {
+      setCashbookSearchSuggestions([])
+      setCashbookSearchSuggestionsOpen(false)
+      return
+    }
+    try {
+      const result = await service.listCashbookEntries({
+        search: query,
+        search_scope: cashbookSearchScope,
+        from: cashbookFrom.trim() || undefined,
+        to: cashbookTo.trim() || undefined,
+        finance_account_id: cashbookAccountId === 'all' || cashbookAccountId === '' ? undefined : cashbookAccountId,
+        finance_account_type: cashbookFundMode === 'bank' && cashbookAccountId === '' ? 'bank' : undefined,
+        direction: cashbookDirection,
+        status: cashbookStatus,
+        is_business_accounted: cashbookBusinessAccounted === 'all' ? undefined : cashbookBusinessAccounted === 'true',
+        page: 1,
+        page_size: 8,
+      })
+      if (cashbookSearchRequestId.current !== requestId) return
+      setCashbookSearchSuggestions(result.items.filter((entry) => cashbookEntryMatchesSearch(entry, query)))
+      setCashbookSearchSuggestionsOpen(true)
+    } catch {
+      if (cashbookSearchRequestId.current !== requestId) return
+      setCashbookSearchSuggestions([])
+      setCashbookSearchSuggestionsOpen(false)
+    }
+  }
+
+  async function selectCashbookSuggestion(entry: CashbookEntry) {
+    setCashbookSearch(entry.code)
+    setCashbookSearchSuggestionsOpen(false)
+    setCashbookPage(1)
+    await loadCashbook({
+      search: entry.code,
+      search_scope: cashbookSearchScope,
+      from: cashbookFrom,
+      to: cashbookTo,
+      finance_account_id: cashbookAccountId,
+      finance_account_type: cashbookFundMode === 'bank' && cashbookAccountId === '' ? 'bank' : undefined,
+      direction: cashbookDirection,
+      status: cashbookStatus,
+      business_accounted_filter: cashbookBusinessAccounted,
+      page: 1,
+    })
+  }
+
   async function applyCashbookFilters(input: {
+    search?: string
     from?: string
     to?: string
     finance_account_id?: string
@@ -856,7 +894,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     setCashbookPage(1)
     const nextFinanceAccountId = input.finance_account_id ?? cashbookAccountId
     await loadCashbook({
-      search: cashbookSearch,
+      search: input.search ?? cashbookSearch,
       search_scope: cashbookSearchScope,
       from: input.from ?? cashbookFrom,
       to: input.to ?? cashbookTo,
@@ -1220,40 +1258,32 @@ export function FinancePage({ service }: { service: FinanceService }) {
       title="Sổ quỹ"
       actions={
         <div className="finance-page-actions">
-          <ManagementCompactToolbar ariaLabel="Lọc công nợ khách hàng" onSubmit={filterDebts}>
+          <ManagementCompactToolbar ariaLabel="Lọc sổ quỹ" onSubmit={filterCashbook}>
             <ManagementCompactSearch
-              label="Tìm công nợ"
-              placeholder="Tên, mã khách, mã hóa đơn"
-              value={debtSearch}
+              label="Tìm sổ quỹ"
+              placeholder="Mã phiếu, người nộp/nhận, ghi chú"
+              value={cashbookSearch}
               leadingIcon={<Search aria-hidden="true" size={16} />}
               trailingAction={
-                <button
-                  aria-label="Tạo phiếu thu chi"
-                  className="management-compact-create-action"
-                  title="Tạo phiếu thu chi"
-                  type="button"
-                  onClick={() => openVoucherForm('in')}
-                >
-                  <Plus aria-hidden="true" size={18} strokeWidth={2} />
-                </button>
+                <ManagementCompactCreateAction ariaLabel="Tạo phiếu thu chi" onClick={() => openVoucherForm('in')} />
               }
               suggestions={
-                debtSearchSuggestionsOpen
-                  ? debtSearchSuggestions.map((debt) => ({
-                      id: debt.customer_id ?? debt.customer_code ?? debt.customer_name,
-                      primary: `${debt.customer_code ?? ''} ${debt.customer_name}`.trim(),
-                      secondary: debt.oldest_order_code ?? '',
-                      meta: <MoneyText value={debt.total_debt} />,
-                      ariaLabel: `${debt.customer_code ?? ''} ${debt.customer_name} ${debt.oldest_order_code ?? ''}`.trim(),
+                cashbookSearchSuggestionsOpen
+                  ? cashbookSearchSuggestions.map((entry) => ({
+                      id: entry.id,
+                      primary: `${entry.code} ${cashbookCounterpartyLabel(entry)}`.trim(),
+                      secondary: entry.note,
+                      meta: <MoneyText value={entry.amount_delta} />,
+                      ariaLabel: `${entry.code} ${cashbookCounterpartyLabel(entry)} ${entry.note ?? ''}`.trim(),
                     }))
                   : undefined
               }
-              suggestionsLabel="Gợi ý công nợ"
+              suggestionsLabel="Gợi ý sổ quỹ"
               emptySuggestion="Không có kết quả phù hợp"
-              onChange={(nextSearch) => void suggestDebts(nextSearch)}
+              onChange={(nextSearch) => void suggestCashbook(nextSearch)}
               onSuggestionSelect={(suggestion) => {
-                const debt = debtSearchSuggestions.find((candidate) => (candidate.customer_id ?? candidate.customer_code ?? candidate.customer_name) === suggestion.id)
-                if (debt) void selectDebtSuggestion(debt)
+                const entry = cashbookSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+                if (entry) void selectCashbookSuggestion(entry)
               }}
             />
           </ManagementCompactToolbar>

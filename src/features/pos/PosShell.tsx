@@ -839,11 +839,17 @@ export function PosShell({
             />
             <span className="management-compact-search-trailing">
               <button
-                aria-label="Tạo hàng hóa"
-                className="pos-search-add-button"
-                title="Tạo hàng hóa"
+                aria-label={productSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
+                className={`management-compact-create-action pos-search-add-button${productSearch.trim().length > 0 ? ' management-compact-create-action-clear' : ''}`}
+                title={productSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
                 type="button"
-                onClick={() => setProductCreateOpen(true)}
+                onClick={() => {
+                  if (productSearch.trim().length > 0) {
+                    setProductSearch('')
+                    return
+                  }
+                  setProductCreateOpen(true)
+                }}
               >
                 <Plus aria-hidden="true" size={18} />
               </button>

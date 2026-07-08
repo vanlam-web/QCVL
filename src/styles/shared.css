@@ -1103,8 +1103,8 @@
   position: absolute;
   z-index: calc(var(--z-shell) + 11);
   top: calc(100% + var(--space-1));
-  left: 0;
-  right: 0;
+  left: -1px;
+  right: -1px;
   display: grid;
   gap: var(--space-1);
   max-height: min(24rem, 60dvh);

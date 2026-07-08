@@ -38,22 +38,21 @@ describe('CustomerPanel', () => {
 
     await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
     await userEvent.keyboard('{Enter}')
-    await userEvent.click(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
     expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach' })
     expect(onSelectCustomer).toHaveBeenCalledWith(customer)
   })
 
-  it('searches customers from the visible search button', async () => {
+  it('shows customer suggestions while typing', async () => {
     const service = serviceStub()
 
     render(<CustomerPanel service={service} selectedCustomer={null} onSelectCustomer={vi.fn()} />)
 
     await userEvent.type(screen.getByPlaceholderText('Tìm khách hàng (F4)'), 'khach')
-    await userEvent.click(screen.getByRole('button', { name: 'Tìm khách hàng' }))
 
-    expect(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' })).toBeInTheDocument()
-    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach' })
+    expect(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' })).toBeInTheDocument()
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', page: 1, page_size: 8 })
   })
 
   it('creates and selects a quick customer without requiring phone', async () => {

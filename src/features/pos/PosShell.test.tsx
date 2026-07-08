@@ -275,7 +275,7 @@ it('does not reload products when customer prices refresh', async () => {
 
   await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
   await waitFor(() => expect(service.resolvePrices).toHaveBeenCalledTimes(2))
   expect(service.listProducts).toHaveBeenCalledTimes(1)
@@ -656,7 +656,7 @@ it('resolves prices again with the selected customer', async () => {
 
   await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
   expect(await screen.findByDisplayValue('Khach le')).toBeInTheDocument()
   expect(service.resolvePrices).toHaveBeenCalledWith(['p-1'], 'customer-1')
@@ -1081,7 +1081,7 @@ it('shows recent customer prices from the discount editor and applies a selected
 
   await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
   await userEvent.click(await screen.findByRole('button', { name: /Mica 3mm/ }))
   await userEvent.click(screen.getByLabelText('Đơn giá Mica 3mm'))
   await userEvent.click(screen.getByRole('button', { name: 'Mở chiết khấu Mica 3mm' }))
@@ -1196,7 +1196,7 @@ it('updates automatic cart prices on customer change but preserves manual prices
 
   await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
   await userEvent.keyboard('{Enter}')
-  await userEvent.click(await screen.findByRole('button', { name: 'Chọn KH000001 Khach le' }))
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
   expect(await screen.findByDisplayValue('Khach le')).toBeInTheDocument()
   expect(screen.getByLabelText('Đơn giá Mica 3mm')).toHaveValue('100 000')
