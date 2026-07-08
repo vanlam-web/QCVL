@@ -1,0 +1,534 @@
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { CustomersPage } from './CustomersPage'
+import type { CatalogService } from './catalog-service'
+import type { OrderService } from '../orders/order-service'
+import type { SalesDocumentService } from '../sales-documents/sales-document-service'
+
+function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
+  return {
+    listProducts: vi.fn(async () => ({ items: [], page: 1, page_size: 20, total: 0 })),
+    createProduct: vi.fn(),
+    updateProduct: vi.fn(),
+    getProductBom: vi.fn(async () => null),
+    saveProductBom: vi.fn(),
+    listProductGroups: vi.fn(async () => ({ items: [] })),
+    listStockMovements: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
+    listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
+    listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
+    adjustNormalProductStock: vi.fn(),
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-1',
+          code: 'KH000123',
+          name: 'Công ty Phong Cảnh',
+          phone: '0909000000',
+          tax_code: '0312345678',
+          address: '12 Nguyễn Trãi, Quận 1',
+          customer_group_id: null,
+          customer_group: { id: 'cg-1', code: 'VIP', name: 'Khách VIP' },
+          created_by: { id: 'user-admin', name: 'Admin' },
+          created_at: '2026-06-30T17:08:00Z',
+          total_sales_amount: 750000,
+          total_debt_amount: 250000,
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+    listCustomerGroups: vi.fn(async () => ({
+      items: [
+        { id: 'cg-1', code: 'VIP', name: 'Khách VIP', price_list_id: 'pl-1', is_active: true },
+      ],
+    })),
+    createCustomer: vi.fn(async () => ({
+      id: 'customer-2',
+      code: 'KH000124',
+      name: 'Nguyễn Văn A',
+      phone: '0911000000',
+      tax_code: '0311111111',
+      address: '99 Lê Lợi',
+      customer_group_id: null,
+      customer_group: null,
+      created_by: { id: 'user-admin', name: 'Admin' },
+      created_at: '2026-07-03T03:00:00Z',
+      total_sales_amount: 0,
+      total_debt_amount: 0,
+    })),
+    resolvePrices: vi.fn(async () => ({ items: [] })),
+    listPriceLists: vi.fn(async () => ({ items: [] })),
+    previewPriceFormula: vi.fn(),
+    applyPriceFormula: vi.fn(),
+    ...overrides,
+  }
+}
+
+function makeOrderService(overrides: Partial<Pick<OrderService, 'getCustomerDebt'>> = {}) {
+  return {
+    getCustomerDebt: vi.fn(async () => ({
+      customer_id: 'customer-1',
+      total_debt: 250000,
+      invoices: [
+        {
+          order_id: 'order-1',
+          order_code: 'HD000045',
+          created_at: '2026-06-28T08:00:00Z',
+          total_amount: 500000,
+          paid_amount: 300000,
+          debt_amount: 200000,
+          remaining_debt: 200000,
+        },
+        {
+          order_id: 'order-2',
+          order_code: 'HD000046',
+          created_at: '2026-06-29T09:00:00Z',
+          total_amount: 100000,
+          paid_amount: 50000,
+          debt_amount: 50000,
+          remaining_debt: 50000,
+        },
+      ],
+    })),
+    ...overrides,
+  } satisfies Pick<OrderService, 'getCustomerDebt'>
+}
+
+function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 'listSalesDocuments'>> = {}) {
+  return {
+    listSalesDocuments: vi.fn(async (input = {}) => ({
+      items: input.type === 'quote'
+        ? [
+            {
+              id: 'quote-1',
+              code: 'BG000245',
+              order_type: 'quote' as const,
+              status: 'active' as const,
+              created_at: '2026-06-29T09:30:00Z',
+              customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+              seller: { id: 'seller-1', name: 'Admin' },
+              subtotal_amount: 120000,
+              discount_amount: 0,
+              total_amount: 120000,
+              paid_amount: 0,
+              debt_amount: 0,
+              payment_status: 'not_applicable' as const,
+              note: null,
+            },
+          ]
+        : input.type === 'invoice'
+          ? [
+            {
+              id: 'order-1',
+              code: 'HD010985',
+              order_type: 'invoice' as const,
+              status: 'completed' as const,
+              created_at: '2026-06-30T17:08:00Z',
+              customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+              seller: { id: 'seller-1', name: 'Admin' },
+              subtotal_amount: 180000,
+              discount_amount: 30000,
+              total_amount: 150000,
+              paid_amount: 0,
+              debt_amount: 150000,
+              payment_status: 'unpaid' as const,
+              note: 'Khách lấy sau',
+            },
+            {
+                id: 'order-2',
+                code: 'HD010986',
+                order_type: 'invoice' as const,
+                status: 'completed' as const,
+                created_at: '2026-06-29T17:08:00Z',
+                customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+                seller: { id: 'seller-1', name: 'Admin' },
+                subtotal_amount: 200000,
+                discount_amount: 0,
+                total_amount: 200000,
+                paid_amount: 50000,
+                debt_amount: 150000,
+                payment_status: 'partial' as const,
+                note: null,
+              },
+              {
+                id: 'order-3',
+                code: 'HD010987',
+                order_type: 'invoice' as const,
+                status: 'completed' as const,
+                created_at: '2026-06-28T17:08:00Z',
+                customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+                seller: { id: 'seller-1', name: 'Admin' },
+                subtotal_amount: 90000,
+                discount_amount: 0,
+                total_amount: 90000,
+                paid_amount: 90000,
+                debt_amount: 0,
+                payment_status: 'paid' as const,
+                note: null,
+              },
+            ]
+          : [],
+      page: 1,
+      page_size: 10,
+      total: input.type === 'invoice' ? 3 : 1,
+    })),
+    ...overrides,
+  } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
+}
+
+it('lists customers in the shared management layout', async () => {
+  const service = makeService()
+  const orderService = makeOrderService()
+  render(<CustomersPage service={service} orderService={orderService} />)
+
+  expect(screen.getByText('Đang tải khách hàng...').closest('.management-list-surface')).not.toBeNull()
+  expect(await screen.findByText('KH000123')).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Khách hàng' }).closest('.management-page-header')).not.toBeNull()
+  const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })
+  expect(sidebar).toHaveClass('management-filter-sidebar')
+  expect(within(sidebar).queryByRole('heading', { name: 'Bộ lọc' })).not.toBeInTheDocument()
+  expect(sidebar.querySelector('.management-filter-summary')).toBeNull()
+  expect(within(sidebar).queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
+  const summary = screen.getByRole('region', { name: 'Tổng quan khách hàng' })
+  expect(summary.closest('.management-filter-column')).not.toBeNull()
+  expect(within(summary).queryByText('Tổng KH')).not.toBeInTheDocument()
+  expect(within(summary).getByText('Nợ hiện tại')).toBeInTheDocument()
+  expect(within(summary).getByText('Tổng bán')).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Danh sách khách hàng' })).toHaveClass('management-list-surface')
+
+  const grid = screen.getByRole('table', { name: 'Danh sách khách hàng' })
+  expect(grid).toHaveClass('customer-management-table')
+  expect(
+    within(grid).getByRole('row', {
+      name: 'Mã KH Tên khách hàng Điện thoại Nhóm khách hàng Nợ hiện tại Tổng bán',
+    }),
+  ).toBeInTheDocument()
+  expect(within(grid).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
+  expect(within(grid).getByText('Công ty Phong Cảnh')).toBeInTheDocument()
+  expect(within(grid).getByText('Khách VIP')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument()
+  expect(grid).toHaveTextContent('250 000')
+  expect(grid).toHaveTextContent('750 000')
+  expect(summary).toHaveTextContent('250 000')
+  expect(summary).toHaveTextContent('750 000')
+  expect(orderService.getCustomerDebt).not.toHaveBeenCalled()
+
+  const footer = screen.getByRole('navigation', { name: 'Phân trang khách hàng' })
+  expect(footer).toHaveClass('management-table-footer')
+  expect(footer).toContainElement(screen.getByText('1 - 1 trong 1 khách hàng'))
+  expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
+  expect(within(footer).getByRole('button', { name: 'Trang trước' })).toBeDisabled()
+  expect(within(footer).getByRole('button', { name: 'Trang sau' })).toBeDisabled()
+  expect(footer.closest('.management-table-viewport')).toBeNull()
+})
+
+it('uses the shared pagination footer to move between customer pages', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async (input = {}) => ({
+      items: [
+        {
+          id: `customer-page-${input.page ?? 1}`,
+          code: input.page === 2 ? 'KH000222' : 'KH000111',
+          name: input.page === 2 ? 'Khách trang 2' : 'Khách trang 1',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: null,
+          customer_group: null,
+          created_by: null,
+          created_at: '2026-07-01T03:00:00Z',
+        },
+      ],
+      page: input.page ?? 1,
+      page_size: input.page_size ?? 15,
+      total: 45,
+    })),
+  })
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  expect(await screen.findByText('KH000111')).toBeInTheDocument()
+  const footer = screen.getByRole('navigation', { name: 'Phân trang khách hàng' })
+  expect(footer).toHaveClass('management-table-footer')
+  expect(footer).toContainElement(screen.getByText('1 - 15 trong 45 khách hàng'))
+  expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
+
+  await userEvent.click(within(footer).getByRole('button', { name: 'Trang sau' }))
+
+  expect(await screen.findByText('KH000222')).toBeInTheDocument()
+  expect(footer).toContainElement(screen.getByText('16 - 30 trong 45 khách hàng'))
+  expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('2')
+  expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 2, page_size: 15, search: undefined })
+})
+
+it('uses the shared management filter hide and show controls', async () => {
+  render(<CustomersPage service={makeService()} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+  expect(screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Ẩn bộ lọc khách hàng' }))
+
+  expect(screen.queryByRole('complementary', { name: 'Bộ lọc khách hàng' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Khách hàng')).toHaveClass('management-layout-filters-hidden')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Mở bộ lọc khách hàng' }))
+  expect(screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })).toBeInTheDocument()
+})
+
+it('searches and creates a customer from the search action', async () => {
+  const service = makeService()
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+  const searchForm = screen.getByRole('search', { name: 'Lọc khách hàng' })
+  expect(searchForm.closest('.management-page-header')).not.toBeNull()
+  expect(within(searchForm).getByLabelText('Tìm khách hàng').closest('.management-compact-search')).not.toBeNull()
+  await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), 'Phong{Enter}')
+  expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 1, page_size: 15, search: 'Phong' })
+  expect(screen.queryByText('Tìm: Phong')).not.toBeInTheDocument()
+
+  expect(screen.queryByRole('dialog', { name: 'Tạo khách hàng' })).not.toBeInTheDocument()
+  await userEvent.click(within(searchForm).getByRole('button', { name: 'Tạo khách hàng' }))
+  const dialog = screen.getByRole('dialog', { name: 'Tạo khách hàng' })
+  expect(dialog).toHaveClass('management-modal-dialog')
+  expect(dialog.closest('.management-modal-backdrop')).not.toBeNull()
+  const createForm = within(dialog).getByRole('form', { name: 'Tạo khách hàng' })
+  expect(within(createForm).getByLabelText('Tên khách hàng')).toHaveFocus()
+  const codeInput = within(createForm).getByLabelText('Mã khách hàng')
+  expect(codeInput).not.toBeDisabled()
+  await userEvent.type(codeInput, 'KHMANUAL01')
+  await userEvent.type(within(createForm).getByLabelText('Tên khách hàng'), 'Nguyễn Văn A')
+  await userEvent.type(within(createForm).getByLabelText('Điện thoại'), '0911000000')
+  await userEvent.type(within(createForm).getByLabelText('MST'), '0311111111')
+  await userEvent.type(within(createForm).getByLabelText('Địa chỉ'), '99 Lê Lợi')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+
+  expect(service.createCustomer).toHaveBeenCalledWith({
+    code: 'KHMANUAL01',
+    name: 'Nguyễn Văn A',
+    phone: '0911000000',
+    tax_code: '0311111111',
+    address: '99 Lê Lợi',
+    customer_group_id: null,
+  })
+})
+
+it('reactively filters customers by existing customer fields in the shared sidebar', async () => {
+  const service = makeService()
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+  const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })
+
+  expect(within(sidebar).getByRole('region', { name: 'Nhóm khách hàng' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Ngày tạo' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Người tạo' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Tổng bán' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Nợ hiện tại' })).toBeInTheDocument()
+  expect(within(sidebar).queryByRole('region', { name: 'Giới tính' })).not.toBeInTheDocument()
+  expect(within(sidebar).queryByRole('region', { name: 'Sinh nhật' })).not.toBeInTheDocument()
+  expect(within(sidebar).queryByRole('region', { name: 'Trạng thái' })).not.toBeInTheDocument()
+
+  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Nhóm khách hàng' }), 'cg-1')
+  expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    customer_group_id: 'cg-1',
+  })
+
+  await userEvent.type(within(sidebar).getByLabelText('Ngày tạo từ'), '2026-07-01')
+  await userEvent.type(within(sidebar).getByLabelText('Tổng bán từ'), '500000')
+  await userEvent.type(within(sidebar).getByLabelText('Nợ hiện tại tới'), '300000')
+  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Người tạo' }), 'user-admin')
+
+  expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    customer_group_id: 'cg-1',
+    created_from: '2026-07-01',
+    created_by: 'user-admin',
+    total_sales_min: 500000,
+    total_debt_max: 300000,
+  })
+})
+
+it('shows customer create errors inside the modal', async () => {
+  const service = makeService({
+    createCustomer: vi.fn(async () => {
+      throw new Error('Mã khách hàng đã tồn tại')
+    }),
+  })
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo khách hàng' }))
+  const dialog = screen.getByRole('dialog', { name: 'Tạo khách hàng' })
+  await userEvent.type(within(dialog).getByLabelText('Tên khách hàng'), 'Khách bị lỗi')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Không lưu được khách hàng.')
+})
+
+it('expands customer details directly under the selected row and closes on second click', async () => {
+  const service = makeService()
+  const orderService = makeOrderService()
+  const salesDocumentService = makeSalesDocumentService()
+  render(<CustomersPage service={service} orderService={orderService} salesDocumentService={salesDocumentService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000123' })
+  const customerRow = detail.closest('tr')?.previousElementSibling
+  expect(customerRow).toHaveTextContent('KH000123')
+  expect(customerRow).toHaveClass('management-data-row-selected')
+  expect(detail.closest('tr')).toHaveClass('management-detail-row-selected')
+  const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
+  expect(within(infoPanel).queryByText('KH000123')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Công ty Phong Cảnh')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('0909000000')).not.toBeInTheDocument()
+  expect(within(infoPanel).getByText('0312345678')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('12 Nguyễn Trãi, Quận 1')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Khách VIP')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Theo nhóm: Khách VIP')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Admin')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('00:08 1/7/26')).toBeInTheDocument()
+  expect(within(infoPanel).queryByRole('button', { name: 'Xem phân tích' })).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByRole('region', { name: 'Xem phân tích khách hàng' })).not.toBeInTheDocument()
+  await userEvent.click(within(detail).getByRole('button', { name: 'Xem phân tích' }))
+  const analysis = screen.getByRole('dialog', { name: 'Phân tích khách hàng KH000123' })
+  expect(within(analysis).getByLabelText('Khoảng thời gian')).toHaveValue('all')
+  expect(within(analysis).getByText('Doanh thu')).toBeInTheDocument()
+  expect(within(analysis).getByText('Số chứng từ')).toBeInTheDocument()
+  expect(within(analysis).getByText('Tần suất')).toBeInTheDocument()
+  expect(within(analysis).getAllByText('-')).toHaveLength(3)
+  expect(within(analysis).queryByText('Chưa có dữ liệu phân tích. Sau này nối báo cáo mua hàng, công nợ và tần suất giao dịch theo khách.')).not.toBeInTheDocument()
+  await userEvent.click(within(analysis).getByRole('button', { name: 'Đóng phân tích khách hàng' }))
+  expect(screen.queryByRole('dialog', { name: 'Phân tích khách hàng KH000123' })).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Đang hoạt động')).not.toBeInTheDocument()
+  const detailTablist = within(detail).getByRole('tablist', { name: 'Chi tiết khách hàng' })
+  const analysisButton = within(detail).getByRole('button', { name: 'Xem phân tích' })
+  expect(analysisButton).toHaveClass('management-icon-button')
+  expect(detailTablist).toBeInTheDocument()
+  expect(analysisButton.closest('.inline-detail-tabbar')).toBe(detailTablist.closest('.inline-detail-tabbar'))
+  expect(within(detail).getByRole('tab', { name: 'Thông tin' })).toHaveAttribute('aria-selected', 'true')
+  expect(within(detail).getByRole('tab', { name: 'Nợ cần thu' })).toHaveAttribute('aria-selected', 'false')
+  expect(within(detail).getByRole('tab', { name: 'Lịch sử' })).toHaveAttribute('aria-selected', 'false')
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ cần thu' }))
+  expect(within(detail).getByRole('tab', { name: 'Nợ cần thu' })).toHaveAttribute('aria-selected', 'true')
+  await waitFor(() => expect(detail).toHaveTextContent('250 000'))
+  expect(detail).toHaveTextContent('250 000')
+  expect(within(detail).getByText('2 hóa đơn mở')).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Mã' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Thời gian' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Tổng tiền' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Đã trả' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Còn nợ' })).toBeInTheDocument()
+  expect(within(detail).getByText('HD000045')).toBeInTheDocument()
+  expect(detail).toHaveTextContent('200 000')
+  expect(orderService.getCustomerDebt).toHaveBeenCalledWith('customer-1')
+  expect(customerRow).toHaveTextContent('250 000')
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử' }))
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 10 })
+  expect(await within(detail).findByText('HD010985')).toBeInTheDocument()
+  expect(within(detail).getByText('HD010986')).toBeInTheDocument()
+  expect(within(detail).getByText('HD010987')).toBeInTheDocument()
+  expect(within(detail).queryByText('BG000245')).not.toBeInTheDocument()
+  expect(within(detail).getByRole('button', { name: 'Hóa đơn' })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(detail).getByRole('button', { name: 'Báo giá' })).toHaveAttribute('aria-pressed', 'false')
+  expect(within(detail).getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Thời gian' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Người bán' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Tổng cộng' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Trạng thái' })).toBeInTheDocument()
+  expect(within(detail).queryByRole('columnheader', { name: 'Loại' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('columnheader', { name: 'Công nợ' })).not.toBeInTheDocument()
+  expect(within(detail).queryByText('1 chứng từ gần đây')).not.toBeInTheDocument()
+  expect(within(detail).getAllByText('Admin')).toHaveLength(3)
+  expect(detail).toHaveTextContent('150 000')
+  expect(within(detail).getByText('Nợ')).toBeInTheDocument()
+  expect(within(detail).getByText('Nợ 1 phần')).toBeInTheDocument()
+  expect(within(detail).getByText('Hoàn tất')).toBeInTheDocument()
+  const historyTable = within(detail).getByRole('table', { name: 'Lịch sử chứng từ khách hàng' })
+  expect(historyTable).toHaveClass('customer-history-table')
+  expect(within(historyTable).queryByText('Hóa đơn')).not.toBeInTheDocument()
+
+  await userEvent.click(within(detail).getByRole('button', { name: 'Báo giá' }))
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'quote', page: 1, page_size: 10 })
+  expect(await within(detail).findByText('BG000245')).toBeInTheDocument()
+  expect(within(detail).getByRole('button', { name: 'Hóa đơn' })).toHaveAttribute('aria-pressed', 'false')
+  expect(within(detail).getByRole('button', { name: 'Báo giá' })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(detail).getByRole('columnheader', { name: 'Mã báo giá' })).toBeInTheDocument()
+  expect(within(detail).getByText('Đang hiệu lực')).toBeInTheDocument()
+  expect(within(detail).queryByText('HD010985')).not.toBeInTheDocument()
+
+  await userEvent.click(customerRow as HTMLElement)
+  expect(screen.queryByRole('region', { name: 'Chi tiết khách hàng KH000123' })).not.toBeInTheDocument()
+})
+
+it('shows common price list when the customer has no group', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-2',
+          code: 'KH000124',
+          name: 'Khách lẻ',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: null,
+          customer_group: null,
+          created_by: null,
+          created_at: '2026-07-01T03:00:00Z',
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+  render(<CustomersPage service={service} orderService={makeOrderService({ getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-2', total_debt: 0, invoices: [] })) })} />)
+
+  await userEvent.click(await screen.findByText('KH000124'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000124' })
+  const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
+  expect(within(infoPanel).getByText('Bảng giá chung')).toBeInTheDocument()
+})
+
+it('opens customer detail when legacy cloud data has no created timestamp', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-legacy',
+          code: 'KHLEGACY',
+          name: 'Khách dữ liệu cũ',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: null,
+          customer_group: null,
+          created_by: null,
+          created_at: '',
+          total_sales_amount: 0,
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+  render(
+    <CustomersPage
+      service={service}
+      orderService={makeOrderService({ getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-legacy', total_debt: 0, invoices: [] })) })}
+    />,
+  )
+
+  await userEvent.click(await screen.findByText('KHLEGACY'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KHLEGACY' })
+  const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
+  expect(within(infoPanel).getAllByText('Chưa có dữ liệu').length).toBeGreaterThanOrEqual(2)
+})

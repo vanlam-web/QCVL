@@ -1,0 +1,20 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.108.2"
+  },
+  "tasks": {
+    "check": "deno check functions/api/index.ts tests/functions/*.ts",
+    "lint": "deno lint functions tests/functions",
+    "test": "deno test tests/functions --allow-env --allow-net"
+  },
+  "lint": {
+    "rules": {
+      "tags": ["recommended"]
+    }
+  },
+  "fmt": {
+    "lineWidth": 100,
+    "semiColons": true,
+    "singleQuote": false
+  }
+}
