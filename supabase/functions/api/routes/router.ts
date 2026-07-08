@@ -132,7 +132,11 @@ export function routeRequest(
     });
   }
 
-  if (url.pathname === "/api/v1/orders/checkout" || url.pathname.startsWith("/api/v1/orders/")) {
+  if (
+    url.pathname === "/api/v1/pos/cart/validate" ||
+    url.pathname === "/api/v1/orders/checkout" ||
+    url.pathname.startsWith("/api/v1/orders/")
+  ) {
     if (options.auth === undefined || options.repository === undefined) {
       throw new ApiError({
         status: 500,

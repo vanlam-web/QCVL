@@ -325,6 +325,30 @@ Deno.test("checkout can return inventory warnings without blocking success", asy
   assertEquals(data.inventory_warnings.length, 1);
 });
 
+Deno.test("cart validate route performs soft validation for checkout payload", async () => {
+  const response = await call(
+    "/api/v1/pos/cart/validate",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        items: [{
+          product_id: "p-roll",
+          quantity: 1,
+          unit_price: 180000,
+          price_source: "manual",
+        }],
+        payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0 },
+      }),
+    },
+    repo(["perm.create_order"]),
+  );
+
+  const data = (await body(response)).data as { valid: boolean; warnings: unknown[] };
+  assertEquals(response.status, 200);
+  assertEquals(data.valid, true);
+  assertEquals(Array.isArray(data.warnings), true);
+});
+
 Deno.test("quote routes save and reopen active quote with create_order", async () => {
   const receivedInputs: Array<Record<string, unknown>> = [];
   const saveResponse = await call(

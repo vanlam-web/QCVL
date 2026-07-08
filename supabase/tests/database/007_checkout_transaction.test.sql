@@ -1,6 +1,6 @@
 begin;
 
-select plan(42);
+select plan(45);
 
 insert into auth.users (id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at)
 values (
@@ -727,6 +727,104 @@ select is(
   'retail debt without selected customer is tracked under KH000001'
 );
 
+insert into public.products (
+  id,
+  organization_id,
+  code,
+  name,
+  status,
+  unit_name,
+  sell_method,
+  latest_purchase_cost
+)
+values (
+  '20000000-0000-4000-8000-000000000307',
+  '00000000-0000-4000-8000-000000000001',
+  'ROLL-PENDING',
+  'Cuon can gan sau',
+  'active',
+  'm2',
+  'area_m2',
+  0
+);
+
+insert into public.product_inventory_settings (
+  id,
+  organization_id,
+  product_id,
+  track_inventory,
+  inventory_shape,
+  stock_unit_id,
+  default_allow_negative
+)
+values (
+  '20000000-0000-4000-8000-000000000308',
+  '00000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000307',
+  true,
+  'roll',
+  '00000000-0000-4000-8000-000000000601',
+  true
+);
+
+insert into checkout_results (name, result)
+values (
+  'roll_pending_reconciliation',
+  public.checkout_order_tx(
+    '20000000-0000-4000-8000-000000000701',
+    '00000000-0000-4000-8000-000000000001',
+    jsonb_build_object(
+      'customer_id', '00000000-0000-4000-8000-000000000501',
+      'items', jsonb_build_array(
+        jsonb_build_object(
+          'product_id', '20000000-0000-4000-8000-000000000307',
+          'quantity', 2,
+          'width_m', 1.2,
+          'height_m', 2,
+          'unit_price', 180000,
+          'price_source', 'manual'
+        )
+      ),
+      'payment', jsonb_build_object(
+        'cash_amount', 360000,
+        'bank_amount', 0,
+        'old_debt_payment_amount', 0
+      )
+    )
+  )
+);
+
+select ok(
+  exists (
+    select 1
+    from jsonb_array_elements((select result->'inventory_warnings' from checkout_results where name = 'roll_pending_reconciliation')) warning
+    where warning->>'code' = 'NEGATIVE_STOCK'
+      and warning->>'product_id' = '20000000-0000-4000-8000-000000000307'
+  ),
+  'checkout returns warning when sale makes physical stock negative'
+);
+
+select ok(
+  exists (
+    select 1
+    from jsonb_array_elements((select result->'inventory_warnings' from checkout_results where name = 'roll_pending_reconciliation')) warning
+    where warning->>'code' = 'PENDING_MATERIAL_RECONCILIATION'
+      and warning->>'product_id' = '20000000-0000-4000-8000-000000000307'
+  ),
+  'checkout returns warning when roll object is not assigned'
+);
+
+select is(
+  (
+    select inventory_object_type
+    from public.stock_movements
+    where order_id = ((select result->>'order_id' from checkout_results where name = 'roll_pending_reconciliation')::uuid)
+      and product_id = '20000000-0000-4000-8000-000000000307'
+  ),
+  null,
+  'roll sale without object is stored as pending material reconciliation'
+);
+
 select throws_ok(
   $$
     select public.revise_invoice_tx(
@@ -756,9 +854,15 @@ select throws_ok(
 );
 
 select is(
-  (select count(*)::integer from public.orders where order_type = 'invoice' and status = 'completed'),
-  11,
-  'successful checkout attempts leave eleven completed invoices'
+  (
+    select count(*)::integer
+    from public.orders
+    where order_type = 'invoice'
+      and status = 'completed'
+      and created_by = '20000000-0000-4000-8000-000000000701'
+  ),
+  12,
+  'successful checkout attempts leave twelve completed invoices'
 );
 
 select * from finish();

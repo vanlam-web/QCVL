@@ -1,4 +1,11 @@
-import type { CheckoutResultData, FoundationRepository, PermissionCode, QuoteReopenPayloadData, QuoteSummaryData } from "../contracts.ts";
+import type {
+  CartValidationData,
+  CheckoutResultData,
+  FoundationRepository,
+  PermissionCode,
+  QuoteReopenPayloadData,
+  QuoteSummaryData,
+} from "../contracts.ts";
 import { ApiError } from "../http.ts";
 
 export interface OrderContext {
@@ -27,6 +34,15 @@ export async function checkoutOrder(
   } catch (cause) {
     throw mapRepositoryError(cause);
   }
+}
+
+export function validateCart(
+  context: OrderContext,
+  body: unknown,
+): CartValidationData {
+  requireAnyPermission(context, ["perm.create_order"]);
+  parseCheckoutPayload(body);
+  return { valid: true, warnings: [] };
 }
 
 export async function saveQuote(

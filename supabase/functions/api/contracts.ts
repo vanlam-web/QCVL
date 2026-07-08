@@ -281,6 +281,11 @@ export interface InventoryWarningData {
   message: string;
 }
 
+export interface CartValidationData {
+  valid: boolean;
+  warnings: InventoryWarningData[];
+}
+
 export interface CheckoutResultData {
   order: CheckoutOrderSummaryData;
   payment_receipt: CheckoutPaymentReceiptData | null;

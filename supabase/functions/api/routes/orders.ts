@@ -2,7 +2,7 @@ import type { FoundationRepository } from "../contracts.ts";
 import { ApiError, successResponse } from "../http.ts";
 import type { AuthClient } from "../middleware/auth.ts";
 import { requireAuth } from "../middleware/auth.ts";
-import { checkoutOrder, getQuoteReopenPayload, reviseInvoice, saveQuote } from "../use-cases/orders.ts";
+import { checkoutOrder, getQuoteReopenPayload, reviseInvoice, saveQuote, validateCart } from "../use-cases/orders.ts";
 
 export interface OrderRouteDependencies {
   auth: AuthClient;
@@ -33,6 +33,13 @@ export async function handleOrders(
     permissions: currentUser.permissions,
   };
   const url = new URL(request.url);
+
+  if (url.pathname === "/api/v1/pos/cart/validate" && request.method === "POST") {
+    return successResponse(
+      validateCart(context, await request.json()),
+      traceId,
+    );
+  }
 
   if (url.pathname === "/api/v1/orders/checkout" && request.method === "POST") {
     return successResponse(

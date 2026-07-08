@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const css = readFileSync(join(process.cwd(), 'src/styles/index.css'), 'utf8')
+const css = readFileSync(join(process.cwd(), 'src/styles/index.css'), 'utf8').replace(/\r\n/g, '\n')
 
 function cssRule(selector: string) {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
