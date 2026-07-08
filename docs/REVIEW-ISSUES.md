@@ -1,7 +1,7 @@
 # REVIEW-ISSUES — Review Thread Issue Tracker
 
 > **Vai trò:** Tracker issue cho Review Thread.
-> **Cập nhật:** 2026-07-05.
+> **Cập nhật:** 2026-07-08.
 
 File này chỉ giữ issue review còn mở hoặc cần theo dõi. Chi tiết dài của issue đã đóng nằm trong git history.
 
@@ -38,7 +38,20 @@ Issue không thay thế PR comments, implementation plan, hoặc Source of Truth
 
 ## Issue Đang Mở
 
-Không có issue đang mở.
+### `REV-2026-07-08-001` — `/pos/cart/validate` documented and called by frontend but not routed in Supabase API
+
+- Tình trạng: `Waiting for Implement`
+- Bằng chứng:
+  - `src/features/orders/order-service.ts` gọi `POST /api/v1/pos/cart/validate`.
+  - `docs/05-BACKEND-MayChu/POS/ORDER-API.md` định nghĩa `POST /pos/cart/validate`.
+  - `supabase/functions/api/routes/router.ts` chỉ dispatch `/api/v1/orders/checkout` và `/api/v1/orders/*` sang `handleOrders`; không dispatch `/api/v1/pos/cart/validate`.
+  - `supabase/functions/api/routes/orders.ts` không có branch xử lý `/api/v1/pos/cart/validate`.
+- Việc cần làm: Implement route/use-case tương ứng hoặc sửa frontend/spec nếu endpoint không còn dùng; ưu tiên giữ Source of Truth backend docs và thêm route để tránh 404 khi UI gọi `validateCart`.
+- Lệnh re-check:
+  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate" src supabase/functions docs/05-BACKEND-MayChu/POS/ORDER-API.md`
+  - `npm run test:functions -- supabase/tests/functions/orders_test.ts`
+  - `npm test`
+- Luồng phụ trách: Implement
 
 ---
 

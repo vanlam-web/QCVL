@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { FoundationAdminPage } from './FoundationAdminPage'
 import type { FoundationService } from '../users/foundation-service'
@@ -199,17 +199,37 @@ it('creates, disables, and updates permissions for users', async () => {
   expect(service.listUsers).toHaveBeenCalledWith({ search: 'Admin', status: 'active' })
   await userEvent.click(screen.getByRole('button', { name: 'Tạo người dùng' }))
   const createUserForm = screen.getByRole('form', { name: 'Tạo người dùng' })
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Tên hiển thị' }), 'Cashier')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Điện thoại' }), '0912345678')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Email' }), 'cashier@example.test')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Tên đăng nhập' }), 'cashier-login')
-  await userEvent.type(within(createUserForm).getByLabelText('Sinh nhật'), '2026-07-07')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Địa chỉ' }), '12 Nguyen Trai')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Khu vực' }), 'TP Hồ Chí Minh')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Phường/Xã' }), 'Phường Bến Thành')
-  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Ghi chú' }), 'Ca tối')
-  await userEvent.type(createUserForm.querySelector('input[type="password"]') as HTMLInputElement, 'Password123!')
-  await userEvent.type(within(createUserForm).getByLabelText('Nhập lại mật khẩu'), 'Password123!')
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Tên hiển thị' }), {
+    target: { value: 'Cashier' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Điện thoại' }), {
+    target: { value: '0912345678' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Email' }), {
+    target: { value: 'cashier@example.test' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Tên đăng nhập' }), {
+    target: { value: 'cashier-login' },
+  })
+  fireEvent.change(within(createUserForm).getByLabelText('Sinh nhật'), { target: { value: '2026-07-07' } })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Địa chỉ' }), {
+    target: { value: '12 Nguyen Trai' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Khu vực' }), {
+    target: { value: 'TP Hồ Chí Minh' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Phường/Xã' }), {
+    target: { value: 'Phường Bến Thành' },
+  })
+  fireEvent.change(within(createUserForm).getByRole('textbox', { name: 'Ghi chú' }), {
+    target: { value: 'Ca tối' },
+  })
+  fireEvent.change(createUserForm.querySelector('input[type="password"]') as HTMLInputElement, {
+    target: { value: 'Password123!' },
+  })
+  fireEvent.change(within(createUserForm).getByLabelText('Nhập lại mật khẩu'), {
+    target: { value: 'Password123!' },
+  })
   await userEvent.selectOptions(within(createUserForm).getByRole('combobox', { name: 'Vai trò' }), 'cashier')
   await userEvent.click(within(createUserForm).getByRole('button', { name: 'Lưu' }))
   expect(service.createUser).toHaveBeenCalledWith({
@@ -228,11 +248,21 @@ it('creates, disables, and updates permissions for users', async () => {
 
   await userEvent.click(screen.getByRole('button', { name: 'Tạo người dùng' }))
   const mismatchForm = screen.getByRole('form', { name: 'Tạo người dùng' })
-  await userEvent.type(within(mismatchForm).getByRole('textbox', { name: 'Tên hiển thị' }), 'Cashier 2')
-  await userEvent.type(within(mismatchForm).getByRole('textbox', { name: 'Email' }), 'cashier2@example.test')
-  await userEvent.type(within(mismatchForm).getByRole('textbox', { name: 'Tên đăng nhập' }), 'cashier-2')
-  await userEvent.type(mismatchForm.querySelector('input[type="password"]') as HTMLInputElement, 'Password123!')
-  await userEvent.type(within(mismatchForm).getByLabelText('Nhập lại mật khẩu'), 'Password456!')
+  fireEvent.change(within(mismatchForm).getByRole('textbox', { name: 'Tên hiển thị' }), {
+    target: { value: 'Cashier 2' },
+  })
+  fireEvent.change(within(mismatchForm).getByRole('textbox', { name: 'Email' }), {
+    target: { value: 'cashier2@example.test' },
+  })
+  fireEvent.change(within(mismatchForm).getByRole('textbox', { name: 'Tên đăng nhập' }), {
+    target: { value: 'cashier-2' },
+  })
+  fireEvent.change(mismatchForm.querySelector('input[type="password"]') as HTMLInputElement, {
+    target: { value: 'Password123!' },
+  })
+  fireEvent.change(within(mismatchForm).getByLabelText('Nhập lại mật khẩu'), {
+    target: { value: 'Password456!' },
+  })
   await userEvent.click(within(mismatchForm).getByRole('button', { name: 'Lưu' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Mật khẩu nhập lại không khớp.')
 

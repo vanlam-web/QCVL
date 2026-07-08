@@ -436,7 +436,7 @@ npm run lint
 - Modify: `supabase/functions/api/repositories/foundation-repository.ts`
 - Modify: `src/features/pos/PosShell.tsx`
 - Modify: `src/features/inventory/InventoryPage.tsx`
-- Test: `supabase/tests/functions/inventory_test.ts`
+- Test: `supabase/tests/functions/inventory_finance_test.ts`
 - Test: `src/features/pos/PosShell.test.tsx`
 - Test: `src/features/inventory/InventoryPage.test.tsx`
 
@@ -468,7 +468,7 @@ Topbar/manual khui and POS quick khui reuse one modal. If opened from POS shorta
 Run:
 
 ```bash
-npm run test:functions -- supabase/tests/functions/inventory_test.ts
+npm run test:functions -- supabase/tests/functions/inventory_finance_test.ts
 npx vitest run src/features/pos/PosShell.test.tsx src/features/inventory/InventoryPage.test.tsx --exclude '.worktrees/**'
 npm run typecheck
 npm run lint
@@ -508,7 +508,7 @@ Ensure order items store enough snapshot data: product name/code, unit, conversi
 
 Use `stock_movements.sale_deduction` for all official stock changes. Do not write raw stock numbers directly.
 
-**Status 2026-07-07:** normal checkout ghi `stock_movements.sale_deduction`; combo checkout trừ vật tư cấu thành theo BOM snapshot và không trừ mã combo. Roll/sheet checkout object-level deduction chưa hoàn tất; trước khi bật bán thật cuộn/tấm cần POS gửi object được chọn hoặc backend từ chối rõ nếu thiếu object.
+**Status 2026-07-08:** normal checkout ghi `stock_movements.sale_deduction`; combo checkout trừ vật tư cấu thành theo BOM snapshot và không trừ mã combo. Roll/sheet checkout object-level deduction chưa hoàn tất; trước khi bật bán thật cuộn/tấm cần POS gửi object được chọn hoặc backend từ chối rõ nếu thiếu object. Drift liên quan đang được theo dõi ở `REV-2026-07-08-001` vì `/pos/cart/validate` có trong frontend/docs nhưng chưa được Supabase router dispatch.
 
 - [x] **Step 4: Verify**
 

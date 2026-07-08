@@ -1,7 +1,7 @@
 # PROJECT-COORDINATION — Board Điều Phối
 
 > **Vai trò:** Board cho việc đang mở giữa các luồng Spec / Implement / Review.
-> **Cập nhật:** 2026-07-07.
+> **Cập nhật:** 2026-07-08.
 
 File này chỉ dùng khi có item đang cần nhiều luồng phối hợp. Nếu không có item đang mở, xem queue sống ở [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) và issue review ở [REVIEW-ISSUES.md](./REVIEW-ISSUES.md).
 
@@ -47,18 +47,18 @@ Không xem là đã handoff nếu thiếu `Luồng đang giữ`, `Luồng nhận
 Việc:
 - ID: `COORD-2026-07-07-PRODUCT-INVENTORY-POS`
 - Mục tiêu nghiệp vụ: Hoàn tất luồng Hàng hóa, Kiểm kho và POS theo thứ tự đã chốt: Hàng hóa → Kiểm kho hàng thường → Cuộn/tấm/khui object-level → POS trừ kho thật.
-- Luồng đang giữ: Spec
+- Luồng đang giữ: Implement
 - Luồng nhận tiếp: Implement
 - Tình trạng: Implementing
-- Branch / PR / commit: branch `codex/products-inventory-pos-completion`; chưa mở PR riêng cho plan này.
+- Branch / PR / commit: current `main` at `bc3fd85`; historical branch `codex/products-inventory-pos-completion` không có trong checkout hiện tại.
 - Source of Truth:
   - [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md)
   - [2026-07-07-products-inventory-pos-completion.md](./superpowers/plans/2026-07-07-products-inventory-pos-completion.md)
   - [Inventory layout](./02-PRD-UX-PhongCanh/Inventory/01-INVENTORY-LAYOUT.md)
   - [Stocktake](./02-PRD-UX-PhongCanh/Inventory/04-STOCKTAKE.md)
   - [Khui vật tư](./02-PRD-UX-PhongCanh/POS/K01/01d-K01-KHUI.md)
-- Báo cáo gần nhất: Task 8 gần xong nhưng chưa tick toàn bộ vì còn thiếu integration/database test chứng minh RPC khui không tạo `stocktakes`. Đã thêm migration `202607070904_material_opening_movements.sql` để `stock_movements` có `material_opening_id`; normal khui ghi movement âm đưa phần cũ về `0` và movement dương cho lượng khui mới; roll/sheet backend cập nhật object cũ theo phần còn lại/bỏ; module Kho có modal `Khui vật tư` cho `normal`, `roll`, `sheet`; POS quick khui vẫn prefill từ dòng thiếu vật tư; POS topbar đã mở modal khui thủ công cho `normal`. Verification pass: `npm run test:functions -- supabase/tests/functions/inventory_finance_test.ts`, `npx vitest run src/features/inventory/InventoryPage.test.tsx src/features/inventory/inventory-service.test.ts src/features/pos/PosShell.test.tsx --exclude '.worktrees/**'`, `npm run typecheck`, `npm run lint`, `git diff --check`.
-- Bước tiếp theo: Viết test DB/RPC no-stocktake cho Task 8 Step 1 nếu test harness hiện tại cho phép; nếu không, ghi rõ limitation và chuyển Task 9 POS snapshot/deduction.
+- Báo cáo gần nhất: Task 8 đã tick đủ trong plan: DB test `supabase/tests/database/015_material_opening_normal.test.sql` chứng minh `open_normal_material_tx` tạo `inventory_material_openings`, ghi `stock_movements.material_opening_id` khi cần và không tạo `stocktakes`; function/UI test đã phủ normal, roll, sheet material opening. Task 9 đã xong normal checkout `sale_deduction` và combo BOM component deduction; roll/sheet POS object-level deduction vẫn pending ở Step 3. Review cũng ghi drift `REV-2026-07-08-001`: frontend/docs có `/api/v1/pos/cart/validate` nhưng Supabase router chưa route endpoint này.
+- Bước tiếp theo: Implement chốt Task 9 Step 3 bằng một trong hai hướng: POS gửi object roll/sheet được chọn để checkout trừ đúng object, hoặc backend từ chối rõ checkout roll/sheet khi thiếu object; đồng thời xử lý `REV-2026-07-08-001`.
 - Cần Owner quyết định: Không ở bước hiện tại. Chưa deploy cloud theo quyết định gom batch.
 - Rủi ro: Kho/stock movement/POS là vùng dữ liệu lâu dài; mọi slice schema/API/stock movement cần Spec gate và verification trước merge.
 

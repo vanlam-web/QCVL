@@ -32,7 +32,7 @@
   | ----- | -------------- | -------------------------------- | ----------------------------------------------------------------------- |
   | Cột 1 | 50% — Căn trái | `[Mã hàng] Tên hàng hóa / dịch vụ` | **In đậm** phần từ khóa khớp với tìm kiếm                               |
   | Cột 2 | 12% — Căn giữa | ĐVT                              | Màu xám nhạt (Ví dụ: `m²`, `Cái`, `Cuộn`)                               |
-  | Cột 3 | 18% — Căn phải | Tồn hiện tại                     | Số tồn theo ĐVT nếu có quản lý tồn; ngược lại hiển thị `—`               |
+  | Cột 3 | 18% — Căn phải | Tồn hiện tại                     | Số tồn theo ĐVT nếu có quản lý tồn; ngược lại hiển thị `—` (font nhỏ hơn) |
   | Cột 4 | 20% — Căn phải | Giá bán                          | Định dạng phân tách hàng nghìn, màu xanh hoặc đen đậm (Ví dụ: `40,000`) |
 
 - **Quy tắc hiển thị tồn hiện tại:**
