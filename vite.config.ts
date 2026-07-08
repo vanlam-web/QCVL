@@ -31,7 +31,11 @@ export const pwaOptions = {
 } satisfies Partial<VitePWAOptions>
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), VitePWA(pwaOptions)],
+  plugins: [
+    react(),
+    tailwindcss(),
+    ...(process.env.VITE_ENABLE_PWA === 'true' ? [VitePWA(pwaOptions)] : []),
+  ],
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
     environment: 'jsdom',
