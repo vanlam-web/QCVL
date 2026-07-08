@@ -1,5 +1,6 @@
 export type ApiErrorCode =
   | 'AUTH_REQUIRED'
+  | 'LOGIN_FAILED'
   | 'ACCOUNT_INACTIVE'
   | 'WORKSTATION_INVALID'
   | 'PERMISSION_DENIED'

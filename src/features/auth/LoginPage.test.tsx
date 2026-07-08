@@ -22,7 +22,7 @@ it('submits normalized login and password to the auth service', async () => {
   await userEvent.type(screen.getByLabelText('Mật khẩu'), '123456')
   await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 
-  expect(signIn).toHaveBeenCalledWith('admin@qc.local', '123456')
+  expect(signIn).toHaveBeenCalledWith('admin@qc-oms.local', '123456')
 })
 
 it('validates missing credentials before submitting', async () => {
@@ -43,6 +43,28 @@ it('validates missing credentials before submitting', async () => {
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Vui lòng nhập tài khoản và mật khẩu.')
   expect(signIn).not.toHaveBeenCalled()
+})
+
+it('shows login failure instead of expired session when credentials are rejected', async () => {
+  render(
+    <AuthProvider
+      service={{
+        signIn: vi.fn(async () => {
+          throw new ApiError(401, 'LOGIN_FAILED', 'Invalid email or password.', 'trace')
+        }),
+        signOut: async () => undefined,
+        getAccessToken: async () => null,
+      }}
+    >
+      <LoginPage />
+    </AuthProvider>,
+  )
+
+  await userEvent.type(screen.getAllByRole('textbox')[0], 'admin')
+  await userEvent.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'bad')
+  await userEvent.click(screen.getByRole('button'))
+
+  expect(await screen.findByRole('alert')).toHaveTextContent('Tài khoản hoặc mật khẩu không đúng.')
 })
 
 it('shows mapped API errors after authentication fails downstream', async () => {

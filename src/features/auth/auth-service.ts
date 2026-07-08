@@ -33,9 +33,10 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
       }
 
       if (!response.ok || !body.success || !body.data?.access_token) {
+        const errorCode = body.error?.code === 'AUTH_REQUIRED' && response.status === 401 ? 'LOGIN_FAILED' : body.error?.code
         throw new ApiError(
           response.status,
-          (body.error?.code as ApiErrorCode | undefined) ?? 'AUTH_REQUIRED',
+          (errorCode as ApiErrorCode | undefined) ?? 'LOGIN_FAILED',
           body.error?.message ?? 'Đăng nhập không thành công.',
           body.trace_id ?? 'local',
         )
