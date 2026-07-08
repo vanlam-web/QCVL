@@ -301,7 +301,33 @@ public.customer_product_price_history.product_id
 
 - `idx_customer_product_price_history_recent` trên `(organization_id, customer_id, product_id, sold_at DESC)`
 
-## 8. Bảng `public.orders` — Báo giá và hóa đơn bán hàng
+## 8. Bảng `public.pos_product_usage` — Lượt dùng sản phẩm nhanh POS
+
+### Mục đích
+
+Lưu số lần sản phẩm xuất hiện trong báo giá/hóa đơn đã lưu để lưới sản phẩm nhanh POS tự đưa hàng hay dùng lên trước. Đây là dữ liệu server, không phải cache trình duyệt, nên dùng chung cho mọi máy POS trong cùng organization.
+
+### Các cột
+
+| Tên cột | Kiểu dữ liệu | Nullable | Mô tả |
+|---|---|---|---|
+| `organization_id` | `uuid` | ❌ | FK → `public.organizations.id` |
+| `product_id` | `uuid` | ❌ | FK → `public.products.id` |
+| `usage_count` | `integer` | ❌ | Tổng lượt dùng đã ghi nhận |
+| `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật gần nhất |
+
+### Ràng buộc
+
+- `PRIMARY KEY (organization_id, product_id)`
+- `usage_count >= 0`
+- Backend chỉ cộng lượt sau khi lưu báo giá hoặc checkout hóa đơn thành công.
+- Nếu chứng từ bị sửa/hủy sau này, không trừ ngược lượt dùng trong phạm vi MVP; đây là tín hiệu ưu tiên thao tác, không phải báo cáo doanh số.
+
+### Index
+
+- `pos_product_usage_rank_idx` trên `(organization_id, usage_count DESC, product_id)`
+
+## 9. Bảng `public.orders` — Báo giá và hóa đơn bán hàng
 
 ### Mục đích
 
@@ -411,7 +437,7 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 
 ---
 
-## 9. Bảng `public.order_items` — Dòng chứng từ
+## 10. Bảng `public.order_items` — Dòng chứng từ
 
 ### Mục đích
 
@@ -462,7 +488,7 @@ Lưu snapshot dòng hàng của báo giá hoặc hóa đơn bán hàng.
 
 ---
 
-## 10. Bảng `public.order_status_history` — Lịch sử trạng thái chứng từ
+## 11. Bảng `public.order_status_history` — Lịch sử trạng thái chứng từ
 
 ### Mục đích
 
@@ -492,7 +518,7 @@ Ghi lịch sử đổi trạng thái của báo giá và hóa đơn để truy v
 
 ---
 
-## 11. Ranh giới Production queue
+## 12. Ranh giới Production queue
 
 ### Mục đích
 

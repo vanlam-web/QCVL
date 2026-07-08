@@ -165,6 +165,8 @@ Quy tắc vỏ/ruột:
 - Không định nghĩa lại button/menu/search/modal/table trong ruột nếu vỏ đã có.
 - Nếu một rule riêng được dùng lại ở 2 module, kéo lên `shared.css`.
 - Test CSS phải đọc qua import tree, không chỉ đọc `index.css`.
+- POS tách vỏ/ruột tại `src/features/pos/pos-core.ts`: component chỉ gọi helper/core cho tính tiền, parse số, state tab, nhãn tab và chuyển báo giá; sửa UI không viết lại nghiệp vụ trong `PosShell.tsx`.
+- Quy tắc nghiệp vụ POS mới phải có test ở `pos-core.test.ts` hoặc test service/backend tương ứng trước khi nối vào UI.
 
 ## 10. Accessibility
 

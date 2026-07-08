@@ -239,6 +239,21 @@ Náº¿u chuyá»ƒn `is_active = false`, khÃ¡ch hÃ ng Ä‘ang thuá»™c 
 
 ### `GET /products`
 
+Query dùng cho POS và trang Hàng hóa.
+
+Tham số hiện tại:
+
+| Query | Ý nghĩa |
+|---|---|
+| `search` | Tìm theo mã/tên; hỗ trợ tìm không dấu ở frontend và backend nếu có cột chuẩn hóa |
+| `status` | Lọc `active` / `inactive`; POS chỉ dùng `active` |
+| `sell_method` | Lọc cách tính bán |
+| `product_kind` | Lọc loại hàng |
+| `page`, `page_size` | Phân trang |
+| `sort=pos_usage` | Dùng cho lưới sản phẩm nhanh POS; ưu tiên sản phẩm có `pos_product_usage.usage_count` cao hơn |
+
+Với `sort=pos_usage`, backend join theo `(organization_id, product_id)`, sắp `usage_count DESC`, rồi fallback theo thứ tự sản phẩm ổn định. Không dùng cache trình duyệt cho thứ tự này.
+
 TÃ¬m sáº£n pháº©m/dá»‹ch vá»¥ Ä‘ang bÃ¡n trÃªn POS.
 
 **Permission:** `perm.create_order` hoáº·c `perm.edit_price_book`

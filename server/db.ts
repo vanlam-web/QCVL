@@ -95,10 +95,65 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows as WorkstationData[]
     },
 
+    async getPosProductUsageCounts(organizationId) {
+      await ensurePosProductUsageTable(pool)
+      const result = await pool.query(
+        `
+          select product_id, usage_count
+          from pos_product_usage
+          where organization_id = $1
+        `,
+        [organizationId],
+      )
+      return new Map(result.rows.map((row) => [row.product_id, Number(row.usage_count)]))
+    },
+
+    async recordPosProductUsage(input) {
+      const productCounts = new Map<string, number>()
+      for (const productId of input.productIds) {
+        productCounts.set(productId, (productCounts.get(productId) ?? 0) + 1)
+      }
+      if (productCounts.size === 0) return
+      await ensurePosProductUsageTable(pool)
+      await pool.query('begin')
+      try {
+        for (const [productId, count] of productCounts) {
+          await pool.query(
+            `
+              insert into pos_product_usage (organization_id, product_id, usage_count)
+              values ($1, $2, $3)
+              on conflict (organization_id, product_id)
+              do update set
+                usage_count = pos_product_usage.usage_count + excluded.usage_count,
+                updated_at = now()
+            `,
+            [input.organizationId, productId, count],
+          )
+        }
+        await pool.query('commit')
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
     async close() {
       await pool.end()
     },
   }
+}
+
+async function ensurePosProductUsageTable(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists pos_product_usage (
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id text not null,
+      usage_count integer not null default 0 check (usage_count >= 0),
+      updated_at timestamptz not null default now(),
+      primary key (organization_id, product_id)
+    )
+  `)
+  await pool.query('create index if not exists pos_product_usage_rank_idx on pos_product_usage (organization_id, usage_count desc, product_id)')
 }
 
 async function findWorkstation(pool: pg.Pool, organizationId: string, workstationId: string) {

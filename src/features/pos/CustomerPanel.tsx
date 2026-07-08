@@ -20,6 +20,9 @@ export function CustomerPanel({
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
+  const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
+  const searchQuery = search.trim()
+  const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
 
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -37,7 +40,7 @@ export function CustomerPanel({
     const query = nextSearch.trim()
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
-    if (query.length === 0) {
+    if (query.length === 0 || (selectedCustomer !== null && query === selectedCustomerSearchText)) {
       setResults([])
       return
     }
@@ -91,7 +94,7 @@ export function CustomerPanel({
           leadingIcon={<Search aria-hidden="true" size={16} />}
           trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
           suggestions={
-            search.trim().length > 0
+            searchQuery.length > 0 && !searchShowsSelectedCustomer
               ? results.map((customer) => ({
                   id: customer.id,
                   primary: `${customer.code} ${customer.name}`,

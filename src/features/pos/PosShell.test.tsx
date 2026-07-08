@@ -211,13 +211,13 @@ it('renders POS landmarks, profile identity, and active product grid', async () 
   expect(within(cart).getAllByText('120 000').length).toBeGreaterThan(0)
 })
 
-it('loads only the quick grid product page on POS startup', async () => {
+it('loads enough quick products for local POS grid pagination on startup', async () => {
   const service = makeCatalogService()
   renderPosShell({ catalogService: service })
 
   await screen.findByRole('button', { name: /Mica 3mm/ })
 
-  expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 12 })
+  expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 120, sort: 'pos_usage' })
 })
 
 it('replaces the K03 product panel with the checkout drawer while payment is open', async () => {

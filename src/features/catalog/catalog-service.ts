@@ -50,6 +50,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       product_group_id?: string
       page?: number
       page_size?: number
+      sort?: 'pos_usage'
     } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
@@ -60,6 +61,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.product_group_id) params.set('product_group_id', input.product_group_id)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.sort) params.set('sort', input.sort)
       const query = params.toString()
       return api.request<ProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
     },

@@ -61,6 +61,17 @@ create table if not exists sessions (
 create index if not exists sessions_user_idx on sessions (user_id);
 create index if not exists sessions_expires_at_idx on sessions (expires_at);
 
+create table if not exists pos_product_usage (
+  organization_id uuid not null references organizations(id) on delete cascade,
+  product_id text not null,
+  usage_count integer not null default 0 check (usage_count >= 0),
+  updated_at timestamptz not null default now(),
+  primary key (organization_id, product_id)
+);
+
+create index if not exists pos_product_usage_rank_idx
+  on pos_product_usage (organization_id, usage_count desc, product_id);
+
 insert into permissions (code, module, description)
 values
   ('perm.create_order', 'pos', 'Create POS orders'),

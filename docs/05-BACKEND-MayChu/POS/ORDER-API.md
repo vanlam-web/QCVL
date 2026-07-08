@@ -186,8 +186,9 @@ LÆ°u hÃ³a Ä‘Æ¡n nhÃ¡p hiá»‡n táº¡i thÃ nh bÃ¡o giÃ¡.
 2. Sinh mÃ£ `BG...` tÄƒng dáº§n trong organization.
 3. Táº¡o `orders` vá»›i `order_type = quote`, `status = active`.
 4. Táº¡o `order_items` theo snapshot Ä‘Ã£ validate.
-5. Ghi `order_status_history` tá»« null sang `active`.
-6. Tráº£ bÃ¡o giÃ¡ vá»«a táº¡o.
+5. Cộng lượt dùng sản phẩm vào `pos_product_usage` cho từng dòng có `product_id`.
+6. Ghi `order_status_history` tá»« null sang `active`.
+7. Tráº£ bÃ¡o giÃ¡ vá»«a táº¡o.
 
 **Response data:**
 
@@ -374,14 +375,15 @@ Náº¿u khÃ¡ch tráº£ dÆ° vÃ  nhÃ¢n viÃªn chá»n cáº¥n vÃ o
 4. Resolve khÃ¡ch hÃ ng: náº¿u input khÃ´ng cÃ³ khÃ¡ch, dÃ¹ng `KH000001 - KhÃ¡ch láº»`.
 5. Táº¡o `orders` loáº¡i `invoice`, `status = completed`.
 6. Táº¡o `order_items` snapshot.
-7. Trá»« kho theo Inventory rule báº±ng `stock_movements`.
-8. Náº¿u cÃ³ tiá»n thá»±c giá»¯ láº¡i, táº¡o `payment_receipts` vÃ  `payment_receipt_methods`.
-9. Táº¡o `cashbook_entries` tá»« tá»«ng dÃ²ng phÆ°Æ¡ng thá»©c thu.
-10. Náº¿u hÃ³a Ä‘Æ¡n má»›i cÃ²n ná»£, táº¡o `customer_debt_entries` loáº¡i `invoice_debt`.
-11. Náº¿u cÃ³ tráº£ ná»£ cÅ©, phÃ¢n bá»• vÃ o hÃ³a Ä‘Æ¡n cÃ²n ná»£ cÅ© nháº¥t trÆ°á»›c báº±ng `customer_debt_allocations` vÃ  táº¡o `customer_debt_entries` loáº¡i `debt_payment`.
-12. Náº¿u cÃ³ `source_quote_id`, Ä‘á»•i bÃ¡o giÃ¡ sang `converted`; náº¿u khÃ´ng cÃ³ thÃ¬ bá» qua bÆ°á»›c nÃ y.
-13. Ghi `order_status_history`.
-14. Tráº£ hÃ³a Ä‘Æ¡n, payment summary, debt summary vÃ  cáº£nh bÃ¡o tá»“n kho náº¿u cÃ³.
+7. Cộng lượt dùng sản phẩm vào `pos_product_usage` cho từng dòng có `product_id`.
+8. Trá»« kho theo Inventory rule báº±ng `stock_movements`.
+9. Náº¿u cÃ³ tiá»n thá»±c giá»¯ láº¡i, táº¡o `payment_receipts` vÃ  `payment_receipt_methods`.
+10. Táº¡o `cashbook_entries` tá»« tá»«ng dÃ²ng phÆ°Æ¡ng thá»©c thu.
+11. Náº¿u hÃ³a Ä‘Æ¡n má»›i cÃ²n ná»£, táº¡o `customer_debt_entries` loáº¡i `invoice_debt`.
+12. Náº¿u cÃ³ tráº£ ná»£ cÅ©, phÃ¢n bá»• vÃ o hÃ³a Ä‘Æ¡n cÃ²n ná»£ cÅ© nháº¥t trÆ°á»›c báº±ng `customer_debt_allocations` vÃ  táº¡o `customer_debt_entries` loáº¡i `debt_payment`.
+13. Náº¿u cÃ³ `source_quote_id`, Ä‘á»•i bÃ¡o giÃ¡ sang `converted`; náº¿u khÃ´ng cÃ³ thÃ¬ bá» qua bÆ°á»›c nÃ y.
+14. Ghi `order_status_history`.
+15. Tráº£ hÃ³a Ä‘Æ¡n, payment summary, debt summary vÃ  cáº£nh bÃ¡o tá»“n kho náº¿u cÃ³.
 
 Náº¿u báº¥t ká»³ bÆ°á»›c ghi dá»¯ liá»‡u chÃ­nh nÃ o lá»—i, transaction pháº£i rollback; khÃ´ng Ä‘Æ°á»£c táº¡o hÃ³a Ä‘Æ¡n dá»Ÿ dang.
 

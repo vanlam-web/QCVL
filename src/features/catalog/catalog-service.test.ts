@@ -18,10 +18,11 @@ describe('catalog-service', () => {
       product_kind: 'combo',
       page: 2,
       page_size: 15,
+      sort: 'pos_usage',
     })
 
     expect(calls).toEqual([
-      ['/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&page=2&page_size=15', undefined],
+      ['/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&page=2&page_size=15&sort=pos_usage', undefined],
     ])
   })
 

@@ -61,6 +61,9 @@
 
 - K03-C chỉ hiển thị sản phẩm/dịch vụ đang bật bán trên POS.
 - Sắp xếp mặc định: sản phẩm hay dùng lên trước.
+- "Hay dùng" lấy từ bảng server `pos_product_usage`, không lấy từ cache trình duyệt hay `localStorage`, nên đổi máy POS vẫn giữ đúng thứ tự.
+- Khi lưu báo giá hoặc tạo hóa đơn thành công, backend cộng lượt dùng cho từng `product_id` xuất hiện trong dòng hàng.
+- POS gọi `GET /api/v1/products?status=active&sort=pos_usage` để lấy danh sách nhanh; server sắp theo `usage_count desc`, sau đó fallback theo dữ liệu sản phẩm.
 - Không có tùy chọn sắp xếp khác trong POS để giữ thao tác nhanh và đơn giản.
 - Nếu đã chọn khách ở K03-A, giá hiển thị theo bảng giá đang áp dụng của khách.
 - Nếu chưa chọn khách, giá hiển thị theo Bảng giá chung.

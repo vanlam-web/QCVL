@@ -573,6 +573,9 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const visibleCashbookEntries = showCashbookFavoritesOnly
     ? fundFilteredCashbookEntries.filter((entry) => cashbookFavoriteIds.includes(entry.id))
     : fundFilteredCashbookEntries
+  const pagedVisibleCashbookEntries = visibleCashbookEntries.length > cashbookPageSize
+    ? visibleCashbookEntries.slice((cashbookPage - 1) * cashbookPageSize, cashbookPage * cashbookPageSize)
+    : visibleCashbookEntries
 
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
@@ -1918,7 +1921,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
 
       <ManagementListSurface ariaLabel="Sổ quỹ">
         {cashbookEntries === null ? <p>Đang tải sổ quỹ...</p> : null}
-        {cashbookEntries !== null && visibleCashbookEntries.length === 0 ? <EmptyState>Chưa có dòng sổ quỹ.</EmptyState> : null}
+        {cashbookEntries !== null && pagedVisibleCashbookEntries.length === 0 ? <EmptyState>Chưa có dòng sổ quỹ.</EmptyState> : null}
         {cashbookEntries !== null && cashbookEntries.length > 0 ? (
           <>
             <ManagementTableViewport>
@@ -1947,7 +1950,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCashbookEntries.map((entry) => (
+                  {pagedVisibleCashbookEntries.map((entry) => (
                     <Fragment key={entry.id}>
                       <tr
                         aria-expanded={selectedCashbookEntry?.id === entry.id}

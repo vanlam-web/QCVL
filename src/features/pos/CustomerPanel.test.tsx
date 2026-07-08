@@ -55,6 +55,13 @@ describe('CustomerPanel', () => {
     expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', page: 1, page_size: 8 })
   })
 
+  it('hides suggestions when the selected customer name is shown', () => {
+    render(<CustomerPanel service={serviceStub()} selectedCustomer={customer} onSelectCustomer={vi.fn()} />)
+
+    expect(screen.getByDisplayValue('Khach le')).toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
   it('creates and selects a quick customer without requiring phone', async () => {
     const created = { ...customer, id: 'customer-2', code: 'KH000002', name: 'Cong ty ABC' }
     const service = serviceStub({ createCustomer: vi.fn(async () => created) })

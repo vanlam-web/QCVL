@@ -187,6 +187,43 @@ describe('createHttpHandler', () => {
     expect(rollBody.data.items.every((item: { product_kind: string; product_group_id: string }) => item.product_kind === 'roll' && item.product_group_id === 'pg-mica')).toBe(true)
   })
 
+  test('sorts POS quick products by persisted invoice and quote usage', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await handler(
+      new Request('http://api.local/api/v1/orders/quotes', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-retail',
+          items: [
+            { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
+            { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
+          ],
+          payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products?status=active&page=1&page_size=5&sort=pos_usage', {
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items[0].id).toBe('product-005')
+  })
+
   test('searches demo customers by POS query text', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

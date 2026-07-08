@@ -14,41 +14,55 @@ import { ConnectionStatus } from '../../components/ConnectionStatus'
 import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
 import type { CatalogService } from '../catalog/catalog-service'
-import type { Customer, Product, ResolvedPrice, SellMethod } from '../catalog/types'
+import type { Product, ResolvedPrice, SellMethod } from '../catalog/types'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShortageMaterial, PosShortagePreview } from '../inventory/types'
-import type { CheckoutCartLine, OrderService, QuoteReopenPayload, RecentPriceList } from '../orders/order-service'
+import type { CheckoutCartLine, OrderService, RecentPriceList } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
 import type { ProductionQueueDraftPayload } from '../production-queue/types'
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatMeasure, formatMoney, parseMoneyInput } from '../../lib/number-format'
+import { formatMeasure, formatMoney } from '../../lib/number-format'
 import { ProfileMenu } from './ProfileMenu'
 import { ProductGrid } from './ProductGrid'
 import { ProductionQueuePanel } from './ProductionQueuePanel'
 import { consumeQuoteReopenPayload } from './quote-draft-handoff'
 import { permissions } from '../users/permissions'
+import {
+  areaPieceCount,
+  areaQuantity,
+  clampLineDiscount,
+  draftLineQuantity,
+  initialQuotePayloadToTabs,
+  invoiceTabLabel,
+  isAreaLine,
+  isInvoiceTabDirty,
+  lineInputDraftKey,
+  lineSubtotal,
+  lineTotal,
+  makeCartLine,
+  makeInvoiceTab,
+  maxInvoiceTabs,
+  nextInvoiceNumber,
+  normalizeMeasureInputText,
+  normalizeSearch,
+  persistInvoiceTabs,
+  quickProductLoadSize,
+  quoteBlockedReason,
+  readNonNegativeNumber,
+  readPositiveMoney,
+  readPositiveNumber,
+  type DiscountMode,
+  type PosInvoiceTab,
+} from './pos-core'
 
-const posDraftStorageKey = 'qc-oms.pos.invoice-tabs.v1'
-const maxInvoiceTabs = 10
 const sellMethodLabels: Record<SellMethod, string> = {
   quantity: 'Theo số lượng',
   area_m2: 'Theo m²',
   linear_m: 'Theo mét dài',
   sheet: 'Theo tấm',
   combo: 'Combo',
-}
-type DiscountMode = 'amount' | 'percent'
-
-interface PosInvoiceTab {
-  id: string
-  number: number
-  createdAt: string
-  cartLines: CheckoutCartLine[]
-  selectedCustomer: Customer | null
-  orderNote: string
-  sourceQuote?: { id: string; code: string }
 }
 
 export function PosShell({
@@ -164,7 +178,8 @@ export function PosShell({
         const productResult = await catalogService.listProducts({
           status: 'active',
           page: 1,
-          page_size: 12,
+          page_size: quickProductLoadSize,
+          sort: 'pos_usage',
         })
         if (!active) return
         setProducts(productResult.items)
@@ -1614,52 +1629,6 @@ export function PosShell({
   )
 }
 
-function normalizeSearch(value: string) {
-  return value
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-}
-
-function initialQuotePayloadToTabs(payload: QuoteReopenPayload | null): PosInvoiceTab[] {
-  if (payload !== null) {
-    return [
-      {
-        ...makeInvoiceTab(1),
-        cartLines: quotePayloadToCartLines(payload),
-        selectedCustomer: quotePayloadToCustomer(payload),
-        orderNote: '',
-        sourceQuote: { id: payload.quote.id, code: payload.quote.code },
-      },
-    ]
-  }
-
-  const restored = restoreInvoiceTabs()
-  return restored.length > 0 ? restored : [makeInvoiceTab(1)]
-}
-
-function makeInvoiceTab(number: number): PosInvoiceTab {
-  return {
-    id: `invoice-${number}`,
-    number,
-    createdAt: new Date().toISOString(),
-    cartLines: [],
-    selectedCustomer: null,
-    orderNote: '',
-  }
-}
-
-function invoiceTabLabel(tab: PosInvoiceTab, active = true) {
-  const dirty = isInvoiceTabDirty(tab)
-  const prefix = active ? 'Hóa đơn' : 'HĐ'
-  return `${prefix} ${tab.number}${dirty ? ' •' : ''}`
-}
-
-function isInvoiceTabDirty(tab: PosInvoiceTab) {
-  return tab.cartLines.length > 0 || tab.selectedCustomer !== null || tab.orderNote.trim() !== '' || tab.sourceQuote !== undefined
-}
-
 function valueInputCaretIndexFromPointer(input: HTMLInputElement, clientX: number) {
   const value = input.value
   if (value.length === 0) return 0
@@ -1775,227 +1744,4 @@ function unitColumnWidthCh(line: CheckoutCartLine) {
 
 function columnWidthRem(widthCh: number) {
   return Number((widthCh * 0.64).toFixed(2))
-}
-
-function nextInvoiceNumber(tabs: PosInvoiceTab[]) {
-  const used = new Set(tabs.map((tab) => tab.number))
-  for (let number = 1; number <= maxInvoiceTabs; number += 1) {
-    if (!used.has(number)) return number
-  }
-  return Math.min(tabs.length + 1, maxInvoiceTabs)
-}
-
-function persistInvoiceTabs(tabs: PosInvoiceTab[]) {
-  window.localStorage.setItem(posDraftStorageKey, JSON.stringify(tabs.slice(0, maxInvoiceTabs)))
-}
-
-function restoreInvoiceTabs(): PosInvoiceTab[] {
-  try {
-    const raw = window.localStorage.getItem(posDraftStorageKey)
-    if (raw === null) return []
-    const parsed = JSON.parse(raw) as PosInvoiceTab[]
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter((tab) => Number.isInteger(tab.number) && Array.isArray(tab.cartLines))
-      .slice(0, maxInvoiceTabs)
-      .map((tab) => ({
-        ...makeInvoiceTab(tab.number),
-        id: typeof tab.id === 'string' ? tab.id : `invoice-${tab.number}`,
-        createdAt: typeof tab.createdAt === 'string' ? tab.createdAt : new Date().toISOString(),
-        cartLines: tab.cartLines.map(normalizeRestoredCartLine),
-        selectedCustomer: tab.selectedCustomer ?? null,
-        orderNote: typeof tab.orderNote === 'string' ? tab.orderNote : '',
-        sourceQuote: tab.sourceQuote,
-      }))
-  } catch {
-    return []
-  }
-}
-
-function quoteBlockedReason(cartLines: CheckoutCartLine[]): string | null {
-  const blockedLine = cartLines.find((line) =>
-    line.product.status !== 'active' || line.product.id.startsWith('missing-')
-  )
-  return blockedLine === undefined
-    ? null
-    : 'Sản phẩm trong báo giá không còn khả dụng. Hãy thay thế dòng trước khi thanh toán.'
-}
-
-function quotePayloadToCustomer(payload: QuoteReopenPayload): Customer | null {
-  if (payload.customer.customer_id === null) return null
-  return {
-    id: payload.customer.customer_id,
-    code: payload.customer.snapshot.code ?? '',
-    name: payload.customer.snapshot.name,
-    phone: payload.customer.snapshot.phone,
-    tax_code: null,
-    address: null,
-    customer_group_id: null,
-    customer_group: null,
-  }
-}
-
-function quotePayloadToCartLines(payload: QuoteReopenPayload): CheckoutCartLine[] {
-  return payload.items.map((item, index) => {
-    const blocked = item.warnings.some(
-      (warning) => warning.code === 'PRODUCT_INACTIVE' || warning.code === 'PRODUCT_MISSING',
-    )
-    return {
-      id: `${payload.quote.id}-${index + 1}`,
-      product: {
-        id: item.product_id ?? `missing-${item.order_item_id}`,
-        code: item.product_snapshot.code,
-        name: item.product_snapshot.name,
-        status: blocked ? 'inactive' : 'active',
-        unit_name: item.product_snapshot.unit_name,
-        sell_method: item.product_snapshot.sell_method,
-      },
-      quantity: item.quantity,
-      width_m: item.width_m ?? undefined,
-      height_m: item.height_m ?? undefined,
-      linear_m: item.linear_m ?? undefined,
-      unitPrice: item.unit_price,
-      discountAmount: item.discount_amount,
-      priceSource: item.price_source,
-      isManualPrice: true,
-      note: item.note ?? undefined,
-      quoteWarnings: item.warnings,
-    }
-  })
-}
-
-function readPositiveNumber(value: string): number {
-  const normalized = normalizeMeasureInputText(value)
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-function readNonNegativeNumber(value: string): number {
-  const normalized = normalizeMeasureInputText(value)
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0
-}
-
-function normalizeMeasureInputText(value: string) {
-  let hasDecimal = false
-  let normalized = ''
-  for (const character of value.trim().replace(/\s/g, '').replace(/,/g, '.')) {
-    if (character >= '0' && character <= '9') {
-      normalized += character
-      continue
-    }
-    if (character === '.' && !hasDecimal) {
-      normalized += character
-      hasDecimal = true
-    }
-  }
-  return normalized
-}
-
-function lineInputDraftKey(lineId: string, field: string) {
-  return `${lineId}:${field}`
-}
-
-function readPositiveMoney(value: string): number {
-  const parsed = parseMoneyInput(value)
-  return parsed > 0 ? parsed : 0
-}
-
-function normalizeRestoredCartLine(line: CheckoutCartLine): CheckoutCartLine {
-  if (!isAreaLine(line)) return line
-  const widthM = line.width_m !== undefined && line.width_m > 0 ? line.width_m : 1
-  const heightM = line.height_m !== undefined && line.height_m > 0 ? line.height_m : 1
-  const rawPieceCount = line.pieceCount ?? (
-    line.width_m !== undefined && line.height_m !== undefined
-      ? areaPieceCount(line)
-      : 1
-  )
-  const pieceCount = rawPieceCount > 0 ? rawPieceCount : 1
-  return {
-    ...line,
-    width_m: widthM,
-    height_m: heightM,
-    pieceCount,
-    quantity: areaQuantity(widthM, heightM, pieceCount),
-  }
-}
-
-function makeCartLine({
-  id,
-  product,
-  unitPrice,
-  priceSource,
-}: {
-  id: string
-  product: Product
-  unitPrice: number
-  priceSource: string
-}): CheckoutCartLine {
-  const base = {
-    id,
-    product,
-    unitPrice,
-    priceSource,
-    isManualPrice: false,
-    discountAmount: 0,
-  }
-  if (!isAreaProduct(product)) return { ...base, quantity: 1 }
-  return {
-    ...base,
-    quantity: 1,
-    width_m: 1,
-    height_m: 1,
-    pieceCount: 1,
-  }
-}
-
-function isAreaLine(line: CheckoutCartLine) {
-  return isAreaProduct(line.product)
-}
-
-function isAreaProduct(product: Product) {
-  const unitName = product.unit_name.trim().toLowerCase()
-  return product.sell_method === 'area_m2' || unitName === 'm²' || unitName === 'm2'
-}
-
-function areaPieceCount(line: CheckoutCartLine) {
-  if (line.pieceCount !== undefined) return line.pieceCount
-  const area = (line.width_m ?? 0) * (line.height_m ?? 0)
-  if (area > 0) return roundMeasure(line.quantity / area)
-  return line.quantity > 0 ? line.quantity : 1
-}
-
-function areaQuantity(widthM: number, heightM: number, pieceCount: number) {
-  return roundMeasure(widthM * heightM * pieceCount)
-}
-
-function roundMeasure(value: number) {
-  return Math.round(value * 1000) / 1000
-}
-
-function draftLineQuantity(draftLine: {
-  sell_method: SellMethod
-  width_m: number | null
-  height_m: number | null
-  quantity: number
-}) {
-  if (draftLine.sell_method !== 'area_m2' || draftLine.width_m === null || draftLine.height_m === null) {
-    return draftLine.quantity
-  }
-  return areaQuantity(draftLine.width_m, draftLine.height_m, draftLine.quantity)
-}
-
-function lineSubtotal(line: CheckoutCartLine): number {
-  return Math.round(line.quantity * line.unitPrice)
-}
-
-function lineTotal(line: CheckoutCartLine): number {
-  return lineSubtotal(line) - Math.min(line.discountAmount ?? 0, lineSubtotal(line))
-}
-
-function clampLineDiscount(line: CheckoutCartLine): CheckoutCartLine {
-  return {
-    ...line,
-    discountAmount: Math.min(line.discountAmount ?? 0, lineSubtotal(line)),
-  }
 }

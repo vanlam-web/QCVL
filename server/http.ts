@@ -53,6 +53,8 @@ export interface ServerRepository {
   deleteSession(token: string): Promise<void>
   getSessionUser(token: string, workstationId?: string | null): Promise<CurrentUserData | null>
   listWorkstations(organizationId: string): Promise<WorkstationData[]>
+  getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
+  recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
 }
 
 export interface HttpHandlerOptions {
@@ -321,6 +323,7 @@ function makePurchaseReceipt(number: number) {
 
 function makeSalesDocument(number: number) {
   const customer = customers[(number - 1) % Math.min(customers.length, 5)] ?? customers[0]
+  const product = products[(number - 1) % products.length] ?? products[0]
   const isQuote = number % 2 === 0
   const subtotal = 500000 + number * 75000
   const discount = number % 4 === 0 ? 50000 : 0
@@ -342,6 +345,7 @@ function makeSalesDocument(number: number) {
     debt_amount: isQuote ? 0 : debtAmount,
     payment_status: isQuote ? 'not_applicable' : debtAmount > 0 ? 'partial' : 'paid',
     note: `Don demo ${pad(number)}`,
+    items: [{ product_id: product.id }],
   }
 }
 
@@ -380,6 +384,14 @@ function filterSalesDocuments(url: URL) {
   })
 }
 
+async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
+  const filtered = filterProducts(url)
+  if (url.searchParams.get('sort') !== 'pos_usage') return filtered
+
+  const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
+  return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
+}
+
 function filterProducts(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? '')
   const status = url.searchParams.get('status')
@@ -400,6 +412,32 @@ function filterProducts(url: URL) {
     }
     return true
   })
+}
+
+function sortProductsByUsage<T extends { id: string }>(filtered: T[], usageByProductId: Map<string, number>) {
+  return [...filtered].sort((left, right) => {
+    const usageDelta = (usageByProductId.get(right.id) ?? 0) - (usageByProductId.get(left.id) ?? 0)
+    if (usageDelta !== 0) return usageDelta
+    return products.findIndex((product) => product.id === left.id) - products.findIndex((product) => product.id === right.id)
+  })
+}
+
+function productUsageCounts() {
+  const usageByProductId = new Map<string, number>()
+  for (const document of salesDocuments) {
+    if (document.order_type !== 'invoice' && document.order_type !== 'quote') continue
+    for (const item of document.items ?? []) {
+      if (!item.product_id) continue
+      usageByProductId.set(item.product_id, (usageByProductId.get(item.product_id) ?? 0) + 1)
+    }
+  }
+  return usageByProductId
+}
+
+function checkoutProductIds(body: Parameters<typeof makeOrderFromCheckout>[0]) {
+  return (body.items ?? [])
+    .map((item) => item.product_id)
+    .filter((productId): productId is string => typeof productId === 'string' && productId.trim() !== '')
 }
 
 function filterCustomers(url: URL) {
@@ -521,7 +559,7 @@ function filterCashbookEntries(url: URL) {
 function makeOrderFromCheckout(body: {
   customer_id?: string
   note?: string
-  items?: Array<{ quantity?: number; unit_price?: number; discount_amount?: number }>
+  items?: Array<{ product_id?: string; quantity?: number; unit_price?: number; discount_amount?: number }>
   payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
 }, orderType: 'invoice' | 'quote') {
   const number = salesDocuments.length + 1
@@ -551,6 +589,7 @@ function makeOrderFromCheckout(body: {
     debt_amount: debtAmount,
     payment_status: orderType === 'quote' ? 'not_applicable' : debtAmount > 0 ? 'partial' : 'paid',
     note: body.note ?? '',
+    items: checkoutProductIds(body).map((productId) => ({ product_id: productId })),
   }
 }
 
@@ -763,7 +802,7 @@ async function getDevApiResponse(
   }
 
   if (method === 'GET' && path === '/api/v1/product-groups') return { found: true, data: { items: productGroups } }
-  if (method === 'GET' && path === '/api/v1/products') return { found: true, data: paged(filterProducts(url), page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/products') return { found: true, data: paged(await listProductsForRequest(url, repository, currentUser.organization.id), page, pageSize) }
   if (method === 'GET' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(path)) return { found: true, data: null }
   if (method === 'POST' && path === '/api/v1/products') return { found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
   if (method === 'PATCH' && /^\/api\/v1\/products\/[^/]+$/.test(path)) return { found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }
@@ -836,6 +875,7 @@ async function getDevApiResponse(
     const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
     const order = makeOrderFromCheckout(body, 'invoice')
     salesDocuments.unshift(order)
+    await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
     const paymentEntries = addCashbookEntriesFromCheckout(order, body.payment)
     return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
   }
@@ -843,6 +883,7 @@ async function getDevApiResponse(
     const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
     const quote = makeOrderFromCheckout(body, 'quote')
     salesDocuments.unshift(quote)
+    await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
     return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
   }
   if (method === 'GET' && /^\/api\/v1\/orders\/quotes\/[^/]+\/reopen-payload$/.test(path)) return { found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }

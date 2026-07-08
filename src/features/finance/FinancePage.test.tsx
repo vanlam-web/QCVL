@@ -299,6 +299,29 @@ describe('FinancePage', () => {
     expect(screen.queryByRole('heading', { level: 2, name: 'Sổ quỹ' })).not.toBeInTheDocument()
   })
 
+  it('renders only the selected cashbook page size when the API returns an oversized page', async () => {
+    const entries = Array.from({ length: 24 }, (_, index): CashbookEntry => ({
+      ...entry,
+      id: `entry-${index + 1}`,
+      code: `PT${String(index + 1).padStart(4, '0')}`,
+    }))
+    const { container } = render(<FinancePage service={makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: entries,
+        page: 1,
+        page_size: 15,
+        total: 24,
+      })),
+    })} />)
+
+    await screen.findByText('PT0015')
+    const rows = container.querySelectorAll('.finance-cashbook-data-table tr')
+    expect(rows).toHaveLength(16)
+    expect(screen.getByText('PT0015')).toBeInTheDocument()
+    expect(screen.queryByText('PT0016')).not.toBeInTheDocument()
+  })
+
   it('filters cashbook entries from the header search', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)
