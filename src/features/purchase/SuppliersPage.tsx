@@ -17,6 +17,8 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 
 function money(value: number) {
   return formatMoney(value)
@@ -35,6 +37,7 @@ const blankForm: SupplierInput = {
 }
 
 const supplierPageSize = 15
+type SupplierSortKey = 'code' | 'name' | 'phone' | 'email' | 'current_payable_amount' | 'total_purchase_amount' | 'linked_customer' | 'status'
 
 function numberFilterValue(value: string) {
   const parsed = Number(value)
@@ -88,6 +91,20 @@ export function SuppliersPage({
   const bankAccounts = financeAccounts.filter((account) => account.is_active && account.account_type === 'bank')
   const payableTotal = suppliers?.reduce((sum, supplier) => sum + supplier.current_payable_amount, 0) ?? 0
   const purchaseTotal = suppliers?.reduce((sum, supplier) => sum + supplier.total_purchase_amount, 0) ?? 0
+  const {
+    sortedItems: sortedSuppliers,
+    sortState: supplierSortState,
+    requestSort: requestSupplierSort,
+  } = useManagementTableSort<Supplier, SupplierSortKey>(suppliers ?? [], {
+    code: { kind: 'text', value: (supplier) => supplier.code },
+    name: { kind: 'text', value: (supplier) => supplier.name },
+    phone: { kind: 'text', value: (supplier) => supplier.phone },
+    email: { kind: 'text', value: (supplier) => supplier.email },
+    current_payable_amount: { kind: 'number', value: (supplier) => supplier.current_payable_amount },
+    total_purchase_amount: { kind: 'number', value: (supplier) => supplier.total_purchase_amount },
+    linked_customer: { kind: 'text', value: (supplier) => supplier.linked_customer?.name },
+    status: { kind: 'text', value: (supplier) => supplier.status },
+  })
   const isCreatingSupplier = detailOpen && editingId === null && paymentSupplier === null
   const activeDetailSupplier = suppliers?.find((supplier) => supplier.id === editingId) ?? null
 
@@ -774,18 +791,18 @@ export function SuppliersPage({
                 <table>
                   <thead>
                     <tr>
-                      <th>Mã NCC</th>
-                      <th>Tên NCC</th>
-                      <th>Điện thoại</th>
-                      <th>Email</th>
-                      <th>Nợ hiện tại</th>
-                      <th>Tổng mua</th>
-                      <th>Khách hàng liên kết</th>
-                      <th>Trạng thái</th>
+                      <ManagementSortableHeader kind="text" sortKey="code" sortState={supplierSortState} onSort={requestSupplierSort}>Mã NCC</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="name" sortState={supplierSortState} onSort={requestSupplierSort}>Tên NCC</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="phone" sortState={supplierSortState} onSort={requestSupplierSort}>Điện thoại</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="email" sortState={supplierSortState} onSort={requestSupplierSort}>Email</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="current_payable_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Nợ hiện tại</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="total_purchase_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Tổng mua</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="linked_customer" sortState={supplierSortState} onSort={requestSupplierSort}>Khách hàng liên kết</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="status" sortState={supplierSortState} onSort={requestSupplierSort}>Trạng thái</ManagementSortableHeader>
                     </tr>
                   </thead>
                   <tbody>
-                    {suppliers.map((supplier) => {
+                    {sortedSuppliers.map((supplier) => {
                       const detailForRow = editingId === supplier.id || paymentSupplier?.id === supplier.id
                       const loadingForRow = loadingSupplierId === supplier.id
                       return (

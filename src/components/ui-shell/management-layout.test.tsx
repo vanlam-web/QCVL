@@ -19,6 +19,8 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from './management-layout'
+import { ManagementSortableHeader } from './management-sortable-header'
+import { useManagementTableSort } from './management-table-sort'
 
 it('keeps retired management toolbar patterns out of the shared source', () => {
   const css = readCssWithImports(join(process.cwd(), 'src/styles/index.css'))
@@ -53,6 +55,60 @@ function readCssWithImports(path: string, seen = new Set<string>()): string {
     return readCssWithImports(join(dirname(path), importPath), seen)
   })
 }
+
+function SortDemo() {
+  const rows = [
+    { id: 'old', name: 'Beta', amount: 200, createdAt: '2026-07-07T08:00:00.000Z' },
+    { id: 'new', name: 'Alpha', amount: 500, createdAt: '2026-07-08T08:00:00.000Z' },
+    { id: 'mid', name: 'Gamma', amount: 100, createdAt: '2026-07-06T08:00:00.000Z' },
+  ]
+  const { sortedItems, sortState, requestSort } = useManagementTableSort(rows, {
+    name: { kind: 'text', value: (row) => row.name },
+    amount: { kind: 'number', value: (row) => row.amount },
+    createdAt: { kind: 'date', value: (row) => row.createdAt },
+  })
+  return (
+    <table>
+      <thead>
+        <tr>
+          <ManagementSortableHeader kind="text" sortKey="name" sortState={sortState} onSort={requestSort}>Tên</ManagementSortableHeader>
+          <ManagementSortableHeader kind="number" sortKey="amount" sortState={sortState} onSort={requestSort}>Tiền</ManagementSortableHeader>
+          <ManagementSortableHeader kind="date" sortKey="createdAt" sortState={sortState} onSort={requestSort}>Ngày</ManagementSortableHeader>
+        </tr>
+      </thead>
+      <tbody>
+        {sortedItems.map((row) => (
+          <tr key={row.id}>
+            <td>{row.id}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+it('sorts management table headers by text, number, date, then returns to default order', async () => {
+  render(<SortDemo />)
+  const user = userEvent.setup()
+  const ids = () => screen.getAllByRole('cell').map((cell) => cell.textContent)
+
+  expect(ids()).toEqual(['old', 'new', 'mid'])
+
+  await user.click(screen.getByRole('button', { name: 'Tên' }))
+  expect(ids()).toEqual(['new', 'old', 'mid'])
+
+  await user.click(screen.getByRole('button', { name: 'Tên' }))
+  expect(ids()).toEqual(['mid', 'old', 'new'])
+
+  await user.click(screen.getByRole('button', { name: 'Tên' }))
+  expect(ids()).toEqual(['old', 'new', 'mid'])
+
+  await user.click(screen.getByRole('button', { name: 'Tiền' }))
+  expect(ids()).toEqual(['new', 'old', 'mid'])
+
+  await user.click(screen.getByRole('button', { name: 'Ngày' }))
+  expect(ids()).toEqual(['new', 'old', 'mid'])
+})
 
 it('renders a KV-style management page with filter sidebar and list surface', () => {
   render(

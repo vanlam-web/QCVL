@@ -13,6 +13,8 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
 import { formatApiError } from '../../lib/api/error-message'
@@ -34,6 +36,7 @@ function dateTime(value: string | null | undefined, fallback?: string | null): s
 }
 
 const salesDocumentsPageSize = 15
+type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
 type TimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'last_week' | 'last_7_days' | 'month' | 'last_month' | 'last_30_days' | 'quarter' | 'last_quarter' | 'year' | 'last_year' | 'custom'
 
 const quickTimeGroups: Array<{ title: string; presets: Array<Exclude<TimeFilter, 'custom'>> }> = [
@@ -478,6 +481,19 @@ export function SalesDocumentsPage({
   }
 
   const documents = state?.items ?? []
+  const {
+    sortedItems: sortedDocuments,
+    sortState: documentSortState,
+    requestSort: requestDocumentSort,
+  } = useManagementTableSort<SalesDocumentListItem, SalesDocumentSortKey>(documents, {
+    code: { kind: 'text', value: (document) => document.code },
+    created_at: { kind: 'date', value: (document) => document.created_at },
+    customer_name: { kind: 'text', value: (document) => document.customer.name },
+    subtotal_amount: { kind: 'number', value: (document) => document.subtotal_amount },
+    discount_amount: { kind: 'number', value: (document) => document.discount_amount },
+    total_amount: { kind: 'number', value: (document) => document.total_amount },
+    paid_amount: { kind: 'number', value: (document) => document.paid_amount },
+  })
   const total = state?.total ?? 0
   const page = state?.page ?? 1
   const pageSize = state?.pageSize ?? salesDocumentsPageSize
@@ -745,17 +761,17 @@ export function SalesDocumentsPage({
                 <table aria-label="Danh sách chứng từ bán hàng" className="sales-documents-management-table">
                   <thead>
                     <tr>
-                      <th>Mã hóa đơn</th>
-                      <th>Thời gian</th>
-                      <th>Khách hàng</th>
-                      <th>Tổng tiền hàng</th>
-                      <th>Giảm giá</th>
-                      <th>Tổng sau giảm</th>
-                      <th>Khách đã trả</th>
+                      <ManagementSortableHeader kind="text" sortKey="code" sortState={documentSortState} onSort={requestDocumentSort}>Mã hóa đơn</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="date" sortKey="created_at" sortState={documentSortState} onSort={requestDocumentSort}>Thời gian</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="text" sortKey="customer_name" sortState={documentSortState} onSort={requestDocumentSort}>Khách hàng</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng tiền hàng</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="discount_amount" sortState={documentSortState} onSort={requestDocumentSort}>Giảm giá</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="total_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng sau giảm</ManagementSortableHeader>
+                      <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={documentSortState} onSort={requestDocumentSort}>Khách đã trả</ManagementSortableHeader>
                     </tr>
                   </thead>
                   <tbody>
-                    {documents.map((document) => (
+                    {sortedDocuments.map((document) => (
                       <Fragment key={document.id}>
                         <tr
                           aria-expanded={selected?.id === document.id}

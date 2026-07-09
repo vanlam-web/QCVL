@@ -14,6 +14,8 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
 import type { Customer, CustomerGroup } from './types'
 import type { CustomerDebtDetail, OrderService } from '../orders/order-service'
@@ -30,6 +32,7 @@ type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
 type CustomerHistoryState = { items: SalesDocumentListItem[]; total: number } | 'loading' | 'error'
 type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerHistoryType = 'invoice' | 'quote'
+type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerPageSize = 15
 const customerHistoryPageSize = 10
 
@@ -416,6 +419,18 @@ export function CustomersPage({
     return sum + (customer.total_debt_amount ?? 0)
   }, 0) ?? 0
   const visibleSalesTotal = state?.customers.reduce((sum, customer) => sum + (customer.total_sales_amount ?? 0), 0) ?? 0
+  const {
+    sortedItems: sortedCustomers,
+    sortState: customerSortState,
+    requestSort: requestCustomerSort,
+  } = useManagementTableSort<Customer, CustomerSortKey>(state?.customers ?? [], {
+    code: { kind: 'text', value: (customer) => customer.code },
+    name: { kind: 'text', value: (customer) => customer.name },
+    phone: { kind: 'text', value: (customer) => customer.phone },
+    group: { kind: 'text', value: (customer) => customer.customer_group?.name },
+    total_debt_amount: { kind: 'number', value: (customer) => customer.total_debt_amount },
+    total_sales_amount: { kind: 'number', value: (customer) => customer.total_sales_amount },
+  })
   const customerKpis = (
     <MetricGrid ariaLabel="Tổng quan khách hàng">
       <MetricCard hint="Từ danh sách đang xem" label="Nợ hiện tại" tone={visibleDebtTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={visibleDebtTotal} />} />
@@ -685,16 +700,16 @@ export function CustomersPage({
               <table aria-label="Danh sách khách hàng" className="customer-management-table">
                 <thead>
                   <tr>
-                    <th>Mã KH</th>
-                    <th>Tên khách hàng</th>
-                    <th>Điện thoại</th>
-                    <th>Nhóm khách hàng</th>
-                    <th>Nợ hiện tại</th>
-                    <th>Tổng bán</th>
+                    <ManagementSortableHeader kind="text" sortKey="code" sortState={customerSortState} onSort={requestCustomerSort}>Mã KH</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="name" sortState={customerSortState} onSort={requestCustomerSort}>Tên khách hàng</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="phone" sortState={customerSortState} onSort={requestCustomerSort}>Điện thoại</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="group" sortState={customerSortState} onSort={requestCustomerSort}>Nhóm khách hàng</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="number" sortKey="total_debt_amount" sortState={customerSortState} onSort={requestCustomerSort}>Nợ hiện tại</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="number" sortKey="total_sales_amount" sortState={customerSortState} onSort={requestCustomerSort}>Tổng bán</ManagementSortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {state.customers.map((customer) => {
+                {sortedCustomers.map((customer) => {
                   const debt = customerDebts[customer.id]
                   const history = customerHistories[customerHistoryKey(customer.id, customerHistoryType)]
                   const debtAmount = customer.total_debt_amount ?? null

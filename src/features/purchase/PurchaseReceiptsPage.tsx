@@ -28,6 +28,8 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 
 const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
@@ -53,6 +55,7 @@ const blankForm: PurchaseReceiptInput = {
 }
 
 const purchaseReceiptPageSize = 15
+type PurchaseReceiptSortKey = 'code' | 'received_at' | 'supplier' | 'line_count' | 'subtotal_amount' | 'payable_amount' | 'paid_amount' | 'remaining_amount' | 'status'
 
 function money(value: number) {
   return formatMoney(value)
@@ -207,6 +210,21 @@ export function PurchaseReceiptsPage({
       remaining: items.reduce((sum, receipt) => sum + receipt.remaining_amount, 0),
     }
   }, [receipts])
+  const {
+    sortedItems: sortedReceipts,
+    sortState: receiptSortState,
+    requestSort: requestReceiptSort,
+  } = useManagementTableSort<PurchaseReceipt, PurchaseReceiptSortKey>(receipts ?? [], {
+    code: { kind: 'text', value: (receipt) => receipt.code },
+    received_at: { kind: 'date', value: (receipt) => receipt.received_at },
+    supplier: { kind: 'text', value: (receipt) => receipt.supplier.name },
+    line_count: { kind: 'number', value: (receipt) => receipt.items.length },
+    subtotal_amount: { kind: 'number', value: (receipt) => receipt.subtotal_amount },
+    payable_amount: { kind: 'number', value: (receipt) => receipt.payable_amount },
+    paid_amount: { kind: 'number', value: (receipt) => receipt.paid_amount },
+    remaining_amount: { kind: 'number', value: (receipt) => receipt.remaining_amount },
+    status: { kind: 'text', value: (receipt) => receipt.status },
+  })
 
   async function loadReceipts(
     input: {
@@ -1380,19 +1398,19 @@ export function PurchaseReceiptsPage({
                   <table>
                     <thead>
                       <tr>
-                        <th>Mã PN</th>
-                        <th>Thời gian</th>
-                        <th>Nhà cung cấp</th>
-                        <th>Số dòng</th>
-                        <th>Tổng tiền hàng</th>
-                        <th>Cần trả</th>
-                        <th>Đã trả</th>
-                        <th>Còn phải trả</th>
-                        <th>Trạng thái</th>
+                        <ManagementSortableHeader kind="text" sortKey="code" sortState={receiptSortState} onSort={requestReceiptSort}>Mã PN</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="date" sortKey="received_at" sortState={receiptSortState} onSort={requestReceiptSort}>Thời gian</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="text" sortKey="supplier" sortState={receiptSortState} onSort={requestReceiptSort}>Nhà cung cấp</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="number" sortKey="line_count" sortState={receiptSortState} onSort={requestReceiptSort}>Số dòng</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng tiền hàng</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="number" sortKey="payable_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Cần trả</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Đã trả</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="number" sortKey="remaining_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Còn phải trả</ManagementSortableHeader>
+                        <ManagementSortableHeader kind="text" sortKey="status" sortState={receiptSortState} onSort={requestReceiptSort}>Trạng thái</ManagementSortableHeader>
                       </tr>
                     </thead>
                     <tbody>
-                      {receipts.map((receipt) => {
+                      {sortedReceipts.map((receipt) => {
                         const detailForRow = editingId === receipt.id
                         const loadingForRow = loadingReceiptId === receipt.id
                         return (
