@@ -14,6 +14,7 @@
 
 QCVL runtime hien tai la Node API + PostgreSQL tren NAS.
 
+- Doc [../CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) truoc khi sua/deploy cac luong hoa don, bao gia, cong no, thu no, so quy.
 - Docker duoc giu cho NAS app/PostgreSQL containers.
 - Khong dung Supabase cho auth, API, realtime, seed data, test, hoac local dev.
 - Khong dung Docker local de chay Supabase.

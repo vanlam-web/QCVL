@@ -14,6 +14,7 @@
 
 QCVL dung PostgreSQL qua Node API.
 
+- Doc [../CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) truoc khi sua sales/finance data.
 - Khong ghi seed/demo data vao backend cu da go.
 - Khong tao migration/test cho backend cu.
 - Schema runtime toi thieu hien nam o [../../database/schema.sql](../../database/schema.sql).

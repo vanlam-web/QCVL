@@ -9,6 +9,7 @@
 | Việc cần biết | File |
 |---|---|
 | Tổng quan hệ thống tài liệu | [00-OVERVIEW-TongQuan/README.md](./00-OVERVIEW-TongQuan/README.md) |
+| Nguồn dữ liệu hiện tại / chống nhầm cách cũ | [CURRENT-DATA-SOURCE.md](./CURRENT-DATA-SOURCE.md) |
 | Nguồn đúng 8 tầng | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Quy tắc viết tài liệu | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 | Trạng thái sống / queue hiện tại | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |

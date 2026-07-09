@@ -18,6 +18,8 @@ The Review Thread is the thread responsible for checking the project when Owner 
 
 For load/performance work, read and update `docs/PERFORMANCE-FIX-LOG.md` with measured request counts, timings, fixes, and verification before handing off or merging.
 
+For data-source or persistence work, read `docs/CURRENT-DATA-SOURCE.md` first. Current rule: sales/finance runtime data (POS checkout, quotes, sales documents, customer debt, debt collection, cashbook) uses PostgreSQL as source of truth. Do not reintroduce RAM/global-array persistence, Supabase runtime, or hybrid RAM+DB reads for these flows.
+
 ## 1. Mandatory Working Principles
 
 Every Codex thread must follow these principles.
