@@ -9,4 +9,4 @@ export type {
   SalesDocumentData,
   ServerRepository,
   WorkstationData,
-} from './http'
+} from './http.js'

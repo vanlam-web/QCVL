@@ -1,5 +1,5 @@
-import type { CurrentUserData, ServerRepository } from '../../http-types'
-import type { RouteResult } from '../sales/sales-routes'
+import type { CurrentUserData, ServerRepository } from '../../http-types.js'
+import type { RouteResult } from '../sales/sales-routes.js'
 
 export interface InventoryRouteContext {
   request: Request

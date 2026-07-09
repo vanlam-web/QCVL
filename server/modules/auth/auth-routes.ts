@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
-import type { ServerRepository } from '../../http-types'
-import { HttpError, success } from '../../http-response'
+import type { ServerRepository } from '../../http-types.js'
+import { HttpError, success } from '../../http-response.js'
 
 interface AuthRouteContext {
   request: Request
