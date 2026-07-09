@@ -10,6 +10,20 @@
 
 ---
 
+## Execution Status
+
+> Cap nhat: 2026-07-09. Plan da duoc thuc thi theo batch nho va commit rieng.
+
+- Done: safe NAS build/deploy/health scripts, dry-run deploy mac dinh.
+- Done: HTTP response helpers va route mapping theo module.
+- Done: versioned DB migrations, dry-run, baseline mode.
+- Done: Finance page tach `FinanceFiltersPanel` va `FinanceDetailPanel`.
+- Done: POS shell tach `PosTopbar`, `PosCartPanel`, `PosPaymentPanel`.
+- Done: internal ops checklist va ranh gioi cai nao dua NAS/Git/local.
+- Rule con hieu luc: khong deploy NAS khi chua co lenh ro; `npm run deploy:nas` chi copy khi co `QCVL_NAS_DEPLOY_CONFIRM=true`.
+
+---
+
 ## Scope Rules
 
 - Khong doi password NAS trong plan nay. Owner se tu doi sau.
