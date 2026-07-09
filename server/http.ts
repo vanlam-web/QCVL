@@ -1,7 +1,11 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
 import { HttpError, emptyResponse, failure, success } from './http-response'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes'
+import { handleCatalogRoute } from './modules/catalog/catalog-routes'
 import { handleFinanceRoute } from './modules/finance/finance-routes'
+import { handleInventoryRoute } from './modules/inventory/inventory-routes'
+import { handleProductionRoute } from './modules/production/production-routes'
+import { handlePurchaseRoute } from './modules/purchase/purchase-routes'
 import { handleSalesRoute } from './modules/sales/sales-routes'
 
 export type UserStatus = 'active' | 'inactive'
@@ -1164,83 +1168,86 @@ async function getDevApiResponse(
     return { found: true, data: { ...toUserListItem(currentUser), permissions: normalizePermissions(body.permissions) } }
   }
 
-  if (method === 'GET' && path === '/api/v1/product-groups') return { found: true, data: { items: productGroups } }
-  if (method === 'GET' && path === '/api/v1/products') return { found: true, data: paged(await listProductsForRequest(url, repository, currentUser.organization.id), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(path)) return { found: true, data: null }
-  if (method === 'POST' && path === '/api/v1/products') return { found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
-  if (method === 'PATCH' && /^\/api\/v1\/products\/[^/]+$/.test(path)) return { found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }
-  if (method === 'PUT' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(path)) {
-    return { found: true, data: { id: randomUUID(), product_id: path.split('/')[4], version: 1, status: 'active', notes: null, created_at: nowIso, items: [] } }
-  }
+  const catalogRoute = await handleCatalogRoute(
+    { request, url, currentUser, repository },
+    {
+      productGroups: async () => ({ found: true, data: { items: productGroups } }),
+      listProducts: async () => ({ found: true, data: paged(await listProductsForRequest(url, repository, currentUser.organization.id), page, pageSize) }),
+      getProductBom: async () => ({ found: true, data: null }),
+      createProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
+      updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
+      upsertProductBom: async () => ({ found: true, data: { id: randomUUID(), product_id: path.split('/')[4], version: 1, status: 'active', notes: null, created_at: nowIso, items: [] } }),
+      customerGroups: async () => ({ found: true, data: { items: customerGroups } }),
+      listCustomers: async () => {
+        const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
+        const localActivity = repository.getCustomerFinancialTotals ? undefined : customerActivityFromSalesDocuments()
+        const filteredCustomers = filterCustomers(url).map((customer) => {
+          const totals = financialTotals?.get(customer.id)
+          const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
+          return { ...customer, ...totals, last_activity_at: lastActivityAt }
+        })
+        return { found: true, data: paged(newestFirst(filteredCustomers), page, pageSize) }
+      },
+      createCustomer: async () => {
+        const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
+        const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
+        customers.push(created)
+        return { found: true, data: created, status: 201 }
+      },
+      customerRecentPrices: async () => ({ found: true, data: { items: [{ unitPrice: 600000, soldAt: nowIso, orderCode: 'HD0001' }] } }),
+      resolvePricing: async () => {
+        const body = await readJson(request)
+        const productIds = Array.isArray(body.product_ids) ? body.product_ids : products.map((product) => product.id)
+        return {
+          found: true,
+          data: { items: productIds.map((productId) => ({ product_id: productId, unit_price: 600000, price_source: 'default_price_list', price_list_id: 'pl-default' })) },
+        }
+      },
+      priceLists: async () => ({ found: true, data: { items: priceLists } }),
+      previewPriceFormula: async () => ({ found: true, data: { affected_count: 1, items: [{ product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, latest_purchase_cost: 250000, current_mode: 'manual', current_unit_price: 600000, computed_prices: [{ price_list_id: 'pl-default', price_list_name: 'Bang gia le', current_unit_price: 600000, computed_unit_price: 620000, delta: 20000 }] }] } }),
+      applyPriceFormula: async () => ({ found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }),
+    },
+  )
+  if (catalogRoute.found) return catalogRoute
 
-  if (method === 'GET' && path === '/api/v1/customer-groups') return { found: true, data: { items: customerGroups } }
-  if (method === 'GET' && path === '/api/v1/customers') {
-    const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
-    const localActivity = repository.getCustomerFinancialTotals ? undefined : customerActivityFromSalesDocuments()
-    const filteredCustomers = filterCustomers(url).map((customer) => {
-      const totals = financialTotals?.get(customer.id)
-      const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
-      return { ...customer, ...totals, last_activity_at: lastActivityAt }
-    })
-    return { found: true, data: paged(newestFirst(filteredCustomers), page, pageSize) }
-  }
-  if (method === 'POST' && path === '/api/v1/customers') {
-    const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
-    const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
-    customers.push(created)
-    return { found: true, data: created, status: 201 }
-  }
-  if (method === 'GET' && /^\/api\/v1\/customers\/[^/]+\/products\/[^/]+\/recent-prices$/.test(path)) {
-    return { found: true, data: { items: [{ unitPrice: 600000, soldAt: nowIso, orderCode: 'HD0001' }] } }
-  }
+  const inventoryRoute = await handleInventoryRoute(
+    { request, url, currentUser, repository },
+    {
+      listProducts: async () => ({ found: true, data: paged(filterInventoryProducts(url), page, pageSize) }),
+      getProduct: async () => ({ found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }),
+      adjustStock: async () => ({ found: true, data: makeStocktake() }),
+      stockMovements: async () => {
+        const productId = url.searchParams.get('product_id')
+        const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
+        return { found: true, data: paged(newestFirst(items), page, pageSize) }
+      },
+      stocktakes: async () => ({ found: true, data: paged([makeStocktake()], page, pageSize) }),
+      rolls: async () => ({ found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }),
+      sheets: async () => ({ found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }),
+      shortagePreview: async () => ({ found: true, data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] } }),
+      materialOpeningOptions: async () => ({ found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }),
+      createMaterialOpening: async () => ({ found: true, data: { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }, status: 201 }),
+    },
+  )
+  if (inventoryRoute.found) return inventoryRoute
 
-  if (method === 'POST' && path === '/api/v1/pricing/resolve') {
-    const body = await readJson(request)
-    const productIds = Array.isArray(body.product_ids) ? body.product_ids : products.map((product) => product.id)
-    return {
-      found: true,
-      data: { items: productIds.map((productId) => ({ product_id: productId, unit_price: 600000, price_source: 'default_price_list', price_list_id: 'pl-default' })) },
-    }
-  }
-  if (method === 'GET' && path === '/api/v1/price-lists') return { found: true, data: { items: priceLists } }
-  if (method === 'POST' && path === '/api/v1/price-lists/formulas/preview') {
-    return { found: true, data: { affected_count: 1, items: [{ product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, latest_purchase_cost: 250000, current_mode: 'manual', current_unit_price: 600000, computed_prices: [{ price_list_id: 'pl-default', price_list_name: 'Bang gia le', current_unit_price: 600000, computed_unit_price: 620000, delta: 20000 }] }] } }
-  }
-  if (method === 'POST' && path === '/api/v1/price-lists/formulas/apply') return { found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }
-
-  if (method === 'GET' && path === '/api/v1/inventory/products') return { found: true, data: paged(filterInventoryProducts(url), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/inventory\/products\/[^/]+$/.test(path)) return { found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }
-  if (method === 'PATCH' && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(path)) return { found: true, data: makeStocktake() }
-  if (method === 'GET' && path === '/api/v1/inventory/stock-movements') {
-    const productId = url.searchParams.get('product_id')
-    const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
-    return { found: true, data: paged(newestFirst(items), page, pageSize) }
-  }
-  if (method === 'GET' && path === '/api/v1/inventory/stocktakes') return { found: true, data: paged([makeStocktake()], page, pageSize) }
-  if (method === 'GET' && path === '/api/v1/inventory/rolls') return { found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }
-  if (method === 'GET' && path === '/api/v1/inventory/sheets') return { found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }
-  if (method === 'POST' && path === '/api/v1/inventory/pos-shortage-preview') return { found: true, data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] } }
-  if (method === 'GET' && path === '/api/v1/inventory/material-openings/options') {
-    return { found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }
-  }
-  if (method === 'POST' && path === '/api/v1/inventory/material-openings') {
-    return { found: true, data: { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }, status: 201 }
-  }
-
-  if (method === 'GET' && path === '/api/v1/suppliers') return { found: true, data: paged(filterSuppliers(url), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/suppliers\/[^/]+$/.test(path)) return { found: true, data: suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }
-  if (method === 'POST' && path === '/api/v1/suppliers') return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }
-  if (method === 'PATCH' && /^\/api\/v1\/suppliers\/[^/]+$/.test(path)) return { found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }
-  if (method === 'GET' && /^\/api\/v1\/suppliers\/[^/]+\/payable-receipts$/.test(path)) {
-    return { found: true, data: { items: purchaseReceipts.slice(0, 10).map((receipt) => ({ id: receipt.id, code: receipt.code, supplier_document_no: receipt.supplier_document_no, received_at: receipt.received_at, payable_amount: receipt.payable_amount, paid_amount: receipt.paid_amount, remaining_amount: receipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: receipt.remaining_amount })) } }
-  }
-  if (method === 'POST' && /^\/api\/v1\/suppliers\/[^/]+\/payments$/.test(path)) return { found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }
-
-  if (method === 'GET' && path === '/api/v1/purchase/receipts') return { found: true, data: paged(filterPurchaseReceipts(url), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
-  if (method === 'POST' && path === '/api/v1/purchase/receipts') return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }
-  if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }
-  if (method === 'POST' && /^\/api\/v1\/purchase\/receipts\/[^/]+\/post$/.test(path)) return { found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }
+  const purchaseRoute = await handlePurchaseRoute(
+    { request, url, currentUser, repository },
+    {
+      listSuppliers: async () => ({ found: true, data: paged(filterSuppliers(url), page, pageSize) }),
+      getSupplier: async () => ({ found: true, data: suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }),
+      createSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
+      updateSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
+      supplierPayableReceipts: async () => ({ found: true, data: { items: purchaseReceipts.slice(0, 10).map((receipt) => ({ id: receipt.id, code: receipt.code, supplier_document_no: receipt.supplier_document_no, received_at: receipt.received_at, payable_amount: receipt.payable_amount, paid_amount: receipt.paid_amount, remaining_amount: receipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: receipt.remaining_amount })) } }),
+      paySupplier: async () => ({ found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }),
+      listReceipts: async () => ({ found: true, data: paged(filterPurchaseReceipts(url), page, pageSize) }),
+      getReceipt: async () => ({ found: true, data: purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }),
+      createReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }),
+      updateReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }),
+      postReceipt: async () => ({ found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }),
+    },
+  )
+  if (purchaseRoute.found) return purchaseRoute
 
   const salesRoute = await handleSalesRoute(
     { request, url, currentUser, repository },
@@ -1362,10 +1369,16 @@ async function getDevApiResponse(
   )
   if (financeRoute.found) return financeRoute
 
-  if (method === 'GET' && path === '/api/v1/production-queue') return { found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }
-  if (method === 'GET' && path === '/api/v1/production-queue/history') return { found: true, data: paged([], page, pageSize) }
-  if (method === 'POST' && /^\/api\/v1\/production-queue\/[^/]+\/add-to-draft$/.test(path)) return { found: true, data: { queue_item_id: path.split('/')[4], customer: customers[0], draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }
-  if (method === 'POST' && /^\/api\/v1\/production-queue\/[^/]+\/(dismiss|restore)$/.test(path)) return { found: true, data: {} }
+  const productionRoute = await handleProductionRoute(
+    { request, url, currentUser, repository },
+    {
+      listQueue: async () => ({ found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }),
+      history: async () => ({ found: true, data: paged([], page, pageSize) }),
+      addToDraft: async () => ({ found: true, data: { queue_item_id: path.split('/')[4], customer: customers[0], draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }),
+      setVisibility: async () => ({ found: true, data: {} }),
+    },
+  )
+  if (productionRoute.found) return productionRoute
 
   return { found: false }
 }
