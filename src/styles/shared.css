@@ -664,6 +664,15 @@
   font-size: 0.875rem;
 }
 
+.management-filter-options label:has(.management-filter-select) {
+  display: block;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .management-filter-options input {
   accent-color: var(--color-primary);
 }
