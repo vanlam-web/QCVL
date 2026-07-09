@@ -1,6 +1,8 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
 import { HttpError, emptyResponse, failure, success } from './http-response'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes'
+import { handleFinanceRoute } from './modules/finance/finance-routes'
+import { handleSalesRoute } from './modules/sales/sales-routes'
 
 export type UserStatus = 'active' | 'inactive'
 
@@ -1240,114 +1242,125 @@ async function getDevApiResponse(
   if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(path)) return { found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }
   if (method === 'POST' && /^\/api\/v1\/purchase\/receipts\/[^/]+\/post$/.test(path)) return { found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }
 
-  if (method === 'POST' && path === '/api/v1/pos/cart/validate') return { found: true, data: { valid: true } }
-  if (method === 'POST' && path === '/api/v1/orders/checkout') {
-    const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-    const order = makeOrderFromCheckout(body, 'invoice')
-    await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
-    const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment) : addCashbookEntriesFromCheckout(order, body.payment)
-    if (repository.saveSalesDocument) {
-      await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: order, cashbookEntries: paymentEntries })
-    } else {
-      salesDocuments.unshift(order)
-      addCustomerSalesFromCheckout(order)
-      addCustomerDebtFromCheckout(order)
-    }
-    return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
-  }
-  if (method === 'POST' && path === '/api/v1/orders/quotes') {
-    const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-    const quote = makeOrderFromCheckout(body, 'quote')
-    await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
-    if (repository.saveSalesDocument) {
-      await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
-    } else {
-      salesDocuments.unshift(quote)
-    }
-    return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
-  }
-  if (method === 'GET' && /^\/api\/v1\/orders\/quotes\/[^/]+\/reopen-payload$/.test(path)) return { found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }
-
-  if (method === 'GET' && path === '/api/v1/sales-documents') {
-    if (repository.listSalesDocuments) {
-      return { found: true, data: paged(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), page, pageSize) }
-    }
-    return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
-  }
-  if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) {
-    const id = getIdFromPath(path) ?? ''
-    if (repository.getSalesDocument) {
-      const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
-      return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0]) }
-    }
-    return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === id) ?? salesDocuments[0]) }
-  }
-
-  if (method === 'GET' && path === '/api/v1/finance/accounts') return { found: true, data: { items: financeAccounts } }
-  if (method === 'GET' && path === '/api/v1/finance/customer-debts') {
-    if (repository.listCustomerDebts) {
-      return { found: true, data: paged(await repository.listCustomerDebts({ organizationId: currentUser.organization.id, url }), page, pageSize) }
-    }
-    return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
-  }
-  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) {
-    const customerId = getFinanceCustomerId(path)
-    if (repository.getCustomerDebt) {
-      return { found: true, data: await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId }) }
-    }
-    return { found: true, data: makeCustomerDebtDetail(customerId) }
-  }
-  if (method === 'POST' && path === '/api/v1/finance/debt-collections') {
-    if (repository.collectCustomerDebt) {
-      const body = await readJson(request) as {
-        customer_id?: string
-        amount?: number
-        payment_method?: {
-          cash_amount?: number
-          bank_amount?: number
-          bank_account_id?: string | null
-          bank_transaction_ref?: string
+  const salesRoute = await handleSalesRoute(
+    { request, url, currentUser, repository },
+    {
+      validateCart: async () => ({ found: true, data: { valid: true } }),
+      checkout: async () => {
+        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
+        const order = makeOrderFromCheckout(body, 'invoice')
+        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
+        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment) : addCashbookEntriesFromCheckout(order, body.payment)
+        if (repository.saveSalesDocument) {
+          await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: order, cashbookEntries: paymentEntries })
+        } else {
+          salesDocuments.unshift(order)
+          addCustomerSalesFromCheckout(order)
+          addCustomerDebtFromCheckout(order)
         }
-        note?: string
-      }
-      return {
-        found: true,
-        data: await repository.collectCustomerDebt({
-          organizationId: currentUser.organization.id,
-          customerId: body.customer_id ?? '',
-          amount: Math.max(Number(body.amount ?? 0), 0),
-          cashAmount: Math.max(Number(body.payment_method?.cash_amount ?? 0), 0),
-          bankAmount: Math.max(Number(body.payment_method?.bank_amount ?? 0), 0),
-          bankAccountId: body.payment_method?.bank_account_id,
-          bankTransactionRef: body.payment_method?.bank_transaction_ref,
-          note: body.note,
-        }),
-        status: 201,
-      }
-    }
-    return { found: true, data: await collectCustomerDebt(request), status: 201 }
-  }
-  if (method === 'GET' && path === '/api/v1/finance/cashbook/balances') return { found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }
-  if (method === 'GET' && path === '/api/v1/finance/cashbook/vouchers') return { found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }
-  if (method === 'GET' && path === '/api/v1/finance/cashbook') {
-    const entries = repository.listCashbookEntries
-      ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url })
-      : filterCashbookEntries(url)
-    return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
-  }
-  if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) {
-    const id = getIdFromPath(path) ?? ''
-    if (repository.getCashbookEntry) {
-      const entry = await repository.getCashbookEntry({ organizationId: currentUser.organization.id, id })
-      if (entry === null) return { found: true, data: { message: 'Cashbook entry not found' }, status: 404 }
-      return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
-    }
-    const entry = cashbookEntries.find((item) => item.id === id) ?? cashbookEntries[0]
-    return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
-  }
-  if (method === 'POST' && path === '/api/v1/finance/cashbook-vouchers') return { found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }
-  if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/cancel$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }
-  if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/revise$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }
+        return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
+      },
+      createQuote: async () => {
+        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
+        const quote = makeOrderFromCheckout(body, 'quote')
+        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
+        if (repository.saveSalesDocument) {
+          await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
+        } else {
+          salesDocuments.unshift(quote)
+        }
+        return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
+      },
+      reopenQuotePayload: async () => ({ found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }),
+      listSalesDocuments: async () => {
+        if (repository.listSalesDocuments) {
+          return { found: true, data: paged(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), page, pageSize) }
+        }
+        return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
+      },
+      getSalesDocument: async () => {
+        const id = getIdFromPath(path) ?? ''
+        if (repository.getSalesDocument) {
+          const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
+          return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0]) }
+        }
+        return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === id) ?? salesDocuments[0]) }
+      },
+    },
+  )
+  if (salesRoute.found) return salesRoute
+
+  const financeRoute = await handleFinanceRoute(
+    { request, url, currentUser, repository },
+    {
+      listAccounts: async () => ({ found: true, data: { items: financeAccounts } }),
+      listCustomerDebts: async () => {
+        if (repository.listCustomerDebts) {
+          return { found: true, data: paged(await repository.listCustomerDebts({ organizationId: currentUser.organization.id, url }), page, pageSize) }
+        }
+        return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
+      },
+      getCustomerDebt: async () => {
+        const customerId = getFinanceCustomerId(path)
+        if (repository.getCustomerDebt) {
+          return { found: true, data: await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId }) }
+        }
+        return { found: true, data: makeCustomerDebtDetail(customerId) }
+      },
+      collectCustomerDebt: async () => {
+        if (repository.collectCustomerDebt) {
+          const body = await readJson(request) as {
+            customer_id?: string
+            amount?: number
+            payment_method?: {
+              cash_amount?: number
+              bank_amount?: number
+              bank_account_id?: string | null
+              bank_transaction_ref?: string
+            }
+            note?: string
+          }
+          return {
+            found: true,
+            data: await repository.collectCustomerDebt({
+              organizationId: currentUser.organization.id,
+              customerId: body.customer_id ?? '',
+              amount: Math.max(Number(body.amount ?? 0), 0),
+              cashAmount: Math.max(Number(body.payment_method?.cash_amount ?? 0), 0),
+              bankAmount: Math.max(Number(body.payment_method?.bank_amount ?? 0), 0),
+              bankAccountId: body.payment_method?.bank_account_id,
+              bankTransactionRef: body.payment_method?.bank_transaction_ref,
+              note: body.note,
+            }),
+            status: 201,
+          }
+        }
+        return { found: true, data: await collectCustomerDebt(request), status: 201 }
+      },
+      cashbookBalances: async () => ({ found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }),
+      cashbookVouchers: async () => ({ found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }),
+      listCashbook: async () => {
+        const entries = repository.listCashbookEntries
+          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url })
+          : filterCashbookEntries(url)
+        return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
+      },
+      getCashbookEntry: async () => {
+        const id = getIdFromPath(path) ?? ''
+        if (repository.getCashbookEntry) {
+          const entry = await repository.getCashbookEntry({ organizationId: currentUser.organization.id, id })
+          if (entry === null) return { found: true, data: { message: 'Cashbook entry not found' }, status: 404 }
+          return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+        }
+        const entry = cashbookEntries.find((item) => item.id === id) ?? cashbookEntries[0]
+        return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+      },
+      createCashbookVoucher: async () => ({ found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }),
+      cancelCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }),
+      reviseCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }),
+    },
+  )
+  if (financeRoute.found) return financeRoute
 
   if (method === 'GET' && path === '/api/v1/production-queue') return { found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }
   if (method === 'GET' && path === '/api/v1/production-queue/history') return { found: true, data: paged([], page, pageSize) }
