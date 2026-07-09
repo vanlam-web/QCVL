@@ -91,6 +91,7 @@ export interface ServerRepository {
     note?: string
   }): Promise<{ payment_receipt_id: string; allocated_amount: number }>
   listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
+  getCashbookEntry?(input: { organizationId: string; id: string }): Promise<CashbookEntryData | null>
   getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
     organizationId: string
@@ -796,10 +797,11 @@ function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCh
 }
 
 function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
-  const entries: typeof cashbookEntries = []
+  const entries: CashbookEntryData[] = []
   const createdAt = runtimeIso()
   const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
   const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
+  let collectedBefore = 0
   const methods = [
     { amount: cashAmount, account: financeAccounts[0] },
     { amount: bankAmount, account: financeAccounts.find((account) => account.id === payment.bank_account_id) ?? financeAccounts[1] },
@@ -808,9 +810,12 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
   for (const method of methods) {
     if (method.amount <= 0) continue
     const codeSuffix = `${pad(cashbookEntries.length + entries.length + 1)}-${randomUUID().slice(0, 8).toUpperCase()}`
+    const entryId = randomUUID()
+    const entryCode = `PT-POS-${codeSuffix}`
+    const remainingAfter = Math.max(order.total_amount - collectedBefore - method.amount, 0)
     entries.push({
-      id: randomUUID(),
-      code: `PT-POS-${codeSuffix}`,
+      id: entryId,
+      code: entryCode,
       status: 'posted',
       direction: 'in',
       amount_delta: method.amount,
@@ -820,7 +825,18 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
       created_at: createdAt,
       note: `Thu tien ${order.code}`,
       counterparty: { type: 'customer', name: order.customer.name, phone: order.customer.phone },
+      source: { type: 'payment_receipt', id: entryId, code: entryCode, order_code: order.code },
+      allocations: [{
+        order_id: order.id,
+        order_code: order.code,
+        order_total_amount: order.total_amount,
+        collected_before: collectedBefore,
+        allocated_amount: method.amount,
+        remaining_after: remainingAfter,
+      }],
+      payment_method: method.account.account_type === 'bank' ? 'bank_transfer' : 'cash',
     })
+    collectedBefore += method.amount
   }
 
   return entries
@@ -1016,6 +1032,32 @@ function makeCustomerDebtDetail(customerId: string) {
     customer_id: customerId,
     total_debt: debt.total_debt,
     invoices: debt.invoices,
+  }
+}
+
+function cashbookPaymentMethod(entry: CashbookEntryData) {
+  if (entry.payment_method === 'cash' || entry.payment_method === 'bank_transfer' || entry.payment_method === 'manual') return entry.payment_method
+  if (entry.source_type === 'cashbook_voucher') return 'manual'
+  return entry.finance_account.account_type === 'bank' ? 'bank_transfer' : 'cash'
+}
+
+function enrichCashbookEntryDetail(entry: CashbookEntryData, currentUser: CurrentUserData) {
+  const allocations = entry.allocations ?? []
+  const entrySource = entry.source && typeof entry.source.type === 'string' && typeof entry.source.code === 'string'
+    ? entry.source
+    : null
+  const source = entrySource ?? {
+    type: entry.source_type === 'cashbook_voucher' ? 'manual_voucher' : 'payment_receipt',
+    id: entry.id,
+    code: entry.code,
+    order_code: null,
+  }
+  return {
+    ...entry,
+    created_by: { id: currentUser.user.id, name: currentUser.user.display_name },
+    payment_method: cashbookPaymentMethod(entry),
+    source: { ...source, order_code: source.order_code ?? allocations[0]?.order_code ?? null },
+    allocations,
   }
 }
 
@@ -1284,7 +1326,16 @@ async function getDevApiResponse(
       : filterCashbookEntries(url)
     return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
   }
-  if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) return { found: true, data: { ...cashbookEntries[0], created_by: { id: currentUser.user.id, name: currentUser.user.display_name }, payment_method: 'cash', source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001' }, allocations: [{ order_id: 'order-0001', order_code: 'HD0001', order_total_amount: 1150000, collected_before: 0, allocated_amount: 700000, remaining_after: 450000 }] } }
+  if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) {
+    const id = getIdFromPath(path) ?? ''
+    if (repository.getCashbookEntry) {
+      const entry = await repository.getCashbookEntry({ organizationId: currentUser.organization.id, id })
+      if (entry === null) return { found: true, data: { message: 'Cashbook entry not found' }, status: 404 }
+      return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+    }
+    const entry = cashbookEntries.find((item) => item.id === id) ?? cashbookEntries[0]
+    return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+  }
   if (method === 'POST' && path === '/api/v1/finance/cashbook-vouchers') return { found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }
   if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/cancel$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }
   if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/revise$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }

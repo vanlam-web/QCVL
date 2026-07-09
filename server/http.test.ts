@@ -71,6 +71,16 @@ function persistentRepository(passwordHash: string): ServerRepository {
     created_at: string
     note: string
     counterparty: { type: string; name: string; phone: string | null }
+    source?: { type: string; id: string; code: string; order_code: string | null }
+    allocations?: Array<{
+      order_id: string
+      order_code: string
+      order_total_amount: number
+      collected_before: number
+      allocated_amount: number
+      remaining_after: number
+    }>
+    payment_method?: string
   }> = []
 
   function normalize(value: string) {
@@ -221,6 +231,9 @@ function persistentRepository(passwordHash: string): ServerRepository {
     },
     async listCashbookEntries(input) {
       return cashbook.filter((entry) => cashbookMatches(input.url, entry))
+    },
+    async getCashbookEntry(input) {
+      return cashbook.find((entry) => entry.id === input.id) ?? null
     },
     async getCustomerFinancialTotals() {
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number }>()
@@ -643,6 +656,49 @@ describe('createHttpHandler', () => {
     expect(cashbookBody.data.items[0].note).toContain(orderCode)
     expect(cashbookBody.data.items[0].amount_delta).toBe(1200000)
     expect(customerBody.data.items[0].total_sales_amount).toBe(4000000)
+  })
+
+  test('opens cashbook detail from persisted checkout entry instead of fixture invoice', async () => {
+    const handler = createHttpHandler({ repository: persistentRepository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-009',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 100000, bank_amount: 200000, bank_account_id: 'bank-main', old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+    const orderCode = checkoutBody.data.order.code
+
+    const cashbook = await handler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${orderCode}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const cashbookBody = await cashbook.json()
+    const entryId = cashbookBody.data.items[0].id
+
+    const detail = await handler(
+      new Request(`http://api.local/api/v1/finance/cashbook/${entryId}`, { headers: { authorization } }),
+    )
+    const detailBody = await detail.json()
+
+    expect(detail.status).toBe(200)
+    expect(detailBody.data.id).toBe(entryId)
+    expect(detailBody.data.source.order_code).toBe(orderCode)
+    expect(detailBody.data.source.order_code).not.toBe('HD0001')
+    expect(detailBody.data.allocations[0].order_code).toBe(orderCode)
   })
 
   test('adds fully unpaid POS checkout to customer debt detail', async () => {

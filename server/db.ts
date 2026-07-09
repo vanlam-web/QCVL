@@ -485,6 +485,22 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows.map(mapCashbookRow).filter((entry) => cashbookEntryMatches(input.url, entry))
     },
 
+    async getCashbookEntry(input) {
+      await ensureSalesFinanceTables(pool)
+      const result = await pool.query(
+        `
+          select *
+          from cashbook_entries
+          where organization_id = $1
+            and id = $2
+          limit 1
+        `,
+        [input.organizationId, input.id],
+      )
+      if (!result.rows[0]) return null
+      return hydrateCashbookEntryLink(pool, input.organizationId, mapCashbookRow(result.rows[0]))
+    },
+
     async getCustomerFinancialTotals(organizationId) {
       await ensureSalesFinanceTables(pool)
       const sales = await pool.query(
@@ -778,6 +794,48 @@ function mapCashbookRow(row: PgCashbookRow): CashbookEntryData {
     counterparty: row.counterparty,
     source: row.source,
     allocations: row.allocations,
+  }
+}
+
+function cashbookNoteOrderCode(note: string | null | undefined) {
+  return note?.match(/\bHD(?:-[A-Z0-9]+)+\b|\bHD\d+(?:\.\d+)?\b/i)?.[0].toUpperCase() ?? null
+}
+
+function cashbookEntryHasLinkedOrder(entry: CashbookEntryData) {
+  return entry.source?.order_code || (entry.allocations?.length ?? 0) > 0
+}
+
+async function hydrateCashbookEntryLink(pool: pg.Pool, organizationId: string, entry: CashbookEntryData) {
+  if (entry.direction !== 'in' || cashbookEntryHasLinkedOrder(entry)) return entry
+  const orderCode = cashbookNoteOrderCode(entry.note)
+  if (orderCode === null) return entry
+
+  const order = await pool.query(
+    `
+      select id, code, total_amount, paid_amount, debt_amount
+      from orders
+      where organization_id = $1
+        and code = $2
+      limit 1
+    `,
+    [organizationId, orderCode],
+  )
+  const row = order.rows[0]
+  if (!row) return entry
+
+  const allocatedAmount = Math.abs(Number(entry.amount_delta))
+  const paidAmount = Number(row.paid_amount)
+  return {
+    ...entry,
+    source: { type: 'payment_receipt', id: entry.id, code: entry.code, order_code: row.code },
+    allocations: [{
+      order_id: row.id,
+      order_code: row.code,
+      order_total_amount: Number(row.total_amount),
+      collected_before: Math.max(paidAmount - allocatedAmount, 0),
+      allocated_amount: allocatedAmount,
+      remaining_after: Number(row.debt_amount),
+    }],
   }
 }
 
