@@ -489,7 +489,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       await ensureSalesFinanceTables(pool)
       const sales = await pool.query(
         `
-          select customer_id, sum(total_amount) as total_sales_amount
+          select customer_id, sum(total_amount) as total_sales_amount, max(updated_at) as last_activity_at
           from orders
           where organization_id = $1
             and order_type = 'invoice'
@@ -510,9 +510,13 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [organizationId],
       )
-      const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number }>()
+      const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
       for (const row of sales.rows) {
-        totals.set(row.customer_id, { total_sales_amount: Number(row.total_sales_amount), total_debt_amount: 0 })
+        totals.set(row.customer_id, {
+          total_sales_amount: Number(row.total_sales_amount),
+          total_debt_amount: 0,
+          last_activity_at: row.last_activity_at?.toISOString(),
+        })
       }
       for (const row of debts.rows) {
         const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }

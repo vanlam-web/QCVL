@@ -91,7 +91,7 @@ export interface ServerRepository {
     note?: string
   }): Promise<{ payment_receipt_id: string; allocated_amount: number }>
   listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
-  getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number }>>
+  getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
     organizationId: string
     documents: SalesDocumentData[]
@@ -418,6 +418,15 @@ function optionalNumber(value: string | null) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+function latestTimestamp(item: Record<string, unknown>) {
+  const value = item.last_activity_at ?? item.updated_at ?? item.posted_at ?? item.balanced_at ?? item.received_at ?? item.created_at
+  return typeof value === 'string' ? Date.parse(value) || 0 : 0
+}
+
+function newestFirst<T extends Record<string, unknown>>(items: readonly T[]) {
+  return [...items].sort((left, right) => latestTimestamp(right) - latestTimestamp(left))
+}
+
 function filterSalesDocuments(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? '')
   const type = url.searchParams.get('type')
@@ -425,7 +434,7 @@ function filterSalesDocuments(url: URL) {
   const customerId = url.searchParams.get('customer_id')
   const paymentStatus = url.searchParams.get('payment_status')
 
-  return salesDocuments.filter((document) => {
+  const filtered = salesDocuments.filter((document) => {
     if (type && document.order_type !== type) return false
     if (status && document.status !== status) return false
     if (customerId && document.customer.id !== customerId) return false
@@ -436,11 +445,12 @@ function filterSalesDocuments(url: URL) {
     }
     return true
   })
+  return newestFirst(filtered)
 }
 
 async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
   const filtered = filterProducts(url)
-  if (url.searchParams.get('sort') !== 'pos_usage') return filtered
+  if (url.searchParams.get('sort') !== 'pos_usage') return newestFirst(filtered)
 
   const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
   return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
@@ -608,7 +618,7 @@ function filterInventoryProducts(url: URL) {
   const status = url.searchParams.get('status')
   const inventoryShape = url.searchParams.get('inventory_shape')
 
-  return inventoryProducts.filter((product) => {
+  return newestFirst(inventoryProducts.filter((product) => {
     if (status && status !== 'all' && product.status !== status) return false
     if (inventoryShape && inventoryShape !== 'all' && product.inventory_shape !== inventoryShape) return false
     if (search) {
@@ -616,7 +626,7 @@ function filterInventoryProducts(url: URL) {
       if (!haystack.includes(search)) return false
     }
     return true
-  })
+  }))
 }
 
 function filterSuppliers(url: URL) {
@@ -627,7 +637,14 @@ function filterSuppliers(url: URL) {
   const currentPayableMin = optionalNumber(url.searchParams.get('current_payable_min'))
   const currentPayableMax = optionalNumber(url.searchParams.get('current_payable_max'))
 
-  return suppliers.filter((supplier) => {
+  const supplierActivity = new Map<string, string>()
+  for (const receipt of purchaseReceipts) {
+    const activity = receipt.updated_at ?? receipt.created_at ?? receipt.received_at
+    const current = supplierActivity.get(receipt.supplier_id)
+    if (!current || activity > current) supplierActivity.set(receipt.supplier_id, activity)
+  }
+
+  return newestFirst(suppliers.filter((supplier) => {
     if (status && status !== 'all' && supplier.status !== status) return false
     if (totalPurchaseMin !== undefined && supplier.total_purchase_amount < totalPurchaseMin) return false
     if (totalPurchaseMax !== undefined && supplier.total_purchase_amount > totalPurchaseMax) return false
@@ -638,7 +655,7 @@ function filterSuppliers(url: URL) {
       if (!haystack.includes(search)) return false
     }
     return true
-  })
+  }).map((supplier) => ({ ...supplier, last_activity_at: supplierActivity.get(supplier.id) })))
 }
 
 function filterPurchaseReceipts(url: URL) {
@@ -648,7 +665,7 @@ function filterPurchaseReceipts(url: URL) {
   const dateTo = url.searchParams.get('date_to')
   const createdBy = url.searchParams.get('created_by')
 
-  return purchaseReceipts.filter((receipt) => {
+  return newestFirst(purchaseReceipts.filter((receipt) => {
     if (status && status !== 'all' && receipt.status !== status) return false
     if (dateFrom && receipt.received_at.slice(0, 10) < dateFrom) return false
     if (dateTo && receipt.received_at.slice(0, 10) > dateTo) return false
@@ -658,17 +675,26 @@ function filterPurchaseReceipts(url: URL) {
       if (!haystack.includes(search)) return false
     }
     return true
-  })
+  }))
 }
 
 function filterCustomerDebts(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
 
-  return customerDebtItems.filter((debt) => {
+  return newestFirst(customerDebtItems.filter((debt) => {
     if (!search) return true
     const haystack = normalizeSearchText(`${debt.customer_code} ${debt.customer_name} ${debt.oldest_order_code}`)
     return haystack.includes(search)
-  })
+  }))
+}
+
+function customerActivityFromSalesDocuments() {
+  const activity = new Map<string, string>()
+  for (const document of salesDocuments) {
+    const current = activity.get(document.customer.id)
+    if (!current || document.created_at > current) activity.set(document.customer.id, document.created_at)
+  }
+  return activity
 }
 
 async function ensureSalesFinanceSeed(repository: ServerRepository, organizationId: string) {
@@ -689,7 +715,7 @@ function filterCashbookEntries(url: URL) {
   const from = url.searchParams.get('from')
   const to = url.searchParams.get('to')
 
-  return cashbookEntries.filter((entry) => {
+  return newestFirst(cashbookEntries.filter((entry) => {
     if (financeAccountId && financeAccountId !== 'all' && entry.finance_account.id !== financeAccountId) return false
     if (financeAccountType && financeAccountType !== 'all' && entry.finance_account.account_type !== financeAccountType) return false
     if (direction && direction !== 'all' && entry.direction !== direction) return false
@@ -709,7 +735,7 @@ function filterCashbookEntries(url: URL) {
       if (!haystack.includes(search)) return false
     }
     return true
-  })
+  }))
 }
 
 function makeOrderFromCheckout(body: {
@@ -1097,11 +1123,13 @@ async function getDevApiResponse(
   if (method === 'GET' && path === '/api/v1/customer-groups') return { found: true, data: { items: customerGroups } }
   if (method === 'GET' && path === '/api/v1/customers') {
     const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
+    const localActivity = repository.getCustomerFinancialTotals ? undefined : customerActivityFromSalesDocuments()
     const filteredCustomers = filterCustomers(url).map((customer) => {
       const totals = financialTotals?.get(customer.id)
-      return totals ? { ...customer, ...totals } : customer
+      const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
+      return { ...customer, ...totals, last_activity_at: lastActivityAt }
     })
-    return { found: true, data: paged(filteredCustomers, page, pageSize) }
+    return { found: true, data: paged(newestFirst(filteredCustomers), page, pageSize) }
   }
   if (method === 'POST' && path === '/api/v1/customers') {
     const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
@@ -1133,7 +1161,7 @@ async function getDevApiResponse(
   if (method === 'GET' && path === '/api/v1/inventory/stock-movements') {
     const productId = url.searchParams.get('product_id')
     const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
-    return { found: true, data: paged(items, page, pageSize) }
+    return { found: true, data: paged(newestFirst(items), page, pageSize) }
   }
   if (method === 'GET' && path === '/api/v1/inventory/stocktakes') return { found: true, data: paged([makeStocktake()], page, pageSize) }
   if (method === 'GET' && path === '/api/v1/inventory/rolls') return { found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }
@@ -1261,7 +1289,7 @@ async function getDevApiResponse(
   if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/cancel$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }
   if (method === 'POST' && /^\/api\/v1\/finance\/cashbook-vouchers\/[^/]+\/revise$/.test(path)) return { found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }
 
-  if (method === 'GET' && path === '/api/v1/production-queue') return { found: true, data: paged(productionQueueItems, page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/production-queue') return { found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }
   if (method === 'GET' && path === '/api/v1/production-queue/history') return { found: true, data: paged([], page, pageSize) }
   if (method === 'POST' && /^\/api\/v1\/production-queue\/[^/]+\/add-to-draft$/.test(path)) return { found: true, data: { queue_item_id: path.split('/')[4], customer: customers[0], draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }
   if (method === 'POST' && /^\/api\/v1\/production-queue\/[^/]+\/(dismiss|restore)$/.test(path)) return { found: true, data: {} }

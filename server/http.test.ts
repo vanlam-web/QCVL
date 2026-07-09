@@ -733,6 +733,40 @@ describe('createHttpHandler', () => {
     expect(createdTime).toBeLessThanOrEqual(Date.now() + 1000)
   })
 
+  test('moves customer with newest bill to top of default customer list', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-018',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+
+    const customersResponse = await handler(
+      new Request('http://api.local/api/v1/customers?page=1&page_size=10', { headers: { authorization } }),
+    )
+    const customersBody = await customersResponse.json()
+
+    expect(customersBody.data.items[0]).toEqual(expect.objectContaining({
+      id: 'customer-018',
+      code: 'DEV20-KH-018',
+    }))
+  })
+
   test('keeps customer 11 partial bank checkout after server restart', async () => {
     const passwordHash = await hashPassword('ChangeMe123!')
     const sharedRepository = persistentRepository(passwordHash)
