@@ -1366,10 +1366,27 @@
 }
 
 .management-sort-header-indicator {
+  display: inline-flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 0.875rem;
+  height: 0.875rem;
   color: var(--color-text-muted);
-  font-size: 0.75rem;
   line-height: 1;
+  opacity: 0.78;
+  transition: color 120ms ease, opacity 120ms ease, transform 120ms ease;
+}
+
+.management-sort-header-button:hover .management-sort-header-indicator,
+th[aria-sort='ascending'] .management-sort-header-indicator,
+th[aria-sort='descending'] .management-sort-header-indicator {
+  color: var(--color-primary);
+  opacity: 1;
+}
+
+.management-sort-header-button:hover .management-sort-header-indicator {
+  transform: translateX(1px);
 }
 
 .finance-cashbook-data-table thead th {

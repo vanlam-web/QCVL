@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react'
 import { firstManagementSortDirection, type ManagementSortKind, type ManagementSortState } from './management-table-sort'
 
 export function ManagementSortableHeader<Key extends string>({
@@ -27,7 +28,11 @@ export function ManagementSortableHeader<Key extends string>({
       <button className="management-sort-header-button" title={title} type="button" onClick={() => onSort(sortKey)}>
         <span>{children}</span>
         <span aria-hidden="true" className="management-sort-header-indicator">
-          {active ? (sortState.direction === 'asc' ? '▲' : '▼') : '↕'}
+          {active ? (
+            sortState.direction === 'asc' ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />
+          ) : (
+            <ChevronsUpDown size={13} strokeWidth={1.8} />
+          )}
         </span>
       </button>
     </th>
