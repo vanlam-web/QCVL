@@ -18,6 +18,7 @@
     "verify:sales-finance-persistence": "node scripts/verify-sales-finance-persistence.mjs",
     "smoke:nas": "node scripts/smoke-nas-ui.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:dry-run": "node scripts/db-migrate-dry-run.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run src scripts/*.test.mjs tests/e2e/*.test.ts",
