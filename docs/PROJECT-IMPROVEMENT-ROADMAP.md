@@ -8,6 +8,7 @@
 - Moi thay doi lon phai tach vo UI va ruot nghiep vu theo `docs/CODE_ARCHITECTURE_RULES.md`.
 - Lam theo tung batch nho, co test, build, docs, roi moi deploy NAS khi owner yeu cau.
 - Khong dua secret, password, token, database dump vao Git hoac docs.
+- Xem checklist van hanh: `docs/07-DEPLOYMENT-TrienKhai/INTERNAL-OPS-CHECKLIST.md`.
 
 ## Uu Tien 1: Bao Mat Va Quy Trinh NAS
 
@@ -23,6 +24,7 @@ Muc tieu tiep theo:
 
 - Tao script deploy NAS mot lenh gom: build NAS, verify bundle, copy runtime, restart container, health check, smoke.
 - Script khong chua password; password chi doc tu environment variable.
+- Script deploy NAS dry-run mac dinh; chi copy khi co `QCVL_NAS_DEPLOY_CONFIRM=true`.
 - Docs NAS chi ghi placeholder, khong ghi credential that.
 
 ## Uu Tien 3: Tach Backend Theo Module
