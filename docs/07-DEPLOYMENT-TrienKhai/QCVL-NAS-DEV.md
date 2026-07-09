@@ -2,6 +2,24 @@
 
 > Cập nhật: 2026-07-09.
 
+## Latest NAS Deploy - 2026-07-09 SalesDocuments Filter
+
+Da deploy len NAS thay doi bo loc trang Hoa don/SalesDocuments:
+
+- Sidebar dung checkbox nhieu chon cho `type`, `status`, `payment_status`.
+- Backend NAS phai nhan query comma: `type=invoice,quote`, `status=active,completed`, `payment_status=unpaid,partial,paid`.
+- Neu bo het mot nhom checkbox, frontend gui `__none__` va backend tra rong.
+- Khong tao filter giao hang, COD, doi tac giao hang, kenh ban, HĐĐT, VAT khi schema/API chua co du lieu that.
+- Proof sau restart `qcvl-app`: `GET /api/v1/sales-documents?status=active,completed&page=1&page_size=5` tra `total=24`.
+- Proof UI: `http://100.84.228.125:3200/sales-documents` co dong hoa don, checkbox `Da huy` khong duoc check mac dinh, khong con trang rong do backend cu khong hieu comma.
+- `npm run smoke:nas` pass voi `/pos`, `/products`, `/customers`, `/finance`, `/sales-documents`; `apiCallCount=17`.
+
+Luu y khi test local:
+
+- Neu khong set `VITE_API_BASE_URL`, frontend dev fallback sang `http://100.84.228.125:3200`.
+- Khi sua ca frontend va backend, phai test bang dung cap frontend/backend cung phien ban.
+- Loi da gap: frontend local `127.0.0.1:3202` gui `status=active,completed` vao backend NAS cu, backend cu chi so sanh chuoi don nen tra rong. Cach dung la deploy backend tuong ung len NAS, hoac chay API dev cung code moi.
+
 ## 1. Trạng thái hiện hành
 
 | Mục | Giá trị |

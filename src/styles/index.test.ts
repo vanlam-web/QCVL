@@ -340,19 +340,24 @@ it('keeps management KPI summaries compact above filters', () => {
 
 it('keeps management filter selects styled as shared compact controls', () => {
   const rule = cssRule('.management-filter-select')
-  const focusRule = cssRule('.management-filter-select:focus')
+  const hoverRule = cssRule('.management-filter-select:hover')
+  const focusRule = cssRuleContainingSelectors(['.management-filter-select:focus', '.management-filter-select:focus-visible'])
+  const selectedValueRule = cssRule(".management-filter-group:has(.management-filter-select option:not([value='all']):checked) .management-filter-select")
 
   expect(rule).toContain('appearance: none')
   expect(rule).toContain('min-height: 2.25rem')
-  expect(rule).toContain('border: 1px solid transparent')
+  expect(rule).toContain('border: 1px solid var(--color-border)')
   expect(rule).toContain('border-radius: var(--radius-sm)')
   expect(rule).toContain('background-color: var(--color-surface)')
   expect(rule).toContain('background-image:')
   expect(rule).toContain('background-position: right var(--space-2) center')
   expect(rule).toContain('padding: 0 calc(var(--space-4) + 1.25rem) 0 var(--space-2)')
   expect(rule).toContain('box-shadow: none')
+  expect(hoverRule).toContain('border-color: var(--color-selected-border)')
   expect(focusRule).toContain('border-color: var(--color-selected-border)')
   expect(focusRule).toContain('box-shadow: inset 0 0 0 1px var(--color-selected-border)')
+  expect(selectedValueRule).toContain('border-color: var(--color-selected-border)')
+  expect(selectedValueRule).toContain('box-shadow: inset 0 0 0 1px var(--color-selected-border)')
 })
 
 it('keeps shared filter choices compact with borders only on active state', () => {

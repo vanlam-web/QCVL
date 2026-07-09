@@ -12,10 +12,10 @@ export function createSalesDocumentService(api: SalesDocumentApiRequester) {
   return {
     listSalesDocuments: (input: {
       search?: string
-      type?: 'quote' | 'invoice'
-      status?: 'active' | 'converted' | 'completed' | 'cancelled'
+      type?: 'quote' | 'invoice' | string
+      status?: 'active' | 'converted' | 'completed' | 'cancelled' | string
       customer_id?: string
-      payment_status?: 'not_applicable' | 'unpaid' | 'partial' | 'paid'
+      payment_status?: 'not_applicable' | 'unpaid' | 'partial' | 'paid' | string
       payment_method?: 'cash' | 'bank_transfer'
       created_by?: string
       price_list_id?: string

@@ -1,20 +1,31 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatMoney } from '../../lib/number-format'
 import type {
   PurchaseReceipt,
   PurchaseReceiptFinanceAccount,
   PurchaseReceiptInput,
-  PurchaseReceiptInputItem,
   PurchaseReceiptProduct,
   PurchaseReceiptStatus,
-  PurchasePhysicalPayload,
   RollPhysicalPayload,
   SheetPhysicalPayload,
 } from './purchase-receipt-types'
 import type { PurchaseReceiptService } from './purchase-receipt-service'
 import type { Supplier } from './types'
+import {
+  defaultPhysicalPayload,
+  lineAmount,
+  physicalSummary,
+  purchaseReceiptListSummary,
+  purchaseReceiptTotals,
+  purchaseUnitForProduct,
+  receiptOutstandingAfterPost,
+  rollPayload,
+  sheetGroupQuantity,
+  sheetPayload,
+} from './purchase-receipt-calculations'
+import { purchaseReceiptTimeQuickOptions } from './purchase-receipt-filters'
+import { isExactPurchaseReceiptCode, money, statusText } from './purchase-receipt-presenter'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
@@ -56,81 +67,6 @@ const blankForm: PurchaseReceiptInput = {
 
 const purchaseReceiptPageSize = 15
 type PurchaseReceiptSortKey = 'code' | 'received_at' | 'supplier' | 'line_count' | 'subtotal_amount' | 'payable_amount' | 'paid_amount' | 'remaining_amount' | 'status'
-
-function money(value: number) {
-  return formatMoney(value)
-}
-
-function statusText(status: PurchaseReceiptStatus) {
-  if (status === 'draft') return 'Phiếu tạm'
-  if (status === 'posted') return 'Đã nhập hàng'
-  return 'Đã hủy'
-}
-
-function localDateString(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
-}
-
-function currentMonthRange() {
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return { from: localDateString(firstDay), to: localDateString(lastDay) }
-}
-
-function isExactPurchaseReceiptCode(value: string) {
-  return /^PN\d+/i.test(value.trim())
-}
-
-function lineAmount(line: PurchaseReceiptInput['items'][number]) {
-  return Math.max(Math.round(Number(line.quantity || 0) * Number(line.unit_cost || 0)) - Number(line.discount_amount || 0), 0)
-}
-
-function defaultPhysicalPayload(shape: PurchaseReceiptInputItem['inventory_shape']): PurchasePhysicalPayload | null {
-  if (shape === 'roll') return { rolls: { width_m: 1, lengths_m: [1] } }
-  if (shape === 'sheet') return { sheet_groups: [{ width_m: 1, length_m: 1, quantity: 1 }] }
-  return null
-}
-
-function purchaseUnitForProduct(product?: PurchaseReceiptProduct) {
-  if (product?.inventory_shape === 'roll') return 'cuộn'
-  if (product?.inventory_shape === 'sheet') return 'tấm'
-  return product?.unit_name ?? ''
-}
-
-function rollPayload(payload: PurchasePhysicalPayload | null): RollPhysicalPayload {
-  return payload !== null && 'rolls' in payload ? payload : { rolls: { width_m: 1, lengths_m: [1] } }
-}
-
-function sheetPayload(payload: PurchasePhysicalPayload | null): SheetPhysicalPayload {
-  return payload !== null && 'sheet_groups' in payload ? payload : { sheet_groups: [{ width_m: 1, length_m: 1, quantity: 1 }] }
-}
-
-function rollTotalArea(payload: RollPhysicalPayload) {
-  return payload.rolls.lengths_m.reduce((sum, length) => sum + Number(payload.rolls.width_m || 0) * Number(length || 0), 0)
-}
-
-function sheetTotalArea(payload: SheetPhysicalPayload) {
-  return payload.sheet_groups.reduce(
-    (sum, group) => sum + Number(group.width_m || 0) * Number(group.length_m || 0) * Number(group.quantity || 0),
-    0,
-  )
-}
-
-function physicalSummary(line: Pick<PurchaseReceiptInputItem, 'inventory_shape' | 'physical_payload'>) {
-  if (line.inventory_shape === 'roll') {
-    const payload = rollPayload(line.physical_payload)
-    if (payload.rolls.lengths_m.length === 0) return `0 cuộn, khổ ${payload.rolls.width_m}m, tổng 0.000 m²`
-    return `${payload.rolls.lengths_m.length} cuộn, khổ ${payload.rolls.width_m}m, tổng ${rollTotalArea(payload).toFixed(3)} m²`
-  }
-  if (line.inventory_shape === 'sheet') {
-    const payload = sheetPayload(line.physical_payload)
-    const sheetCount = payload.sheet_groups.reduce((sum, group) => sum + Number(group.quantity || 0), 0)
-    return `${sheetCount} tấm, ${payload.sheet_groups.length} nhóm kích thước, tổng ${sheetTotalArea(payload).toFixed(3)} m²`
-  }
-  return null
-}
 
 export function PurchaseReceiptsPage({
   service,
@@ -176,11 +112,8 @@ export function PurchaseReceiptsPage({
   const receiptSearchRequestId = useRef(0)
 
   const totals = useMemo(() => {
-    const subtotal = form.items.reduce((sum, line) => sum + lineAmount(line), 0)
-    const payable = Math.max(subtotal - Number(form.discount_amount || 0), 0)
-    const remaining = payable - Number(form.paid_amount || 0)
-    return { subtotal, payable, remaining }
-  }, [form.discount_amount, form.items, form.paid_amount])
+    return purchaseReceiptTotals(form)
+  }, [form])
 
   const lowCostWarnings = useMemo(() => {
     return form.items.flatMap((line, index) => {
@@ -200,16 +133,9 @@ export function PurchaseReceiptsPage({
     [financeAccounts],
   )
   const isReadOnly = editingStatus !== null && editingStatus !== 'draft'
-  const selectedReceiptPaidAfterPost = selectedReceipt?.supplier_payments.reduce((sum, payment) => sum + payment.amount, 0) ?? 0
-  const selectedReceiptOutstanding = selectedReceipt ? selectedReceipt.remaining_amount - selectedReceiptPaidAfterPost : 0
+  const selectedReceiptOutstanding = selectedReceipt ? receiptOutstandingAfterPost(selectedReceipt) : 0
   const isCreatingReceipt = detailOpen && editingId === null
-  const receiptSummary = useMemo(() => {
-    const items = receipts ?? []
-    return {
-      payable: items.reduce((sum, receipt) => sum + receipt.payable_amount, 0),
-      remaining: items.reduce((sum, receipt) => sum + receipt.remaining_amount, 0),
-    }
-  }, [receipts])
+  const receiptSummary = useMemo(() => purchaseReceiptListSummary(receipts ?? []), [receipts])
   const {
     sortedItems: sortedReceipts,
     sortState: receiptSortState,
@@ -589,7 +515,7 @@ export function PurchaseReceiptsPage({
     )
     const nextPayload: SheetPhysicalPayload = { sheet_groups: sheetGroups }
     updateLine(index, {
-      quantity: sheetGroups.reduce((sum, group) => sum + Number(group.quantity || 0), 0),
+      quantity: sheetGroupQuantity(sheetGroups),
       physical_payload: nextPayload,
     })
   }
@@ -600,7 +526,7 @@ export function PurchaseReceiptsPage({
       sheet_groups: [...currentPayload.sheet_groups, { width_m: 1, length_m: 1, quantity: 1 }],
     }
     updateLine(index, {
-      quantity: nextPayload.sheet_groups.reduce((sum, group) => sum + Number(group.quantity || 0), 0),
+      quantity: sheetGroupQuantity(nextPayload.sheet_groups),
       physical_payload: nextPayload,
     })
   }
@@ -610,7 +536,7 @@ export function PurchaseReceiptsPage({
     const sheetGroups = currentPayload.sheet_groups.filter((_, currentGroupIndex) => currentGroupIndex !== groupIndex)
     const nextGroups = sheetGroups.length === 0 ? [{ width_m: 1, length_m: 1, quantity: 1 }] : sheetGroups
     updateLine(index, {
-      quantity: nextGroups.reduce((sum, group) => sum + Number(group.quantity || 0), 0),
+      quantity: sheetGroupQuantity(nextGroups),
       physical_payload: { sheet_groups: nextGroups },
     })
   }
@@ -670,32 +596,11 @@ export function PurchaseReceiptsPage({
     }
   }
 
-  const today = localDateString(new Date())
-  const monthRange = currentMonthRange()
   const creatorOptions = useMemo(() => {
     const creators = new Set((receipts ?? []).map((receipt) => receipt.created_by).filter(Boolean))
     return Array.from(creators).sort((left, right) => left.localeCompare(right))
   }, [receipts])
-  const receiptTimeQuickOptions = [
-    {
-      id: 'all',
-      label: 'Toàn thời gian',
-      from: '',
-      to: '',
-    },
-    {
-      id: 'today',
-      label: 'Hôm nay',
-      from: today,
-      to: today,
-    },
-    {
-      id: 'this-month',
-      label: 'Tháng này',
-      from: monthRange.from,
-      to: monthRange.to,
-    },
-  ]
+  const receiptTimeQuickOptions = purchaseReceiptTimeQuickOptions()
   const selectedTimeQuickOption = receiptTimeQuickOptions.find((option) => option.from === dateFrom && option.to === dateTo)?.id ?? 'custom'
 
   const receiptFilterChips = [

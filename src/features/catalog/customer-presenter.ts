@@ -1,0 +1,38 @@
+import type { SalesDocumentListItem } from '../sales-documents/sales-document-service'
+import type { Customer } from './types'
+
+export function customerSalesDocumentStatusText(document: SalesDocumentListItem) {
+  if (document.order_type === 'invoice') {
+    if (document.status === 'cancelled') return 'Đã hủy'
+    if (document.payment_status === 'unpaid' || (document.debt_amount > 0 && document.paid_amount <= 0)) return 'Nợ'
+    if (document.payment_status === 'partial' || document.debt_amount > 0) return 'Nợ 1 phần'
+    return 'Hoàn tất'
+  }
+
+  if (document.status === 'active') return 'Đang hiệu lực'
+  if (document.status === 'converted') return 'Đã chuyển'
+  return 'Đã hủy'
+}
+
+export function customerDateTime(value: string | null | undefined) {
+  if (!value) return 'Chưa có dữ liệu'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Chưa có dữ liệu'
+
+  return new Intl.DateTimeFormat('vi-VN', {
+    dateStyle: 'short',
+    timeStyle: 'short',
+    timeZone: 'Asia/Ho_Chi_Minh',
+  }).format(parsed)
+}
+
+export function customerVisibleSummary(customers: Array<Pick<Customer, 'total_debt_amount' | 'total_sales_amount'>>) {
+  return {
+    visibleDebtTotal: customers.reduce((sum, customer) => sum + (customer.total_debt_amount ?? 0), 0),
+    visibleSalesTotal: customers.reduce((sum, customer) => sum + (customer.total_sales_amount ?? 0), 0),
+  }
+}
+
+export function customerPriceRuleLabel(customer: Pick<Customer, 'customer_group'>) {
+  return customer.customer_group === null ? 'Bảng giá chung' : `Theo nhóm: ${customer.customer_group.name}`
+}

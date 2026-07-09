@@ -10,6 +10,8 @@
 |---|---|
 | Tổng quan hệ thống tài liệu | [00-OVERVIEW-TongQuan/README.md](./00-OVERVIEW-TongQuan/README.md) |
 | Nguồn dữ liệu hiện tại / chống nhầm cách cũ | [CURRENT-DATA-SOURCE.md](./CURRENT-DATA-SOURCE.md) |
+| Quy tắc tách vỏ UI và ruột nghiệp vụ/code | [CODE_ARCHITECTURE_RULES.md](./CODE_ARCHITECTURE_RULES.md) |
+| Kế hoạch tách vỏ/ruột toàn dự án | [ARCHITECTURE-SEPARATION-PLAN.md](./ARCHITECTURE-SEPARATION-PLAN.md) |
 | Nguồn đúng 8 tầng | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 | Quy tắc viết tài liệu | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 | Trạng thái sống / queue hiện tại | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |

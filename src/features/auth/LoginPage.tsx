@@ -1,6 +1,7 @@
-﻿import { FormEvent, useState } from 'react'
+import { FormEvent, useState } from 'react'
 import { useAuthService } from './auth-context'
 import { formatApiError } from '../../lib/api/error-message'
+import { normalizeLogin } from './auth-presenter'
 
 export function LoginPage() {
   const auth = useAuthService()
@@ -55,7 +56,3 @@ export function LoginPage() {
   )
 }
 
-function normalizeLogin(value: string) {
-  const login = value.trim().toLowerCase()
-  return login.includes('@') ? login : `${login}@qc-oms.local`
-}

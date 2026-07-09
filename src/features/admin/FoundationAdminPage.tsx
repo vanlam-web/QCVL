@@ -15,6 +15,15 @@ import {
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
 import { permissions } from '../users/permissions'
+import {
+  adminNullableFormValue,
+  findAdminRoleById,
+  groupAdminPermissionsByModule,
+  permissionDescription,
+  permissionTitle,
+  userRoleLabel,
+  userStatusLabel,
+} from './admin-presenter'
 
 interface AdminState {
   users: UserListItem[]
@@ -187,16 +196,16 @@ export function FoundationAdminPage({
     setSavingUser(true)
     setError(null)
     try {
-      const role = findRoleById(userForm.roleId, customRoles)
+      const role = findAdminRoleById(userForm.roleId, [...roleDefinitions, ...customRoles])
       await service.createUser({
         email: userForm.email,
         username: userForm.username,
         phone: userForm.phone,
-        birthday: nullableFormValue(userForm.birthday),
-        address: nullableFormValue(userForm.address),
-        region: nullableFormValue(userForm.region),
-        ward: nullableFormValue(userForm.ward),
-        note: nullableFormValue(userForm.note),
+        birthday: adminNullableFormValue(userForm.birthday),
+        address: adminNullableFormValue(userForm.address),
+        region: adminNullableFormValue(userForm.region),
+        ward: adminNullableFormValue(userForm.ward),
+        note: adminNullableFormValue(userForm.note),
         password: userForm.password,
         display_name: userForm.displayName,
         permissions: role ? role.permissions : [...internalStaffDefaultPermissions],
@@ -286,7 +295,7 @@ export function FoundationAdminPage({
     return [...builtInRoles, ...customRoles]
   }, [customRoles, state])
   const selectedRole = roleRows.find((role) => role.id === selectedRoleId) ?? null
-  const permissionsByModule = useMemo(() => groupPermissionsByModule(state?.permissions ?? []), [state?.permissions])
+  const permissionsByModule = useMemo(() => groupAdminPermissionsByModule(state?.permissions ?? []), [state?.permissions])
 
   return (
     <ManagementPage
@@ -735,11 +744,6 @@ export function FoundationAdminPage({
   )
 }
 
-function nullableFormValue(value: string): string | null {
-  const trimmed = value.trim()
-  return trimmed.length === 0 ? null : trimmed
-}
-
 function AdminSettingsMenu() {
   return (
     <nav aria-label="Menu thiết lập" className="admin-settings-menu">
@@ -788,72 +792,3 @@ function AdminSettingsGroup({
   )
 }
 
-function userStatusLabel(status: UserListItem['status']) {
-  return status === 'active' ? 'Đã hoạt động' : 'Ngừng hoạt động'
-}
-
-function userRoleLabel(user: UserListItem) {
-  if (user.permissions.includes('perm.manage_users')) return 'Quản trị'
-  if (user.permissions.includes('perm.manage_finance')) return 'Kế toán'
-  if (user.permissions.includes('perm.manage_inventory')) return 'Quản lý kho'
-  if (user.permissions.includes('perm.create_order')) return 'Nhân viên thu ngân'
-  return 'Nhân viên'
-}
-
-function findRoleById(roleId: string, customRoles: RoleListItem[]): Pick<RoleListItem, 'permissions'> | undefined {
-  return roleDefinitions.find((role) => role.id === roleId) ?? customRoles.find((role) => role.id === roleId)
-}
-
-function groupPermissionsByModule(permissions: Permission[]) {
-  return Object.entries(
-    permissions.reduce<Record<string, Permission[]>>((modules, permission) => {
-      const module = permissionModuleLabel(permission)
-      modules[module] = [...(modules[module] ?? []), permission]
-      return modules
-    }, {}),
-  ).sort(([a], [b]) => a.localeCompare(b))
-}
-
-function permissionModuleLabel(permission: Permission) {
-  const byModule: Record<string, string> = {
-    administration: 'Thiết lập',
-    catalog: 'Hàng hóa',
-    finance: 'Sổ quỹ',
-    inventory: 'Kho hàng',
-    reports: 'Báo cáo',
-    sales: 'Bán hàng',
-  }
-  return byModule[permission.module] ?? permission.module
-}
-
-function permissionTitle(permission: Permission) {
-  const byCode: Partial<Record<Permission['code'], string>> = {
-    'perm.access_admin_panel': 'Mở trang thiết lập',
-    'perm.apply_discount': 'Áp dụng chiết khấu',
-    'perm.create_order': 'Tạo đơn bán hàng',
-    'perm.edit_order_locked': 'Sửa đơn đã khóa',
-    'perm.edit_price_book': 'Quản lý bảng giá',
-    'perm.manage_finance': 'Quản lý sổ quỹ',
-    'perm.manage_inventory': 'Quản lý tồn kho',
-    'perm.manage_users': 'Quản lý người dùng',
-    'perm.refund_order': 'Trả hàng',
-    'perm.view_shift_report': 'Xem báo cáo ca',
-  }
-  return byCode[permission.code] ?? permission.description
-}
-
-function permissionDescription(permission: Permission) {
-  const byCode: Partial<Record<Permission['code'], string>> = {
-    'perm.access_admin_panel': 'Cho phép vào khu vực Thiết lập.',
-    'perm.apply_discount': 'Cho phép giảm giá khi bán hàng.',
-    'perm.create_order': 'Cho phép tạo hóa đơn và đơn bán hàng.',
-    'perm.edit_order_locked': 'Cho phép sửa chứng từ đã bị khóa.',
-    'perm.edit_price_book': 'Cho phép chỉnh bảng giá và danh sách giá.',
-    'perm.manage_finance': 'Cho phép thao tác sổ quỹ, công nợ và đối soát.',
-    'perm.manage_inventory': 'Cho phép quản lý tồn kho và nghiệp vụ kho.',
-    'perm.manage_users': 'Cho phép tạo tài khoản, khóa tài khoản và phân quyền.',
-    'perm.refund_order': 'Cho phép lập phiếu trả hàng.',
-    'perm.view_shift_report': 'Cho phép xem báo cáo ca và tổng kết bán hàng.',
-  }
-  return byCode[permission.code] ?? permission.description
-}

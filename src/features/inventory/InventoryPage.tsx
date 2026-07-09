@@ -15,44 +15,10 @@ import {
 } from '../../components/ui-shell/management-layout'
 import type { InventoryProduct, InventoryProductStatus, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake } from './types'
 import type { InventoryService } from './inventory-service'
+import { dateText, inventoryListSummary, moneyText, numberText, shapeText, statusText, stocktakeStatusText } from './inventory-presenter'
 
 const pageSizeDefault = 15
 type InventoryView = 'products' | 'stocktakes' | 'objects'
-
-function shapeText(shape: InventoryShape | 'all') {
-  if (shape === 'normal') return 'Hàng thường'
-  if (shape === 'roll') return 'Hàng cuộn'
-  if (shape === 'sheet') return 'Hàng tấm'
-  return 'Tất cả'
-}
-
-function statusText(status: InventoryProductStatus | 'all') {
-  if (status === 'active') return 'Đang kinh doanh'
-  if (status === 'inactive') return 'Ngưng bán'
-  return 'Tất cả'
-}
-
-function stocktakeStatusText(status: Stocktake['status']) {
-  if (status === 'balanced') return 'Đã cân bằng'
-  if (status === 'draft') return 'Nháp'
-  return 'Đã hủy'
-}
-
-function numberText(value: number) {
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(value)
-}
-
-function moneyText(value: number | null) {
-  if (value === null) return 'Chưa có'
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value).replaceAll('.', ' ')
-}
-
-function dateText(value: string | null) {
-  if (value === null) return 'Chưa có'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
-}
 
 export function InventoryPage({ service }: { service: InventoryService }) {
   const [view, setView] = useState<InventoryView>('products')
@@ -95,8 +61,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [error, setError] = useState<string | null>(null)
   const productSearchRequestId = useRef(0)
 
-  const negativeCount = products?.filter((product) => product.is_negative).length ?? 0
-  const totalQty = products?.reduce((sum, product) => sum + product.available_qty, 0) ?? 0
+  const { negativeCount, totalQty } = inventoryListSummary(products)
 
   async function loadProducts(input: {
     search?: string

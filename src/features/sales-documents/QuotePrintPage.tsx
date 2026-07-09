@@ -1,23 +1,13 @@
 import { useEffect, useState } from 'react'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatMeasure, formatMoney } from '../../lib/number-format'
 import type { SalesDocumentService } from './sales-document-service'
 import type { SalesDocumentDetail } from './types'
-
-function money(value: number) {
-  return formatMoney(value)
-}
-
-function number(value: number) {
-  return formatMeasure(value)
-}
-
-function date(value: string) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value))
-}
+import {
+  salesDocumentMeasureText,
+  salesDocumentMoneyText,
+  salesDocumentQuoteDateText,
+  salesDocumentQuoteLineDimensionText,
+} from './sales-document-presenter'
 
 export function QuotePrintPage({
   documentId,
@@ -108,7 +98,7 @@ export function QuotePrintPage({
               </div>
               <div>
                 <dt>Ngày</dt>
-                <dd>{date(document.created_at)}</dd>
+                <dd>{salesDocumentQuoteDateText(document.created_at)}</dd>
               </div>
             </dl>
           </div>
@@ -155,14 +145,14 @@ export function QuotePrintPage({
                 <td>{item.product.code}</td>
                 <td>
                   <strong>{item.product.name}</strong>
-                  <p>{lineDimensionText(item)}</p>
+                  <p>{salesDocumentQuoteLineDimensionText(item)}</p>
                   {item.note ? <p>{item.note}</p> : null}
                 </td>
                 <td>{item.product.unit_name}</td>
-                <td>{number(item.quantity)}</td>
-                <td>{money(item.unit_price)}</td>
-                <td>{item.discount_amount > 0 ? money(item.discount_amount) : '-'}</td>
-                <td>{money(item.line_total)}</td>
+                <td>{salesDocumentMeasureText(item.quantity)}</td>
+                <td>{salesDocumentMoneyText(item.unit_price)}</td>
+                <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : '-'}</td>
+                <td>{salesDocumentMoneyText(item.line_total)}</td>
               </tr>
             ))}
           </tbody>
@@ -172,15 +162,15 @@ export function QuotePrintPage({
           <dl>
             <div>
               <dt>Tổng tiền hàng</dt>
-              <dd>{money(document.subtotal_amount)}</dd>
+              <dd>{salesDocumentMoneyText(document.subtotal_amount)}</dd>
             </div>
             <div>
               <dt>Giảm giá</dt>
-              <dd>{money(document.discount_amount)}</dd>
+              <dd>{salesDocumentMoneyText(document.discount_amount)}</dd>
             </div>
             <div>
               <dt>Tổng báo giá</dt>
-              <dd>{money(document.total_amount)}</dd>
+              <dd>{salesDocumentMoneyText(document.total_amount)}</dd>
             </div>
           </dl>
         </section>
@@ -198,8 +188,3 @@ export function QuotePrintPage({
   )
 }
 
-function lineDimensionText(item: SalesDocumentDetail['items'][number]) {
-  if (item.width_m && item.height_m) return `${number(item.width_m)} x ${number(item.height_m)} m`
-  if (item.linear_m) return `${number(item.linear_m)} m tới`
-  return item.product.sell_method === 'quantity' ? 'Theo số lượng' : item.product.unit_name
-}

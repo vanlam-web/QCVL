@@ -115,5 +115,6 @@ Ngay 2026-07-09, NAS `http://100.84.228.125:3200` da duoc verify:
 - `PT-CN-MRD47JDC-72CF`
 - hoa don partial, con no `200000`
 - hoa don/no can thu/so quy van con sau restart `qcvl-app`
+- SalesDocuments filter da deploy cung backend NAS: query comma `status=active,completed` tra `total=24`; UI `/sales-documents` co du lieu va khong bi rong do backend cu khong hieu comma.
 
 Chi tiet deploy xem [07-DEPLOYMENT-TrienKhai/QCVL-NAS-DEV.md](./07-DEPLOYMENT-TrienKhai/QCVL-NAS-DEV.md).

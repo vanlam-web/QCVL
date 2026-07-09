@@ -7,6 +7,8 @@ export const maxInvoiceTabs = 10
 export const quickProductLoadSize = 120
 
 export type DiscountMode = 'amount' | 'percent'
+export type CheckoutPaymentMode = 'cash' | 'bank' | 'mixed'
+export type CheckoutSurplusMode = 'return' | 'old-debt'
 
 export interface PosInvoiceTab {
   id: string
@@ -290,13 +292,108 @@ export function lineSubtotal(line: CheckoutCartLine): number {
   return Math.round(line.quantity * line.unitPrice)
 }
 
+export function lineDiscount(line: CheckoutCartLine): number {
+  return Math.min(Math.max(line.discountAmount ?? 0, 0), lineSubtotal(line))
+}
+
 export function lineTotal(line: CheckoutCartLine): number {
-  return lineSubtotal(line) - Math.min(line.discountAmount ?? 0, lineSubtotal(line))
+  return lineSubtotal(line) - lineDiscount(line)
 }
 
 export function clampLineDiscount(line: CheckoutCartLine): CheckoutCartLine {
   return {
     ...line,
-    discountAmount: Math.min(line.discountAmount ?? 0, lineSubtotal(line)),
+    discountAmount: lineDiscount(line),
+  }
+}
+
+export function cartLineDiscountAmountFromPercent(line: CheckoutCartLine, percent: number) {
+  const subtotal = lineSubtotal(line)
+  return Math.round((subtotal * Math.min(Math.max(percent, 0), 100)) / 100)
+}
+
+export function cartLineDiscountPercent(line: CheckoutCartLine) {
+  const subtotal = lineSubtotal(line)
+  if (subtotal <= 0) return 0
+  return Math.round((lineDiscount(line) / subtotal) * 100)
+}
+
+export function checkoutSummary({
+  cartLines,
+  checkoutDiscountAmount,
+  cashAmount,
+  cashAmountOverride,
+  bankAmount,
+  paymentMode,
+  selectedCustomerId,
+  surplusMode,
+  oldDebtPaymentAmount,
+}: {
+  cartLines: CheckoutCartLine[]
+  checkoutDiscountAmount: number
+  cashAmount?: number
+  cashAmountOverride?: number | null
+  bankAmount: number
+  paymentMode: CheckoutPaymentMode
+  selectedCustomerId: string | null
+  surplusMode: CheckoutSurplusMode
+  oldDebtPaymentAmount: number
+}) {
+  const subtotal = cartLines.reduce((sum, line) => sum + lineSubtotal(line), 0)
+  const lineDiscountAmount = cartLines.reduce((sum, line) => sum + lineDiscount(line), 0)
+  const maxCheckoutDiscount = Math.max(subtotal - lineDiscountAmount, 0)
+  const normalizedCheckoutDiscount = Math.min(Math.max(checkoutDiscountAmount, 0), maxCheckoutDiscount)
+  const discountAmount = lineDiscountAmount + normalizedCheckoutDiscount
+  const total = subtotal - discountAmount
+  const resolvedCashAmount = cashAmount ?? cashAmountOverride ?? total
+  const customerPaymentAmount = paymentMode === 'bank' ? bankAmount : resolvedCashAmount
+  const received = resolvedCashAmount + bankAmount
+  const surplus = Math.max(received - total, 0)
+  const debt = Math.max(total - received, 0)
+  const oldDebtPayment = selectedCustomerId !== null && surplusMode === 'old-debt'
+    ? oldDebtPaymentAmount + surplus
+    : oldDebtPaymentAmount
+  const grossCashAmount = resolvedCashAmount + oldDebtPaymentAmount
+
+  return {
+    subtotal,
+    lineDiscountAmount,
+    maxCheckoutDiscount,
+    discountAmount,
+    total,
+    cashAmount: resolvedCashAmount,
+    customerPaymentAmount,
+    received,
+    surplus,
+    debt,
+    oldDebtPayment,
+    grossCashAmount,
+  }
+}
+
+export function linesToCheckoutItems(lines: CheckoutCartLine[], checkoutDiscountAmount: number) {
+  let remainingCheckoutDiscount = Math.max(checkoutDiscountAmount, 0)
+
+  return lines.map((line) => {
+    const subtotal = lineSubtotal(line)
+    const baseDiscount = lineDiscount(line)
+    const extraDiscount = Math.min(remainingCheckoutDiscount, Math.max(subtotal - baseDiscount, 0))
+    remainingCheckoutDiscount -= extraDiscount
+
+    return lineToCheckoutItem(line, baseDiscount + extraDiscount)
+  })
+}
+
+export function lineToCheckoutItem(line: CheckoutCartLine, discountAmount = lineDiscount(line)) {
+  return {
+    product_id: line.product.id,
+    quantity: line.quantity,
+    width_m: line.width_m,
+    height_m: line.height_m,
+    linear_m: line.linear_m,
+    unit_price: line.unitPrice,
+    discount_amount: Math.min(Math.max(discountAmount, 0), lineSubtotal(line)),
+    price_source: line.priceSource,
+    note: line.note,
   }
 }

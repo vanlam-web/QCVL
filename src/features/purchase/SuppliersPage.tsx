@@ -1,7 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Save, Search, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatMoney } from '../../lib/number-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
 import type { SupplierInput, SupplierListFilters, SupplierService } from './supplier-service'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
@@ -19,10 +18,8 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
-
-function money(value: number) {
-  return formatMoney(value)
-}
+import { supplierNumberFilterValue } from './supplier-filters'
+import { supplierListSummary, supplierMoneyText } from './supplier-presenter'
 
 const blankForm: SupplierInput = {
   code: '',
@@ -38,11 +35,6 @@ const blankForm: SupplierInput = {
 
 const supplierPageSize = 15
 type SupplierSortKey = 'code' | 'name' | 'phone' | 'email' | 'current_payable_amount' | 'total_purchase_amount' | 'linked_customer' | 'status'
-
-function numberFilterValue(value: string) {
-  const parsed = Number(value)
-  return value.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed
-}
 
 export function SuppliersPage({
   service,
@@ -89,8 +81,7 @@ export function SuppliersPage({
   const supplierSearchRequestId = useRef(0)
 
   const bankAccounts = financeAccounts.filter((account) => account.is_active && account.account_type === 'bank')
-  const payableTotal = suppliers?.reduce((sum, supplier) => sum + supplier.current_payable_amount, 0) ?? 0
-  const purchaseTotal = suppliers?.reduce((sum, supplier) => sum + supplier.total_purchase_amount, 0) ?? 0
+  const { payableTotal, purchaseTotal } = supplierListSummary(suppliers)
   const {
     sortedItems: sortedSuppliers,
     sortState: supplierSortState,
@@ -135,10 +126,10 @@ export function SuppliersPage({
     const nextPageSize = input.page_size ?? pageSize
     setError(null)
     try {
-      const totalPurchaseMinFilter = numberFilterValue(nextTotalPurchaseMin)
-      const totalPurchaseMaxFilter = numberFilterValue(nextTotalPurchaseMax)
-      const currentPayableMinFilter = numberFilterValue(nextCurrentPayableMin)
-      const currentPayableMaxFilter = numberFilterValue(nextCurrentPayableMax)
+      const totalPurchaseMinFilter = supplierNumberFilterValue(nextTotalPurchaseMin)
+      const totalPurchaseMaxFilter = supplierNumberFilterValue(nextTotalPurchaseMax)
+      const currentPayableMinFilter = supplierNumberFilterValue(nextCurrentPayableMin)
+      const currentPayableMaxFilter = supplierNumberFilterValue(nextCurrentPayableMax)
       const result = await service.listSuppliers({
         page: nextPage,
         page_size: nextPageSize,
@@ -228,10 +219,10 @@ export function SuppliersPage({
       return
     }
     try {
-      const totalPurchaseMinFilter = numberFilterValue(totalPurchaseMin)
-      const totalPurchaseMaxFilter = numberFilterValue(totalPurchaseMax)
-      const currentPayableMinFilter = numberFilterValue(currentPayableMin)
-      const currentPayableMaxFilter = numberFilterValue(currentPayableMax)
+      const totalPurchaseMinFilter = supplierNumberFilterValue(totalPurchaseMin)
+      const totalPurchaseMaxFilter = supplierNumberFilterValue(totalPurchaseMax)
+      const currentPayableMinFilter = supplierNumberFilterValue(currentPayableMin)
+      const currentPayableMaxFilter = supplierNumberFilterValue(currentPayableMax)
       const result = await service.listSuppliers({
         search: query,
         status,
@@ -582,7 +573,7 @@ export function SuppliersPage({
             {payableReceipts.map((receipt) => (
               <fieldset key={receipt.id}>
                 <legend>{receipt.code}</legend>
-                <p>Còn nợ: {money(receipt.outstanding_amount)}</p>
+                <p>Còn nợ: {supplierMoneyText(receipt.outstanding_amount)}</p>
                 <label>
                   Số tiền trả cho {receipt.code}
                   <input

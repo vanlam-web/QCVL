@@ -9,11 +9,8 @@ import {
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import type { CurrentUserData } from '../../lib/api/types'
+import { dashboardChartPoints, dashboardWavePath } from './dashboard-presenter'
 
-const chartWidth = 640
-const chartHeight = 180
-const chartInnerHeight = 136
-const chartPaddingY = 24
 const revenuePoints = [34, 46, 42, 58, 52, 74, 68, 86, 80, 98, 92, 116]
 const weekdayBars = [
   { label: 'T2', value: 42 },
@@ -44,22 +41,6 @@ const activities = [
   { icon: PackagePlus, actor: 'Kho', text: 'vừa nhập hàng', value: '3 800 000', time: '42 phút trước' },
   { icon: ReceiptText, actor: 'Thu ngân', text: 'vừa thu công nợ', value: '650 000', time: '2 giờ trước' },
 ]
-
-function wavePath(points: number[]) {
-  return chartPoints(points)
-    .map(({ x, y }, index) => `${index === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`)
-    .join(' ')
-}
-
-function chartPoints(points: number[]) {
-  const max = Math.max(...points)
-  const min = Math.min(...points)
-  const step = chartWidth / (points.length - 1)
-  return points.map((point, index) => ({
-    x: index * step,
-    y: chartHeight - chartPaddingY - ((point - min) / (max - min || 1)) * chartInnerHeight,
-  }))
-}
 
 export function DashboardPage({
   onSignOut,
@@ -146,9 +127,9 @@ export function DashboardPage({
                 {[36, 72, 108, 144].map((y) => (
                   <line className="dashboard-chart-gridline" key={y} x1="0" x2="640" y1={y} y2={y} />
                 ))}
-                <path d={`${wavePath(revenuePoints)} L 640 180 L 0 180 Z`} fill="url(#dashboardWaveFill)" />
-                <path d={wavePath(revenuePoints)} fill="none" stroke="url(#dashboardWaveStroke)" strokeLinecap="round" strokeWidth="5" />
-                {chartPoints(revenuePoints).map(({ x, y }, index) => (
+                <path d={`${dashboardWavePath(revenuePoints)} L 640 180 L 0 180 Z`} fill="url(#dashboardWaveFill)" />
+                <path d={dashboardWavePath(revenuePoints)} fill="none" stroke="url(#dashboardWaveStroke)" strokeLinecap="round" strokeWidth="5" />
+                {dashboardChartPoints(revenuePoints).map(({ x, y }, index) => (
                   <circle key={`${x}-${y}`} cx={x} cy={y} r={index === revenuePoints.length - 1 ? 5 : 3.5} />
                 ))}
               </svg>

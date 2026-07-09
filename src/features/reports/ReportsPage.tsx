@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { quickDateRange } from '../../lib/date-ranges'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementFilterGroup,
@@ -13,29 +14,11 @@ import type { CashbookEntry, CustomerDebtSummary } from '../finance/types'
 import type { InventoryProduct } from '../inventory/types'
 import type { SalesDocumentListItem } from '../sales-documents/types'
 import type { ReportService } from './report-service'
+import { reportDateText, reportNumberText, reportOverviewSummary } from './reports-presenter'
 
-function localDateString(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
-}
-
-function currentDayRange() {
-  const today = localDateString(new Date())
-  return { from: today, to: today }
-}
-
-function dateText(value: string) {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
-}
-
-function numberText(value: number) {
-  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(value)
-}
 
 export function ReportsPage({ service }: { service: ReportService }) {
-  const initialRange = useMemo(() => currentDayRange(), [])
+  const initialRange = useMemo(() => quickDateRange('today'), [])
   const [from, setFrom] = useState(initialRange.from)
   const [to, setTo] = useState(initialRange.to)
   const [loadedRange, setLoadedRange] = useState(initialRange)
@@ -46,12 +29,11 @@ export function ReportsPage({ service }: { service: ReportService }) {
   const [cashbookSummary, setCashbookSummary] = useState({ opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 })
   const [error, setError] = useState<string | null>(null)
 
-  const salesTotal = sales?.reduce((sum, item) => sum + item.total_amount, 0) ?? 0
-  const salesPaid = sales?.reduce((sum, item) => sum + item.paid_amount, 0) ?? 0
-  const salesDebt = sales?.reduce((sum, item) => sum + item.debt_amount, 0) ?? 0
-  const debtTotal = debts?.reduce((sum, item) => sum + item.total_debt, 0) ?? 0
-  const negativeStockCount = inventory?.filter((item) => item.is_negative).length ?? 0
-  const inventoryQty = inventory?.reduce((sum, item) => sum + item.available_qty, 0) ?? 0
+  const { salesTotal, salesPaid, salesDebt, debtTotal, negativeStockCount, inventoryQty } = reportOverviewSummary({
+    sales,
+    debts,
+    inventory,
+  })
 
   async function loadReports(input: { from: string; to: string }) {
     setError(null)
@@ -78,7 +60,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
     async function loadInitial() {
       setError(null)
       try {
-        const range = currentDayRange()
+        const range = quickDateRange('today')
         const [salesResult, debtResult, cashbookResult, inventoryResult] = await Promise.all([
           service.listSalesDocuments({ from: range.from, to: range.to, page: 1, page_size: 100 }),
           service.listCustomerDebts({ page: 1, page_size: 100 }),
@@ -172,7 +154,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
                 {cashbook.slice(0, 8).map((entry) => (
                   <tr key={entry.id}>
                     <td>{entry.code}</td>
-                    <td>{dateText(entry.created_at)}</td>
+                    <td>{reportDateText(entry.created_at)}</td>
                     <td>{entry.finance_account.code}</td>
                     <td>{entry.direction === 'in' ? 'Thu' : 'Chi'}</td>
                     <td><MoneyText value={Math.abs(entry.amount_delta)} /></td>
@@ -210,7 +192,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
                 {sales.slice(0, 10).map((document) => (
                   <tr key={document.id}>
                     <td><strong>{document.code}</strong></td>
-                    <td>{dateText(document.created_at)}</td>
+                    <td>{reportDateText(document.created_at)}</td>
                     <td>{document.customer.name}</td>
                     <td>{document.seller.name}</td>
                     <td><MoneyText value={document.total_amount} /></td>
@@ -263,7 +245,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
         <h2>Hàng hóa</h2>
         <MetricGrid ariaLabel="Chỉ số tồn kho">
           <MetricCard label="Mặt hàng đang kinh doanh" value={inventory?.length ?? 0} hint="Tối đa 100 dòng đầu" tone="neutral" />
-          <MetricCard label="Tồn kho" value={numberText(inventoryQty)} hint="Cộng số lượng tồn" tone="info" />
+          <MetricCard label="Tồn kho" value={reportNumberText(inventoryQty)} hint="Cộng số lượng tồn" tone="info" />
           <MetricCard label="Âm kho" value={negativeStockCount} hint="Cần kiểm tra" tone={negativeStockCount > 0 ? 'danger' : 'success'} />
         </MetricGrid>
         {inventory === null ? <p>Đang tải hàng hóa...</p> : null}
@@ -286,7 +268,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
                     <td><strong>{product.code}</strong></td>
                     <td>{product.name}</td>
                     <td>{product.inventory_shape}</td>
-                    <td>{numberText(product.available_qty)} {product.stock_unit}</td>
+                    <td>{reportNumberText(product.available_qty)} {product.stock_unit}</td>
                     <td><StatusChip tone={product.is_negative ? 'danger' : 'success'}>{product.is_negative ? 'Âm kho' : 'Ổn'}</StatusChip></td>
                   </tr>
                 ))}

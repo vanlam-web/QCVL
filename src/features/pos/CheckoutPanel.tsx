@@ -11,6 +11,7 @@ import type {
 } from '../orders/order-service'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
+import { checkoutSummary, linesToCheckoutItems } from './pos-core'
 
 const pinnedBankAccountsStorageKey = 'finance.bankAccounts.pinnedIds'
 
@@ -53,28 +54,28 @@ export function CheckoutPanel({
   const [result, setResult] = useState<CheckoutResult | null>(null)
   const [quoteResult, setQuoteResult] = useState<QuoteSummary | null>(null)
 
-  const subtotal = useMemo(
-    () => cartLines.reduce((sum, line) => sum + lineSubtotal(line), 0),
-    [cartLines],
-  )
-  const lineDiscountAmount = useMemo(
-    () => cartLines.reduce((sum, line) => sum + lineDiscount(line), 0),
-    [cartLines],
-  )
-  const maxCheckoutDiscount = Math.max(subtotal - lineDiscountAmount, 0)
-  const discountAmount = lineDiscountAmount + Math.min(checkoutDiscountAmount, maxCheckoutDiscount)
-  const total = subtotal - discountAmount
-  const cashAmount = cashAmountOverride ?? total
-  const customerPaymentAmount = paymentMode === 'bank' ? bankAmount : cashAmount
-  const received = cashAmount + bankAmount
-  const surplus = Math.max(received - total, 0)
-  const debt = Math.max(total - received, 0)
+  const {
+    subtotal,
+    maxCheckoutDiscount,
+    total,
+    cashAmount,
+    customerPaymentAmount,
+    surplus,
+    debt,
+    oldDebtPayment,
+    grossCashAmount,
+  } = checkoutSummary({
+    cartLines,
+    checkoutDiscountAmount,
+    cashAmountOverride,
+    bankAmount,
+    paymentMode,
+    selectedCustomerId: selectedCustomer?.id ?? null,
+    surplusMode,
+    oldDebtPaymentAmount,
+  })
   const visibleCustomerDebt =
     selectedCustomer !== null && customerDebt?.customer_id === selectedCustomer.id ? customerDebt : null
-  const oldDebtPayment = selectedCustomer !== null && surplusMode === 'old-debt'
-    ? oldDebtPaymentAmount + surplus
-    : oldDebtPaymentAmount
-  const grossCashAmount = cashAmount + oldDebtPaymentAmount
   const pinnedBankAccount = useMemo(
     () => accounts.find((account) => pinnedBankAccountIds.includes(account.id)) ?? null,
     [accounts, pinnedBankAccountIds],
@@ -618,37 +619,3 @@ function financeAccountLabel(account: FinanceAccount) {
   return `${account.code} - ${account.name}`
 }
 
-function lineSubtotal(line: CheckoutCartLine): number {
-  return Math.round(line.quantity * line.unitPrice)
-}
-
-function lineDiscount(line: CheckoutCartLine): number {
-  return Math.min(Math.max(line.discountAmount ?? 0, 0), lineSubtotal(line))
-}
-
-function linesToCheckoutItems(lines: CheckoutCartLine[], checkoutDiscountAmount: number) {
-  let remainingCheckoutDiscount = Math.max(checkoutDiscountAmount, 0)
-
-  return lines.map((line) => {
-    const subtotal = lineSubtotal(line)
-    const baseDiscount = lineDiscount(line)
-    const extraDiscount = Math.min(remainingCheckoutDiscount, Math.max(subtotal - baseDiscount, 0))
-    remainingCheckoutDiscount -= extraDiscount
-
-    return lineToCheckoutItem(line, baseDiscount + extraDiscount)
-  })
-}
-
-function lineToCheckoutItem(line: CheckoutCartLine, discountAmount = lineDiscount(line)) {
-  return {
-    product_id: line.product.id,
-    quantity: line.quantity,
-    width_m: line.width_m,
-    height_m: line.height_m,
-    linear_m: line.linear_m,
-    unit_price: line.unitPrice,
-    discount_amount: Math.min(Math.max(discountAmount, 0), lineSubtotal(line)),
-    price_source: line.priceSource,
-    note: line.note,
-  }
-}

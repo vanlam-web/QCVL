@@ -16,122 +16,49 @@ import {
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
-import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
 import { formatApiError } from '../../lib/api/error-message'
 import type { SalesDocumentDetail, SalesDocumentListItem } from './types'
 import type { SalesDocumentService } from './sales-document-service'
 import type { OrderService, QuoteReopenPayload } from '../orders/order-service'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { FoundationService } from '../users/foundation-service'
+import {
+  allPaymentStatusFilters,
+  allSalesDocumentStatusFilters as allStatusFilters,
+  allSalesDocumentTypeFilters as allTypeFilters,
+  buildSalesDocumentListRequest,
+  currentMonthRange,
+  defaultSalesDocumentStatusFilters as defaultStatusFilters,
+  displayDate,
+  quickTimeGroups,
+  quickTimeLabels,
+  quickTimeRange,
+  salesDocumentsPageSize,
+  sameFilterValues,
+  toggleFilterValue,
+  type PaymentMethodFilter,
+  type PaymentStatusValue,
+  type SalesDocumentStatusFilter,
+  type SalesDocumentTypeFilter,
+  type TimeFilter,
+} from './sales-document-filters'
+import {
+  documentTypeFilterLabel,
+  lifecycleFilterLabel,
+  paymentMethodFilterLabel,
+  paymentReceiptCreatorLabel,
+  paymentReceiptMethodLabel,
+  paymentReceiptMethodTotal,
+  paymentReceiptStatusLabel,
+  paymentStatusFilterLabel,
+  salesDocumentDateTimeText,
+  salesDocumentLineSellPrice,
+  salesDocumentListSummary,
+  salesDocumentStatusLabel,
+  salesDocumentStatusTone,
+} from './sales-document-presenter'
 
-function dateTime(value: string | null | undefined, fallback?: string | null): string {
-  if (!value) return fallback ? dateTime(fallback) : '-'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return fallback ? dateTime(fallback) : '-'
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(parsed)
-}
-
-const salesDocumentsPageSize = 15
 type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
-type TimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'last_week' | 'last_7_days' | 'month' | 'last_month' | 'last_30_days' | 'quarter' | 'last_quarter' | 'year' | 'last_year' | 'custom'
-
-const quickTimeGroups: Array<{ title: string; presets: Array<Exclude<TimeFilter, 'custom'>> }> = [
-  { title: 'Theo ngày', presets: ['today', 'yesterday'] },
-  { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
-  { title: 'Theo tháng', presets: ['month', 'last_month', 'last_30_days'] },
-  { title: 'Theo quý', presets: ['quarter', 'last_quarter'] },
-  { title: 'Theo năm', presets: ['year', 'last_year', 'all'] },
-]
-
-const quickTimeLabels: Record<TimeFilter, string> = {
-  all: 'Toàn thời gian',
-  today: 'Hôm nay',
-  yesterday: 'Hôm qua',
-  week: 'Tuần này',
-  last_week: 'Tuần trước',
-  last_7_days: '7 ngày qua',
-  month: 'Tháng này',
-  last_month: 'Tháng trước',
-  last_30_days: '30 ngày qua',
-  quarter: 'Quý này',
-  last_quarter: 'Quý trước',
-  year: 'Năm nay',
-  last_year: 'Năm trước',
-  custom: 'Tùy chỉnh',
-}
-
-function localDateString(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
-}
-
-function currentMonthRange() {
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return { from: localDateString(firstDay), to: localDateString(lastDay) }
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + amount)
-  return next
-}
-
-function quickTimeRange(preset: Exclude<TimeFilter, 'custom'>) {
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const day = today.getDay()
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  const currentQuarter = Math.floor(today.getMonth() / 3)
-
-  if (preset === 'all') return { from: '', to: '' }
-  if (preset === 'today') return { from: localDateString(today), to: localDateString(today) }
-  if (preset === 'yesterday') {
-    const yesterday = addDays(today, -1)
-    return { from: localDateString(yesterday), to: localDateString(yesterday) }
-  }
-  if (preset === 'week') {
-    const firstDay = addDays(today, mondayOffset)
-    return { from: localDateString(firstDay), to: localDateString(addDays(firstDay, 6)) }
-  }
-  if (preset === 'last_week') {
-    const firstDay = addDays(today, mondayOffset - 7)
-    return { from: localDateString(firstDay), to: localDateString(addDays(firstDay, 6)) }
-  }
-  if (preset === 'last_7_days') return { from: localDateString(addDays(today, -6)), to: localDateString(today) }
-  if (preset === 'month') return currentMonthRange()
-  if (preset === 'last_month') {
-    const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    const lastDay = new Date(today.getFullYear(), today.getMonth(), 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'last_30_days') return { from: localDateString(addDays(today, -29)), to: localDateString(today) }
-  if (preset === 'quarter') {
-    const firstDay = new Date(today.getFullYear(), currentQuarter * 3, 1)
-    const lastDay = new Date(today.getFullYear(), currentQuarter * 3 + 3, 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'last_quarter') {
-    const firstDay = new Date(today.getFullYear(), currentQuarter * 3 - 3, 1)
-    const lastDay = new Date(today.getFullYear(), currentQuarter * 3, 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'year') {
-    return { from: localDateString(new Date(today.getFullYear(), 0, 1)), to: localDateString(new Date(today.getFullYear(), 11, 31)) }
-  }
-  return { from: localDateString(new Date(today.getFullYear() - 1, 0, 1)), to: localDateString(new Date(today.getFullYear() - 1, 11, 31)) }
-}
-
-function displayDate(value: string) {
-  if (!value) return '--/--/----'
-  const [year, month, day] = value.split('-')
-  return `${day}/${month}/${year}`
-}
 
 interface SalesDocumentsState {
   items: SalesDocumentListItem[]
@@ -139,9 +66,6 @@ interface SalesDocumentsState {
   page: number
   pageSize: number
 }
-
-type PaymentStatusFilter = 'all' | 'unpaid' | 'partial' | 'paid'
-type PaymentMethodFilter = 'all' | 'cash' | 'bank_transfer'
 
 export function SalesDocumentsPage({
   service,
@@ -166,9 +90,9 @@ export function SalesDocumentsPage({
   const [documentSearchSuggestions, setDocumentSearchSuggestions] = useState<SalesDocumentListItem[]>([])
   const [documentSearchSuggestionsOpen, setDocumentSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'all' | 'invoice' | 'quote'>('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'cancelled'>('all')
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusFilter>('all')
+  const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(allTypeFilters)
+  const [statusFilter, setStatusFilter] = useState<SalesDocumentStatusFilter[]>(defaultStatusFilters)
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusValue[]>(allPaymentStatusFilters)
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all')
   const [sellerFilter, setSellerFilter] = useState('all')
   const [priceListFilter, setPriceListFilter] = useState('all')
@@ -189,9 +113,9 @@ export function SalesDocumentsPage({
 
   async function loadDocuments(input: {
     search?: string
-    type?: typeof typeFilter
-    status?: typeof statusFilter
-    paymentStatus?: PaymentStatusFilter
+    type?: SalesDocumentTypeFilter[]
+    status?: SalesDocumentStatusFilter[]
+    paymentStatus?: PaymentStatusValue[]
     paymentMethod?: PaymentMethodFilter
     seller?: string
     priceList?: string
@@ -215,19 +139,20 @@ export function SalesDocumentsPage({
     const nextPageSize = input.page_size ?? state?.pageSize ?? salesDocumentsPageSize
     setError(null)
     try {
-      const result = await service.listSalesDocuments({
-        ...(nextSearch ? { search: nextSearch } : {}),
-        ...(nextType === 'all' ? {} : { type: nextType }),
-        ...(nextStatus === 'all' ? {} : { status: nextStatus }),
-        ...(nextPaymentStatus === 'all' ? {} : { payment_status: nextPaymentStatus }),
-        ...(nextPaymentMethod === 'all' ? {} : { payment_method: nextPaymentMethod }),
-        ...(nextSeller === 'all' ? {} : { created_by: nextSeller }),
-        ...(nextPriceList === 'all' ? {} : { price_list_id: nextPriceList }),
-        ...(nextTime !== 'all' && nextFrom ? { from: nextFrom } : {}),
-        ...(nextTime !== 'all' && nextTo ? { to: nextTo } : {}),
+      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
+        search: nextSearch,
+        type: nextType,
+        status: nextStatus,
+        paymentStatus: nextPaymentStatus,
+        paymentMethod: nextPaymentMethod,
+        seller: nextSeller,
+        priceList: nextPriceList,
+        time: nextTime,
+        from: nextFrom,
+        to: nextTo,
         page: nextPage,
         page_size: nextPageSize,
-      })
+      }))
       setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size })
       if (result.items.length === 0) setSelected(null)
     } catch (cause) {
@@ -259,12 +184,19 @@ export function SalesDocumentsPage({
       setError(null)
       try {
         const monthRange = currentMonthRange()
-        const result = await service.listSalesDocuments({
+        const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
+          type: allTypeFilters,
+          status: defaultStatusFilters,
+          paymentStatus: allPaymentStatusFilters,
+          paymentMethod: 'all',
+          seller: 'all',
+          priceList: 'all',
+          time: 'month',
           from: monthRange.from,
           to: monthRange.to,
           page: 1,
           page_size: salesDocumentsPageSize,
-        })
+        }))
         if (!active) return
         setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size })
       } catch (cause) {
@@ -323,19 +255,20 @@ export function SalesDocumentsPage({
       return
     }
     try {
-      const result = await service.listSalesDocuments({
+      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
         search: query,
-        ...(typeFilter === 'all' ? {} : { type: typeFilter }),
-        ...(statusFilter === 'all' ? {} : { status: statusFilter }),
-        ...(paymentStatusFilter === 'all' ? {} : { payment_status: paymentStatusFilter }),
-        ...(paymentMethodFilter === 'all' ? {} : { payment_method: paymentMethodFilter }),
-        ...(sellerFilter === 'all' ? {} : { created_by: sellerFilter }),
-        ...(priceListFilter === 'all' ? {} : { price_list_id: priceListFilter }),
-        ...(timeFilter !== 'all' && dateFrom ? { from: dateFrom } : {}),
-        ...(timeFilter !== 'all' && dateTo ? { to: dateTo } : {}),
+        type: typeFilter,
+        status: statusFilter,
+        paymentStatus: paymentStatusFilter,
+        paymentMethod: paymentMethodFilter,
+        seller: sellerFilter,
+        priceList: priceListFilter,
+        time: timeFilter,
+        from: dateFrom,
+        to: dateTo,
         page: 1,
         page_size: 8,
-      })
+      }))
       if (documentSearchRequestId.current !== requestId) return
       setDocumentSearchSuggestions(result.items)
       setDocumentSearchSuggestionsOpen(true)
@@ -358,7 +291,7 @@ export function SalesDocumentsPage({
     await loadDocuments({ search: document.code, page: 1 })
   }
 
-  async function applyTypeFilter(nextType: typeof typeFilter) {
+  async function applyTypeFilter(nextType: SalesDocumentTypeFilter[]) {
     setTypeFilter(nextType)
     setSelected(null)
     setLoadingDocumentId(null)
@@ -367,7 +300,7 @@ export function SalesDocumentsPage({
     await loadDocuments({ type: nextType, page: 1 })
   }
 
-  async function applyStatusFilter(nextStatus: typeof statusFilter) {
+  async function applyStatusFilter(nextStatus: SalesDocumentStatusFilter[]) {
     setStatusFilter(nextStatus)
     setSelected(null)
     setLoadingDocumentId(null)
@@ -376,7 +309,7 @@ export function SalesDocumentsPage({
     await loadDocuments({ status: nextStatus, page: 1 })
   }
 
-  async function applyPaymentStatusFilter(nextPaymentStatus: PaymentStatusFilter) {
+  async function applyPaymentStatusFilter(nextPaymentStatus: PaymentStatusValue[]) {
     setPaymentStatusFilter(nextPaymentStatus)
     setSelected(null)
     setLoadingDocumentId(null)
@@ -497,7 +430,14 @@ export function SalesDocumentsPage({
   const total = state?.total ?? 0
   const page = state?.page ?? 1
   const pageSize = state?.pageSize ?? salesDocumentsPageSize
-  const hasFilter = lastSearch.length > 0 || typeFilter !== 'all' || statusFilter !== 'all' || paymentStatusFilter !== 'all' || paymentMethodFilter !== 'all' || sellerFilter !== 'all' || priceListFilter !== 'all' || timeFilter !== 'month'
+  const hasFilter = lastSearch.length > 0
+    || !sameFilterValues(typeFilter, allTypeFilters)
+    || !sameFilterValues(statusFilter, defaultStatusFilters)
+    || !sameFilterValues(paymentStatusFilter, allPaymentStatusFilters)
+    || paymentMethodFilter !== 'all'
+    || sellerFilter !== 'all'
+    || priceListFilter !== 'all'
+    || timeFilter !== 'month'
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
@@ -505,15 +445,14 @@ export function SalesDocumentsPage({
     ...(lastSearch ? [`Tìm: ${lastSearch}`] : []),
     ...(timeFilter === 'custom' ? [`Thời gian: ${dateFrom || '...'} - ${dateTo || '...'}`] : []),
     ...(timeFilter !== 'month' && timeFilter !== 'custom' ? [`Thời gian: ${quickTimeLabels[timeFilter]}`] : []),
-    ...(typeFilter !== 'all' ? [`Loại: ${documentTypeFilterLabel(typeFilter)}`] : []),
-    ...(statusFilter !== 'all' ? [`Trạng thái: ${lifecycleFilterLabel(statusFilter)}`] : []),
-    ...(paymentStatusFilter !== 'all' ? [`Thanh toán: ${paymentStatusFilterLabel(paymentStatusFilter)}`] : []),
+    ...(!sameFilterValues(typeFilter, allTypeFilters) ? [`Loại: ${typeFilter.map(documentTypeFilterLabel).join(', ') || 'Không chọn'}`] : []),
+    ...(!sameFilterValues(statusFilter, defaultStatusFilters) ? [`Trạng thái: ${statusFilter.map(lifecycleFilterLabel).join(', ') || 'Không chọn'}`] : []),
+    ...(!sameFilterValues(paymentStatusFilter, allPaymentStatusFilters) ? [`Thanh toán: ${paymentStatusFilter.map(paymentStatusFilterLabel).join(', ') || 'Không chọn'}`] : []),
     ...(paymentMethodFilter !== 'all' ? [`PTTT: ${paymentMethodFilterLabel(paymentMethodFilter)}`] : []),
     ...(sellerFilter !== 'all' ? [`Người bán: ${sellerOptions.find((seller) => seller.id === sellerFilter)?.name ?? sellerFilter}`] : []),
     ...(priceListFilter !== 'all' ? [`Bảng giá: ${priceListOptions.find((priceList) => priceList.id === priceListFilter)?.name ?? priceListFilter}`] : []),
   ].join(' • ')
-  const documentTotalAmount = documents.reduce((sum, document) => sum + document.total_amount, 0)
-  const documentDebtAmount = documents.reduce((sum, document) => sum + document.debt_amount, 0)
+  const { totalAmount: documentTotalAmount, debtAmount: documentDebtAmount } = salesDocumentListSummary(documents)
   const documentKpis = (
     <MetricGrid ariaLabel="Tổng quan chứng từ bán hàng">
       <MetricCard hint="Từ danh sách đang xem" label="Tổng tiền" tone="success" value={<MoneyText value={documentTotalAmount} />} />
@@ -653,43 +592,53 @@ export function SalesDocumentsPage({
               </div>
             ) : null}
           </ManagementFilterGroup>
-          <ManagementFilterGroup title="Loại chứng từ">
-            <select
-              aria-label="Loại chứng từ"
-              className="management-filter-select"
-              value={typeFilter}
-              onChange={(event) => void applyTypeFilter(event.target.value as typeof typeFilter)}
-            >
-              <option value="all">Tất cả</option>
-              <option value="invoice">Hóa đơn</option>
-              <option value="quote">Báo giá</option>
-            </select>
+          <ManagementFilterGroup title="Loại hóa đơn">
+            {allTypeFilters.map((value) => {
+              const checked = typeFilter.includes(value)
+              return (
+                <label className={`management-filter-choice${checked ? ' management-filter-choice-active' : ''}`} key={value}>
+                  <input
+                    aria-label={documentTypeFilterLabel(value)}
+                    checked={checked}
+                    type="checkbox"
+                    onChange={() => void applyTypeFilter(toggleFilterValue(typeFilter, value))}
+                  />
+                  <span>{documentTypeFilterLabel(value)}</span>
+                </label>
+              )
+            })}
           </ManagementFilterGroup>
-          <ManagementFilterGroup title="Trạng thái chứng từ">
-            <select
-              aria-label="Trạng thái chứng từ"
-              className="management-filter-select"
-              value={statusFilter}
-              onChange={(event) => void applyStatusFilter(event.target.value as typeof statusFilter)}
-            >
-              <option value="all">Tất cả</option>
-              <option value="active">Đang hiệu lực</option>
-              <option value="completed">Hoàn tất</option>
-              <option value="cancelled">Đã hủy</option>
-            </select>
+          <ManagementFilterGroup title="Trạng thái hóa đơn">
+            {allStatusFilters.map((value) => {
+              const checked = statusFilter.includes(value)
+              return (
+                <label className={`management-filter-choice${checked ? ' management-filter-choice-active' : ''}`} key={value}>
+                  <input
+                    aria-label={lifecycleFilterLabel(value)}
+                    checked={checked}
+                    type="checkbox"
+                    onChange={() => void applyStatusFilter(toggleFilterValue(statusFilter, value))}
+                  />
+                  <span>{lifecycleFilterLabel(value)}</span>
+                </label>
+              )
+            })}
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Thanh toán">
-            <select
-              aria-label="Thanh toán"
-              className="management-filter-select"
-              value={paymentStatusFilter}
-              onChange={(event) => void applyPaymentStatusFilter(event.target.value as PaymentStatusFilter)}
-            >
-              <option value="all">Tất cả</option>
-              <option value="unpaid">Chưa thanh toán</option>
-              <option value="partial">Thanh toán một phần</option>
-              <option value="paid">Đã thanh toán</option>
-            </select>
+            {allPaymentStatusFilters.map((value) => {
+              const checked = paymentStatusFilter.includes(value)
+              return (
+                <label className={`management-filter-choice${checked ? ' management-filter-choice-active' : ''}`} key={value}>
+                  <input
+                    aria-label={paymentStatusFilterLabel(value)}
+                    checked={checked}
+                    type="checkbox"
+                    onChange={() => void applyPaymentStatusFilter(toggleFilterValue(paymentStatusFilter, value))}
+                  />
+                  <span>{paymentStatusFilterLabel(value)}</span>
+                </label>
+              )
+            })}
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Phương thức thanh toán">
             <select
@@ -801,7 +750,7 @@ export function SalesDocumentsPage({
                               <strong>{document.code}</strong>
                             </button>
                           </td>
-                          <td>{dateTime(document.created_at)}</td>
+                          <td>{salesDocumentDateTimeText(document.created_at)}</td>
                           <td>{document.customer.name}</td>
                           <td><MoneyText value={document.subtotal_amount} /></td>
                           <td><MoneyText value={document.discount_amount} /></td>
@@ -935,7 +884,7 @@ function SalesDocumentDetailView({
             </div>
             <div>
               <dt>Ngày bán:</dt>
-              <dd>{dateTime(document.created_at)}</dd>
+              <dd>{salesDocumentDateTimeText(document.created_at)}</dd>
             </div>
             {document.price_list ? (
               <div>
@@ -968,7 +917,7 @@ function SalesDocumentDetailView({
                   <td>{`${item.quantity} ${item.product.unit_name}`}</td>
                   <td><MoneyText value={item.unit_price} /></td>
                   <td><MoneyText value={item.discount_amount} /></td>
-                  <td><MoneyText value={lineSellPrice(item)} /></td>
+                  <td><MoneyText value={salesDocumentLineSellPrice(item)} /></td>
                   <td><MoneyText value={item.line_total} /></td>
                 </tr>
               ))}
@@ -1024,7 +973,7 @@ function SalesDocumentDetailView({
                 {paymentReceipts.map((receipt) => (
                   <tr key={receipt.id}>
                     <td>{receipt.code}</td>
-                    <td>{dateTime(receipt.created_at, document.created_at)}</td>
+                    <td>{salesDocumentDateTimeText(receipt.created_at, document.created_at)}</td>
                     <td>{paymentReceiptCreatorLabel(receipt, document.seller)}</td>
                     <td><MoneyText value={receipt.total_received_amount} /></td>
                     <td>{paymentReceiptMethodLabel(receipt)}</td>
@@ -1052,73 +1001,3 @@ function SalesDocumentDetailView({
   )
 }
 
-function lineSellPrice(item: SalesDocumentDetail['items'][number]) {
-  if (item.quantity <= 0) return item.line_total
-  return Math.round(item.line_total / item.quantity)
-}
-
-function salesDocumentStatusLabel(document: SalesDocumentDetail) {
-  if (document.status === 'cancelled') return 'Đã hủy'
-  if (document.order_type === 'quote') return document.status === 'converted' ? 'Đã chuyển' : 'Đang hiệu lực'
-  return paymentSettlementStatusLabel(salesDocumentPaymentSettlementStatus(document))
-}
-
-function salesDocumentStatusTone(document: SalesDocumentDetail) {
-  if (document.status === 'cancelled') return 'danger'
-  if (document.order_type === 'quote') return document.status === 'completed' ? 'success' : 'info'
-  return paymentSettlementStatusTone(salesDocumentPaymentSettlementStatus(document))
-}
-
-function salesDocumentPaymentSettlementStatus(document: SalesDocumentDetail): PaymentSettlementStatus {
-  if (document.payment_status === 'paid') return 'paid'
-  if (document.payment_status === 'partial') return 'partial'
-  return 'unpaid'
-}
-
-function documentTypeFilterLabel(value: 'invoice' | 'quote') {
-  return value === 'invoice' ? 'Hóa đơn' : 'Báo giá'
-}
-
-function lifecycleFilterLabel(value: 'active' | 'completed' | 'cancelled') {
-  if (value === 'active') return 'Đang hiệu lực'
-  if (value === 'completed') return 'Hoàn tất'
-  return 'Đã hủy'
-}
-
-function paymentStatusFilterLabel(value: PaymentStatusFilter) {
-  if (value === 'unpaid') return 'Chưa thanh toán'
-  if (value === 'partial') return 'Thanh toán một phần'
-  if (value === 'paid') return 'Đã thanh toán'
-  return 'Tất cả'
-}
-
-function paymentMethodFilterLabel(value: PaymentMethodFilter) {
-  if (value === 'cash') return 'Tiền mặt'
-  if (value === 'bank_transfer') return 'Chuyển khoản'
-  return 'Tất cả'
-}
-
-function paymentReceiptMethodLabel(receipt: SalesDocumentDetail['payment_receipts'][number]) {
-  const labels = paymentReceiptMethods(receipt).map((method) => (method.method_type === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'))
-  return Array.from(new Set(labels)).join(', ') || '-'
-}
-
-function paymentReceiptMethodTotal(receipt: SalesDocumentDetail['payment_receipts'][number]) {
-  const methodTotal = paymentReceiptMethods(receipt).reduce((sum, method) => sum + method.amount, 0)
-  return methodTotal || receipt.total_received_amount
-}
-
-function paymentReceiptStatusLabel(status: SalesDocumentDetail['payment_receipts'][number]['status']) {
-  return status === 'posted' ? 'Đã thanh toán' : 'Đã hủy'
-}
-
-function paymentReceiptCreatorLabel(
-  receipt: SalesDocumentDetail['payment_receipts'][number],
-  seller: SalesDocumentDetail['seller'],
-) {
-  return receipt.created_by?.name || receipt.created_by?.id || seller.name || seller.id || 'Chưa có dữ liệu'
-}
-
-function paymentReceiptMethods(receipt: SalesDocumentDetail['payment_receipts'][number]) {
-  return Array.isArray(receipt.methods) ? receipt.methods : []
-}

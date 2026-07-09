@@ -428,18 +428,42 @@ function newestFirst<T extends Record<string, unknown>>(items: readonly T[]) {
   return [...items].sort((left, right) => latestTimestamp(right) - latestTimestamp(left))
 }
 
+function filterValues(url: URL, key: string) {
+  return (url.searchParams.get(key) ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+}
+
+function filterValueMatches(values: string[], actual: string) {
+  if (values.length === 0) return true
+  return values.includes(actual)
+}
+
+function dateRangeMatches(value: string, from: string | null, to: string | null) {
+  const date = value.slice(0, 10)
+  const fromDate = from?.slice(0, 10)
+  const toDate = to?.slice(0, 10)
+  if (fromDate && date < fromDate) return false
+  if (toDate && date > toDate) return false
+  return true
+}
+
 function filterSalesDocuments(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? '')
-  const type = url.searchParams.get('type')
-  const status = url.searchParams.get('status')
+  const type = filterValues(url, 'type')
+  const status = filterValues(url, 'status')
   const customerId = url.searchParams.get('customer_id')
-  const paymentStatus = url.searchParams.get('payment_status')
+  const paymentStatus = filterValues(url, 'payment_status')
+  const from = url.searchParams.get('from')
+  const to = url.searchParams.get('to')
 
   const filtered = salesDocuments.filter((document) => {
-    if (type && document.order_type !== type) return false
-    if (status && document.status !== status) return false
+    if (!filterValueMatches(type, document.order_type)) return false
+    if (!filterValueMatches(status, document.status)) return false
     if (customerId && document.customer.id !== customerId) return false
-    if (paymentStatus && document.payment_status !== paymentStatus) return false
+    if (!filterValueMatches(paymentStatus, document.payment_status)) return false
+    if (!dateRangeMatches(document.created_at, from, to)) return false
     if (search) {
       const haystack = normalizeSearchText(`${document.code} ${document.customer.code ?? ''} ${document.customer.name} ${document.note ?? ''}`)
       if (!haystack.includes(search)) return false
@@ -603,9 +627,12 @@ function addCustomerDebtDocument(debts: CustomerDebtItem[], document: DebtInvoic
 function filterCustomers(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
   const customerGroupId = url.searchParams.get('customer_group_id')
+  const createdFrom = url.searchParams.get('created_from')
+  const createdTo = url.searchParams.get('created_to')
 
   return customers.filter((customer) => {
     if (customerGroupId && customerGroupId !== 'all' && customer.customer_group_id !== customerGroupId) return false
+    if (!dateRangeMatches(customer.created_at, createdFrom, createdTo)) return false
     if (search) {
       const haystack = normalizeSearchText(`${customer.code} ${customer.name} ${customer.phone ?? ''}`)
       if (!haystack.includes(search)) return false
@@ -723,8 +750,7 @@ function filterCashbookEntries(url: URL) {
     if (status && status !== 'all' && entry.status !== status) return false
     if (isBusinessAccounted === 'true' && !entry.is_business_accounted) return false
     if (isBusinessAccounted === 'false' && entry.is_business_accounted) return false
-    if (from && entry.created_at < from) return false
-    if (to && entry.created_at > to) return false
+    if (!dateRangeMatches(entry.created_at, from, to)) return false
     if (search) {
       const scopedHaystacks = {
         code: entry.code,

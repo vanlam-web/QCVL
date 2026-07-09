@@ -246,12 +246,15 @@ it('lists invoices with money, seller and customer snapshots', async () => {
   expect(within(summary).queryByText('Tổng chứng từ')).not.toBeInTheDocument()
   expect(within(summary).getByText('Tổng tiền')).toBeInTheDocument()
   expect(within(summary).getByText('Còn nợ')).toBeInTheDocument()
-  const typeFilterGroup = within(sidebar).getByRole('region', { name: 'Loại chứng từ' })
-  const statusFilterGroup = within(sidebar).getByRole('region', { name: 'Trạng thái chứng từ' })
-  expect(within(typeFilterGroup).getByRole('combobox', { name: 'Loại chứng từ' })).toHaveValue('all')
-  expect(within(typeFilterGroup).queryByRole('radio')).not.toBeInTheDocument()
-  expect(within(statusFilterGroup).getByRole('combobox', { name: 'Trạng thái chứng từ' })).toHaveValue('all')
-  expect(within(statusFilterGroup).queryByRole('radio')).not.toBeInTheDocument()
+  const typeFilterGroup = within(sidebar).getByRole('region', { name: 'Loại hóa đơn' })
+  const statusFilterGroup = within(sidebar).getByRole('region', { name: 'Trạng thái hóa đơn' })
+  expect(within(typeFilterGroup).getByRole('checkbox', { name: 'Hóa đơn' })).toBeChecked()
+  expect(within(typeFilterGroup).getByRole('checkbox', { name: 'Báo giá' })).toBeChecked()
+  expect(within(typeFilterGroup).queryByRole('combobox')).not.toBeInTheDocument()
+  expect(within(statusFilterGroup).getByRole('checkbox', { name: 'Đang hiệu lực' })).toBeChecked()
+  expect(within(statusFilterGroup).getByRole('checkbox', { name: 'Hoàn tất' })).toBeChecked()
+  expect(within(statusFilterGroup).getByRole('checkbox', { name: 'Đã hủy' })).not.toBeChecked()
+  expect(within(statusFilterGroup).queryByRole('combobox')).not.toBeInTheDocument()
   expect(within(sidebar).queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
   expect(screen.queryByRole('heading', { name: 'Danh sách chứng từ' })).not.toBeInTheDocument()
   expect(screen.queryByText('Tìm nhanh mã hóa đơn/báo giá, khách hàng hoặc ghi chú theo dữ liệu API hiện có.')).not.toBeInTheDocument()
@@ -263,6 +266,7 @@ it('lists invoices with money, seller and customer snapshots', async () => {
     from: expect.stringMatching(/^\d{4}-\d{2}-01$/),
     page: 1,
     page_size: 15,
+    status: 'active,completed',
     to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
   }))
   expect(screen.getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
@@ -331,6 +335,7 @@ it('searches by document code and keeps filtered empty state clear', async () =>
     page: 1,
     page_size: 15,
     search: 'HD010985',
+    status: 'active,completed',
     to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
   }))
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc chứng từ bán hàng' })
@@ -394,6 +399,7 @@ it('uses 15-row pagination range and navigates pages through the list footer', a
     from: expect.stringMatching(/^\d{4}-\d{2}-01$/),
     page: 2,
     page_size: 15,
+    status: 'active,completed',
     to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
   }))
   expect(await within(footer).findByText('16 - 30 trong 40 chứng từ')).toBeInTheDocument()
@@ -422,6 +428,7 @@ it('filters sales documents by KiotViet-style custom time range', async () => {
     from: '2026-07-01',
     page: 1,
     page_size: 15,
+    status: 'active,completed',
     to: '2026-07-31',
   })
 })
@@ -442,6 +449,7 @@ it('opens KiotViet-style quick time menu and can select all time without date pa
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith({
     page: 1,
     page_size: 15,
+    status: 'active,completed',
   })
 })
 
@@ -465,8 +473,11 @@ it('filters quotes and exposes reopen only for active quote rows', async () => {
   )
 
   await screen.findByText('BG000123')
-  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Loại chứng từ' }), 'quote')
-  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Trạng thái chứng từ' }), 'active')
+  const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc chứng từ bán hàng' })
+  const typeGroup = within(sidebar).getByRole('region', { name: 'Loại hóa đơn' })
+  const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái hóa đơn' })
+  await userEvent.click(within(typeGroup).getByRole('checkbox', { name: 'Hóa đơn' }))
+  await userEvent.click(within(statusGroup).getByRole('checkbox', { name: 'Hoàn tất' }))
 
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
     from: expect.stringMatching(/^\d{4}-\d{2}-01$/),
@@ -504,15 +515,15 @@ it('filters sales documents by supported invoice payment seller and price list f
   await screen.findByText('HD010985')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc chứng từ bán hàng' })
 
-  const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái chứng từ' })
-  expect(within(statusGroup).getByRole('combobox', { name: 'Trạng thái chứng từ' })).toBeInTheDocument()
-  expect(within(statusGroup).getByRole('option', { name: 'Hoàn tất' })).toBeInTheDocument()
-  expect(within(statusGroup).getByRole('option', { name: 'Đã hủy' })).toBeInTheDocument()
-  expect(within(statusGroup).queryByRole('option', { name: 'Không giao được' })).not.toBeInTheDocument()
-  expect(within(statusGroup).queryByRole('option', { name: 'Đang xử lý' })).not.toBeInTheDocument()
+  const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái hóa đơn' })
+  expect(within(statusGroup).getByRole('checkbox', { name: 'Đang hiệu lực' })).toBeChecked()
+  expect(within(statusGroup).getByRole('checkbox', { name: 'Hoàn tất' })).toBeChecked()
+  expect(within(statusGroup).getByRole('checkbox', { name: 'Đã hủy' })).not.toBeChecked()
+  expect(within(statusGroup).queryByRole('checkbox', { name: 'Không giao được' })).not.toBeInTheDocument()
+  expect(within(statusGroup).queryByRole('checkbox', { name: 'Đang xử lý' })).not.toBeInTheDocument()
   expect(within(statusGroup).queryByRole('radio')).not.toBeInTheDocument()
 
-  await userEvent.selectOptions(within(statusGroup).getByRole('combobox', { name: 'Trạng thái chứng từ' }), 'completed')
+  await userEvent.click(within(statusGroup).getByRole('checkbox', { name: 'Đang hiệu lực' }))
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
     status: 'completed',
     page: 1,
@@ -520,7 +531,8 @@ it('filters sales documents by supported invoice payment seller and price list f
   }))
 
   const paymentStatusGroup = within(sidebar).getByRole('region', { name: 'Thanh toán' })
-  await userEvent.selectOptions(within(paymentStatusGroup).getByRole('combobox', { name: 'Thanh toán' }), 'paid')
+  await userEvent.click(within(paymentStatusGroup).getByRole('checkbox', { name: 'Chưa thanh toán' }))
+  await userEvent.click(within(paymentStatusGroup).getByRole('checkbox', { name: 'Thanh toán một phần' }))
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
     status: 'completed',
     payment_status: 'paid',

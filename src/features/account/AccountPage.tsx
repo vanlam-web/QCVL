@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { CalendarDays, Edit3, KeyRound, Monitor, Search, ShieldCheck, Smartphone, Tablet, X } from 'lucide-react'
 import type { CurrentUserData } from '../../lib/api/types'
+import {
+  accountRole,
+  accountValueOrFallback,
+  deviceSeenAtText,
+  deviceSummaryText,
+  nullableFormValue,
+  profileSaveErrorMessage,
+  requiredFormValue,
+} from './account-presenter'
 
 export interface AccountProfileInput {
   display_name: string
@@ -14,9 +23,6 @@ export interface AccountProfileInput {
   note: string | null
 }
 
-function accountRole(currentUser: CurrentUserData) {
-  return currentUser.permissions.includes('perm.access_admin_panel') ? 'Admin' : 'Nhân viên'
-}
 
 export function AccountPage({
   currentUser,
@@ -50,19 +56,19 @@ export function AccountPage({
     setProfileSaveError(null)
     try {
       await onSaveProfile?.({
-        display_name: requiredValue(data, 'displayName'),
-        username: nullableValue(data, 'username'),
-        phone: nullableValue(data, 'phone'),
-        email: nullableValue(data, 'email'),
-        birthday: nullableValue(data, 'birthday'),
-        region: nullableValue(data, 'region'),
-        ward: nullableValue(data, 'ward'),
-        address: nullableValue(data, 'address'),
-        note: nullableValue(data, 'note'),
+        display_name: requiredFormValue(data, 'displayName'),
+        username: nullableFormValue(data, 'username'),
+        phone: nullableFormValue(data, 'phone'),
+        email: nullableFormValue(data, 'email'),
+        birthday: nullableFormValue(data, 'birthday'),
+        region: nullableFormValue(data, 'region'),
+        ward: nullableFormValue(data, 'ward'),
+        address: nullableFormValue(data, 'address'),
+        note: nullableFormValue(data, 'note'),
       })
       setIsEditingProfile(false)
     } catch (error) {
-      setProfileSaveError(profileSaveMessage(error))
+      setProfileSaveError(profileSaveErrorMessage(error))
     } finally {
       setIsSavingProfile(false)
     }
@@ -73,7 +79,7 @@ export function AccountPage({
     try {
       await onSignOutDevice?.(deviceId)
     } catch (error) {
-      setDeviceSignOutError(profileSaveMessage(error))
+      setDeviceSignOutError(profileSaveErrorMessage(error))
     } finally {
       setSigningOutDeviceId(null)
     }
@@ -108,11 +114,11 @@ export function AccountPage({
               </div>
               <div>
                 <dt>Điện thoại</dt>
-                <dd>{emptyFallback(profile?.phone)}</dd>
+                <dd>{accountValueOrFallback(profile?.phone)}</dd>
               </div>
               <div>
                 <dt>Địa chỉ</dt>
-                <dd>{emptyFallback(profile?.address)}</dd>
+                <dd>{accountValueOrFallback(profile?.address)}</dd>
               </div>
             </dl>
             <dl>
@@ -132,14 +138,14 @@ export function AccountPage({
               </div>
               <div>
                 <dt>Sinh nhật</dt>
-                <dd>{emptyFallback(profile?.birthday)}</dd>
+                <dd>{accountValueOrFallback(profile?.birthday)}</dd>
               </div>
             </dl>
           </div>
 
           <p className="management-detail-inline-note account-note">
             <Edit3 aria-hidden="true" size={15} />
-            {emptyFallback(profile?.note, 'Chưa có ghi chú')}
+            {accountValueOrFallback(profile?.note, 'Chưa có ghi chú')}
           </p>
         </section>
 
@@ -194,8 +200,8 @@ export function AccountPage({
                       {device.device_name}
                       {device.is_current_device ? <span className="status-chip status-chip-success">Đang dùng</span> : null}
                     </h3>
-                    <p>{deviceSummary(device)}</p>
-                    <p>Hoạt động gần nhất: {formatDeviceSeenAt(device.last_seen_at)}</p>
+                    <p>{deviceSummaryText(device)}</p>
+                    <p>Hoạt động gần nhất: {deviceSeenAtText(device.last_seen_at)}</p>
                   </div>
                   <button
                     className="button button-secondary"
@@ -323,43 +329,3 @@ function DeviceIcon({ type }: { type: NonNullable<CurrentUserData['devices']>[nu
   return <Monitor size={20} />
 }
 
-function deviceSummary(device: NonNullable<CurrentUserData['devices']>[number]) {
-  return [device.browser_name, device.os_name, device.ip_address].filter(Boolean).join(' • ') || 'Chưa có thông tin thiết bị'
-}
-
-function formatDeviceSeenAt(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Chưa có'
-  const parts = new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).formatToParts(date)
-  const pick = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value ?? ''
-  return `${pick('day')}/${pick('month')}/${pick('year')} ${pick('hour')}:${pick('minute')}`
-}
-
-function emptyFallback(value: string | null | undefined, fallback = 'Chưa có') {
-  const text = value?.trim()
-  return text ? text : fallback
-}
-
-function requiredValue(data: FormData, name: string) {
-  return String(data.get(name) ?? '').trim()
-}
-
-function nullableValue(data: FormData, name: string) {
-  const value = requiredValue(data, name)
-  return value.length > 0 ? value : null
-}
-
-function profileSaveMessage(error: unknown) {
-  if (error instanceof Error && error.message.trim()) {
-    return `Không lưu được: ${error.message}`
-  }
-  return 'Không lưu được. Kiểm tra API hoặc kết nối.'
-}

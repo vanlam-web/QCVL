@@ -510,6 +510,44 @@ describe('createHttpHandler', () => {
     expect(cashbook.data.items.every((item: { counterparty: { name: string } }) => item.counterparty.name === 'Khach demo 002')).toBe(true)
   })
 
+  test('filters management lists by time range', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const salesResponse = await handler(
+      new Request('http://api.local/api/v1/sales-documents?from=2999-01-01&to=2999-01-31&page=1&page_size=15', { headers: { authorization } }),
+    )
+    const cashbookResponse = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook?from=2999-01-01&to=2999-01-31&page=1&page_size=15', { headers: { authorization } }),
+    )
+    const customersResponse = await handler(
+      new Request('http://api.local/api/v1/customers?created_from=2999-01-01&created_to=2999-01-31&page=1&page_size=15', { headers: { authorization } }),
+    )
+    const receiptsResponse = await handler(
+      new Request('http://api.local/api/v1/purchase/receipts?date_from=2999-01-01&date_to=2999-01-31&page=1&page_size=15', { headers: { authorization } }),
+    )
+    const salesBody = await salesResponse.json()
+    const cashbookBody = await cashbookResponse.json()
+    const customersBody = await customersResponse.json()
+    const receiptsBody = await receiptsResponse.json()
+
+    expect(salesResponse.status).toBe(200)
+    expect(cashbookResponse.status).toBe(200)
+    expect(customersResponse.status).toBe(200)
+    expect(receiptsResponse.status).toBe(200)
+    expect(salesBody.data.total).toBe(0)
+    expect(cashbookBody.data.total).toBe(0)
+    expect(customersBody.data.total).toBe(0)
+    expect(receiptsBody.data.total).toBe(0)
+  })
+
   test('returns empty demo customer debt detail when customer has no debt invoice', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

@@ -2,7 +2,6 @@ import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } f
 import { CalendarDays, ChevronDown, ChevronRight, Download, Edit3, Info, Pin, Printer, Search, StickyNote, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
-import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -35,12 +34,58 @@ import type {
 } from './types'
 import type { FinanceService } from './finance-service'
 import { buildCashbookCsv } from './finance-service'
+import { currentMonthRange } from '../../lib/date-ranges'
+import {
+  accountTypeText,
+  bankAccountDisplayText,
+  businessAccountedText,
+  cashbookCounterpartyDisplayName,
+  cashbookCounterpartyLabel,
+  cashbookDetailAccountLabel,
+  cashbookDetailAmountLabel,
+  cashbookDetailCounterpartyLabel,
+  cashbookDetailCounterpartyTypeLabel,
+  cashbookDetailNoteText,
+  cashbookDetailPrimaryStatusText,
+  cashbookDetailPrimaryStatusTone,
+  cashbookDetailTitle,
+  cashbookEntryNeedsCounterpartyHydration,
+  cashFirstAccountSort,
+  cashbookLinkedDocumentCode,
+  cashbookLinkedDocumentMessage,
+  cashbookLinkedDocumentRows,
+  financeAccountChoiceLabel,
+  financeDateText as dateText,
+  paymentMethodText,
+  sourceTypeText,
+  statusText,
+  voucherTypeOptions,
+} from './finance-presenter'
+import {
+  cashbookEntryMatchesFundMode,
+  cashbookEntryMatchesSearch,
+  cashbookQuickTimeGroups,
+  cashbookQuickTimeLabels,
+  cashbookQuickTimeRange,
+  dateTimeInputText,
+  directionFilterFromSelection,
+  displayDate,
+  formatVoucherAmountInput,
+  nextDirectionSelection,
+  nextStatusSelection,
+  parseVoucherAmountInput,
+  statusFilterFromSelection,
+  type CashbookFundMode,
+  type CashbookTimeFilter,
+} from './finance-filters'
+import {
+  readCashbookFavoriteIds,
+  readPinnedBankAccountIds,
+  writeCashbookFavoriteIds,
+  writePinnedBankAccountIds,
+} from './finance-storage'
 
 const pageSizeDefault = 15
-const cashbookFavoritesStorageKey = 'finance.cashbook.favoriteEntryIds'
-const pinnedBankAccountsStorageKey = 'finance.bankAccounts.pinnedIds'
-type CashbookTimeFilter = 'all' | 'today' | 'yesterday' | 'week' | 'last_week' | 'last_7_days' | 'month' | 'last_month' | 'last_30_days' | 'quarter' | 'last_quarter' | 'year' | 'last_year' | 'custom'
-type CashbookFundMode = 'cash' | 'bank' | 'all'
 const showAuxiliaryFinanceSections = false
 const defaultCashbookColumns: CashbookColumnKey[] = [
   'code',
@@ -62,375 +107,6 @@ const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }
   { key: 'is_business_accounted', label: 'Hạch toán KQKD' },
 ]
 
-const cashbookQuickTimeGroups: Array<{ title: string; presets: Array<Exclude<CashbookTimeFilter, 'custom'>> }> = [
-  { title: 'Theo ngày', presets: ['today', 'yesterday'] },
-  { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
-  { title: 'Theo tháng', presets: ['month', 'last_month', 'last_30_days'] },
-  { title: 'Theo quý', presets: ['quarter', 'last_quarter'] },
-  { title: 'Theo năm', presets: ['year', 'last_year', 'all'] },
-]
-
-const cashbookQuickTimeLabels: Record<CashbookTimeFilter, string> = {
-  all: 'Toàn thời gian',
-  today: 'Hôm nay',
-  yesterday: 'Hôm qua',
-  week: 'Tuần này',
-  last_week: 'Tuần trước',
-  last_7_days: '7 ngày qua',
-  month: 'Tháng này',
-  last_month: 'Tháng trước',
-  last_30_days: '30 ngày qua',
-  quarter: 'Quý này',
-  last_quarter: 'Quý trước',
-  year: 'Năm nay',
-  last_year: 'Năm trước',
-  custom: 'Tùy chỉnh',
-}
-
-function readCashbookFavoriteIds() {
-  if (typeof window === 'undefined') return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(cashbookFavoritesStorageKey) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function writeCashbookFavoriteIds(ids: string[]) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(cashbookFavoritesStorageKey, JSON.stringify(ids))
-}
-
-function readPinnedBankAccountIds() {
-  if (typeof window === 'undefined') return []
-  try {
-    const parsed = JSON.parse(window.localStorage.getItem(pinnedBankAccountsStorageKey) ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function writePinnedBankAccountIds(ids: string[]) {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(pinnedBankAccountsStorageKey, JSON.stringify(ids))
-}
-
-function accountTypeText(type: FinanceAccount['account_type']) {
-  return type === 'cash' ? 'Tiền mặt' : 'Ngân hàng'
-}
-
-function financeAccountChoiceLabel(account: FinanceAccount) {
-  if (account.account_type === 'cash') return 'Tiền mặt'
-  return `${account.code} · ${account.name}`
-}
-
-function bankAccountDisplayText(account: FinanceAccount) {
-  return [account.code, account.account_number ?? account.name, account.account_holder].filter(Boolean).join(' - ')
-}
-
-function cashFirstAccountSort(left: FinanceAccount, right: FinanceAccount) {
-  if (left.account_type !== right.account_type) return left.account_type === 'cash' ? -1 : 1
-  return left.code.localeCompare(right.code, 'vi')
-}
-
-function statusText(status: 'posted' | 'cancelled') {
-  return status === 'posted' ? 'Đã ghi' : 'Đã hủy'
-}
-
-function cashbookDetailStatusText(status: CashbookStatus) {
-  return status === 'posted' ? 'Đã thanh toán' : 'Đã hủy'
-}
-
-function cashbookDetailTitle(entry: CashbookEntryDetail) {
-  return `${entry.direction === 'in' ? 'Phiếu thu' : 'Phiếu chi'} ${entry.code}`
-}
-
-function cashbookDetailAmountLabel(entry: CashbookEntryDetail) {
-  return entry.direction === 'in' ? 'Loại thu' : 'Loại chi'
-}
-
-function cashbookDetailCounterpartyTypeLabel(entry: CashbookEntryDetail) {
-  if (entry.counterparty.type === 'customer') return 'Khách hàng'
-  if (entry.counterparty.type === 'supplier') return 'Nhà cung cấp'
-  if (entry.counterparty.type === 'employee') return 'Nhân viên'
-  if (entry.counterparty.type === 'other') return 'Khác'
-  return 'Không có'
-}
-
-function cashbookDetailCounterpartyLabel(entry: CashbookEntryDetail) {
-  return entry.direction === 'in' ? 'Người nộp' : 'Người nhận'
-}
-
-function cashbookCounterpartyLabel(entry: CashbookEntry) {
-  return entry.direction === 'in' ? 'Người nộp' : 'Người nhận'
-}
-
-function cashbookCounterpartyDisplayName(name: string) {
-  return name.trim() === 'Khách lẻ' ? 'khách lẻ' : name
-}
-
-function normalizeFinanceSearch(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase()
-    .trim()
-}
-
-function cashbookEntryMatchesSearch(entry: CashbookEntry, search: string) {
-  const query = normalizeFinanceSearch(search)
-  if (query.length === 0) return true
-  const haystack = normalizeFinanceSearch([
-    entry.code,
-    entry.note ?? '',
-    entry.counterparty?.name ?? '',
-    entry.counterparty?.phone ?? '',
-    entry.finance_account.code,
-    entry.finance_account.name,
-  ].join(' '))
-  return haystack.includes(query)
-}
-
-function cashbookEntryMatchesFundMode(entry: CashbookEntry, fundMode: CashbookFundMode, accountId: string) {
-  if (fundMode === 'all') return true
-  if (accountId !== '' && accountId !== 'all') return entry.finance_account.id === accountId
-  return entry.finance_account.account_type === fundMode
-}
-
-function cashbookDetailAccountLabel(entry: CashbookEntryDetail) {
-  if (entry.payment_method !== 'bank_transfer') return entry.direction === 'in' ? 'Đến quỹ' : 'Từ quỹ'
-  return entry.direction === 'in' ? 'Đến tài khoản' : 'Từ tài khoản'
-}
-
-function cashbookLinkedDocumentMessage(entry: CashbookEntryDetail) {
-  const code = cashbookLinkedDocumentCode(entry) ?? entry.source.code
-  if (entry.direction === 'in') return `Phiếu thu tự động được gắn với hóa đơn ${code}.`
-  return `Phiếu chi tự động được gắn với phiếu nhập hàng ${code}.`
-}
-
-function cashbookLinkedDocumentCode(entry: CashbookEntryDetail) {
-  if (entry.source.order_code !== null) return entry.source.order_code
-  const noteDocumentMatch = entry.note?.match(/\b(?:HD|PN)\d+(?:\.\d+)?\b/i)
-  return noteDocumentMatch?.[0].toUpperCase() ?? null
-}
-
-function cashbookEntryNeedsCounterpartyHydration(entry: CashbookEntry) {
-  return entry.source_type === 'payment_receipt_method'
-    && entry.counterparty?.name == null
-}
-
-function linkedDocumentPaymentStatus(remainingAfter: number): Exclude<PaymentSettlementStatus, 'unpaid'> {
-  if (remainingAfter <= 0) return 'paid'
-  return 'partial'
-}
-
-function cashbookDetailPrimarySettlementStatus(entry: CashbookEntryDetail): PaymentSettlementStatus | null {
-  if (entry.status !== 'posted' || entry.direction !== 'in') return null
-  const linkedDocumentRows = cashbookLinkedDocumentRows(entry)
-  if (linkedDocumentRows.length === 0) return null
-  return linkedDocumentRows.some((row) => row.remainingAmount > 0) ? 'partial' : 'paid'
-}
-
-function cashbookDetailPrimaryStatusText(entry: CashbookEntryDetail) {
-  const paymentStatus = cashbookDetailPrimarySettlementStatus(entry)
-  if (paymentStatus !== null) return paymentSettlementStatusLabel(paymentStatus)
-  if (entry.status !== 'posted' || entry.direction !== 'in') return cashbookDetailStatusText(entry.status)
-  return cashbookDetailStatusText(entry.status)
-}
-
-function cashbookDetailPrimaryStatusTone(entry: CashbookEntryDetail) {
-  const paymentStatus = cashbookDetailPrimarySettlementStatus(entry)
-  if (paymentStatus !== null) return paymentSettlementStatusTone(paymentStatus)
-  return entry.status === 'posted' ? 'success' : 'neutral'
-}
-
-function cashbookLinkedDocumentRows(entry: CashbookEntryDetail) {
-  if (entry.allocations.length > 0) {
-    return entry.allocations.map((allocation) => ({
-      id: allocation.order_id,
-      code: allocation.order_code,
-      totalAmount: allocation.order_total_amount,
-      settledBefore: allocation.collected_before,
-      allocatedAmount: allocation.allocated_amount,
-      remainingAmount: allocation.remaining_after,
-      status: entry.direction === 'in'
-        ? paymentSettlementStatusLabel(linkedDocumentPaymentStatus(allocation.remaining_after))
-        : allocation.remaining_after === 0 ? 'Đã thanh toán' : 'Còn nợ',
-    }))
-  }
-
-  const inferredCode = cashbookLinkedDocumentCode(entry)
-  if (inferredCode === null) return []
-
-  return [{
-    id: inferredCode,
-    code: inferredCode,
-    totalAmount: Math.abs(entry.amount_delta),
-    settledBefore: 0,
-    allocatedAmount: Math.abs(entry.amount_delta),
-    remainingAmount: 0,
-    status: entry.direction === 'in' && entry.status === 'posted' ? 'Thu đủ' : cashbookDetailStatusText(entry.status),
-  }]
-}
-
-function cashbookDetailNoteText(entry: CashbookEntryDetail) {
-  if (entry.note?.match(/^Checkout\s+HD\d+(?:\.\d+)?$/i)) return 'Chưa có ghi chú'
-  return entry.note ?? 'Chưa có ghi chú'
-}
-
-function businessAccountedText(value: CashbookBusinessAccountedFilter) {
-  if (value === 'true') return 'Có hạch toán'
-  if (value === 'false') return 'Không hạch toán'
-  return 'Tất cả'
-}
-
-function nextDirectionSelection(current: CashbookDirection[], value: CashbookDirection) {
-  return current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
-}
-
-function directionFilterFromSelection(selection: CashbookDirection[]): CashbookDirection | 'all' {
-  return selection.length === 1 ? selection[0] : 'all'
-}
-
-function nextStatusSelection(current: CashbookStatus[], value: CashbookStatus) {
-  return current.includes(value) ? current.filter((item) => item !== value) : [...current, value]
-}
-
-function statusFilterFromSelection(selection: CashbookStatus[]): CashbookStatus | 'all' {
-  return selection.length === 1 ? selection[0] : 'all'
-}
-
-function paymentMethodText(value: CashbookEntryDetail['payment_method']) {
-  if (value === 'cash') return 'Tiền mặt'
-  if (value === 'bank_transfer') return 'Ngân hàng'
-  return 'Thủ công'
-}
-
-function sourceTypeText(value: CashbookEntry['source_type']) {
-  return value === 'payment_receipt_method' ? 'Phiếu thu' : 'Phiếu quỹ'
-}
-
-function voucherTypeOptions(direction: CashbookDirection): Array<{ value: CreateCashbookVoucherInput['voucher_type']; label: string }> {
-  if (direction === 'in') {
-    return [
-      { value: 'other_income', label: 'Thu nhập khác' },
-      { value: 'capital_contribution', label: 'Góp vốn' },
-      { value: 'transfer', label: 'Chuyển/Rút' },
-    ]
-  }
-  return [
-    { value: 'material_purchase', label: 'Vật tư' },
-    { value: 'supplier_payment', label: 'Tiền trả NCC' },
-    { value: 'staff_salary', label: 'Lương NV' },
-    { value: 'shipping_expense', label: 'Vận chuyển' },
-    { value: 'customer_refund', label: 'Hoàn tiền khách' },
-    { value: 'operating_expense', label: 'Chi phí vận hành' },
-    { value: 'tax_or_vat', label: 'Thuế/VAT' },
-    { value: 'commission', label: 'Hoa hồng' },
-    { value: 'transfer', label: 'Chuyển/Rút' },
-    { value: 'other_expense', label: 'Chi khác' },
-  ]
-}
-
-function dateText(value: string) {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
-}
-
-function dateTimeInputText(date: Date) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
-}
-
-function formatVoucherAmountInput(value: string) {
-  const digits = value.replace(/\D/g, '')
-  if (digits === '') return ''
-  return Number(digits).toLocaleString('vi-VN')
-}
-
-function parseVoucherAmountInput(value: string) {
-  return Number(value.replace(/\D/g, '') || 0)
-}
-
-function localDateString(date: Date) {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 10)
-}
-
-function currentMonthRange() {
-  const now = new Date()
-  const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
-  return { from: localDateString(firstDay), to: localDateString(lastDay) }
-}
-
-function addDays(date: Date, amount: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + amount)
-  return next
-}
-
-function cashbookQuickTimeRange(preset: Exclude<CashbookTimeFilter, 'custom'>) {
-  const now = new Date()
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const day = today.getDay()
-  const mondayOffset = day === 0 ? -6 : 1 - day
-  const currentQuarter = Math.floor(today.getMonth() / 3)
-
-  if (preset === 'all') return { from: '', to: '' }
-  if (preset === 'today') return { from: localDateString(today), to: localDateString(today) }
-  if (preset === 'yesterday') {
-    const yesterday = addDays(today, -1)
-    return { from: localDateString(yesterday), to: localDateString(yesterday) }
-  }
-  if (preset === 'week') {
-    const firstDay = addDays(today, mondayOffset)
-    return { from: localDateString(firstDay), to: localDateString(addDays(firstDay, 6)) }
-  }
-  if (preset === 'last_week') {
-    const firstDay = addDays(today, mondayOffset - 7)
-    return { from: localDateString(firstDay), to: localDateString(addDays(firstDay, 6)) }
-  }
-  if (preset === 'last_7_days') return { from: localDateString(addDays(today, -6)), to: localDateString(today) }
-  if (preset === 'month') return currentMonthRange()
-  if (preset === 'last_month') {
-    const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1)
-    const lastDay = new Date(today.getFullYear(), today.getMonth(), 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'last_30_days') return { from: localDateString(addDays(today, -29)), to: localDateString(today) }
-  if (preset === 'quarter') {
-    const firstDay = new Date(today.getFullYear(), currentQuarter * 3, 1)
-    const lastDay = new Date(today.getFullYear(), currentQuarter * 3 + 3, 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'last_quarter') {
-    const firstDay = new Date(today.getFullYear(), currentQuarter * 3 - 3, 1)
-    const lastDay = new Date(today.getFullYear(), currentQuarter * 3, 0)
-    return { from: localDateString(firstDay), to: localDateString(lastDay) }
-  }
-  if (preset === 'year') {
-    return { from: localDateString(new Date(today.getFullYear(), 0, 1)), to: localDateString(new Date(today.getFullYear(), 11, 31)) }
-  }
-  return { from: localDateString(new Date(today.getFullYear() - 1, 0, 1)), to: localDateString(new Date(today.getFullYear() - 1, 11, 31)) }
-}
-
-function displayDate(value: string) {
-  if (!value) return '--/--/----'
-  const [year, month, day] = value.split('-')
-  return `${day}/${month}/${year}`
-}
 
 function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
   const linkedDocumentRows = cashbookLinkedDocumentRows(entry)

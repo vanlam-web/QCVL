@@ -32,6 +32,8 @@ import { permissions } from '../users/permissions'
 import {
   areaPieceCount,
   areaQuantity,
+  cartLineDiscountAmountFromPercent,
+  cartLineDiscountPercent,
   clampLineDiscount,
   draftLineQuantity,
   initialQuotePayloadToTabs,
@@ -39,7 +41,6 @@ import {
   isAreaLine,
   isInvoiceTabDirty,
   lineInputDraftKey,
-  lineSubtotal,
   lineTotal,
   makeCartLine,
   makeInvoiceTab,
@@ -520,14 +521,11 @@ export function PosShell({
   }
 
   function updateLineDiscountPercent(line: CheckoutCartLine, percent: number) {
-    const subtotal = lineSubtotal(line)
-    updateLineDiscount(line.id, Math.round(subtotal * Math.min(Math.max(percent, 0), 100) / 100))
+    updateLineDiscount(line.id, cartLineDiscountAmountFromPercent(line, percent))
   }
 
   function discountPercentValue(line: CheckoutCartLine) {
-    const subtotal = lineSubtotal(line)
-    if (subtotal <= 0) return 0
-    return Math.round(((line.discountAmount ?? 0) / subtotal) * 100)
+    return cartLineDiscountPercent(line)
   }
 
   async function showRecentPrices(line: CheckoutCartLine) {

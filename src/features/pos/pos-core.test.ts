@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { Product } from '../catalog/types'
 import {
   areaQuantity,
+  cartLineDiscountPercent,
+  checkoutSummary,
   clampLineDiscount,
   invoiceTabLabel,
   isInvoiceTabDirty,
+  linesToCheckoutItems,
   makeCartLine,
   makeInvoiceTab,
   normalizeSearch,
@@ -41,6 +44,51 @@ describe('pos-core', () => {
     const line = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
 
     expect(clampLineDiscount({ ...line, discountAmount: 999999 }).discountAmount).toBe(600000)
+  })
+
+  it('builds checkout totals without UI state doing payment math', () => {
+    const line = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
+
+    const summary = checkoutSummary({
+      cartLines: [{ ...line, discountAmount: 100000 }],
+      checkoutDiscountAmount: 50000,
+      cashAmount: 200000,
+      bankAmount: 100000,
+      paymentMode: 'mixed',
+      selectedCustomerId: 'customer-1',
+      surplusMode: 'old-debt',
+      oldDebtPaymentAmount: 25000,
+    })
+
+    expect(summary.subtotal).toBe(600000)
+    expect(summary.lineDiscountAmount).toBe(100000)
+    expect(summary.maxCheckoutDiscount).toBe(500000)
+    expect(summary.discountAmount).toBe(150000)
+    expect(summary.total).toBe(450000)
+    expect(summary.customerPaymentAmount).toBe(200000)
+    expect(summary.received).toBe(300000)
+    expect(summary.debt).toBe(150000)
+    expect(summary.surplus).toBe(0)
+    expect(summary.oldDebtPayment).toBe(25000)
+    expect(summary.grossCashAmount).toBe(225000)
+  })
+
+  it('moves invoice-level discount into checkout line items in core logic', () => {
+    const first = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
+    const second = makeCartLine({ id: 'line-2', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
+
+    const items = linesToCheckoutItems([
+      { ...first, discountAmount: 500000 },
+      { ...second, discountAmount: 0 },
+    ], 300000)
+
+    expect(items.map((item) => item.discount_amount)).toEqual([600000, 200000])
+  })
+
+  it('keeps discount percent conversion in core logic', () => {
+    const line = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
+
+    expect(cartLineDiscountPercent({ ...line, discountAmount: 150000 })).toBe(25)
   })
 
   it('keeps invoice tab dirtiness independent from tab rendering', () => {

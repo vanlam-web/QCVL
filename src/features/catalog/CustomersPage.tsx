@@ -20,6 +20,13 @@ import type { CatalogService, CustomerListFilters } from './catalog-service'
 import type { Customer, CustomerGroup } from './types'
 import type { CustomerDebtDetail, OrderService } from '../orders/order-service'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
+import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType } from './customer-filters'
+import {
+  customerDateTime as dateTime,
+  customerPriceRuleLabel,
+  customerSalesDocumentStatusText as salesDocumentStatusText,
+  customerVisibleSummary,
+} from './customer-presenter'
 
 interface CustomerState {
   customers: Customer[]
@@ -31,19 +38,9 @@ interface CustomerState {
 type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
 type CustomerHistoryState = { items: SalesDocumentListItem[]; total: number } | 'loading' | 'error'
 type CustomerDetailTab = 'info' | 'debt' | 'history'
-type CustomerHistoryType = 'invoice' | 'quote'
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerPageSize = 15
 const customerHistoryPageSize = 10
-
-function numberFilterValue(value: string) {
-  const parsed = Number(value)
-  return value.trim() === '' || !Number.isFinite(parsed) ? undefined : parsed
-}
-
-function customerHistoryKey(customerId: string, historyType: CustomerHistoryType) {
-  return `${customerId}:${historyType}`
-}
 
 export function CustomersPage({
   service,
@@ -122,23 +119,19 @@ export function CustomersPage({
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
     try {
-      const totalSalesMinFilter = numberFilterValue(nextTotalSalesMin)
-      const totalSalesMaxFilter = numberFilterValue(nextTotalSalesMax)
-      const totalDebtMinFilter = numberFilterValue(nextTotalDebtMin)
-      const totalDebtMaxFilter = numberFilterValue(nextTotalDebtMax)
-      const result = await service.listCustomers({
-        search: nextSearch || undefined,
+      const result = await service.listCustomers(buildCustomerListFilters({
+        search: nextSearch,
         page: nextPage,
         page_size: nextPageSize,
-        ...(nextCustomerGroupId === 'all' ? {} : { customer_group_id: nextCustomerGroupId }),
-        ...(nextCreatedFrom === '' ? {} : { created_from: nextCreatedFrom }),
-        ...(nextCreatedTo === '' ? {} : { created_to: nextCreatedTo }),
-        ...(nextCreatedBy === 'all' ? {} : { created_by: nextCreatedBy }),
-        ...(totalSalesMinFilter === undefined ? {} : { total_sales_min: totalSalesMinFilter }),
-        ...(totalSalesMaxFilter === undefined ? {} : { total_sales_max: totalSalesMaxFilter }),
-        ...(totalDebtMinFilter === undefined ? {} : { total_debt_min: totalDebtMinFilter }),
-        ...(totalDebtMaxFilter === undefined ? {} : { total_debt_max: totalDebtMaxFilter }),
-      })
+        customerGroupId: nextCustomerGroupId,
+        createdFrom: nextCreatedFrom,
+        createdTo: nextCreatedTo,
+        createdBy: nextCreatedBy,
+        totalSalesMin: nextTotalSalesMin,
+        totalSalesMax: nextTotalSalesMax,
+        totalDebtMin: nextTotalDebtMin,
+        totalDebtMax: nextTotalDebtMax,
+      }))
       setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size })
       setLastSearch(nextSearch)
       setLastCustomerGroupId(nextCustomerGroupId)
@@ -227,23 +220,19 @@ export function CustomersPage({
       return
     }
     try {
-      const totalSalesMinFilter = numberFilterValue(totalSalesMin)
-      const totalSalesMaxFilter = numberFilterValue(totalSalesMax)
-      const totalDebtMinFilter = numberFilterValue(totalDebtMin)
-      const totalDebtMaxFilter = numberFilterValue(totalDebtMax)
-      const result = await service.listCustomers({
+      const result = await service.listCustomers(buildCustomerListFilters({
         search: query,
         page: 1,
         page_size: 8,
-        ...(customerGroupId === 'all' ? {} : { customer_group_id: customerGroupId }),
-        ...(createdFrom === '' ? {} : { created_from: createdFrom }),
-        ...(createdTo === '' ? {} : { created_to: createdTo }),
-        ...(createdBy === 'all' ? {} : { created_by: createdBy }),
-        ...(totalSalesMinFilter === undefined ? {} : { total_sales_min: totalSalesMinFilter }),
-        ...(totalSalesMaxFilter === undefined ? {} : { total_sales_max: totalSalesMaxFilter }),
-        ...(totalDebtMinFilter === undefined ? {} : { total_debt_min: totalDebtMinFilter }),
-        ...(totalDebtMaxFilter === undefined ? {} : { total_debt_max: totalDebtMaxFilter }),
-      })
+        customerGroupId,
+        createdFrom,
+        createdTo,
+        createdBy,
+        totalSalesMin,
+        totalSalesMax,
+        totalDebtMin,
+        totalDebtMax,
+      }))
       if (customerSearchRequestId.current !== requestId) return
       setCustomerSearchSuggestions(result.items)
       setCustomerSearchSuggestionsOpen(true)
@@ -415,10 +404,7 @@ export function CustomersPage({
         .map((creator) => [creator.id, creator]),
     ).values(),
   )
-  const visibleDebtTotal = state?.customers.reduce((sum, customer) => {
-    return sum + (customer.total_debt_amount ?? 0)
-  }, 0) ?? 0
-  const visibleSalesTotal = state?.customers.reduce((sum, customer) => sum + (customer.total_sales_amount ?? 0), 0) ?? 0
+  const { visibleDebtTotal, visibleSalesTotal } = customerVisibleSummary(state?.customers ?? [])
   const {
     sortedItems: sortedCustomers,
     sortState: customerSortState,
@@ -809,7 +795,7 @@ export function CustomersPage({
                                   </div>
                                   <div>
                                     <dt>Bảng giá áp dụng</dt>
-                                    <dd>{priceRuleLabel(customer)}</dd>
+                                    <dd>{customerPriceRuleLabel(customer)}</dd>
                                   </div>
                                   <div>
                                     <dt>Người tạo</dt>
@@ -866,9 +852,6 @@ export function CustomersPage({
   )
 }
 
-function priceRuleLabel(customer: Customer) {
-  return customer.customer_group === null ? 'Bảng giá chung' : `Theo nhóm: ${customer.customer_group.name}`
-}
 
 function CustomerDebtPanel({ debt }: { debt: CustomerDebtState | undefined }) {
   if (debt === undefined || debt === 'loading') return <p>Đang tải nợ cần thu...</p>
@@ -1007,27 +990,3 @@ function CustomerAnalysisDialog({ customer, onClose }: { customer: Customer; onC
   )
 }
 
-function salesDocumentStatusText(document: SalesDocumentListItem) {
-  if (document.order_type === 'invoice') {
-    if (document.status === 'cancelled') return 'Đã hủy'
-    if (document.payment_status === 'unpaid' || (document.debt_amount > 0 && document.paid_amount <= 0)) return 'Nợ'
-    if (document.payment_status === 'partial' || document.debt_amount > 0) return 'Nợ 1 phần'
-    return 'Hoàn tất'
-  }
-
-  if (document.status === 'active') return 'Đang hiệu lực'
-  if (document.status === 'converted') return 'Đã chuyển'
-  return 'Đã hủy'
-}
-
-function dateTime(value: string | null | undefined) {
-  if (!value) return 'Chưa có dữ liệu'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có dữ liệu'
-
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(parsed)
-}

@@ -41,6 +41,7 @@ Hiện tại đã triển khai:
 - gợi ý tối đa 8 dòng, hiển thị mã chứng từ + tên khách, dòng phụ là mã khách/ghi chú, mép phải là tổng tiền; bấm gợi ý lọc danh sách theo đúng mã chứng từ
 - bộ lọc thời gian dạng chọn nhanh/tùy chỉnh theo layout filter dùng chung
 - bộ lọc trạng thái thanh toán, phương thức thanh toán, người bán/người tạo và bảng giá nếu dữ liệu/API hiện có hỗ trợ
+- bộ lọc nhiều chọn `Loại hóa đơn`, `Trạng thái hóa đơn`, `Thanh toán` đã chạy trên NAS ngày 2026-07-09; frontend và backend phải cùng hỗ trợ query comma, không được đổi UI sang nhiều chọn khi backend còn chỉ nhận một giá trị
 - exact document-code lookup không bị che bởi filter mặc định
 - bấm dòng chứng từ để mở chi tiết readonly inline
 - mở lại báo giá active vào POS draft local
@@ -91,15 +92,17 @@ QC-OMS chỉ làm luồng **bán đứt**:
 |---|---|
 | Tìm kiếm nhanh | Tìm theo mã chứng từ, mã khách, tên khách, SĐT nếu có, ghi chú đơn |
 | Thời gian | Mặc định tháng này; có bộ lọc hôm nay, hôm qua, tháng này, tùy chỉnh |
-| Loại chứng từ | Tất cả, Báo giá, Hóa đơn |
-| Trạng thái chứng từ | Báo giá, Hoàn thành, Đã hủy |
-| Trạng thái thanh toán | Tất cả, Đã trả đủ, Còn nợ, Không thu tiền nếu có dữ liệu |
+| Loại hóa đơn | Checkbox nhiều chọn: Hóa đơn, Báo giá. Mặc định chọn cả hai. API nhận `type=invoice,quote`; nếu bỏ hết thì gửi `__none__` và trả rỗng. |
+| Trạng thái hóa đơn | Checkbox nhiều chọn: Đang hiệu lực, Hoàn tất, Đã hủy. Mặc định chọn `active,completed`; `cancelled` chỉ hiện khi người dùng chọn. API nhận `status=active,completed,cancelled`. |
+| Thanh toán | Checkbox nhiều chọn: Chưa thanh toán, Thanh toán một phần, Đã thanh toán. Mặc định chọn cả ba. API nhận `payment_status=unpaid,partial,paid`. |
 | Phương thức thanh toán | Tất cả, Tiền mặt, Chuyển khoản, Kết hợp nếu có dữ liệu |
 | Khách hàng | Chọn khách hoặc nhập nhanh tên/mã/SĐT |
 | Người bán/người tạo | Trong QC-OMS hiện tại hai khái niệm này dùng cùng tài khoản tạo/chốt chứng từ; UI chỉ cần một filter người bán/người tạo |
 | Bảng giá | Bảng giá chung hoặc bảng giá theo nhóm khách |
 
 Không có bộ lọc giao hàng, COD, đối tác giao hàng, kênh bán, HĐĐT, VAT, trạng thái giao hàng, trạng thái vận đơn hoặc trạng thái đồng bộ sàn.
+
+Các nhóm checkbox trong sidebar tự áp dụng ngay khi đổi lựa chọn, không có nút `Lọc` hoặc `Đặt lại`. Filter nhiều chọn phải dùng CSS chung `ManagementFilterSidebar`, `ManagementFilterGroup`, `management-filter-choice`, `management-filter-select`; không tạo CSS riêng nếu control hiện có đáp ứng.
 
 Khi người dùng tìm đúng mã chứng từ, hệ thống phải tìm trên toàn bộ lịch sử hoặc tự bỏ các filter thời gian/trạng thái đang che kết quả.
 

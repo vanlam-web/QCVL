@@ -1,0 +1,43 @@
+import type { InventoryProduct, InventoryProductStatus, InventoryShape, Stocktake } from './types'
+
+export function shapeText(shape: InventoryShape | 'all') {
+  if (shape === 'normal') return 'Hàng thường'
+  if (shape === 'roll') return 'Hàng cuộn'
+  if (shape === 'sheet') return 'Hàng tấm'
+  return 'Tất cả'
+}
+
+export function statusText(status: InventoryProductStatus | 'all') {
+  if (status === 'active') return 'Đang kinh doanh'
+  if (status === 'inactive') return 'Ngừng bán'
+  return 'Tất cả'
+}
+
+export function stocktakeStatusText(status: Stocktake['status']) {
+  if (status === 'balanced') return 'Đã cân bằng'
+  if (status === 'draft') return 'Nháp'
+  return 'Đã hủy'
+}
+
+export function numberText(value: number) {
+  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 }).format(value)
+}
+
+export function moneyText(value: number | null) {
+  if (value === null) return 'Chưa có'
+  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value).replaceAll('.', ' ')
+}
+
+export function dateText(value: string | null) {
+  if (value === null) return 'Chưa có'
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
+  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
+}
+
+export function inventoryListSummary(products: Pick<InventoryProduct, 'available_qty' | 'is_negative'>[] | null) {
+  return {
+    negativeCount: products?.filter((product) => product.is_negative).length ?? 0,
+    totalQty: products?.reduce((sum, product) => sum + product.available_qty, 0) ?? 0,
+  }
+}
