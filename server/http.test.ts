@@ -695,6 +695,44 @@ describe('createHttpHandler', () => {
     )
   })
 
+  test('uses actual post time for new checkout invoice instead of demo fixture time', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+    const before = Date.now()
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-011',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+    const orderCode = checkoutBody.data.order.code
+    const documents = await handler(
+      new Request(`http://api.local/api/v1/sales-documents?search=${orderCode}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const documentsBody = await documents.json()
+    const createdAt = documentsBody.data.items[0].created_at
+    const createdTime = new Date(createdAt).getTime()
+
+    expect(checkout.status).toBe(201)
+    expect(createdAt).not.toBe('2026-07-08T08:30:00.000Z')
+    expect(createdTime).toBeGreaterThanOrEqual(before - 1000)
+    expect(createdTime).toBeLessThanOrEqual(Date.now() + 1000)
+  })
+
   test('keeps customer 11 partial bank checkout after server restart', async () => {
     const passwordHash = await hashPassword('ChangeMe123!')
     const sharedRepository = persistentRepository(passwordHash)

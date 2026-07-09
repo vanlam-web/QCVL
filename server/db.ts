@@ -224,7 +224,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           left join order_items oi on oi.order_id = o.id
           where o.organization_id = $1
           group by o.id
-          order by o.created_at desc
+          order by o.updated_at desc, o.created_at desc
         `,
         [input.organizationId],
       )
@@ -264,7 +264,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             and cde.customer_id = $2
             and cde.status = 'open'
             and cde.remaining_debt > 0
-          order by cde.created_at desc
+          order by cde.updated_at desc, cde.created_at desc
         `,
         [input.organizationId, input.customerId],
       )
@@ -565,6 +565,7 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists orders_org_type_created_idx on orders (organization_id, order_type, created_at desc)')
+  await pool.query('create index if not exists orders_org_updated_created_idx on orders (organization_id, updated_at desc, created_at desc)')
   await pool.query('create index if not exists orders_org_customer_idx on orders (organization_id, customer_id)')
   await pool.query(`
     create table if not exists order_items (
@@ -624,6 +625,7 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists customer_debt_entries_customer_idx on customer_debt_entries (organization_id, customer_id, status, created_at desc)')
+  await pool.query('create index if not exists customer_debt_entries_customer_updated_idx on customer_debt_entries (organization_id, customer_id, status, updated_at desc, created_at desc)')
   await pool.query(`
     create table if not exists cashbook_entries (
       id text primary key default gen_random_uuid()::text,

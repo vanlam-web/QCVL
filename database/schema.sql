@@ -97,6 +97,9 @@ create table if not exists orders (
 create index if not exists orders_org_type_created_idx
   on orders (organization_id, order_type, created_at desc);
 
+create index if not exists orders_org_updated_created_idx
+  on orders (organization_id, updated_at desc, created_at desc);
+
 create index if not exists orders_org_customer_idx
   on orders (organization_id, customer_id);
 
@@ -156,6 +159,9 @@ create table if not exists customer_debt_entries (
 
 create index if not exists customer_debt_entries_customer_idx
   on customer_debt_entries (organization_id, customer_id, status, created_at desc);
+
+create index if not exists customer_debt_entries_customer_updated_idx
+  on customer_debt_entries (organization_id, customer_id, status, updated_at desc, created_at desc);
 
 create table if not exists cashbook_entries (
   id text primary key default gen_random_uuid()::text,

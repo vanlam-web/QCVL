@@ -123,6 +123,10 @@ const allPermissions = [
 
 const nowIso = '2026-07-08T08:30:00.000Z'
 
+function runtimeIso() {
+  return new Date().toISOString()
+}
+
 const productGroups = [
   { id: 'pg-mica', code: 'MICA', name: 'Mica', is_default: true, is_active: true },
   { id: 'pg-service', code: 'DV', name: 'Dich vu', is_default: false, is_active: true },
@@ -716,6 +720,7 @@ function makeOrderFromCheckout(body: {
 }, orderType: 'invoice' | 'quote') {
   const number = salesDocuments.length + 1
   const codeSuffix = `${pad(number)}-${randomUUID().slice(0, 8).toUpperCase()}`
+  const createdAt = runtimeIso()
   const customer = customers.find((item) => item.id === body.customer_id) ?? customers[0]
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
   const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
@@ -732,7 +737,7 @@ function makeOrderFromCheckout(body: {
     code: `${orderType === 'quote' ? 'BG-POS' : 'HD-POS'}-${codeSuffix}`,
     order_type: orderType,
     status: orderType === 'quote' ? 'active' : 'completed',
-    created_at: nowIso,
+    created_at: createdAt,
     customer: { id: customer.id, code: customer.code, name: customer.name, phone: customer.phone },
     seller: { id: 'admin', name: 'Admin' },
     subtotal_amount: subtotal,
@@ -766,6 +771,7 @@ function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCh
 
 function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
   const entries: typeof cashbookEntries = []
+  const createdAt = runtimeIso()
   const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
   const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
   const methods = [
@@ -785,7 +791,7 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
       finance_account: { id: method.account.id, code: method.account.code, name: method.account.name, account_type: method.account.account_type },
       is_business_accounted: true,
       source_type: 'payment_receipt_method',
-      created_at: nowIso,
+      created_at: createdAt,
       note: `Thu tien ${order.code}`,
       counterparty: { type: 'customer', name: order.customer.name, phone: order.customer.phone },
     })
@@ -867,6 +873,7 @@ async function collectCustomerDebt(request: Request) {
   }
 
   const receiptCode = `PT-CN-${pad(cashbookEntries.length + 1)}`
+  const createdAt = runtimeIso()
   const customerName = customer?.name ?? debt.customer_name
   const customerPhone = customer && 'phone' in customer ? customer.phone : null
   const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
@@ -877,7 +884,7 @@ async function collectCustomerDebt(request: Request) {
     direction: 'in',
     is_business_accounted: true,
     source_type: 'payment_receipt_method',
-    created_at: nowIso,
+    created_at: createdAt,
     note: entryNote,
     counterparty: { type: 'customer', name: customerName, phone: customerPhone },
     payment_method: bankAmount > 0 && cashAmount <= 0 ? 'bank_transfer' : cashAmount > 0 && bankAmount <= 0 ? 'cash' : 'manual',
