@@ -9,9 +9,6 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react'
-import { PackageOpen, Pencil, Plus, Search } from 'lucide-react'
-import { ConnectionStatus } from '../../components/ConnectionStatus'
-import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Product, ResolvedPrice, SellMethod } from '../catalog/types'
@@ -24,8 +21,10 @@ import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
-import { ProfileMenu } from './ProfileMenu'
 import { ProductGrid } from './ProductGrid'
+import { PosCartPanel } from './PosCartPanel'
+import { PosPaymentPanel } from './PosPaymentPanel'
+import { PosTopbar } from './PosTopbar'
 import { ProductionQueuePanel } from './ProductionQueuePanel'
 import { consumeQuoteReopenPayload } from './quote-draft-handoff'
 import { permissions } from '../users/permissions'
@@ -37,7 +36,6 @@ import {
   clampLineDiscount,
   draftLineQuantity,
   initialQuotePayloadToTabs,
-  invoiceTabLabel,
   isAreaLine,
   isInvoiceTabDirty,
   lineInputDraftKey,
@@ -822,145 +820,40 @@ export function PosShell({
 
   return (
     <main className="pos-shell">
-      <section aria-label="K01 topbar" className="pos-topbar">
-        <section aria-label="K01 tìm kiếm" className="pos-topbar-search">
-          <button
-            aria-label="QC"
-            className="pos-brand-button"
-            type="button"
-            onClick={onOpenDashboard}
-          >
-            <img alt="" className="pos-brand-logo" src="/brand-logo.png" />
-          </button>
-          <label className="management-compact-search pos-topbar-search-control">
-            <span className="pos-topbar-search-label">Tìm hàng (F3)</span>
-            <span className="management-compact-search-leading">
-              <Search aria-hidden="true" size={16} />
-            </span>
-            <input
-              ref={productSearchRef}
-              value={productSearch}
-              placeholder="Tìm hàng, combo, vật tư"
-              onFocus={() => {
-                setHoveredCartLineId(null)
-                setSelectedCartLineId(null)
-                setPriceEditorLineId(null)
-                setRecentPriceLineId(null)
-              }}
-              onChange={(event) => setProductSearch(event.target.value)}
-              onKeyDown={handleProductSearchKeyDown}
-            />
-            <span className="management-compact-search-trailing">
-              <button
-                aria-label={productSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
-                className={`management-compact-create-action pos-search-add-button${productSearch.trim().length > 0 ? ' management-compact-create-action-clear' : ''}`}
-                title={productSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
-                type="button"
-                onClick={() => {
-                  if (productSearch.trim().length > 0) {
-                    setProductSearch('')
-                    return
-                  }
-                  setProductCreateOpen(true)
-                }}
-              >
-                <Plus aria-hidden="true" size={18} />
-              </button>
-            </span>
-          </label>
-          {productSearch.trim().length > 0 ? (
-            <ul aria-label="Kết quả tìm hàng" className="pos-search-results" role="listbox">
-              {productSearchResults.length > 0 ? (
-                productSearchResults.map((product) => {
-                  const price = prices[product.id]?.unit_price ?? 0
-                  return (
-                    <li key={product.id}>
-                      <button
-                        role="option"
-                        aria-selected="false"
-                        type="button"
-                        onClick={() => selectProductFromSearch(product)}
-                      >
-                        <strong>{product.code} {product.name}</strong>
-                        <span>{product.unit_name}</span>
-                        <span>{formatMoney(price)}</span>
-                      </button>
-                    </li>
-                  )
-                })
-              ) : (
-                <li role="option" aria-selected="false">Không tìm thấy hàng hóa phù hợp</li>
-              )}
-            </ul>
-          ) : null}
-        </section>
-        <section aria-label="K01 tab hóa đơn" className="pos-topbar-tabs">
-          {tabs.map((tab) => {
-            const isActiveTab = tab.id === activeTabId
-            return (
-              <span
-                key={tab.id}
-                className="pos-invoice-tab"
-                data-current={isActiveTab ? 'true' : undefined}
-              >
-                <button
-                  aria-current={isActiveTab ? 'true' : undefined}
-                  type="button"
-                  onClick={() => setActiveTabId(tab.id)}
-                >
-                  {invoiceTabLabel(tab, isActiveTab)}
-                </button>
-                {isActiveTab ? (
-                  <button
-                    aria-label={`Đóng Hóa đơn ${tab.number}`}
-                    className="pos-invoice-tab-close"
-                    type="button"
-                    onClick={() => closeInvoiceTab(tab.id)}
-                  >
-                    ×
-                  </button>
-                ) : null}
-              </span>
-            )
-          })}
-          <button
-            aria-label="Tạo hóa đơn mới"
-            disabled={tabs.length >= maxInvoiceTabs}
-            title={tabs.length >= maxInvoiceTabs ? 'Đã đạt tối đa 10 hóa đơn đang mở' : undefined}
-            type="button"
-            onClick={createInvoiceTab}
-          >
-            +
-          </button>
-        </section>
-        <section aria-label="K01 tiện ích" className="pos-topbar-actions">
-          <button
-            aria-label="Khui vật tư"
-            className="pos-icon-button"
-            title="Khui vật tư"
-            type="button"
-            onClick={() => setManualOpeningOpen(true)}
-          >
-            <PackageOpen aria-hidden="true" size={18} />
-          </button>
-          <button aria-label="Lịch sử 10 đơn gần nhất" className="pos-icon-button" type="button">
-            🕒
-          </button>
-          <ConnectionStatus connected={connected} />
-          <div aria-label="Tài khoản và giao diện" className="shell-user-actions pos-user-actions">
-            <ThemeToggle />
-            <ProfileMenu
-              displayName={currentUser.user.display_name}
-              permissions={currentUser.permissions}
-              compact
-              onSignOut={onSignOut}
-              onOpenAdmin={onOpenAdmin}
-              onOpenDashboard={onOpenDashboard}
-            />
-          </div>
-        </section>
-      </section>
-      <section aria-label="K02 giỏ hàng" className="pos-cart">
+      <PosTopbar
+        activeTabId={activeTabId}
+        connected={connected}
+        currentUser={currentUser}
+        prices={prices}
+        productSearch={productSearch}
+        productSearchRef={productSearchRef}
+        productSearchResults={productSearchResults}
+        tabs={tabs}
+        onCloseInvoiceTab={closeInvoiceTab}
+        onCreateInvoiceTab={createInvoiceTab}
+        onOpenAdmin={onOpenAdmin}
+        onOpenDashboard={onOpenDashboard}
+        onOpenManualMaterialOpening={() => setManualOpeningOpen(true)}
+        onOpenProductCreate={() => setProductCreateOpen(true)}
+        onProductSearchChange={setProductSearch}
+        onProductSearchFocus={() => {
+          setHoveredCartLineId(null)
+          setSelectedCartLineId(null)
+          setPriceEditorLineId(null)
+          setRecentPriceLineId(null)
+        }}
+        onProductSearchKeyDown={handleProductSearchKeyDown}
+        onProductSelect={selectProductFromSearch}
+        onSetActiveTab={setActiveTabId}
+        onSignOut={onSignOut}
+      />
+      <PosCartPanel
+        cartTotal={cartTotal}
+        hasLines={cartLines.length > 0}
+        lineCount={cartLines.length}
+        note={activeTab.orderNote}
+        onNoteChange={(orderNote) => updateActiveTab((tab) => ({ ...tab, orderNote }))}
+      >
         {cartLines.length > 0 ? (
           <ul
             aria-label="Dòng hàng trong giỏ"
@@ -1328,27 +1221,13 @@ export function PosShell({
             ))}
           </ul>
         ) : null}
-        <footer className="pos-cart-footer" aria-label="Ghi chú và tổng tiền">
-          <label className="pos-cart-note">
-            <Pencil aria-hidden="true" size={18} />
-            <input
-              aria-label="Ghi chú đơn hàng"
-              placeholder="Ghi chú đơn hàng"
-              value={activeTab.orderNote}
-              onChange={(event) =>
-                updateActiveTab((tab) => ({ ...tab, orderNote: event.target.value }))
-              }
-            />
-          </label>
-          <div className="pos-cart-total" aria-label="Tổng tiền hàng">
-            <span>Tổng tiền hàng</span>
-            <strong>{cartLines.length}</strong>
-            <strong>{formatMoney(cartTotal)}</strong>
-          </div>
-        </footer>
-      </section>
-      {!checkoutOpen ? (
-        <section aria-label="K03 sản phẩm" className="pos-payment">
+      </PosCartPanel>
+      <PosPaymentPanel
+        checkoutDrawerRef={checkoutDrawerRef}
+        checkoutOpen={checkoutOpen}
+        onCloseCheckout={() => setCheckoutOpen(false)}
+        main={
+          <>
           <CustomerPanel
             key={selectedCustomer?.id ?? 'no-customer'}
             service={catalogService}
@@ -1369,22 +1248,9 @@ export function PosShell({
               </button>
             }
           />
-        </section>
-      ) : null}
-      <ProductionQueuePanel
-        service={productionQueueService}
-        onAddToDraft={handleProductionQueueDraft}
-      />
-      {checkoutOpen ? (
-        <aside ref={checkoutDrawerRef} aria-label="Ngăn thanh toán" className="pos-checkout-drawer">
-          <button
-            aria-label="Đóng thanh toán"
-            className="pos-checkout-drawer-close"
-            type="button"
-            onClick={() => setCheckoutOpen(false)}
-          >
-            ×
-          </button>
+          </>
+        }
+        checkout={
           <CheckoutPanel
             cartLines={cartLines}
             selectedCustomer={selectedCustomer}
@@ -1402,8 +1268,12 @@ export function PosShell({
               })
             }}
           />
-        </aside>
-      ) : null}
+        }
+      />
+      <ProductionQueuePanel
+        service={productionQueueService}
+        onAddToDraft={handleProductionQueueDraft}
+      />
       {productCreateOpen ? (
         <aside aria-label="Tạo hàng hóa" className="pos-product-create-popover">
           <form onSubmit={createProductFromPos}>
