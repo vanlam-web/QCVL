@@ -1,12 +1,8 @@
 import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronDown, ChevronRight, Download, Edit3, Info, Pin, Printer, Search, StickyNote, Trash2, WalletCards, X } from 'lucide-react'
+import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
-  ManagementCompactCreateAction,
-  ManagementCompactSearch,
-  ManagementCompactToolbar,
-  ManagementDetailActionFooter,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -41,22 +37,11 @@ import {
   businessAccountedText,
   cashbookCounterpartyDisplayName,
   cashbookCounterpartyLabel,
-  cashbookDetailAccountLabel,
-  cashbookDetailAmountLabel,
-  cashbookDetailCounterpartyLabel,
-  cashbookDetailCounterpartyTypeLabel,
-  cashbookDetailNoteText,
-  cashbookDetailPrimaryStatusText,
-  cashbookDetailPrimaryStatusTone,
-  cashbookDetailTitle,
   cashbookEntryNeedsCounterpartyHydration,
   cashFirstAccountSort,
   cashbookLinkedDocumentCode,
-  cashbookLinkedDocumentMessage,
-  cashbookLinkedDocumentRows,
   financeAccountChoiceLabel,
   financeDateText as dateText,
-  paymentMethodText,
   sourceTypeText,
   statusText,
   voucherTypeOptions,
@@ -84,6 +69,8 @@ import {
   writeCashbookFavoriteIds,
   writePinnedBankAccountIds,
 } from './finance-storage'
+import { FinanceFiltersPanel, type FinanceSearchSuggestion } from './FinanceFiltersPanel'
+import { FinanceDetailPanel } from './FinanceDetailPanel'
 
 const pageSizeDefault = 15
 const showAuxiliaryFinanceSections = false
@@ -107,45 +94,6 @@ const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }
   { key: 'is_business_accounted', label: 'Hạch toán KQKD' },
 ]
 
-
-function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
-  const linkedDocumentRows = cashbookLinkedDocumentRows(entry)
-  return (
-    <section aria-label="Chứng từ liên kết" className="finance-cashbook-linked-documents">
-      <div className="finance-cashbook-linked-documents-inner">
-        <p>{linkedDocumentRows.length > 0 ? cashbookLinkedDocumentMessage(entry) : 'Không có chứng từ liên kết.'}</p>
-        <ManagementTableViewport>
-          <table aria-label="Chứng từ liên kết" className="management-table">
-            <thead>
-              <tr>
-                <th>Mã chứng từ</th>
-                <th>Thời gian</th>
-                <th>{entry.direction === 'in' ? 'Tổng sau giảm' : 'Giá trị phiếu'}</th>
-                <th>{entry.direction === 'in' ? 'Chưa TT' : 'Đã trả trước'}</th>
-                <th>{entry.direction === 'in' ? 'Giá trị thu' : 'Giá trị chi'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linkedDocumentRows.length > 0 ? linkedDocumentRows.map((linkedDocument) => (
-                <tr key={linkedDocument.id}>
-                  <td>{linkedDocument.code}</td>
-                  <td>{dateText(entry.created_at)}</td>
-                  <td><MoneyText value={linkedDocument.totalAmount} /></td>
-                  <td><MoneyText value={entry.direction === 'in' ? linkedDocument.remainingAmount : linkedDocument.settledBefore} /></td>
-                  <td><MoneyText value={linkedDocument.allocatedAmount} /></td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan={5}>Không có kết quả phù hợp</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </ManagementTableViewport>
-      </div>
-    </section>
-  )
-}
 
 export function FinancePage({ service }: { service: FinanceService }) {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -931,48 +879,32 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const voucherCounterpartyTypeLabel = voucherMode === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'
   const voucherCounterpartyNameLabel = voucherMode === 'in' ? 'Tên người nộp' : 'Tên người nhận'
   const bankAccountModalTitle = editingBankAccountId === null ? 'Thêm tài khoản ngân hàng' : 'Sửa tài khoản ngân hàng'
+  const cashbookSuggestionItems: FinanceSearchSuggestion[] | undefined = cashbookSearchSuggestionsOpen
+    ? cashbookSearchSuggestions.map((entry) => ({
+        id: entry.id,
+        primary: `${entry.code} ${cashbookCounterpartyLabel(entry)}`.trim(),
+        secondary: entry.note,
+        meta: <MoneyText value={entry.amount_delta} />,
+        ariaLabel: `${entry.code} ${cashbookCounterpartyLabel(entry)} ${entry.note ?? ''}`.trim(),
+      }))
+    : undefined
 
   return (
     <ManagementPage
       title="Sổ quỹ"
       actions={
-        <div className="finance-page-actions">
-          <ManagementCompactToolbar ariaLabel="Lọc sổ quỹ" onSubmit={filterCashbook}>
-            <ManagementCompactSearch
-              label="Tìm sổ quỹ"
-              placeholder="Mã phiếu, người nộp/nhận, ghi chú"
-              value={cashbookSearch}
-              leadingIcon={<Search aria-hidden="true" size={16} />}
-              trailingAction={
-                <ManagementCompactCreateAction ariaLabel="Tạo phiếu thu chi" onClick={() => openVoucherForm('in')} />
-              }
-              suggestions={
-                cashbookSearchSuggestionsOpen
-                  ? cashbookSearchSuggestions.map((entry) => ({
-                      id: entry.id,
-                      primary: `${entry.code} ${cashbookCounterpartyLabel(entry)}`.trim(),
-                      secondary: entry.note,
-                      meta: <MoneyText value={entry.amount_delta} />,
-                      ariaLabel: `${entry.code} ${cashbookCounterpartyLabel(entry)} ${entry.note ?? ''}`.trim(),
-                    }))
-                  : undefined
-              }
-              suggestionsLabel="Gợi ý sổ quỹ"
-              emptySuggestion="Không có kết quả phù hợp"
-              onChange={(nextSearch) => void suggestCashbook(nextSearch)}
-              onSuggestionSelect={(suggestion) => {
-                const entry = cashbookSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-                if (entry) void selectCashbookSuggestion(entry)
-              }}
-            />
-          </ManagementCompactToolbar>
-          <div className="finance-voucher-actions" aria-label="Tác vụ sổ quỹ">
-            <button className="button button-secondary" type="button" onClick={exportCashbook}>
-              <Download aria-hidden="true" size={16} />
-              Xuất file
-            </button>
-          </div>
-        </div>
+        <FinanceFiltersPanel
+          search={cashbookSearch}
+          suggestions={cashbookSuggestionItems}
+          onCreateVoucher={() => openVoucherForm('in')}
+          onExportCashbook={exportCashbook}
+          onSearchChange={(nextSearch) => void suggestCashbook(nextSearch)}
+          onSubmit={filterCashbook}
+          onSuggestionSelect={(suggestion) => {
+            const entry = cashbookSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
+            if (entry) void selectCashbookSuggestion(entry)
+          }}
+        />
       }
       kpis={
         <MetricGrid ariaLabel="Tổng quan sổ quỹ">
@@ -1666,71 +1598,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                       </tr>
                       {selectedCashbookEntry?.id === entry.id ? (
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>
-                          {cashbookDetail === null ? <p>Đang tải chi tiết...</p> : (
-                            <div className="management-detail-panel finance-cashbook-detail">
-                              <div className="inline-detail-tabbar">
-                                <div className="inline-detail-tabs" role="tablist" aria-label="Chi tiết phiếu">
-                                  <button aria-selected="true" role="tab" type="button">Thông tin</button>
-                                </div>
-                              </div>
-                              <header className="management-detail-header">
-                                <div className="management-detail-heading">
-                                  <div className="management-detail-title-line">
-                                    <h3>{cashbookDetailTitle(cashbookDetail)}</h3>
-                                    <StatusChip tone={cashbookDetailPrimaryStatusTone(cashbookDetail)}>{cashbookDetailPrimaryStatusText(cashbookDetail)}</StatusChip>
-                                    <StatusChip tone={cashbookDetail.is_business_accounted ? 'info' : 'warning'}>{cashbookDetail.is_business_accounted ? 'Có hạch toán' : 'Không hạch toán'}</StatusChip>
-                                  </div>
-                                </div>
-                              </header>
-                              <p className="management-detail-log finance-cashbook-detail-log">
-                                Người tạo: {cashbookDetail.created_by.name} | Thời gian: {dateText(cashbookDetail.created_at)}
-                              </p>
-                              <dl className="management-detail-meta-grid management-detail-meta-grid-four">
-                                <div><dt>Số tiền</dt><dd><MoneyText value={cashbookDetail.amount_delta} /></dd></div>
-                                <div><dt>{cashbookDetailAmountLabel(cashbookDetail)}</dt><dd>{sourceTypeText(cashbookDetail.source_type)}</dd></div>
-                                <div><dt>{cashbookDetail.direction === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'}</dt><dd>{cashbookDetailCounterpartyTypeLabel(cashbookDetail)}</dd></div>
-                                <div><dt>Phương thức thanh toán</dt><dd>{paymentMethodText(cashbookDetail.payment_method)}</dd></div>
-                              </dl>
-                              <dl className="management-detail-meta-rows">
-                                <div>
-                                  <dt>{cashbookDetailCounterpartyLabel(cashbookDetail)}</dt>
-                                  <dd>
-                                    <button aria-label={`${cashbookDetailCounterpartyLabel(cashbookDetail)} ${cashbookDetail.counterparty.name ?? '-'}`} className="finance-cashbook-detail-link" type="button">
-                                      {cashbookDetail.counterparty.name ?? '-'}
-                                    </button>
-                                  </dd>
-                                </div>
-                                <div><dt>{cashbookDetailAccountLabel(cashbookDetail)}</dt><dd>{cashbookDetail.finance_account.name}</dd></div>
-                              </dl>
-                              <CashbookLinkedDocuments entry={cashbookDetail} />
-                              <div className="management-detail-inline-note">
-                                <StickyNote aria-hidden="true" size={16} />
-                                {cashbookDetailNoteText(cashbookDetail)}
-                              </div>
-                              <ManagementDetailActionFooter
-                                leftActions={[
-                                  {
-                                    label: 'Xóa',
-                                    ariaLabel: `Xóa phiếu ${cashbookDetail.code}`,
-                                    danger: true,
-                                    icon: <Trash2 aria-hidden="true" size={16} />,
-                                  },
-                                ]}
-                                rightActions={[
-                                  {
-                                    label: 'Sửa',
-                                    ariaLabel: `Sửa phiếu ${cashbookDetail.code}`,
-                                    icon: <Edit3 aria-hidden="true" size={16} />,
-                                  },
-                                  {
-                                    label: 'In',
-                                    ariaLabel: `In phiếu ${cashbookDetail.code}`,
-                                    icon: <Printer aria-hidden="true" size={16} />,
-                                  },
-                                ]}
-                              />
-                            </div>
-                          )}
+                          <FinanceDetailPanel detail={cashbookDetail} />
                         </ManagementDetailRow>
                       ) : null}
                     </Fragment>
