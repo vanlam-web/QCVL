@@ -645,7 +645,7 @@ Copy bundle and run migration before restart:
 npm run db:migrate
 robocopy dist "\\100.84.228.125\docker\QCVL\app\dist" /E
 robocopy dist-server "\\100.84.228.125\docker\QCVL\app\dist-server" /E
-ssh -tt -o StrictHostKeyChecking=no adminnas@100.84.228.125 "sudo -S /usr/local/bin/docker restart qcvl-app"
+ssh -tt -o StrictHostKeyChecking=no <nas-user>@100.84.228.125 "sudo -S /usr/local/bin/docker restart qcvl-app"
 ```
 
 - [x] **Step 4: NAS smoke**
@@ -654,7 +654,7 @@ Run:
 
 ```powershell
 Invoke-WebRequest -UseBasicParsing http://100.84.228.125:3200/api/v1/health
-$env:QCVL_SMOKE_PASSWORD='Lam650909@1'
+$env:QCVL_SMOKE_PASSWORD='<admin-password>'
 npm run smoke:nas
 Remove-Item Env:\QCVL_SMOKE_PASSWORD
 ```

@@ -128,6 +128,42 @@ Quy tắc:
 
 ## 4. Build và deploy
 
+Quy trinh rut gon, uu tien dung:
+
+```powershell
+npm run build:nas
+npm run verify:nas-bundle
+npm run health:nas
+```
+
+Dry-run deploy, khong copy that:
+
+```powershell
+npm run deploy:nas
+```
+
+Deploy that khi owner noi ro dua len NAS:
+
+```powershell
+$env:QCVL_NAS_DEPLOY_CONFIRM='true'
+npm run deploy:nas
+Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
+```
+
+Deploy that va restart `qcvl-app` khi co thay doi backend/server/runtime:
+
+```powershell
+$env:QCVL_NAS_DEPLOY_CONFIRM='true'
+$env:QCVL_NAS_RESTART='true'
+$env:QCVL_NAS_SSH_TARGET='<nas-user>@100.84.228.125'
+npm run deploy:nas
+Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
+Remove-Item Env:\QCVL_NAS_RESTART
+Remove-Item Env:\QCVL_NAS_SSH_TARGET
+```
+
+`deploy:nas` tu chay build, verify bundle, copy dung runtime path va health check. Mac dinh la dry-run de tranh day nham len NAS. Phan lenh copy tay ben duoi chi giu de tham khao/debug khi script loi.
+
 Build:
 
 ```powershell

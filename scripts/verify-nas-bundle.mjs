@@ -7,7 +7,7 @@ const forbidden = '100.84.228.125:3100'
 const required = '100.84.228.125:3200'
 
 if (!existsSync(assetsDir)) {
-  throw new Error('dist/assets not found. Run npm run build:all first.')
+  throw new Error('dist/assets not found. Run npm run build:nas first.')
 }
 
 const files = readdirSync(assetsDir)
@@ -28,7 +28,7 @@ if (offenders.length > 0) {
 }
 
 if (!requiredFound) {
-  throw new Error(`NAS bundle does not contain public API base URL ${required}. Check VITE_API_BASE_URL.`)
+  throw new Error(`NAS bundle does not contain public API base URL ${required}. Run npm run build:nas before verify/deploy.`)
 }
 
 console.log(`NAS bundle OK: uses ${required} and does not use ${forbidden}.`)
