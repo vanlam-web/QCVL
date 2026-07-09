@@ -53,6 +53,7 @@ import {
   readNonNegativeNumber,
   readPositiveMoney,
   readPositiveNumber,
+  removeCompletedInvoiceTab,
   type DiscountMode,
   type PosInvoiceTab,
 } from './pos-core'
@@ -137,7 +138,6 @@ export function PosShell({
   const cartLines = activeTab.cartLines
   const selectedCustomer = activeTab.selectedCustomer
   const selectedCustomerId = selectedCustomer?.id
-  const sourceQuote = activeTab.sourceQuote
   const cartTotal = useMemo(
     () => cartLines.reduce((sum, line) => sum + lineTotal(line), 0),
     [cartLines],
@@ -963,7 +963,6 @@ export function PosShell({
         </section>
       </section>
       <section aria-label="K02 giỏ hàng" className="pos-cart">
-        {sourceQuote ? <p>Từ báo giá {sourceQuote.code}</p> : null}
         {cartLines.length > 0 ? (
           <ul
             aria-label="Dòng hàng trong giỏ"
@@ -1392,21 +1391,17 @@ export function PosShell({
             cartLines={cartLines}
             selectedCustomer={selectedCustomer}
             orderService={orderService}
-            sourceQuote={sourceQuote}
             orderNote={activeTab.orderNote}
             sellerName={currentUser.user.display_name}
             orderCreatedAt={activeTab.createdAt}
             quoteBlockedReason={quoteBlockedReason(cartLines)}
             onCheckoutSuccess={() => {
               setCheckoutOpen(false)
-              updateActiveTab((tab) => ({
-                ...tab,
-                createdAt: new Date().toISOString(),
-                sourceQuote: undefined,
-                cartLines: [],
-                selectedCustomer: null,
-                orderNote: '',
-              }))
+              setTabs((current) => {
+                const result = removeCompletedInvoiceTab(current, activeTabId)
+                setActiveTabId(result.activeTabId)
+                return result.tabs
+              })
             }}
           />
         </aside>

@@ -18,7 +18,6 @@ export function CheckoutPanel({
   cartLines,
   selectedCustomer,
   orderService,
-  sourceQuote,
   orderNote = '',
   quoteBlockedReason = null,
   sellerName = '',
@@ -28,7 +27,6 @@ export function CheckoutPanel({
   cartLines: CheckoutCartLine[]
   selectedCustomer: Customer | null
   orderService: OrderService
-  sourceQuote?: { id: string; code: string }
   orderNote?: string
   quoteBlockedReason?: string | null
   sellerName?: string
@@ -199,6 +197,7 @@ export function CheckoutPanel({
         },
       }
       setQuoteResult(await orderService.saveQuote(payload))
+      onCheckoutSuccess?.()
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được báo giá.'))
     } finally {
@@ -497,7 +496,6 @@ export function CheckoutPanel({
       ) : null}
 
       {error ? <p role="alert">{error}</p> : null}
-      {sourceQuote ? <p>Từ báo giá {sourceQuote.code}</p> : null}
       {quoteBlockedReason ? <p role="status">{quoteBlockedReason}</p> : null}
       <div aria-label="Thao tác cuối đơn" className="checkout-action-row">
         <button
@@ -566,7 +564,11 @@ function MoneyInput({
         setDraft(event.target.value)
         onChange(readMoney(event.target.value))
       }}
-      onFocus={() => setDraft(formatMoney(value))}
+      onFocus={(event) => {
+        const input = event.currentTarget
+        setDraft(formatMoney(value))
+        window.requestAnimationFrame(() => input.select())
+      }}
     />
   )
 }

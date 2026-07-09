@@ -132,7 +132,7 @@ function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 
               total_amount: 150000,
               paid_amount: 0,
               debt_amount: 150000,
-              payment_status: 'unpaid' as const,
+              payment_status: 'partial' as const,
               note: 'Khách lấy sau',
             },
             {
@@ -504,6 +504,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).getByText('Nợ 1 phần')).toBeInTheDocument()
   expect(within(detail).getByText('Hoàn tất')).toBeInTheDocument()
   const historyTable = within(detail).getByRole('table', { name: 'Lịch sử chứng từ khách hàng' })
+  expect(within(within(historyTable).getByRole('row', { name: /HD010985/ })).getByText('Nợ')).toBeInTheDocument()
   expect(historyTable).toHaveClass('customer-history-table')
   expect(within(historyTable).queryByText('Hóa đơn')).not.toBeInTheDocument()
 
@@ -548,6 +549,44 @@ it('shows common price list when the customer has no group', async () => {
   const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000124' })
   const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
   expect(within(infoPanel).getByText('Bảng giá chung')).toBeInTheDocument()
+})
+
+it('reloads customer debt when the debt tab is opened again', async () => {
+  const getCustomerDebt = vi.fn()
+    .mockResolvedValueOnce({ customer_id: 'customer-1', total_debt: 0, invoices: [] })
+    .mockResolvedValueOnce({
+      customer_id: 'customer-1',
+      total_debt: 300000,
+      invoices: [
+        {
+          order_id: 'order-bank-partial',
+          order_code: 'HD-BANK-PARTIAL',
+          created_at: '2026-07-09T04:00:00Z',
+          total_amount: 600000,
+          paid_amount: 300000,
+          debt_amount: 300000,
+          remaining_debt: 300000,
+        },
+      ],
+    })
+  const orderService = makeOrderService({ getCustomerDebt })
+
+  render(<CustomersPage service={makeService()} orderService={orderService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+  const tabs = within(detail).getAllByRole('tab')
+
+  await userEvent.click(tabs[1])
+  await waitFor(() => expect(getCustomerDebt).toHaveBeenCalledTimes(1))
+  expect(within(detail).getByText('0 hóa đơn mở')).toBeInTheDocument()
+
+  await userEvent.click(tabs[0])
+  await userEvent.click(tabs[1])
+
+  await waitFor(() => expect(getCustomerDebt).toHaveBeenCalledTimes(2))
+  expect(within(detail).getByText('HD-BANK-PARTIAL')).toBeInTheDocument()
+  expect(detail).toHaveTextContent('300 000')
 })
 
 it('opens customer detail when legacy cloud data has no created timestamp', async () => {

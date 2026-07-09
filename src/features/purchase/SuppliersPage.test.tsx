@@ -77,6 +77,16 @@ function makeService(overrides: Partial<SupplierService> = {}): SupplierService 
   }
 }
 
+async function openSupplierDetail(code = 'NCC000031') {
+  await userEvent.click(await screen.findByRole('button', { name: code }))
+}
+
+async function openSupplierPaymentFromDetail(code = 'NCC000031') {
+  await openSupplierDetail(code)
+  const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })
+  await userEvent.click(within(form).getByRole('button', { name: 'Thanh toán NCC' }))
+}
+
 it('lists suppliers with payable and purchase totals plus linked customer', async () => {
   const service = makeService()
 
@@ -100,9 +110,13 @@ it('lists suppliers with payable and purchase totals plus linked customer', asyn
   expect(within(table).getByText('KH000123 - Nguyễn Phong')).toBeInTheDocument()
   expect(within(table).getByText('250 000')).toBeInTheDocument()
   expect(within(table).getByText('300 000')).toBeInTheDocument()
+  const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
+  expect(headers).not.toContain('Thao tác')
   expect(screen.getByRole('navigation', { name: 'Phân trang nhà cung cấp' })).toHaveClass('management-table-footer')
   expect(screen.queryByRole('form', { name: 'Thông tin nhà cung cấp' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Tạo nhà cung cấp' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Sửa NCC000031' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Thanh toán NCC000031' })).not.toBeInTheDocument()
   expect(service.listCustomers).not.toHaveBeenCalled()
   expect(service.listFinanceAccounts).not.toHaveBeenCalled()
 })
@@ -267,11 +281,12 @@ it('opens supplier for editing and saves inactive status', async () => {
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Sửa NCC000031' }))
+  await openSupplierDetail()
   const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })
   const detail = screen.getByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
-  expect(detail).toHaveClass('management-inline-detail')
+  expect(detail).toHaveClass('management-detail-panel')
   expect(form.closest('tr')).toHaveClass('management-detail-row')
+  expect(form.closest('tr')?.previousElementSibling).toHaveClass('management-data-row-selected')
   await userEvent.selectOptions(within(form).getByLabelText('Trạng thái NCC'), 'inactive')
   await userEvent.click(within(form).getByRole('button', { name: 'Lưu nhà cung cấp' }))
 
@@ -290,10 +305,10 @@ it('clears stale supplier edit detail when switching rows fails', async () => {
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Sửa NCC000031' }))
+  await openSupplierDetail()
   expect(screen.getByRole('form', { name: 'Thông tin nhà cung cấp' })).toBeInTheDocument()
 
-  await userEvent.click(screen.getByRole('button', { name: 'Sửa NCC000032' }))
+  await openSupplierDetail('NCC000032')
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được chi tiết nhà cung cấp.')
   expect(screen.queryByRole('form', { name: 'Thông tin nhà cung cấp' })).not.toBeInTheDocument()
@@ -304,9 +319,9 @@ it('opens supplier payment form from payable supplier and submits explicit recei
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Thanh toán NCC000031' }))
+  await openSupplierPaymentFromDetail()
   const form = screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })
-  expect(form.closest('.management-inline-detail')).not.toBeNull()
+  expect(form.closest('.management-detail-panel')).not.toBeNull()
 
   expect(service.listPayableReceipts).toHaveBeenCalledWith('supplier-1')
   expect(within(form).getByText('PN000673')).toBeInTheDocument()
@@ -330,6 +345,7 @@ it('opens supplier payment form from payable supplier and submits explicit recei
 it('clears stale supplier payment detail when switching rows fails', async () => {
   const service = makeService({
     listSuppliers: vi.fn(async () => ({ items: [supplier, inactiveSupplier], page: 1, page_size: 15, total: 2 })),
+    getSupplier: vi.fn(async (id) => (id === 'supplier-2' ? inactiveSupplier : supplier)),
     listPayableReceipts: vi.fn(async (id) => {
       if (id === 'supplier-2') throw new Error('payable failed')
       return { items: payableReceipts }
@@ -338,10 +354,10 @@ it('clears stale supplier payment detail when switching rows fails', async () =>
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Thanh toán NCC000031' }))
+  await openSupplierPaymentFromDetail()
   expect(screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })).toBeInTheDocument()
 
-  await userEvent.click(screen.getByRole('button', { name: 'Thanh toán NCC000032' }))
+  await openSupplierPaymentFromDetail('NCC000032')
 
   expect(await screen.findByRole('alert')).toHaveTextContent('Không tải được phiếu nhập còn nợ.')
   expect(screen.queryByRole('form', { name: 'Thanh toán nhà cung cấp' })).not.toBeInTheDocument()
@@ -352,7 +368,7 @@ it('blocks supplier payment over selected receipt outstanding amount in UI', asy
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Thanh toán NCC000031' }))
+  await openSupplierPaymentFromDetail()
   const form = screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })
   await userEvent.clear(within(form).getByLabelText('Số tiền trả cho PN000673'))
   await userEvent.type(within(form).getByLabelText('Số tiền trả cho PN000673'), '260000')

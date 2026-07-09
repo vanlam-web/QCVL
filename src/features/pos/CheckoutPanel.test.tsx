@@ -282,6 +282,22 @@ it('calculates cart total and submits cash checkout', async () => {
   expect(within(receipt).getByText('Còn nợ 0')).toBeInTheDocument()
 })
 
+it('selects the full money value on focus so zero replaces the current amount', async () => {
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
+
+  const paymentInput = screen.getByLabelText('Khách thanh toán') as HTMLInputElement
+  await userEvent.click(paymentInput)
+
+  await waitFor(() => {
+    expect(paymentInput.selectionStart).toBe(0)
+    expect(paymentInput.selectionEnd).toBe(paymentInput.value.length)
+  })
+
+  await userEvent.keyboard('0')
+
+  expect(paymentInput).toHaveValue('0')
+})
+
 it('saves the current cart as a quote and shows BG code', async () => {
   const service = makeOrderService()
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
@@ -339,7 +355,6 @@ it('saving a reopened quote draft creates a new independent quote', async () => 
       cartLines={[line]}
       selectedCustomer={customer}
       orderService={service}
-      sourceQuote={{ id: 'quote-1', code: 'BG000001' }}
     />,
   )
 
@@ -358,7 +373,6 @@ it('checks out reopened quote drafts normally and blocks unresolved quote lines 
       cartLines={[line]}
       selectedCustomer={customer}
       orderService={service}
-      sourceQuote={{ id: 'quote-1', code: 'BG000001' }}
     />,
   )
 
@@ -373,7 +387,6 @@ it('checks out reopened quote drafts normally and blocks unresolved quote lines 
       cartLines={[line]}
       selectedCustomer={customer}
       orderService={service}
-      sourceQuote={{ id: 'quote-1', code: 'BG000001' }}
       quoteBlockedReason="Sản phẩm trong báo giá không còn khả dụng."
     />,
   )

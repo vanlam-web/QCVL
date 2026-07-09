@@ -70,6 +70,7 @@ Quy chuẩn:
 - Nếu action cuối ô là icon-only thì phải có `aria-label`.
 - Khi trang cần gợi ý nhanh, shared search được phép xổ danh sách ngay dưới ô nhập theo `role="listbox"`/`role="option"`.
 - Dòng gợi ý dùng bố cục gọn 3 vùng: nội dung chính, mô tả phụ, số tiền/trạng thái ở mép phải nếu có.
+- Dòng gợi ý không chừa khoảng trống theo icon tìm kiếm của ô input; padding trái/phải dùng đều `var(--space-2)` để chữ bắt đầu gọn sát nội dung dropdown.
 - Dropdown gợi ý chỉ chứa dữ liệu do trang truyền vào; shell không tự quyết định API, filter, hay nghiệp vụ chọn.
 - Tìm kiếm chính phải hỗ trợ bỏ dấu tiếng Việt ở client/API nơi có search text: gõ `khach le`, `nha cung cap`, `don demo` vẫn trả kết quả có dấu tương ứng nếu dữ liệu có.
 - Dropdown gợi ý dùng z-index chung của shell, phải nổi trên bảng, inline detail, filter/sidebar và không bị cắt bởi vùng list.

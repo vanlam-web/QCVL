@@ -61,7 +61,7 @@ it('renders adaptive navigation with purchase supplier entries and active route'
   expect(screen.getByRole('heading', { name: 'Phiếu nhập' })).toBeInTheDocument()
 })
 
-it('renders POS as a quick action and keeps module navigation for management pages', () => {
+it('renders POS as a quick action and keeps module navigation for management pages', async () => {
   renderShell('/pos', fullNavigationUser)
 
   const banner = screen.getByRole('banner')
@@ -77,10 +77,11 @@ it('renders POS as a quick action and keeps module navigation for management pag
   expect(within(navigation).queryByRole('link', { name: /POS/i })).not.toBeInTheDocument()
   expect(within(quickActions).getByRole('link', { name: 'Mở POS' })).toHaveAttribute('href', '/pos')
   expect(within(quickActions).getByRole('link', { name: 'Mở POS' })).toHaveAttribute('aria-current', 'page')
-  expect(within(navigation).getByRole('link', { name: /Chứng từ/i })).toHaveAttribute('href', '/sales-documents')
-  expect(within(navigation).queryByRole('link', { name: /Hóa đơn/i })).not.toBeInTheDocument()
+  expect(within(navigation).getByRole('link', { name: /Hóa đơn/i })).toHaveAttribute('href', '/sales-documents')
   expect(within(navigation).getByRole('link', { name: /Sổ quỹ/i })).toHaveAttribute('href', '/finance')
-  expect(within(navigation).getByRole('link', { name: /Báo cáo/i })).toHaveAttribute('href', '/reports')
+  expect(within(navigation).queryByRole('link', { name: /Báo cáo/i })).not.toBeInTheDocument()
+  await userEvent.click(within(screen.getByLabelText('Tài khoản và giao diện')).getByRole('button', { name: 'Tài khoản' }))
+  expect(screen.getByRole('menuitem', { name: 'Báo cáo' })).toHaveAttribute('href', '/reports')
   expect(within(navigation).getByRole('link', { name: /Khách hàng/i })).toHaveAttribute('href', '/customers')
   expect(within(navigation).getByRole('link', { name: /Hàng hóa/i })).toHaveAttribute('href', '/products')
   expect(within(navigation).queryByRole('link', { name: /^Kho$/i })).not.toBeInTheDocument()
@@ -144,8 +145,12 @@ it('keeps theme and account controls before POS in the topbar quick actions', as
   expect(profileItem).toHaveClass('account-menu-profile')
   expect(within(profileItem).getByText('0947900909')).toHaveClass('account-menu-profile-label')
   expect(within(userActions).queryByText(/xác (thực|minh) 2 lớp/i)).not.toBeInTheDocument()
+  expect(within(userActions).getByRole('menuitem', { name: 'Báo cáo' })).toHaveAttribute('href', '/reports')
   expect(within(userActions).getByRole('menuitem', { name: 'Báo cáo ca' })).toBeInTheDocument()
   expect(within(userActions).getByRole('menuitem', { name: 'Quản trị' })).toHaveAttribute('href', '/admin')
+  await userEvent.click(screen.getByRole('heading', { name: 'Khách hàng' }))
+  expect(within(userActions).queryByRole('menuitem', { name: 'Báo cáo' })).not.toBeInTheDocument()
+  await userEvent.click(within(userActions).getByRole('button', { name: 'Tài khoản' }))
   await userEvent.click(within(userActions).getByRole('menuitem', { name: 'Đăng xuất' }))
 
   expect(onSignOut).toHaveBeenCalled()
@@ -186,11 +191,24 @@ it('routes the price book nav item to the dedicated price book page', () => {
   expect(screen.getByRole('link', { name: /Bảng giá/i })).toHaveAttribute('aria-current', 'page')
 })
 
-it('shows reports only when user has both finance and inventory permissions', () => {
+it('moves the reports page out of management navigation and into the account menu', async () => {
+  renderShell('/reports', fullNavigationUser)
+
+  const navigation = screen.getByRole('navigation', { name: 'Điều hướng chính' })
+  const userActions = screen.getByLabelText('Tài khoản và giao diện')
+
+  expect(within(navigation).queryByRole('link', { name: /Báo cáo/i })).not.toBeInTheDocument()
+  await userEvent.click(within(userActions).getByRole('button', { name: 'Tài khoản' }))
+  expect(within(userActions).getByRole('menuitem', { name: 'Báo cáo' })).toHaveAttribute('href', '/reports')
+})
+
+it('shows reports only when user has both finance and inventory permissions', async () => {
   const financeOnly = renderShell('/finance', { ...inventoryUser, permissions: ['perm.manage_finance'] })
   expect(screen.queryByRole('link', { name: /Báo cáo/i })).not.toBeInTheDocument()
   financeOnly.unmount()
 
   renderShell('/inventory', { ...inventoryUser, permissions: ['perm.manage_finance', 'perm.manage_inventory'] })
-  expect(screen.getByRole('link', { name: /Báo cáo/i })).toHaveAttribute('href', '/reports')
+  expect(screen.queryByRole('link', { name: /Báo cáo/i })).not.toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Tài khoản' }))
+  expect(screen.getByRole('menuitem', { name: 'Báo cáo' })).toHaveAttribute('href', '/reports')
 })

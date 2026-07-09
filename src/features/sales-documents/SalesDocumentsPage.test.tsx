@@ -479,7 +479,7 @@ it('filters quotes and exposes reopen only for active quote rows', async () => {
   expect(screen.queryByRole('button', { name: 'Mở tại POS BG000123' })).not.toBeInTheDocument()
   await clickDocumentRow('BG000123')
   const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ BG000123' })
-  expect(within(detailRegion).getByRole('button', { name: 'Mở tại POS' })).toBeInTheDocument()
+  expect(within(detailRegion).queryByRole('button', { name: 'Mở tại POS' })).not.toBeInTheDocument()
   expect(within(detailRegion).getByRole('button', { name: 'Hủy' })).toBeEnabled()
   expect(within(detailRegion).getByRole('button', { name: 'Sao chép' })).toBeEnabled()
   expect(within(detailRegion).getByRole('button', { name: 'Sửa' })).toBeEnabled()
@@ -556,7 +556,7 @@ it('filters sales documents by supported invoice payment seller and price list f
   }))
 })
 
-it('stores reopen payload through callback when opening active quote in POS', async () => {
+it('stores reopen payload through callback when editing an active quote', async () => {
   const onOpenQuoteInPos = vi.fn()
   const orderService = makeOrderService()
   const service = makeService({
@@ -579,7 +579,8 @@ it('stores reopen payload through callback when opening active quote in POS', as
 
   await clickDocumentRow('BG000123')
   const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ BG000123' })
-  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Mở tại POS' }))
+  expect(within(detailRegion).queryByRole('button', { name: 'Mở tại POS' })).not.toBeInTheDocument()
+  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Sửa' }))
 
   expect(orderService.getQuoteReopenPayload).toHaveBeenCalledWith('quote-1')
   expect(onOpenQuoteInPos).toHaveBeenCalledWith(quoteReopenPayload)
@@ -611,7 +612,8 @@ it('shows quote reopen failures inside the row-level shared detail area', async 
 
   await clickDocumentRow('BG000123')
   const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ BG000123' })
-  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Mở tại POS' }))
+  expect(within(detailRegion).queryByRole('button', { name: 'Mở tại POS' })).not.toBeInTheDocument()
+  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Sửa' }))
 
   expect(detailRegion).toHaveClass('management-inline-detail')
   expect(within(detailRegion).getByRole('alert')).toHaveTextContent('Không mở được báo giá tại POS.')

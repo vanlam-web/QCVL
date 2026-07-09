@@ -147,6 +147,10 @@ function makeService(overrides: Partial<PurchaseReceiptService> = {}): PurchaseR
   }
 }
 
+async function openReceiptDetail(code = 'PN000673') {
+  await userEvent.click(await screen.findByRole('button', { name: code }))
+}
+
 it('lists draft purchase receipts with totals and opens post action for draft detail', async () => {
   const service = makeService()
 
@@ -164,17 +168,20 @@ it('lists draft purchase receipts with totals and opens post action for draft de
   expect(screen.queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Trang chủ' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Hoàn thành nhập hàng' })).not.toBeInTheDocument()
+  const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
+  expect(headers).not.toContain('Mở')
   expect(service.listSuppliers).not.toHaveBeenCalled()
   expect(service.listProducts).not.toHaveBeenCalled()
   expect(service.listFinanceAccounts).not.toHaveBeenCalled()
   const footer = screen.getByRole('navigation', { name: 'Phân trang phiếu nhập' })
   expect(within(footer).getByText('1 - 1 trong 1 phiếu nhập')).toBeInTheDocument()
   expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
-  await userEvent.click(screen.getByRole('button', { name: 'Mở chi tiết PN000673' }))
+  await openReceiptDetail()
   const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000673' })
   expect(detail).toBeInTheDocument()
   expect(detail.closest('tr')).toHaveClass('management-detail-row')
   expect(detail.closest('section[aria-label="Phiếu nhập"]')).toHaveClass('management-layout')
+  expect(detail).toHaveClass('management-detail-panel')
   expect(screen.getByRole('button', { name: 'Hoàn thành nhập hàng' })).toBeInTheDocument()
 })
 
@@ -465,7 +472,7 @@ it('opens a draft receipt for editing and saves updated lines', async () => {
 
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PN000673' }))
+  await openReceiptDetail()
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
   await userEvent.clear(within(form).getByLabelText('Ghi chú'))
   await userEvent.type(within(form).getByLabelText('Ghi chú'), 'Đã sửa')
@@ -483,7 +490,7 @@ it('opens posted receipts as view-only details', async () => {
 
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PN000674' }))
+  await openReceiptDetail('PN000674')
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
 
   expect(within(form).getByRole('heading', { name: 'Xem phiếu nhập' })).toBeInTheDocument()
@@ -500,7 +507,7 @@ it('shows supplier payment history and pays remaining amount from posted receipt
 
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PN000674' }))
+  await openReceiptDetail('PN000674')
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
 
   expect(within(form).getByText('Lịch sử thanh toán NCC')).toBeInTheDocument()
@@ -530,7 +537,7 @@ it('warns on low purchase cost and posts with a selected bank account', async ()
 
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PN000673' }))
+  await openReceiptDetail()
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
 
   expect(within(form).getByText(/thấp hơn giá nhập cuối/i)).toBeInTheDocument()

@@ -113,6 +113,14 @@ it('keeps brand logo buttons image-only without extra chrome', () => {
   expect(cssRule('.pos-brand-button:hover,\n.pos-brand-button:focus-visible')).toContain('background: transparent')
 })
 
+it('aligns POS product search results with the shared search field after the brand button', () => {
+  expect(cssRule('.pos-search-results')).toContain('left: calc(2.5rem + var(--space-2) + 3px)')
+  expect(cssRule('.pos-search-results')).toContain('right: -3px')
+  expect(cssRule('.pos-search-results')).toContain('width: auto')
+  expect(cssRule('.pos-search-results')).not.toContain('left: 6.5rem')
+  expect(cssRule('.pos-search-results')).not.toContain('width: min(36rem, 150%)')
+})
+
 it('places checkout divider under seller metadata instead of customer name', () => {
   expect(cssRule('.checkout-panel-header')).toContain('border-bottom: 1px solid var(--color-border)')
   expect(cssRule('.checkout-panel-header')).toContain('padding: 0 2rem 0.2rem 0')
@@ -235,6 +243,7 @@ it('keeps account menu items borderless inside the popover', () => {
   const profileRule = cssRule('.account-menu-profile')
   const profileLabelRule = cssRule('.account-menu-profile-label')
 
+  expect(cssRule('.account-menu-popover')).toContain('width: fit-content')
   expect(cssRule('.account-menu-popover')).toContain('min-width: 0')
   expect(cssRule('.account-menu-popover')).toContain('max-width: min(18rem, calc(100vw - var(--space-4)))')
   expect(profileRule).toContain('grid-template-columns: auto minmax(0, 1fr)')
@@ -622,9 +631,9 @@ it('keeps shared search suggestions aligned with the search box and hoverable li
   expect(suggestionsRule).toContain('z-index: calc(var(--z-shell) + 11)')
   expect(suggestionsRule).toContain('border-radius: var(--radius-md)')
   expect(optionRule).toContain('border: 1px solid transparent')
-  expect(optionRule).toContain('padding: 0 var(--space-2) 0 calc(2.875rem - var(--space-2))')
+  expect(optionRule).toContain('padding: 0 var(--space-2)')
   expect(optionRule).toContain('transition:')
-  expect(emptyRule).toContain('padding: var(--space-2) var(--space-2) var(--space-2) calc(2.875rem - var(--space-2))')
+  expect(emptyRule).toContain('padding: var(--space-2)')
   expect(optionHoverRule).toContain('border-color: var(--color-primary)')
   expect(optionHoverRule).toContain('background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface))')
   expect(optionHoverRule).toContain('color: var(--color-primary)')
@@ -663,6 +672,9 @@ it('keeps inline detail surfaces unframed and summary rows single-line', () => {
   expect(cssRule('.management-detail-note')).toContain('border: 1px solid var(--color-border-muted)')
   expect(cssRule('.management-detail-summary-box')).toContain('display: grid')
   expect(cssRule('.management-detail-summary-box-right')).toContain('grid-column: 1 / -1')
+  expect(cssRule('.management-detail-lower-right')).toContain('grid-template-columns: minmax(18rem, 1fr) minmax(26rem, 34rem)')
+  expect(cssRule('.management-detail-lower-right .management-detail-note')).toContain('grid-column: 1')
+  expect(cssRule('.management-detail-lower-right .management-detail-summary-box-right')).toContain('grid-column: 2')
   expect(cssRule('.sales-document-lines-table')).toContain('table-layout: auto')
   expect(cssRule('.sales-document-lines-table th:nth-child(1),\n.sales-document-lines-table td:nth-child(1)')).toContain('width: 7rem')
   expect(cssRule('.sales-document-lines-table th:nth-child(2),\n.sales-document-lines-table td:nth-child(2)')).toContain('width: auto')

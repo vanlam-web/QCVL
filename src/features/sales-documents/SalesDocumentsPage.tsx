@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Copy, ExternalLink, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -794,20 +794,18 @@ export function SalesDocumentsPage({
                         </tr>
                         {selected?.id === document.id || detailErrorDocumentId === document.id || loadingDocumentId === document.id ? (
                           <ManagementDetailRow colSpan={7} label={`Chi tiết chứng từ ${document.code}`}>
-                            {document.order_type === 'quote' && document.status === 'active' && orderService && onOpenQuoteInPos ? (
-                              <div className="row-actions">
-                                <button
-                                  className="button button-secondary"
-                                  disabled={openingQuoteId === document.id}
-                                  type="button"
-                                  onClick={() => void openQuoteInPos(document)}
-                                >
-                                  <ExternalLink aria-hidden="true" size={15} />
-                                  Mở tại POS
-                                </button>
-                              </div>
-                            ) : null}
-                            <SalesDocumentDetailView document={selected} error={detailError} loading={loadingDocumentId === document.id} onOpenQuotePrint={onOpenQuotePrint} />
+                            <SalesDocumentDetailView
+                              document={selected}
+                              editDisabled={openingQuoteId === document.id}
+                              error={detailError}
+                              loading={loadingDocumentId === document.id}
+                              onEdit={
+                                document.order_type === 'quote' && document.status === 'active' && orderService && onOpenQuoteInPos
+                                  ? () => void openQuoteInPos(document)
+                                  : undefined
+                              }
+                              onOpenQuotePrint={onOpenQuotePrint}
+                            />
                           </ManagementDetailRow>
                         ) : null}
                       </Fragment>
@@ -839,13 +837,17 @@ export function SalesDocumentsPage({
 
 function SalesDocumentDetailView({
   document,
+  editDisabled,
   error,
   loading,
+  onEdit,
   onOpenQuotePrint,
 }: {
   document: SalesDocumentDetail | null
+  editDisabled?: boolean
   error: string | null
   loading: boolean
+  onEdit?: () => void
   onOpenQuotePrint?: (documentId: string) => void
 }) {
   const [activeTab, setActiveTab] = useState<'info' | 'payment-history'>('info')
@@ -1025,7 +1027,7 @@ function SalesDocumentDetailView({
           { label: 'Sao chép', icon: <Copy aria-hidden="true" size={15} /> },
         ]}
         rightActions={[
-          { label: 'Sửa', icon: <Pencil aria-hidden="true" size={15} /> },
+          { label: 'Sửa', disabled: editDisabled, icon: <Pencil aria-hidden="true" size={15} />, onClick: onEdit },
           { label: 'Lưu', icon: <Save aria-hidden="true" size={15} /> },
           { label: 'In', icon: <Printer aria-hidden="true" size={15} /> },
         ]}

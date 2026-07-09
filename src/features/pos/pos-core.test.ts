@@ -10,6 +10,8 @@ import {
   normalizeSearch,
   readNonNegativeNumber,
   readPositiveMoney,
+  removeCompletedInvoiceTab,
+  initialQuotePayloadToTabs,
 } from './pos-core'
 
 const areaProduct: Product = {
@@ -48,6 +50,33 @@ describe('pos-core', () => {
     expect(isInvoiceTabDirty(cleanTab)).toBe(false)
     expect(isInvoiceTabDirty(dirtyTab)).toBe(true)
     expect(invoiceTabLabel(dirtyTab)).toContain('•')
+  })
+
+  it('removes the completed invoice tab and activates a remaining draft', () => {
+    const first = makeInvoiceTab(1)
+    const completed = {
+      ...makeInvoiceTab(2),
+      cartLines: [makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })],
+    }
+
+    const result = removeCompletedInvoiceTab([first, completed], completed.id)
+
+    expect(result.tabs).toEqual([first])
+    expect(result.activeTabId).toBe(first.id)
+  })
+
+  it('moves reopened quote marker into the draft note', () => {
+    const [tab] = initialQuotePayloadToTabs({
+      quote: { id: 'quote-1', code: 'BG000123', status: 'active' },
+      customer: { customer_id: null, snapshot: { code: null, name: 'Khach le', phone: null }, warnings: [] },
+      price_list: { price_list_id: null, snapshot: { code: null, name: null }, warnings: [] },
+      items: [],
+      summary: { subtotal_amount: 0, discount_amount: 0, total_amount: 0 },
+      note: null,
+    })
+
+    expect(tab.orderNote).toBe('Từ báo giá BG000123')
+    expect(tab.sourceQuote).toEqual({ id: 'quote-1', code: 'BG000123' })
   })
 
   it('parses POS numeric inputs in the core layer', () => {

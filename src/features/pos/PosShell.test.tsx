@@ -604,6 +604,53 @@ it('keeps cart lines isolated between invoice tabs', async () => {
   expect(screen.getByLabelText('K02 giỏ hàng')).toHaveTextContent('Mica 3mm')
 })
 
+it('removes the completed draft tab after checkout and keeps another draft open', async () => {
+  const orderService = makeOrderService({
+    checkout: vi.fn(async () => ({
+      order: {
+        id: 'order-1',
+        code: 'HD000001',
+        order_type: 'invoice' as const,
+        status: 'completed' as const,
+        total_amount: 120000,
+        paid_amount: 120000,
+        debt_amount: 0,
+        payment_status: 'paid' as const,
+      },
+      payment_receipt: null,
+      inventory_warnings: [],
+    })),
+  })
+  renderPosShell({ orderService })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn mới' }))
+  await userEvent.click(await screen.findByRole('button', { name: /Mica 3mm/ }))
+
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(orderService.checkout).toHaveBeenCalledTimes(1)
+  expect(screen.queryByRole('button', { name: 'Hóa đơn 2 •' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Hóa đơn 1' })).toHaveAttribute('aria-current', 'true')
+  expect(screen.queryByLabelText('Ngăn thanh toán')).not.toBeInTheDocument()
+})
+
+it('removes the completed draft tab after saving a quote', async () => {
+  const orderService = makeOrderService()
+  renderPosShell({ orderService })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn mới' }))
+  await userEvent.click(await screen.findByRole('button', { name: /Mica 3mm/ }))
+
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Báo giá' }))
+
+  expect(orderService.saveQuote).toHaveBeenCalledTimes(1)
+  expect(screen.queryByRole('button', { name: 'Hóa đơn 2 •' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Hóa đơn 1' })).toHaveAttribute('aria-current', 'true')
+  expect(screen.queryByLabelText('Ngăn thanh toán')).not.toBeInTheDocument()
+})
+
 it('restores local invoice draft tabs after POS remount', async () => {
   const { unmount } = renderPosShell()
 
@@ -1310,7 +1357,8 @@ it('reopened quote keeps snapshot price and checks out as a normal draft', async
 
   renderPosShell({ orderService })
 
-  expect((await screen.findAllByText('Từ báo giá BG000123')).length).toBeGreaterThan(0)
+  expect(screen.queryByText('Từ báo giá BG000123')).not.toBeInTheDocument()
+  expect(await screen.findByLabelText('Ghi chú đơn hàng')).toHaveValue('Từ báo giá BG000123')
   expect(screen.getByLabelText('Đơn giá Mica 3mm')).toHaveValue('99 000')
   expect(screen.getByText('Giá hiện tại khác báo giá.')).toBeInTheDocument()
 
@@ -1319,6 +1367,9 @@ it('reopened quote keeps snapshot price and checks out as a normal draft', async
   await userEvent.type(within(checkoutDrawer).getByLabelText('Khách thanh toán'), '99000')
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 
+  expect(orderService.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({ note: 'Từ báo giá BG000123' }),
+  )
   expect(orderService.checkout).toHaveBeenCalledWith(
     expect.not.objectContaining({ source_quote_id: 'quote-1' }),
   )

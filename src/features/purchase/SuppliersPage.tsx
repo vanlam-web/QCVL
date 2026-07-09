@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Pencil, Plus, Save, Search, WalletCards, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Save, Search, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
@@ -14,7 +14,6 @@ import {
   ManagementFilterSidebar,
   ManagementListSurface,
   ManagementPage,
-  ManagementRowActionButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
@@ -90,6 +89,7 @@ export function SuppliersPage({
   const payableTotal = suppliers?.reduce((sum, supplier) => sum + supplier.current_payable_amount, 0) ?? 0
   const purchaseTotal = suppliers?.reduce((sum, supplier) => sum + supplier.total_purchase_amount, 0) ?? 0
   const isCreatingSupplier = detailOpen && editingId === null && paymentSupplier === null
+  const activeDetailSupplier = suppliers?.find((supplier) => supplier.id === editingId) ?? null
 
   async function loadSuppliers(
     input: SupplierListFilters & {
@@ -460,12 +460,20 @@ export function SuppliersPage({
       <form aria-label="Thông tin nhà cung cấp" className="supplier-form" onSubmit={saveSupplier}>
         <header>
           <h2>{editingId ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'}</h2>
-          {editingId ? (
-            <button className="button button-secondary" type="button" onClick={resetForm}>
-              <Plus aria-hidden="true" size={15} />
-              Tạo mới
-            </button>
-          ) : null}
+          <div className="row-actions">
+            {activeDetailSupplier && activeDetailSupplier.current_payable_amount > 0 ? (
+              <button className="button button-secondary" type="button" onClick={() => void openSupplierPayment(activeDetailSupplier)}>
+                <WalletCards aria-hidden="true" size={15} />
+                Thanh toán NCC
+              </button>
+            ) : null}
+            {editingId ? (
+              <button className="button button-secondary" type="button" onClick={resetForm}>
+                <Plus aria-hidden="true" size={15} />
+                Tạo mới
+              </button>
+            ) : null}
+          </div>
         </header>
         <label>
           Mã NCC
@@ -609,7 +617,7 @@ export function SuppliersPage({
 
   function supplierDetailLoading(supplier: Supplier) {
     return (
-      <section aria-label={`Đang tải ${supplier.code}`} className="management-inline-detail" role="region">
+      <section aria-label={`Đang tải ${supplier.code}`} className="management-detail-panel" role="region">
         <p>Đang tải chi tiết nhà cung cấp...</p>
       </section>
     )
@@ -774,7 +782,6 @@ export function SuppliersPage({
                       <th>Tổng mua</th>
                       <th>Khách hàng liên kết</th>
                       <th>Trạng thái</th>
-                      <th>Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -783,12 +790,26 @@ export function SuppliersPage({
                       const loadingForRow = loadingSupplierId === supplier.id
                       return (
                         <Fragment key={supplier.id}>
-                          <tr className={detailForRow || loadingForRow ? 'management-data-row-selected' : undefined}>
+                          <tr
+                            aria-expanded={detailForRow || loadingForRow}
+                            className={`management-data-row${detailForRow || loadingForRow ? ' management-data-row-selected' : ''}`}
+                            tabIndex={0}
+                            onClick={() => void openSupplier(supplier)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault()
+                                void openSupplier(supplier)
+                              }
+                            }}
+                          >
                             <td>
                               <button
                                 className="management-link-button"
                                 type="button"
-                                onClick={() => void openSupplier(supplier)}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void openSupplier(supplier)
+                                }}
                               >
                                 <strong>{supplier.code}</strong>
                               </button>
@@ -805,24 +826,16 @@ export function SuppliersPage({
                             </td>
                             <td>
                               <StatusChip tone={supplier.status === 'active' ? 'success' : 'neutral'}>
-                                {supplier.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'}
-                              </StatusChip>
-                            </td>
-                            <td>
-                              <div className="row-actions">
-                                <ManagementRowActionButton ariaLabel={`Sửa ${supplier.code}`} onClick={() => void openSupplier(supplier)}>
-                                  <Pencil aria-hidden="true" size={15} />
-                                </ManagementRowActionButton>
-                                {supplier.current_payable_amount > 0 ? (
-                                  <ManagementRowActionButton ariaLabel={`Thanh toán ${supplier.code}`} onClick={() => void openSupplierPayment(supplier)}>
-                                    <WalletCards aria-hidden="true" size={15} />
-                                  </ManagementRowActionButton>
-                                ) : null}
-                              </div>
-                            </td>
+                                  {supplier.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                                </StatusChip>
+                              </td>
                           </tr>
                           {detailForRow || loadingForRow ? (
-                            <ManagementDetailRow colSpan={9} label="Hồ sơ và thanh toán nhà cung cấp">
+                            <ManagementDetailRow
+                              colSpan={8}
+                              detailClassName="management-detail-panel"
+                              label="Hồ sơ và thanh toán nhà cung cấp"
+                            >
                               {loadingForRow
                                 ? supplierDetailLoading(supplier)
                                 : paymentSupplier?.id === supplier.id

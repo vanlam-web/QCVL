@@ -1,6 +1,6 @@
 # QCVL NAS Dev Runbook
 
-> Cập nhật: 2026-07-08.
+> Cập nhật: 2026-07-09.
 
 ## 1. Trạng thái hiện hành
 
@@ -41,6 +41,38 @@ Không dùng:
 
 Demo/test data phải ghi vào PostgreSQL/API runtime của QCVL, không ghi vào Supabase.
 
+Sales/finance runtime data source of truth:
+
+- POS checkout, báo giá, thu nợ khách, công nợ khách và sổ quỹ mới phải ghi vào PostgreSQL.
+- Không coi mảng demo trong `server/http.ts` là nguồn lưu bền.
+- Sau thay đổi schema sales/finance phải chạy `npm run db:migrate` trước khi restart NAS.
+- Trước khi deploy NAS, phải test khách `DEV20-KH-011`: tạo hóa đơn, trả ngân hàng một phần, restart server, hóa đơn/nợ/sổ quỹ vẫn còn.
+- 2026-07-09 proof tren NAS: `HD-POS-021-4330498D` va `PT-CN-MRD47JDC-72CF` van ton tai sau restart `qcvl-app`; document partial, con no `200000`, cashbook co phieu thu.
+- Loi `inconsistent types deduced for parameter $2` khi thu no la loi SQL cast tien; fix dung la ep `$2::numeric` trong query cap nhat `customer_debt_entries`.
+- Lệnh kiểm bền sales/finance:
+
+```powershell
+$env:QCVL_VERIFY_BASE_URL='http://100.84.228.125:3200'
+$env:QCVL_VERIFY_PASSWORD='<mật khẩu admin>'
+npm run verify:sales-finance-persistence
+Remove-Item Env:\QCVL_VERIFY_BASE_URL
+Remove-Item Env:\QCVL_VERIFY_PASSWORD
+```
+
+Sau khi lệnh in `orderCode` và `receiptCode`, restart app rồi kiểm lại cùng chứng từ:
+
+```powershell
+$env:QCVL_VERIFY_BASE_URL='http://100.84.228.125:3200'
+$env:QCVL_VERIFY_PASSWORD='<mật khẩu admin>'
+$env:QCVL_VERIFY_ORDER_CODE='<orderCode vừa in>'
+$env:QCVL_VERIFY_RECEIPT_CODE='<receiptCode vừa in>'
+npm run verify:sales-finance-persistence
+Remove-Item Env:\QCVL_VERIFY_BASE_URL
+Remove-Item Env:\QCVL_VERIFY_PASSWORD
+Remove-Item Env:\QCVL_VERIFY_ORDER_CODE
+Remove-Item Env:\QCVL_VERIFY_RECEIPT_CODE
+```
+
 ## 3. Dev URL và NAS URL
 
 | URL | Mục đích | Cách cập nhật |
@@ -67,6 +99,9 @@ Quy tắc:
 - Sửa local không tự xuất hiện trên NAS.
 - Kiểm tra local trước khi cần.
 - Khi owner nói đưa lên NAS, build và copy một lần vào `\\100.84.228.125\docker\QCVL\app`.
+- Sau sửa nghiệp vụ POS/checkout/công nợ, phải test trên dev local trước; chỉ deploy `3200` sau khi test/API xác nhận đúng.
+- Nếu sửa schema PostgreSQL, phải copy `database/schema.sql` và chạy `npm run db:migrate` trên môi trường đích trước khi restart `qcvl-app`.
+- Hóa đơn POS nợ toàn bộ phải có `payment_status = unpaid`, được cộng vào `total_debt_amount` của khách và xuất hiện trong chi tiết nợ cần thu.
 - Docs chỉ giữ ở workspace local/git, không copy lên NAS.
 - Nếu chỉ sửa docs, không cần build frontend và không cần đụng NAS.
 - Nếu frontend gọi `http://100.84.228.125:3100/api/...`, build đang sai env hoặc fallback sai; sửa về `http://100.84.228.125:3200` rồi build/deploy lại.

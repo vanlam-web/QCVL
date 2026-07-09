@@ -325,8 +325,9 @@ export function CustomersPage({
     })
   }
 
-  function loadCustomerDebt(customerId: string) {
-    if (customerDebts[customerId] !== undefined || customerDebtRequestsRef.current.has(customerId)) return
+  function loadCustomerDebt(customerId: string, options: { force?: boolean } = {}) {
+    if (!options.force && customerDebts[customerId] !== undefined) return
+    if (customerDebtRequestsRef.current.has(customerId)) return
 
     customerDebtRequestsRef.current.add(customerId)
     setCustomerDebts((debts) => ({ ...debts, [customerId]: 'loading' }))
@@ -752,7 +753,7 @@ export function CustomersPage({
                                   type="button"
                                   onClick={() => {
                                     setActiveDetailTab('debt')
-                                    loadCustomerDebt(customer.id)
+                                    loadCustomerDebt(customer.id, { force: true })
                                   }}
                                 >
                                   Nợ cần thu
@@ -994,8 +995,8 @@ function CustomerAnalysisDialog({ customer, onClose }: { customer: Customer; onC
 function salesDocumentStatusText(document: SalesDocumentListItem) {
   if (document.order_type === 'invoice') {
     if (document.status === 'cancelled') return 'Đã hủy'
-    if (document.payment_status === 'partial') return 'Nợ 1 phần'
-    if (document.payment_status === 'unpaid' || document.debt_amount > 0) return 'Nợ'
+    if (document.payment_status === 'unpaid' || (document.debt_amount > 0 && document.paid_amount <= 0)) return 'Nợ'
+    if (document.payment_status === 'partial' || document.debt_amount > 0) return 'Nợ 1 phần'
     return 'Hoàn tất'
   }
 

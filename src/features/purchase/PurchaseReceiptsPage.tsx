@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Pencil, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
+import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
 import type {
@@ -25,7 +25,6 @@ import {
   ManagementFilterSidebar,
   ManagementListSurface,
   ManagementPage,
-  ManagementRowActionButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
@@ -790,7 +789,7 @@ export function PurchaseReceiptsPage({
 
   function receiptDetailContent(ariaLabel: string) {
     return (
-      <section aria-label={ariaLabel} className="management-inline-detail" role="region">
+      <section aria-label={ariaLabel} className="management-detail-panel" role="region">
         <div className="panel-heading">
           <div>
             <h2>Chi tiết phiếu</h2>
@@ -1217,7 +1216,7 @@ export function PurchaseReceiptsPage({
 
   function receiptDetailLoading(ariaLabel: string) {
     return (
-      <section aria-label={ariaLabel} className="management-inline-detail" role="region">
+      <section aria-label={ariaLabel} className="management-detail-panel" role="region">
         <p>Đang tải chi tiết phiếu nhập...</p>
       </section>
     )
@@ -1390,7 +1389,6 @@ export function PurchaseReceiptsPage({
                         <th>Đã trả</th>
                         <th>Còn phải trả</th>
                         <th>Trạng thái</th>
-                        <th>Mở</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1399,8 +1397,30 @@ export function PurchaseReceiptsPage({
                         const loadingForRow = loadingReceiptId === receipt.id
                         return (
                           <Fragment key={receipt.id}>
-                            <tr className={detailForRow || loadingForRow ? 'management-data-row-selected' : undefined}>
-                              <td>{receipt.code}</td>
+                            <tr
+                              aria-expanded={detailForRow || loadingForRow}
+                              className={`management-data-row${detailForRow || loadingForRow ? ' management-data-row-selected' : ''}`}
+                              tabIndex={0}
+                              onClick={() => void openReceipt(receipt)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  void openReceipt(receipt)
+                                }
+                              }}
+                            >
+                              <td>
+                                <button
+                                  className="management-link-button"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void openReceipt(receipt)
+                                  }}
+                                >
+                                  <strong>{receipt.code}</strong>
+                                </button>
+                              </td>
                               <td>{new Date(receipt.received_at).toLocaleString('vi-VN')}</td>
                               <td>{`${receipt.supplier.code} - ${receipt.supplier.name}`}</td>
                               <td>{receipt.items.length}</td>
@@ -1415,19 +1435,13 @@ export function PurchaseReceiptsPage({
                                   {statusText(receipt.status)}
                                 </StatusChip>
                               </td>
-                              <td>
-                                <div className="row-actions">
-                                  <ManagementRowActionButton
-                                    ariaLabel={detailForRow ? `Đóng chi tiết ${receipt.code}` : `Mở chi tiết ${receipt.code}`}
-                                    onClick={() => void openReceipt(receipt)}
-                                  >
-                                    <Pencil aria-hidden="true" size={15} />
-                                  </ManagementRowActionButton>
-                                </div>
-                              </td>
                             </tr>
                             {detailForRow || loadingForRow ? (
-                              <ManagementDetailRow colSpan={10} label={`Chi tiết phiếu nhập ${receipt.code}`}>
+                              <ManagementDetailRow
+                                colSpan={9}
+                                detailClassName="management-detail-panel"
+                                label={`Chi tiết phiếu nhập ${receipt.code}`}
+                              >
                                 {loadingForRow
                                   ? receiptDetailLoading(`Đang tải chi tiết ${receipt.code}`)
                                   : receiptDetailContent(`Nội dung chi tiết ${receipt.code}`)}

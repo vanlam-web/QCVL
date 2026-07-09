@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { BarChart3, Bell, LogOut, Settings, ShoppingCart, UserCircle } from 'lucide-react'
 import type { CurrentUserData } from '../../lib/api/types'
@@ -18,7 +18,7 @@ interface ShellNavItem {
 const shellNavItems: ShellNavItem[] = [
   { label: 'POS', shortLabel: 'POS', path: appRoutes.pos, marker: 'POS', permissions: [permissions.createOrder] },
   {
-    label: 'Chứng từ',
+    label: 'Hóa đơn',
     shortLabel: 'CT',
     path: appRoutes.salesDocuments,
     marker: 'CT',
@@ -70,11 +70,28 @@ export function AppShell({
   onSignOut: () => void
 }) {
   const visibleItems = shellNavItems.filter((item) => canSeeNavItem(currentUser, item))
-  const visibleNavItems = visibleItems.filter((item) => item.path !== appRoutes.pos && item.path !== appRoutes.admin)
+  const visibleNavItems = visibleItems.filter((item) =>
+    item.path !== appRoutes.pos && item.path !== appRoutes.admin && item.path !== appRoutes.reports
+  )
   const canOpenPos = visibleItems.some((item) => item.path === appRoutes.pos)
   const canOpenAdmin = visibleItems.some((item) => item.path === appRoutes.admin)
+  const canOpenReports = visibleItems.some((item) => item.path === appRoutes.reports)
   const currentAccountLabel = accountLabel(currentUser)
   const [accountOpen, setAccountOpen] = useState(false)
+  const accountMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!accountOpen) return undefined
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && accountMenuRef.current?.contains(target)) return
+      setAccountOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [accountOpen])
 
   return (
     <div className="app-shell">
@@ -104,7 +121,7 @@ export function AppShell({
               <Settings aria-hidden="true" size={18} />
             </button>
             <ThemeToggle />
-            <div className="account-menu">
+            <div className="account-menu" ref={accountMenuRef}>
               <button
                 aria-expanded={accountOpen}
                 aria-label="Tài khoản"
@@ -125,6 +142,12 @@ export function AppShell({
                       {currentAccountLabel}
                     </span>
                   </NavLink>
+                  {canOpenReports ? (
+                    <NavLink className="button button-secondary" role="menuitem" to={appRoutes.reports}>
+                      <BarChart3 aria-hidden="true" size={16} />
+                      Báo cáo
+                    </NavLink>
+                  ) : null}
                   <button className="button button-secondary" role="menuitem" type="button">
                     <BarChart3 aria-hidden="true" size={16} />
                     Báo cáo ca

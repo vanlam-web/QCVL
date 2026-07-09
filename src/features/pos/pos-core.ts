@@ -33,7 +33,7 @@ export function initialQuotePayloadToTabs(payload: QuoteReopenPayload | null): P
         ...makeInvoiceTab(1),
         cartLines: quotePayloadToCartLines(payload),
         selectedCustomer: quotePayloadToCustomer(payload),
-        orderNote: '',
+        orderNote: `Từ báo giá ${payload.quote.code}`,
         sourceQuote: { id: payload.quote.id, code: payload.quote.code },
       },
     ]
@@ -70,6 +70,20 @@ export function nextInvoiceNumber(tabs: PosInvoiceTab[]) {
     if (!used.has(number)) return number
   }
   return Math.min(tabs.length + 1, maxInvoiceTabs)
+}
+
+export function removeCompletedInvoiceTab(tabs: PosInvoiceTab[], completedTabId: string) {
+  const completedIndex = tabs.findIndex((tab) => tab.id === completedTabId)
+  if (completedIndex < 0) return { tabs, activeTabId: tabs[0]?.id ?? makeInvoiceTab(1).id }
+
+  const remaining = tabs.filter((tab) => tab.id !== completedTabId)
+  if (remaining.length === 0) {
+    const freshTab = makeInvoiceTab(1)
+    return { tabs: [freshTab], activeTabId: freshTab.id }
+  }
+
+  const nextActiveTab = remaining[Math.min(completedIndex, remaining.length - 1)]
+  return { tabs: remaining, activeTabId: nextActiveTab.id }
 }
 
 export function persistInvoiceTabs(tabs: PosInvoiceTab[]) {

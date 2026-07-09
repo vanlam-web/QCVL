@@ -47,6 +47,22 @@ export interface WorkstationData {
   status: 'active' | 'inactive'
 }
 
+export type SalesDocumentData = ReturnType<typeof makeSalesDocument>
+export type CashbookEntryData = ReturnType<typeof makeCashbookEntry> & {
+  source?: { type: string; id: string; code: string; order_code: string | null }
+  allocations?: Array<{
+    order_id: string
+    order_code: string
+    order_total_amount: number
+    collected_before: number
+    allocated_amount: number
+    remaining_after: number
+  }>
+  payment_method?: string
+}
+export type CustomerDebtSummaryData = CustomerDebtItem
+export type CustomerDebtDetailData = ReturnType<typeof makeCustomerDebtDetail>
+
 export interface ServerRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | null>
   createSession(input: { token: string; userId: string; expiresAt: Date }): Promise<void>
@@ -55,6 +71,32 @@ export interface ServerRepository {
   listWorkstations(organizationId: string): Promise<WorkstationData[]>
   getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
   recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
+  saveSalesDocument?(input: {
+    organizationId: string
+    document: SalesDocumentData
+    cashbookEntries: CashbookEntryData[]
+  }): Promise<void>
+  listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
+  getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
+  listCustomerDebts?(input: { organizationId: string; url: URL }): Promise<CustomerDebtSummaryData[]>
+  getCustomerDebt?(input: { organizationId: string; customerId: string }): Promise<CustomerDebtDetailData>
+  collectCustomerDebt?(input: {
+    organizationId: string
+    customerId: string
+    amount: number
+    cashAmount: number
+    bankAmount: number
+    bankAccountId?: string | null
+    bankTransactionRef?: string
+    note?: string
+  }): Promise<{ payment_receipt_id: string; allocated_amount: number }>
+  listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
+  getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number }>>
+  ensureSalesFinanceSeed?(input: {
+    organizationId: string
+    documents: SalesDocumentData[]
+    cashbookEntries: CashbookEntryData[]
+  }): Promise<void>
 }
 
 export interface HttpHandlerOptions {
@@ -198,6 +240,7 @@ const suppliers = Array.from({ length: 20 }, (_, index) => {
 })
 
 const purchaseReceipts = Array.from({ length: 20 }, (_, index) => makePurchaseReceipt(index + 1))
+syncSupplierTotalsFromPurchaseReceipts()
 const purchaseReceipt = purchaseReceipts[0]
 
 const salesDocuments = Array.from({ length: 20 }, (_, index) => makeSalesDocument(index + 1))
@@ -243,16 +286,8 @@ const stockMovements = products.flatMap((product) => (
 ))
 
 const cashbookEntries = Array.from({ length: 20 }, (_, index) => makeCashbookEntry(index + 1))
-const customerDebtItems = customers
-  .filter((customer) => customer.total_debt_amount > 0)
-  .map((customer, index) => ({
-    customer_id: customer.id,
-    customer_code: customer.code,
-    customer_name: customer.name,
-    total_debt: customer.total_debt_amount,
-    oldest_order_code: salesDocuments[index % salesDocuments.length].code,
-    open_invoice_count: 1 + (index % 3),
-  }))
+const customerDebtItems = buildCustomerDebtItems()
+const salesFinanceSeededOrganizations = new Set<string>()
 
 const productionQueueItems = Array.from({ length: 20 }, (_, index) => {
   const number = index + 1
@@ -318,6 +353,21 @@ function makePurchaseReceipt(number: number) {
       },
     ],
     supplier_payments: [],
+  }
+}
+
+function syncSupplierTotalsFromPurchaseReceipts() {
+  suppliers.forEach((supplier) => {
+    supplier.total_purchase_amount = 0
+    supplier.current_payable_amount = 0
+  })
+
+  for (const receipt of purchaseReceipts) {
+    if (receipt.status === 'cancelled') continue
+    const supplier = suppliers.find((item) => item.id === receipt.supplier_id)
+    if (!supplier) continue
+    supplier.total_purchase_amount += receipt.payable_amount
+    supplier.current_payable_amount += receipt.remaining_amount
   }
 }
 
@@ -440,6 +490,101 @@ function checkoutProductIds(body: Parameters<typeof makeOrderFromCheckout>[0]) {
     .filter((productId): productId is string => typeof productId === 'string' && productId.trim() !== '')
 }
 
+function checkoutPaymentStatus(orderType: 'invoice' | 'quote', paidAmount: number, debtAmount: number) {
+  if (orderType === 'quote') return 'not_applicable'
+  if (debtAmount <= 0) return 'paid'
+  if (paidAmount <= 0) return 'unpaid'
+  return 'partial'
+}
+
+function invoicePaymentStatus(paidAmount: number, debtAmount: number) {
+  if (debtAmount <= 0) return 'paid'
+  if (paidAmount <= 0) return 'unpaid'
+  return 'partial'
+}
+
+type DebtInvoiceDocument = {
+  id: string
+  code: string
+  order_type: string
+  status: string
+  created_at: string
+  customer: { id: string; code: string; name: string }
+  total_amount: number
+  paid_amount: number
+  debt_amount: number
+}
+
+type CustomerDebtItem = {
+  customer_id: string
+  customer_code: string
+  customer_name: string
+  total_debt: number
+  oldest_order_code: string
+  open_invoice_count: number
+  invoices: Array<{
+    order_id: string
+    order_code: string
+    created_at: string
+    total_amount: number
+    paid_amount: number
+    debt_amount: number
+    remaining_debt: number
+  }>
+}
+
+function buildCustomerDebtItems() {
+  customers.forEach((customer) => {
+    customer.total_debt_amount = 0
+    customer.total_sales_amount = 0
+  })
+
+  const debts: CustomerDebtItem[] = []
+
+  for (const document of salesDocuments) {
+    if (document.order_type !== 'invoice' || document.status === 'cancelled') continue
+    const customer = customers.find((item) => item.id === document.customer.id)
+    if (customer) customer.total_sales_amount += document.total_amount
+    if (document.debt_amount <= 0) continue
+    addCustomerDebtDocument(debts, document)
+  }
+
+  return debts
+}
+
+function addCustomerDebtDocument(debts: CustomerDebtItem[], document: DebtInvoiceDocument) {
+  const customer = customers.find((item) => item.id === document.customer.id)
+  if (customer) customer.total_debt_amount += document.debt_amount
+
+  const invoice = {
+    order_id: document.id,
+    order_code: document.code,
+    created_at: document.created_at,
+    total_amount: document.total_amount,
+    paid_amount: document.paid_amount,
+    debt_amount: document.debt_amount,
+    remaining_debt: document.debt_amount,
+  }
+  const debt = debts.find((item) => item.customer_id === document.customer.id)
+  if (debt) {
+    debt.total_debt += document.debt_amount
+    debt.open_invoice_count += 1
+    debt.invoices.unshift(invoice)
+    if (document.created_at < debt.invoices[debt.invoices.length - 1].created_at) debt.oldest_order_code = document.code
+    return
+  }
+
+  debts.unshift({
+    customer_id: document.customer.id,
+    customer_code: document.customer.code,
+    customer_name: document.customer.name,
+    total_debt: document.debt_amount,
+    oldest_order_code: document.code,
+    open_invoice_count: 1,
+    invoices: [invoice],
+  })
+}
+
 function filterCustomers(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
   const customerGroupId = url.searchParams.get('customer_group_id')
@@ -522,6 +667,13 @@ function filterCustomerDebts(url: URL) {
   })
 }
 
+async function ensureSalesFinanceSeed(repository: ServerRepository, organizationId: string) {
+  if (!repository.ensureSalesFinanceSeed) return
+  if (salesFinanceSeededOrganizations.has(organizationId)) return
+  await repository.ensureSalesFinanceSeed({ organizationId, documents: salesDocuments, cashbookEntries })
+  salesFinanceSeededOrganizations.add(organizationId)
+}
+
 function filterCashbookEntries(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
   const searchScope = url.searchParams.get('search_scope') ?? 'all'
@@ -563,6 +715,7 @@ function makeOrderFromCheckout(body: {
   payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
 }, orderType: 'invoice' | 'quote') {
   const number = salesDocuments.length + 1
+  const codeSuffix = `${pad(number)}-${randomUUID().slice(0, 8).toUpperCase()}`
   const customer = customers.find((item) => item.id === body.customer_id) ?? customers[0]
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
   const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
@@ -575,8 +728,8 @@ function makeOrderFromCheckout(body: {
   const debtAmount = orderType === 'quote' ? 0 : Math.max(total - paid, 0)
 
   return {
-    id: `order-pos-${pad(number)}`,
-    code: `${orderType === 'quote' ? 'BG-POS' : 'HD-POS'}-${pad(number)}`,
+    id: randomUUID(),
+    code: `${orderType === 'quote' ? 'BG-POS' : 'HD-POS'}-${codeSuffix}`,
     order_type: orderType,
     status: orderType === 'quote' ? 'active' : 'completed',
     created_at: nowIso,
@@ -587,13 +740,31 @@ function makeOrderFromCheckout(body: {
     total_amount: total,
     paid_amount: paid,
     debt_amount: debtAmount,
-    payment_status: orderType === 'quote' ? 'not_applicable' : debtAmount > 0 ? 'partial' : 'paid',
+    payment_status: checkoutPaymentStatus(orderType, paid, debtAmount),
     note: body.note ?? '',
     items: checkoutProductIds(body).map((productId) => ({ product_id: productId })),
   }
 }
 
+function addCustomerDebtFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>) {
+  if (order.order_type !== 'invoice' || order.debt_amount <= 0) return
+
+  addCustomerDebtDocument(customerDebtItems, order)
+}
+
+function addCustomerSalesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>) {
+  if (order.order_type !== 'invoice' || order.status === 'cancelled') return
+  const customer = customers.find((item) => item.id === order.customer.id)
+  if (customer) customer.total_sales_amount += order.total_amount
+}
+
 function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
+  const entries = previewCashbookEntriesFromCheckout(order, payment)
+  cashbookEntries.unshift(...entries)
+  return entries
+}
+
+function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
   const entries: typeof cashbookEntries = []
   const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
   const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
@@ -604,9 +775,10 @@ function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCh
 
   for (const method of methods) {
     if (method.amount <= 0) continue
+    const codeSuffix = `${pad(cashbookEntries.length + entries.length + 1)}-${randomUUID().slice(0, 8).toUpperCase()}`
     entries.push({
-      id: `cashbook-pos-${randomUUID()}`,
-      code: `PT-POS-${pad(cashbookEntries.length + entries.length + 1)}`,
+      id: randomUUID(),
+      code: `PT-POS-${codeSuffix}`,
       status: 'posted',
       direction: 'in',
       amount_delta: method.amount,
@@ -619,8 +791,123 @@ function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCh
     })
   }
 
-  cashbookEntries.unshift(...entries)
   return entries
+}
+
+async function collectCustomerDebt(request: Request) {
+  const body = await readJson(request) as {
+    customer_id?: string
+    amount?: number
+    payment_method?: {
+      cash_amount?: number
+      bank_amount?: number
+      bank_account_id?: string | null
+      bank_transaction_ref?: string
+    }
+    note?: string
+  }
+  const customerId = body.customer_id ?? ''
+  const requestedAmount = Math.max(Number(body.amount ?? 0), 0)
+  const cashAmount = Math.max(Number(body.payment_method?.cash_amount ?? 0), 0)
+  const bankAmount = Math.max(Number(body.payment_method?.bank_amount ?? 0), 0)
+  const receivedAmount = cashAmount + bankAmount
+  const debt = customerDebtItems.find((item) => item.customer_id === customerId)
+  if (!debt || requestedAmount <= 0 || receivedAmount !== requestedAmount) {
+    return { payment_receipt_id: '', allocated_amount: 0 }
+  }
+
+  const allocations: Array<{
+    order_id: string
+    order_code: string
+    order_total_amount: number
+    collected_before: number
+    allocated_amount: number
+    remaining_after: number
+  }> = []
+  let remainingPayment = Math.min(requestedAmount, debt.total_debt)
+  const invoices = [...debt.invoices].reverse()
+
+  for (const invoice of invoices) {
+    if (remainingPayment <= 0) break
+    if (invoice.remaining_debt <= 0) continue
+    const allocated = Math.min(invoice.remaining_debt, remainingPayment)
+    const document = salesDocuments.find((item) => item.id === invoice.order_id)
+    const collectedBefore = document ? document.paid_amount : invoice.paid_amount
+
+    invoice.paid_amount += allocated
+    invoice.remaining_debt -= allocated
+    invoice.debt_amount = invoice.remaining_debt
+    if (document) {
+      document.paid_amount += allocated
+      document.debt_amount = Math.max(document.debt_amount - allocated, 0)
+      document.payment_status = invoicePaymentStatus(document.paid_amount, document.debt_amount)
+    }
+
+    allocations.push({
+      order_id: invoice.order_id,
+      order_code: invoice.order_code,
+      order_total_amount: invoice.total_amount,
+      collected_before: collectedBefore,
+      allocated_amount: allocated,
+      remaining_after: invoice.remaining_debt,
+    })
+    remainingPayment -= allocated
+  }
+
+  const allocatedAmount = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
+  debt.total_debt = Math.max(debt.total_debt - allocatedAmount, 0)
+  debt.invoices = debt.invoices.filter((invoice) => invoice.remaining_debt > 0)
+  debt.open_invoice_count = debt.invoices.length
+  debt.oldest_order_code = debt.invoices.at(-1)?.order_code ?? ''
+  const customer = customers.find((item) => item.id === customerId)
+  if (customer) customer.total_debt_amount = debt.total_debt
+  if (debt.total_debt <= 0) {
+    const index = customerDebtItems.findIndex((item) => item.customer_id === customerId)
+    if (index >= 0) customerDebtItems.splice(index, 1)
+  }
+
+  const receiptCode = `PT-CN-${pad(cashbookEntries.length + 1)}`
+  const customerName = customer?.name ?? debt.customer_name
+  const customerPhone = customer && 'phone' in customer ? customer.phone : null
+  const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
+  const inputNote = body.note?.trim()
+  const entryNote = inputNote ? `${inputNote} - ${allocationCodes}` : `Thu no ${allocationCodes}`
+  const baseEntry = {
+    status: 'posted',
+    direction: 'in',
+    is_business_accounted: true,
+    source_type: 'payment_receipt_method',
+    created_at: nowIso,
+    note: entryNote,
+    counterparty: { type: 'customer', name: customerName, phone: customerPhone },
+    payment_method: bankAmount > 0 && cashAmount <= 0 ? 'bank_transfer' : cashAmount > 0 && bankAmount <= 0 ? 'cash' : 'manual',
+    source: { type: 'payment_receipt', id: receiptCode, code: receiptCode, order_code: allocations[0]?.order_code ?? null },
+    allocations,
+  }
+  const entries: typeof cashbookEntries = []
+  if (cashAmount > 0) {
+    entries.push({
+      ...baseEntry,
+      id: `cashbook-debt-${randomUUID()}`,
+      code: entries.length === 0 ? receiptCode : `${receiptCode}-TM`,
+      amount_delta: cashAmount,
+      finance_account: { id: financeAccounts[0].id, code: financeAccounts[0].code, name: financeAccounts[0].name, account_type: financeAccounts[0].account_type },
+    })
+  }
+  if (bankAmount > 0) {
+    const account = financeAccounts.find((item) => item.id === body.payment_method?.bank_account_id) ?? financeAccounts[1]
+    entries.push({
+      ...baseEntry,
+      id: `cashbook-debt-${randomUUID()}`,
+      code: entries.length === 0 ? receiptCode : `${receiptCode}-NH`,
+      amount_delta: bankAmount,
+      finance_account: { id: account.id, code: account.code, name: account.name, account_type: account.account_type },
+      note: body.payment_method?.bank_transaction_ref ? `${baseEntry.note} (${body.payment_method.bank_transaction_ref})` : baseEntry.note,
+    })
+  }
+  cashbookEntries.unshift(...entries)
+
+  return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
 }
 
 function makeSalesDocumentDetail(document: ReturnType<typeof makeSalesDocument>) {
@@ -692,21 +979,10 @@ function makeCashbookEntry(number: number) {
 function makeCustomerDebtDetail(customerId: string) {
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
   if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [] }
-  const document = salesDocuments.find((item) => item.code === debt.oldest_order_code) ?? salesDocuments[0]
   return {
     customer_id: customerId,
     total_debt: debt.total_debt,
-    invoices: [
-      {
-        order_id: document.id,
-        order_code: document.code,
-        created_at: nowIso,
-        total_amount: document.total_amount,
-        paid_amount: document.paid_amount,
-        debt_amount: document.debt_amount,
-        remaining_debt: debt.total_debt,
-      },
-    ],
+    invoices: debt.invoices,
   }
 }
 
@@ -748,6 +1024,7 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       }
 
       const currentUser = await requireCurrentUser(options.repository, request, traceId)
+      await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
       const devResponse = await getDevApiResponse(request, url, currentUser, options.repository)
       if (devResponse.found) return success(devResponse.data, traceId, devResponse.status)
 
@@ -811,7 +1088,14 @@ async function getDevApiResponse(
   }
 
   if (method === 'GET' && path === '/api/v1/customer-groups') return { found: true, data: { items: customerGroups } }
-  if (method === 'GET' && path === '/api/v1/customers') return { found: true, data: paged(filterCustomers(url), page, pageSize) }
+  if (method === 'GET' && path === '/api/v1/customers') {
+    const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
+    const filteredCustomers = filterCustomers(url).map((customer) => {
+      const totals = financialTotals?.get(customer.id)
+      return totals ? { ...customer, ...totals } : customer
+    })
+    return { found: true, data: paged(filteredCustomers, page, pageSize) }
+  }
   if (method === 'POST' && path === '/api/v1/customers') {
     const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
     const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
@@ -874,31 +1158,95 @@ async function getDevApiResponse(
   if (method === 'POST' && path === '/api/v1/orders/checkout') {
     const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
     const order = makeOrderFromCheckout(body, 'invoice')
-    salesDocuments.unshift(order)
     await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
-    const paymentEntries = addCashbookEntriesFromCheckout(order, body.payment)
+    const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment) : addCashbookEntriesFromCheckout(order, body.payment)
+    if (repository.saveSalesDocument) {
+      await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: order, cashbookEntries: paymentEntries })
+    } else {
+      salesDocuments.unshift(order)
+      addCustomerSalesFromCheckout(order)
+      addCustomerDebtFromCheckout(order)
+    }
     return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
   }
   if (method === 'POST' && path === '/api/v1/orders/quotes') {
     const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
     const quote = makeOrderFromCheckout(body, 'quote')
-    salesDocuments.unshift(quote)
     await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
+    if (repository.saveSalesDocument) {
+      await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
+    } else {
+      salesDocuments.unshift(quote)
+    }
     return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
   }
   if (method === 'GET' && /^\/api\/v1\/orders\/quotes\/[^/]+\/reopen-payload$/.test(path)) return { found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }
 
-  if (method === 'GET' && path === '/api/v1/sales-documents') return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === getIdFromPath(path)) ?? salesDocuments[0]) }
+  if (method === 'GET' && path === '/api/v1/sales-documents') {
+    if (repository.listSalesDocuments) {
+      return { found: true, data: paged(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), page, pageSize) }
+    }
+    return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
+  }
+  if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(path)) {
+    const id = getIdFromPath(path) ?? ''
+    if (repository.getSalesDocument) {
+      const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
+      return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0]) }
+    }
+    return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === id) ?? salesDocuments[0]) }
+  }
 
   if (method === 'GET' && path === '/api/v1/finance/accounts') return { found: true, data: { items: financeAccounts } }
-  if (method === 'GET' && path === '/api/v1/finance/customer-debts') return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
-  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) return { found: true, data: makeCustomerDebtDetail(getFinanceCustomerId(path)) }
-  if (method === 'POST' && path === '/api/v1/finance/debt-collections') return { found: true, data: { payment_receipt_id: randomUUID(), allocated_amount: 100000 }, status: 201 }
+  if (method === 'GET' && path === '/api/v1/finance/customer-debts') {
+    if (repository.listCustomerDebts) {
+      return { found: true, data: paged(await repository.listCustomerDebts({ organizationId: currentUser.organization.id, url }), page, pageSize) }
+    }
+    return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
+  }
+  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(path)) {
+    const customerId = getFinanceCustomerId(path)
+    if (repository.getCustomerDebt) {
+      return { found: true, data: await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId }) }
+    }
+    return { found: true, data: makeCustomerDebtDetail(customerId) }
+  }
+  if (method === 'POST' && path === '/api/v1/finance/debt-collections') {
+    if (repository.collectCustomerDebt) {
+      const body = await readJson(request) as {
+        customer_id?: string
+        amount?: number
+        payment_method?: {
+          cash_amount?: number
+          bank_amount?: number
+          bank_account_id?: string | null
+          bank_transaction_ref?: string
+        }
+        note?: string
+      }
+      return {
+        found: true,
+        data: await repository.collectCustomerDebt({
+          organizationId: currentUser.organization.id,
+          customerId: body.customer_id ?? '',
+          amount: Math.max(Number(body.amount ?? 0), 0),
+          cashAmount: Math.max(Number(body.payment_method?.cash_amount ?? 0), 0),
+          bankAmount: Math.max(Number(body.payment_method?.bank_amount ?? 0), 0),
+          bankAccountId: body.payment_method?.bank_account_id,
+          bankTransactionRef: body.payment_method?.bank_transaction_ref,
+          note: body.note,
+        }),
+        status: 201,
+      }
+    }
+    return { found: true, data: await collectCustomerDebt(request), status: 201 }
+  }
   if (method === 'GET' && path === '/api/v1/finance/cashbook/balances') return { found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }
   if (method === 'GET' && path === '/api/v1/finance/cashbook/vouchers') return { found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }
   if (method === 'GET' && path === '/api/v1/finance/cashbook') {
-    const entries = filterCashbookEntries(url)
+    const entries = repository.listCashbookEntries
+      ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url })
+      : filterCashbookEntries(url)
     return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
   }
   if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(path)) return { found: true, data: { ...cashbookEntries[0], created_by: { id: currentUser.user.id, name: currentUser.user.display_name }, payment_method: 'cash', source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001' }, allocations: [{ order_id: 'order-0001', order_code: 'HD0001', order_total_amount: 1150000, collected_before: 0, allocated_amount: 700000, remaining_after: 450000 }] } }
@@ -992,7 +1340,8 @@ function getIdFromPath(path: string) {
 }
 
 function getFinanceCustomerId(path: string) {
-  return path.split('/')[4] ?? 'customer-an'
+  const parts = path.split('/').filter(Boolean)
+  return parts.at(-2) ?? 'customer-an'
 }
 
 function normalizePermissions(value: unknown) {
