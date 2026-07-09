@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto'
+import { HttpError, emptyResponse, failure, success } from './http-response'
 
 export type UserStatus = 'active' | 'inactive'
 
@@ -1564,51 +1565,3 @@ function scrypt(
   })
 }
 
-class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code:
-      | 'AUTH_REQUIRED'
-      | 'ACCOUNT_INACTIVE'
-      | 'WORKSTATION_INVALID'
-      | 'PERMISSION_DENIED'
-      | 'VALIDATION_ERROR'
-      | 'RESOURCE_CONFLICT'
-      | 'RESOURCE_NOT_FOUND'
-      | 'RATE_LIMITED'
-      | 'INTERNAL_ERROR',
-    message: string,
-  ) {
-    super(message)
-  }
-}
-
-function success<T>(data: T, traceId: string, status = 200) {
-  return jsonResponse({ success: true, data, trace_id: traceId }, status)
-}
-
-function failure(status: number, code: HttpError['code'], message: string, traceId: string) {
-  return jsonResponse({ success: false, error: { code, message }, trace_id: traceId }, status)
-}
-
-function emptyResponse(traceId: string) {
-  return new Response(null, { status: 204, headers: responseHeaders(traceId) })
-}
-
-function jsonResponse(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: responseHeaders(),
-  })
-}
-
-function responseHeaders(traceId?: string) {
-  const headers = new Headers({
-    'access-control-allow-origin': '*',
-    'access-control-allow-methods': 'GET,POST,PATCH,PUT,DELETE,OPTIONS',
-    'access-control-allow-headers': 'authorization,content-type,x-request-id,x-client-device-id,x-workstation-id',
-    'content-type': 'application/json',
-  })
-  if (traceId) headers.set('x-request-id', traceId)
-  return headers
-}
