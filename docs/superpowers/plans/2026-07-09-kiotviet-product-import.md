@@ -10,6 +10,29 @@
 
 ---
 
+## Current Status 2026-07-10
+
+This plan is no longer the active task checklist. The implementation was completed, deployed to NAS, and merged through commit `38b8c9d`, with the later read-performance fix merged through commit `5efc3a6`.
+
+Use this file as the product import design record only. Do not treat the older unchecked task boxes below as active work unless Owner explicitly reopens product import implementation.
+
+Accepted current behavior:
+
+- KiotViet product import can be run repeatedly by `Ma hang` upsert.
+- Product import writes real catalog fields, source `created_at`, default sale price, provisional stock, and draft BOM.
+- Product import does not create official stock movements.
+- Product import delete/reset is a separate explicit action, not an import checkbox.
+- `3202` and `3200` promotion must go through migrations and `npm run deploy:nas`.
+
+Still deferred:
+
+- `Nha cung cap`: derive from purchase/import receipt history, because one product can have many suppliers.
+- `Du kien het hang`: compute after enough sales/purchase/stock history exists; do not copy KiotViet text.
+- Official operating stock conversion: requires explicit review/balance flow from provisional stock/history into stock movements.
+- Draft BOM activation: requires human review before POS uses BOM.
+
+---
+
 ## Scope Locked For Current Import Phase
 
 Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with the same columns.

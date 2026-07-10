@@ -10,6 +10,21 @@
 
 ---
 
+## Current Status 2026-07-10
+
+The price-import implementation is part of the accepted KiotViet product import flow. Keep price ownership in `price_list_items`; do not move sale price into `products`.
+
+Verification refreshed on 2026-07-10:
+
+- `npm run typecheck` passed.
+- `npm run lint` passed.
+- `npx vitest run src/lib/config/runtime.test.ts src/features/catalog/catalog-service.test.ts src/features/catalog/ProductImportDialog.test.tsx src/features/catalog/CatalogPage.test.tsx server/http.test.ts server/modules/catalog/product-import.test.ts` passed: 6 files, 83 tests.
+- `npm run build:nas` passed.
+
+Remaining manual check only if this plan is reopened: open `http://127.0.0.1:3202/products`, import a KV product file, search a product with nonzero `Gia ban`, and confirm the list/detail show the formatted price from API `default_sale_price`.
+
+---
+
 ## Scope
 
 - Write KV `Giá bán` into the default active price list only.
@@ -66,7 +81,7 @@
 ### Task 4: Docs And Verification
 
 - [x] Update inventory doc: Phase 2 now writes `Giá bán` into default price list through Hàng hóa import.
-- [ ] Run:
+- [x] Run:
   - `npm run typecheck`
   - `npm run lint`
   - `npx vitest run src/lib/config/runtime.test.ts src/features/catalog/catalog-service.test.ts src/features/catalog/ProductImportDialog.test.tsx src/features/catalog/CatalogPage.test.tsx server/http.test.ts server/modules/catalog/product-import.test.ts`
