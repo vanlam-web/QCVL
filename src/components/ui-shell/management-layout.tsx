@@ -1,5 +1,6 @@
-import { isValidElement, type FormEvent, type ReactNode, type SyntheticEvent } from 'react'
+import { isValidElement, useEffect, useRef, type FormEvent, type ReactNode, type SyntheticEvent } from 'react'
 import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
 
 export interface ManagementSearchSuggestion {
   id: string
@@ -52,6 +53,7 @@ export function ManagementPage({
 export function ManagementFilterSidebar({
   ariaLabel,
   actions,
+  onPopoverClose,
   popoverOpen = false,
   children,
 }: {
@@ -59,11 +61,29 @@ export function ManagementFilterSidebar({
   title?: string
   activeSummary?: string
   actions?: ReactNode
+  onPopoverClose?: () => void
   popoverOpen?: boolean
   children: ReactNode
 }) {
+  const sidebarRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (!popoverOpen || !onPopoverClose) return undefined
+    const closePopover = onPopoverClose
+
+    function closeWhenOutside(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (sidebarRef.current?.contains(target)) return
+      closePopover()
+    }
+
+    document.addEventListener('pointerdown', closeWhenOutside, true)
+    return () => document.removeEventListener('pointerdown', closeWhenOutside, true)
+  }, [onPopoverClose, popoverOpen])
+
   return (
-    <aside aria-label={ariaLabel} className={`management-filter-sidebar${popoverOpen ? ' management-filter-sidebar-popover-open' : ''}`}>
+    <aside ref={sidebarRef} aria-label={ariaLabel} className={`management-filter-sidebar${popoverOpen ? ' management-filter-sidebar-popover-open' : ''}`}>
       {children}
       {actions ? <ManagementFilterActionBar>{actions}</ManagementFilterActionBar> : null}
     </aside>
@@ -80,6 +100,60 @@ export function ManagementFilterGroup({ title, children }: { title: string; chil
       <h2>{title}</h2>
       <div className="management-filter-options">{children}</div>
     </section>
+  )
+}
+
+export function ManagementDateRangeInputs({
+  from,
+  to,
+  onFromChange,
+  onToChange,
+}: {
+  from: string
+  to: string
+  onFromChange: (value: string) => void
+  onToChange: (value: string) => void
+}) {
+  return (
+    <div className="management-filter-date-range">
+      <ManagementDateInput label="Từ ngày" value={from} onChange={onFromChange} />
+      <ManagementDateInput label="Đến ngày" value={to} onChange={onToChange} />
+    </div>
+  )
+}
+
+function ManagementDateInput({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  function updateDateInput(nextText: string) {
+    const normalized = normalizeDateInput(nextText)
+    if (normalized !== null && (normalized === '' || nextText.trim().length >= 10)) onChange(normalized)
+  }
+
+  function formatOnBlur(input: HTMLInputElement) {
+    const normalized = normalizeDateInput(input.value)
+    input.value = normalized === null ? toDisplayDateInput(value) : toDisplayDateInput(normalized)
+  }
+
+  return (
+    <label>
+      <span>{label}</span>
+      <input
+        aria-label={label}
+        defaultValue={toDisplayDateInput(value)}
+        inputMode="numeric"
+        key={value}
+        placeholder="dd/mm/yyyy"
+        onBlur={(event) => formatOnBlur(event.currentTarget)}
+        onChange={(event) => updateDateInput(event.target.value)}
+      />
+    </label>
   )
 }
 
@@ -250,6 +324,7 @@ export function ManagementTableFooter({
   page,
   pageSize,
   total,
+  totalDetail,
   canGoPrevious,
   canGoNext,
   pageSizeOptions = [15, 30, 50, 100],
@@ -264,6 +339,7 @@ export function ManagementTableFooter({
   page: number
   pageSize: number
   total: number
+  totalDetail?: string
   canGoPrevious: boolean
   canGoNext: boolean
   pageSizeOptions?: number[]
@@ -316,7 +392,9 @@ export function ManagementTableFooter({
           <ChevronLast aria-hidden="true" size={18} />
         </button>
       </div>
-      <strong className="management-table-footer-summary">{rangeStart} - {rangeEnd} trong {total} {entityLabel}</strong>
+      <strong className="management-table-footer-summary">
+        {rangeStart} - {rangeEnd} trong {total} {entityLabel}{totalDetail ? ` (${totalDetail})` : ''}
+      </strong>
     </nav>
   )
 }

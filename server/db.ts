@@ -1,8 +1,26 @@
 import pg from 'pg'
 import { randomUUID } from 'node:crypto'
-import type { CashbookEntryData, CurrentUserData, CustomerDebtSummaryData, SalesDocumentData, ServerRepository, WorkstationData } from './http.js'
+import type {
+  CashbookEntryData,
+  CurrentUserData,
+  CustomerDebtSummaryData,
+  ProductListData,
+  SalesDocumentData,
+  ServerRepository,
+  StocktakeListData,
+  WorkstationData,
+} from './http.js'
 
 const { Pool } = pg
+
+const productReferenceGuards = [
+  { table: 'order_items', column: 'product_id' },
+  { table: 'price_list_items', column: 'product_id' },
+  { table: 'stock_movements', column: 'product_id' },
+  { table: 'purchase_receipt_items', column: 'product_id' },
+  { table: 'product_boms', column: 'product_id' },
+  { table: 'product_bom_items', column: 'component_product_id' },
+] as const
 
 export function createPgRepository(databaseUrl: string): ServerRepository & { close(): Promise<void> } {
   const pool = new Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30_000 })
@@ -132,6 +150,969 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           )
         }
         await pool.query('commit')
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async findProductsByCodes(input) {
+      const result = await pool.query(
+        `
+          select code
+          from products
+          where organization_id = $1
+            and code = any($2::text[])
+        `,
+        [input.organizationId, input.codes],
+      )
+      return new Set(result.rows.map((row) => String(row.code)))
+    },
+
+    async listProducts(input) {
+      await ensureProductCatalogSchema(pool)
+      await ensureProductUnitTables(pool)
+      await ensurePriceListTables(pool)
+      await ensureInventoryProvisionalBalancesTable(pool)
+      await ensureProductBomTables(pool)
+      await ensureImportedStocktakeTables(pool)
+      const search = input.url.searchParams.get('search')?.trim() ?? ''
+      const status = input.url.searchParams.get('status')
+      const sellMethod = input.url.searchParams.get('sell_method')
+      const inventoryShape = input.url.searchParams.get('inventory_shape')
+      const productKind = input.url.searchParams.get('product_kind')
+      const productGroupId = input.url.searchParams.get('product_group_id')
+      const createdFrom = input.url.searchParams.get('created_from')
+      const createdTo = input.url.searchParams.get('created_to')
+      const clauses = ['p.organization_id = $1']
+      const values: unknown[] = [input.organizationId]
+      if (status && status !== 'all') {
+        values.push(status)
+        clauses.push(`p.status = $${values.length}`)
+      }
+      if (sellMethod) {
+        values.push(sellMethod)
+        clauses.push(`p.sell_method = $${values.length}`)
+      }
+      if (inventoryShape) {
+        values.push(inventoryShape)
+        clauses.push(`p.inventory_shape = $${values.length}`)
+      }
+      if (productKind) {
+        values.push(productKind)
+        clauses.push(`p.product_kind = $${values.length}`)
+      }
+      if (productGroupId) {
+        values.push(productGroupId)
+        clauses.push(`p.product_group_id = $${values.length}::uuid`)
+      }
+      if (createdFrom) {
+        values.push(createdFrom)
+        clauses.push(`p.created_at >= $${values.length}::date`)
+      }
+      if (createdTo) {
+        values.push(createdTo)
+        clauses.push(`p.created_at < ($${values.length}::date + interval '1 day')`)
+      }
+      if (search) {
+        values.push(`%${search}%`)
+        clauses.push(`(p.code ilike $${values.length} or p.name ilike $${values.length})`)
+      }
+
+      const result = await pool.query(
+        `
+          select
+            p.id::text,
+            p.code,
+            p.name,
+            p.status,
+            p.product_kind,
+            p.unit_name,
+            p.sell_method,
+            p.latest_purchase_cost,
+            p.latest_purchase_cost_at,
+            pli.unit_price as default_sale_price,
+            p.product_group_id::text,
+            case
+              when pg.id is null then null
+              else jsonb_build_object('id', pg.id::text, 'code', pg.code, 'name', pg.name)
+            end as product_group,
+            p.inventory_shape,
+            p.track_inventory,
+            coalesce(unit_data.unit_conversions, '[]'::jsonb) as unit_conversions,
+            provisional_data.kiotviet_provisional_stock,
+            latest_stocktake_data.latest_kiotviet_stocktake,
+            draft_bom_data.draft_bom,
+            p.created_at,
+            p.updated_at
+          from products p
+          left join product_groups pg on pg.id = p.product_group_id and pg.organization_id = p.organization_id
+          left join price_lists pl on pl.organization_id = p.organization_id and pl.is_default = true and pl.is_active = true
+          left join price_list_items pli on pli.organization_id = p.organization_id and pli.price_list_id = pl.id and pli.product_id = p.id
+          left join lateral (
+            select jsonb_agg(
+              jsonb_build_object(
+                'unit_name', sale_unit.name,
+                'stock_qty_per_unit', puc.stock_qty_per_sale_unit,
+                'is_default_purchase_unit', puc.is_default_purchase_unit,
+                'is_default_sale_unit', puc.is_default_sale_unit
+              )
+              order by puc.is_default_sale_unit desc, puc.is_default_purchase_unit desc, sale_unit.name
+            ) as unit_conversions
+            from product_unit_conversions puc
+            join inventory_units sale_unit on sale_unit.id = puc.sale_unit_id
+            where puc.organization_id = p.organization_id
+              and puc.product_id = p.id
+              and puc.is_active = true
+              and sale_unit.is_active = true
+          ) unit_data on true
+          left join lateral (
+            select jsonb_build_object(
+              'quantity', ipb.remaining_qty,
+              'unit_name', stock_unit.name,
+              'source_type', ipb.source_type,
+              'source_label', ipb.source_label,
+              'status', ipb.status,
+              'updated_at', ipb.updated_at
+            ) as kiotviet_provisional_stock
+            from inventory_provisional_balances ipb
+            join inventory_units stock_unit on stock_unit.id = ipb.stock_unit_id
+            where ipb.organization_id = p.organization_id
+              and ipb.product_id = p.id
+              and ipb.source_type = 'kiotviet_import'
+            order by ipb.updated_at desc
+            limit 1
+          ) provisional_data on true
+          left join lateral (
+            select jsonb_build_object(
+              'code', st.code,
+              'source_created_at', st.source_created_at,
+              'source_balanced_at', st.source_balanced_at,
+              'system_qty', sti.system_qty,
+              'actual_qty', sti.actual_qty,
+              'difference_qty', sti.difference_qty,
+              'unit_name', coalesce(sti.source_unit_name, stock_unit.name)
+            ) as latest_kiotviet_stocktake
+            from stocktake_items sti
+            join stocktakes st on st.id = sti.stocktake_id and st.organization_id = sti.organization_id
+            left join inventory_units stock_unit on stock_unit.id = sti.stock_unit_id
+            where sti.organization_id = p.organization_id
+              and sti.product_id = p.id
+              and st.source_type = 'kiotviet_import'
+              and st.source_system = 'kiotviet'
+            order by coalesce(st.source_balanced_at, st.source_created_at, st.created_at) desc, sti.line_no desc
+            limit 1
+          ) latest_stocktake_data on true
+          left join lateral (
+            select jsonb_build_object(
+              'id', pb.id::text,
+              'version', pb.version,
+              'status', pb.status,
+              'item_count', count(pbi.id),
+              'notes', pb.notes
+            ) as draft_bom
+            from product_boms pb
+            left join product_bom_items pbi on pbi.organization_id = pb.organization_id and pbi.bom_id = pb.id
+            where pb.organization_id = p.organization_id
+              and pb.product_id = p.id
+              and pb.status = 'draft'
+            group by pb.id, pb.version, pb.status, pb.notes, pb.created_at
+            order by pb.version desc, pb.created_at desc
+            limit 1
+          ) draft_bom_data on true
+          where ${clauses.join(' and ')}
+          order by p.updated_at desc, p.created_at desc
+        `,
+        values,
+      )
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        code: String(row.code),
+        name: String(row.name),
+        status: String(row.status),
+        product_kind: String(row.product_kind),
+        unit_name: String(row.unit_name),
+        sell_method: String(row.sell_method),
+        latest_purchase_cost: row.latest_purchase_cost === null ? null : Number(row.latest_purchase_cost),
+        latest_purchase_cost_at: row.latest_purchase_cost_at?.toISOString?.() ?? row.latest_purchase_cost_at ?? null,
+        default_sale_price: row.default_sale_price === null ? null : Number(row.default_sale_price),
+        product_group_id: row.product_group_id === null ? null : String(row.product_group_id),
+        product_group: row.product_group ?? null,
+        inventory_shape: String(row.inventory_shape),
+        track_inventory: Boolean(row.track_inventory),
+        unit_conversions: (row.unit_conversions ?? []).map((conversion: {
+          unit_name: string
+          stock_qty_per_unit: string | number
+          is_default_purchase_unit: boolean
+          is_default_sale_unit: boolean
+        }) => ({
+          unit_name: String(conversion.unit_name),
+          stock_qty_per_unit: Number(conversion.stock_qty_per_unit),
+          is_default_purchase_unit: Boolean(conversion.is_default_purchase_unit),
+          is_default_sale_unit: Boolean(conversion.is_default_sale_unit),
+        })),
+        kiotviet_provisional_stock: row.kiotviet_provisional_stock
+          ? {
+              quantity: Number(row.kiotviet_provisional_stock.quantity),
+              unit_name: String(row.kiotviet_provisional_stock.unit_name),
+              source_type: 'kiotviet_import',
+              source_label: row.kiotviet_provisional_stock.source_label === null ? null : String(row.kiotviet_provisional_stock.source_label),
+              status: String(row.kiotviet_provisional_stock.status),
+              updated_at: row.kiotviet_provisional_stock.updated_at?.toISOString?.() ?? row.kiotviet_provisional_stock.updated_at ?? null,
+            }
+          : null,
+        latest_kiotviet_stocktake: row.latest_kiotviet_stocktake
+          ? {
+              code: String(row.latest_kiotviet_stocktake.code),
+              source_created_at: dbDateText(row.latest_kiotviet_stocktake.source_created_at),
+              source_balanced_at: dbDateText(row.latest_kiotviet_stocktake.source_balanced_at),
+              system_qty: row.latest_kiotviet_stocktake.system_qty === null ? null : Number(row.latest_kiotviet_stocktake.system_qty),
+              actual_qty: row.latest_kiotviet_stocktake.actual_qty === null ? null : Number(row.latest_kiotviet_stocktake.actual_qty),
+              difference_qty: row.latest_kiotviet_stocktake.difference_qty === null ? null : Number(row.latest_kiotviet_stocktake.difference_qty),
+              unit_name: row.latest_kiotviet_stocktake.unit_name === null ? null : String(row.latest_kiotviet_stocktake.unit_name),
+            }
+          : null,
+        draft_bom: row.draft_bom
+          ? {
+              id: String(row.draft_bom.id),
+              version: Number(row.draft_bom.version),
+              status: 'draft',
+              item_count: Number(row.draft_bom.item_count),
+              notes: row.draft_bom.notes === null ? null : String(row.draft_bom.notes),
+            }
+          : null,
+        created_at: row.created_at?.toISOString?.() ?? row.created_at,
+        updated_at: row.updated_at?.toISOString?.() ?? row.updated_at,
+      })) satisfies ProductListData[]
+    },
+
+    async findDefaultPriceList(input) {
+      await ensureProductCatalogSchema(pool)
+      await ensurePriceListTables(pool)
+      const result = await pool.query(
+        `
+          select id::text, name
+          from price_lists
+          where organization_id = $1
+            and is_default = true
+            and is_active = true
+          order by updated_at desc, created_at desc
+          limit 1
+        `,
+        [input.organizationId],
+      )
+      const row = result.rows[0]
+      return row ? { id: String(row.id), name: String(row.name) } : null
+    },
+
+    async upsertProductGroupsByName(input) {
+      const names = [...new Set(input.names.map((name) => name.trim()).filter(Boolean))]
+      if (names.length === 0) return new Map()
+
+      await ensureProductCatalogSchema(pool)
+      await pool.query('begin')
+      try {
+        const existing = await pool.query(
+          `
+            select id, name
+            from product_groups
+            where organization_id = $1
+              and name = any($2::text[])
+          `,
+          [input.organizationId, names],
+        )
+        const existingNames = new Set(existing.rows.map((row) => String(row.name)))
+        for (const name of names) {
+          if (existingNames.has(name)) continue
+          const code = productGroupImportCode(name)
+          await pool.query(
+            `
+              insert into product_groups (id, organization_id, code, name, is_default, is_active, created_at, updated_at)
+              values ($1, $2, $3, $4, false, true, now(), now())
+              on conflict (organization_id, code)
+              do update set
+                name = excluded.name,
+                is_active = true,
+                updated_at = now()
+            `,
+            [randomUUID(), input.organizationId, code, name],
+          )
+        }
+        const result = await pool.query(
+          `
+            select id, name
+            from product_groups
+            where organization_id = $1
+              and name = any($2::text[])
+          `,
+          [input.organizationId, names],
+        )
+        await pool.query('commit')
+        return new Map(result.rows.map((row) => [String(row.name), String(row.id)]))
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async upsertProductsByCode(input) {
+      if (input.rows.length === 0) return { created: 0, updated: 0, skipped: 0 }
+
+      await ensureProductCatalogSchema(pool)
+      await ensureProductUnitTables(pool)
+      let created = 0
+      let updated = 0
+      await pool.query('begin')
+      try {
+        for (const row of input.rows) {
+          const result = await pool.query(
+            `
+              insert into products (
+                id, organization_id, code, name, status, product_group_id, unit_name,
+                sell_method, product_kind, inventory_shape, track_inventory,
+                latest_purchase_cost, latest_purchase_cost_at, created_at, updated_at
+              )
+              values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, case when $12::numeric is null then null else now() end, coalesce($13::timestamptz, now()), now())
+              on conflict (organization_id, code)
+              do update set
+                name = excluded.name,
+                status = excluded.status,
+                product_group_id = excluded.product_group_id,
+                unit_name = excluded.unit_name,
+                sell_method = excluded.sell_method,
+                product_kind = excluded.product_kind,
+                inventory_shape = excluded.inventory_shape,
+                track_inventory = excluded.track_inventory,
+                latest_purchase_cost = excluded.latest_purchase_cost,
+                latest_purchase_cost_at = case
+                  when excluded.latest_purchase_cost is distinct from products.latest_purchase_cost then now()
+                  else products.latest_purchase_cost_at
+                end,
+                created_at = coalesce(excluded.created_at, products.created_at),
+                updated_at = now()
+              returning id::text, (xmax = 0) as inserted
+            `,
+            [
+              randomUUID(),
+              input.organizationId,
+              row.code,
+              row.name,
+              row.status,
+              row.product_group_id,
+              row.unit_name,
+              row.sell_method,
+              row.product_kind,
+              row.inventory_shape,
+              row.track_inventory,
+              row.latest_purchase_cost,
+              row.source_created_at,
+            ],
+          )
+          const productId = String(result.rows[0]?.id)
+          if (result.rows[0]?.inserted) created += 1
+          else updated += 1
+          const stockUnitId = await upsertInventoryUnit(pool, input.organizationId, row.unit_name)
+          await upsertProductInventorySettings(pool, input.organizationId, productId, row, stockUnitId)
+          await upsertProductUnitConversions(pool, input.organizationId, productId, stockUnitId, row.unit_conversions)
+        }
+        await pool.query('commit')
+        return { created, updated, skipped: 0 }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async upsertDefaultPriceListItems(input) {
+      if (input.rows.length === 0) return { created: 0, updated: 0, skipped: 0 }
+
+      await ensureProductCatalogSchema(pool)
+      await ensurePriceListTables(pool)
+      let created = 0
+      let updated = 0
+      let skipped = 0
+      await pool.query('begin')
+      try {
+        for (const row of input.rows) {
+          const product = await pool.query(
+            `
+              select id
+              from products
+              where organization_id = $1
+                and code = $2
+              limit 1
+            `,
+            [input.organizationId, row.product_code],
+          )
+          const productId = product.rows[0]?.id
+          if (!productId) {
+            skipped += 1
+            continue
+          }
+          const result = await pool.query(
+            `
+              insert into price_list_items (id, organization_id, price_list_id, product_id, unit_price, created_at, updated_at)
+              values ($1, $2, $3::uuid, $4, $5, now(), now())
+              on conflict (price_list_id, product_id)
+              do update set
+                unit_price = excluded.unit_price,
+                updated_at = now()
+              returning (xmax = 0) as inserted
+            `,
+            [randomUUID(), input.organizationId, input.priceListId, productId, row.unit_price],
+          )
+          if (result.rows[0]?.inserted) created += 1
+          else updated += 1
+        }
+        await pool.query('commit')
+        return { created, updated, skipped }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async upsertProvisionalStockBalances(input) {
+      if (input.rows.length === 0) return { created: 0, updated: 0, skipped: 0 }
+
+      await ensureProductUnitTables(pool)
+      await ensureInventoryProvisionalBalancesTable(pool)
+      let created = 0
+      let updated = 0
+      let skipped = 0
+      await pool.query('begin')
+      try {
+        for (const row of input.rows) {
+          const product = await pool.query(
+            `
+              select id
+              from products
+              where organization_id = $1
+                and code = $2
+              limit 1
+            `,
+            [input.organizationId, row.product_code],
+          )
+          const productId = product.rows[0]?.id
+          if (!productId) {
+            skipped += 1
+            continue
+          }
+
+          const settings = await pool.query(
+            `
+              select stock_unit_id::text
+              from product_inventory_settings
+              where organization_id = $1
+                and product_id = $2
+              limit 1
+            `,
+            [input.organizationId, productId],
+          )
+          const stockUnitId = settings.rows[0]?.stock_unit_id ?? await upsertInventoryUnit(pool, input.organizationId, row.unit_name)
+          const result = await pool.query(
+            `
+              insert into inventory_provisional_balances (
+                id, organization_id, product_id, source_type, source_label,
+                initial_qty, remaining_qty, stock_unit_id, status, note, created_at, updated_at
+              )
+              values ($1, $2, $3, 'kiotviet_import', $4, $5, $5, $6, $7, $8, now(), now())
+              on conflict (organization_id, product_id, source_type)
+              do update set
+                source_label = excluded.source_label,
+                initial_qty = excluded.initial_qty,
+                remaining_qty = excluded.remaining_qty,
+                stock_unit_id = excluded.stock_unit_id,
+                status = excluded.status,
+                note = excluded.note,
+                updated_at = now()
+              returning (xmax = 0) as inserted
+            `,
+            [
+              randomUUID(),
+              input.organizationId,
+              productId,
+              row.source_label,
+              row.quantity,
+              stockUnitId,
+              row.quantity > 0 ? 'open' : 'closed',
+              'Imported from KiotViet product export. Provisional until stock is normalized.',
+            ],
+          )
+          if (result.rows[0]?.inserted) created += 1
+          else updated += 1
+        }
+        await pool.query('commit')
+        return { created, updated, skipped }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async upsertDraftProductBoms(input) {
+      if (input.rows.length === 0) return { created: 0, updated: 0, skipped: 0 }
+
+      await ensureProductBomTables(pool)
+      let created = 0
+      let updated = 0
+      let skipped = 0
+      await pool.query('begin')
+      try {
+        for (const row of input.rows) {
+          const productId = await findProductIdByCode(pool, input.organizationId, row.product_code)
+          if (!productId) {
+            skipped += 1
+            continue
+          }
+          const componentIds: Array<{ id: string; quantity: number; sortOrder: number; code: string }> = []
+          let missingComponent = false
+          for (const [index, component] of row.components.entries()) {
+            const componentId = await findProductIdByCode(pool, input.organizationId, component.component_code)
+            if (!componentId) {
+              missingComponent = true
+              break
+            }
+            componentIds.push({ id: componentId, quantity: component.quantity, sortOrder: index + 1, code: component.component_code })
+          }
+          if (missingComponent || componentIds.length === 0) {
+            skipped += 1
+            continue
+          }
+
+          const hadDraft = await pool.query(
+            `
+              select id
+              from product_boms
+              where organization_id = $1
+                and product_id = $2
+                and status = 'draft'
+                and notes like 'Imported from KiotViet%'
+              limit 1
+            `,
+            [input.organizationId, productId],
+          )
+          await pool.query(
+            `
+              update product_boms
+              set status = 'archived'
+              where organization_id = $1
+                and product_id = $2
+                and status = 'draft'
+                and notes like 'Imported from KiotViet%'
+            `,
+            [input.organizationId, productId],
+          )
+          const version = await pool.query(
+            `
+              select coalesce(max(version), 0) + 1 as next_version
+              from product_boms
+              where organization_id = $1
+                and product_id = $2
+            `,
+            [input.organizationId, productId],
+          )
+          const bom = await pool.query(
+            `
+              insert into product_boms (id, organization_id, product_id, version, status, notes, created_at)
+              values ($1, $2, $3, $4, 'draft', $5, now())
+              returning id::text, (xmax = 0) as inserted
+            `,
+            [
+              randomUUID(),
+              input.organizationId,
+              productId,
+              Number(version.rows[0]?.next_version ?? 1),
+              `${row.note} Source: ${row.source_text}`,
+            ],
+          )
+          const bomId = String(bom.rows[0]?.id)
+          for (const component of componentIds) {
+            await pool.query(
+              `
+                insert into product_bom_items (
+                  id, organization_id, bom_id, component_product_id, quantity,
+                  calculation_payload, sort_order, notes
+                )
+                values ($1, $2, $3, $4, $5, '{}'::jsonb, $6, $7)
+              `,
+              [randomUUID(), input.organizationId, bomId, component.id, component.quantity, component.sortOrder, `KiotViet component ${component.code}`],
+            )
+          }
+          if (hadDraft.rows.length > 0) updated += 1
+          else created += 1
+        }
+        await pool.query('commit')
+        return { created, updated, skipped }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async upsertImportedKiotVietStocktakes(input) {
+      if (input.rows.length === 0) {
+        return {
+          stocktakes_created: 0,
+          stocktakes_updated: 0,
+          items_created: 0,
+          items_updated: 0,
+          missing_product_rows: 0,
+        }
+      }
+
+      await ensureImportedStocktakeTables(pool)
+      let stocktakesCreated = 0
+      let stocktakesUpdated = 0
+      let itemsCreated = 0
+      let itemsUpdated = 0
+      let missingProductRows = 0
+      const rowsBySourceCode = new Map<string, typeof input.rows>()
+      for (const row of input.rows) {
+        const groupedRows = rowsBySourceCode.get(row.source_code) ?? []
+        groupedRows.push(row)
+        rowsBySourceCode.set(row.source_code, groupedRows)
+      }
+
+      await pool.query('begin')
+      try {
+        for (const [sourceCode, rows] of rowsBySourceCode) {
+          const firstRow = rows[0]
+          const status = importedStocktakeStatus(firstRow.status)
+          const note = importedStocktakeNote(rows)
+          const stocktake = await pool.query(
+            `
+              insert into stocktakes (
+                id, organization_id, source_system, source_code, code, status, source_type,
+                source_created_at, source_balanced_at, note, balanced_at, created_by,
+                created_at, updated_at
+              )
+              values ($1, $2, $3, $4, $4, $5, 'kiotviet_import', $6, $7, $8, $9, null, coalesce($6::timestamptz, now()), now())
+              on conflict (organization_id, source_system, source_code)
+              where source_system is not null and source_code is not null
+              do update set
+                status = excluded.status,
+                source_created_at = excluded.source_created_at,
+                source_balanced_at = excluded.source_balanced_at,
+                note = excluded.note,
+                balanced_at = excluded.balanced_at,
+                updated_at = now()
+              returning id::text, (xmax = 0) as inserted
+            `,
+            [
+              randomUUID(),
+              input.organizationId,
+              'kiotviet',
+              sourceCode,
+              status,
+              firstRow.source_created_at,
+              firstRow.source_balanced_at,
+              note,
+              status === 'balanced' ? firstRow.source_balanced_at : null,
+            ],
+          )
+          const stocktakeId = String(stocktake.rows[0]?.id)
+          if (stocktake.rows[0]?.inserted) stocktakesCreated += 1
+          else stocktakesUpdated += 1
+
+          for (const row of rows) {
+            const productId = await findProductIdByCode(pool, input.organizationId, row.product_code)
+            if (!productId) missingProductRows += 1
+            const item = await pool.query(
+              `
+                insert into stocktake_items (
+                  id, organization_id, stocktake_id, line_no, product_id, stock_unit_id,
+                  system_qty, actual_qty, difference_qty, note, source_row_number,
+                  source_product_code, source_product_name, source_unit_name,
+                  line_actual_value, line_difference_value, created_at
+                )
+                values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $4, $11, $12, $13, $14, $15, now())
+                on conflict (stocktake_id, source_row_number)
+                where source_row_number is not null
+                do update set
+                  line_no = excluded.line_no,
+                  product_id = excluded.product_id,
+                  stock_unit_id = excluded.stock_unit_id,
+                  system_qty = excluded.system_qty,
+                  actual_qty = excluded.actual_qty,
+                  difference_qty = excluded.difference_qty,
+                  note = excluded.note,
+                  source_product_code = excluded.source_product_code,
+                  source_product_name = excluded.source_product_name,
+                  source_unit_name = excluded.source_unit_name,
+                  line_actual_value = excluded.line_actual_value,
+                  line_difference_value = excluded.line_difference_value
+                returning (xmax = 0) as inserted
+              `,
+              [
+                randomUUID(),
+                input.organizationId,
+                stocktakeId,
+                row.rowNumber,
+                productId,
+                null,
+                row.system_qty,
+                row.actual_qty,
+                row.difference_qty,
+                row.note,
+                row.product_code,
+                row.product_name,
+                row.unit_name,
+                row.total_actual_value,
+                row.line_difference_value,
+              ],
+            )
+            if (item.rows[0]?.inserted) itemsCreated += 1
+            else itemsUpdated += 1
+          }
+        }
+        await pool.query('commit')
+        return {
+          stocktakes_created: stocktakesCreated,
+          stocktakes_updated: stocktakesUpdated,
+          items_created: itemsCreated,
+          items_updated: itemsUpdated,
+          missing_product_rows: missingProductRows,
+        }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async deleteDemoStocktakesForImport(input) {
+      await ensureImportedStocktakeTables(pool)
+      const result = await pool.query(
+        `
+          delete from stocktakes
+          where organization_id = $1
+            and source_system = 'kiotviet'
+            and source_code = any($2::text[])
+        `,
+        [input.organizationId, ['KK-JULY', 'KK-JUNE', 'KK-DEMO']],
+      )
+      return { deleted: result.rowCount ?? 0, blocked: 0 }
+    },
+
+    async deleteImportedKiotVietStocktakes(input) {
+      await ensureImportedStocktakeTables(pool)
+      await pool.query(
+        `
+          delete from stocktake_items
+          where organization_id = $1
+            and stocktake_id in (
+              select id
+              from stocktakes
+              where organization_id = $1
+                and (
+                  source_type = 'kiotviet_import'
+                  or source_system = 'kiotviet'
+                )
+            )
+        `,
+        [input.organizationId],
+      )
+      const result = await pool.query(
+        `
+          delete from stocktakes
+          where organization_id = $1
+            and (
+              source_type = 'kiotviet_import'
+              or source_system = 'kiotviet'
+            )
+        `,
+        [input.organizationId],
+      )
+      return { deleted: result.rowCount ?? 0, blocked: 0 }
+    },
+
+    async listStocktakes(input) {
+      await ensureImportedStocktakeTables(pool)
+      const search = input.url.searchParams.get('search')?.trim() ?? ''
+      const status = input.url.searchParams.get('status')
+      const from = input.url.searchParams.get('from')
+      const to = input.url.searchParams.get('to')
+      const clauses = ['st.organization_id = $1']
+      const values: unknown[] = [input.organizationId]
+
+      if (status === '__none__') {
+        clauses.push('false')
+      } else if (status) {
+        const statuses = status.split(',').map((item) => item.trim()).filter(Boolean)
+        if (statuses.length > 0) {
+          values.push(statuses)
+          clauses.push(`st.status = any($${values.length}::text[])`)
+        }
+      }
+      if (from) {
+        values.push(from)
+        clauses.push(`coalesce(st.source_created_at, st.created_at) >= $${values.length}::date`)
+      }
+      if (to) {
+        values.push(to)
+        clauses.push(`coalesce(st.source_created_at, st.created_at) < ($${values.length}::date + interval '1 day')`)
+      }
+      if (search) {
+        values.push(`%${search}%`)
+        clauses.push(`(st.code ilike $${values.length} or coalesce(st.note, '') ilike $${values.length})`)
+      }
+
+      const result = await pool.query(
+        `
+          select
+            st.id::text,
+            st.code,
+            st.status,
+            st.source_type,
+            coalesce(st.source_created_at, st.created_at) as created_at,
+            coalesce(st.source_balanced_at, st.balanced_at) as balanced_at,
+            coalesce(sum(sti.actual_qty), 0) as total_actual_qty,
+            case
+              when count(sti.line_actual_value) = 0 then null
+              else sum(sti.line_actual_value)
+            end as total_actual_value,
+            case
+              when count(sti.line_difference_value) = 0 then null
+              else sum(sti.line_difference_value)
+            end as total_difference_value,
+            coalesce(sum(greatest(sti.difference_qty, 0)), 0) as increased_qty,
+            abs(coalesce(sum(least(sti.difference_qty, 0)), 0)) as decreased_qty,
+            st.note
+          from stocktakes st
+          left join stocktake_items sti on sti.organization_id = st.organization_id and sti.stocktake_id = st.id
+          where ${clauses.join(' and ')}
+          group by st.id, st.code, st.status, st.source_type, st.source_created_at, st.created_at, st.source_balanced_at, st.balanced_at, st.note
+          order by coalesce(st.source_created_at, st.created_at) desc
+        `,
+        values,
+      )
+
+      return result.rows.map((row) => ({
+        id: String(row.id),
+        code: String(row.code),
+        status: row.status === 'draft' || row.status === 'cancelled' ? row.status : 'balanced',
+        source_type: row.source_type === 'kiotviet_import' || row.source_type === 'product_edit' ? row.source_type : 'manual',
+        created_at: row.created_at?.toISOString?.() ?? row.created_at,
+        balanced_at: row.balanced_at === null ? null : row.balanced_at?.toISOString?.() ?? row.balanced_at,
+        total_actual_qty: Number(row.total_actual_qty),
+        total_actual_value: row.total_actual_value === null ? null : Number(row.total_actual_value),
+        total_difference_value: row.total_difference_value === null ? null : Number(row.total_difference_value),
+        increased_qty: Number(row.increased_qty),
+        decreased_qty: Number(row.decreased_qty),
+        note: row.note === null ? null : String(row.note),
+      })) satisfies StocktakeListData[]
+    },
+
+    async deleteDemoProductsForImport(input) {
+      await ensureProductCatalogSchema(pool)
+      const candidates = await pool.query(
+        `
+          select id
+          from products
+          where organization_id = $1
+            and (
+              code like 'DEV20-SP-%'
+              or code in ('MICA-3MM', 'DECAL-PP', 'CUT-CNC')
+            )
+        `,
+        [input.organizationId],
+      )
+      const candidateIds = candidates.rows.map((row) => String(row.id))
+      if (candidateIds.length === 0) return { deleted: 0, blocked: 0 }
+
+      const referenced = new Set<string>()
+      for (const guard of productReferenceGuards) {
+        for (const productId of await referencedProductIds(pool, guard.table, guard.column, input.organizationId, candidateIds)) {
+          referenced.add(productId)
+        }
+      }
+      const deletable = candidateIds.filter((productId) => !referenced.has(productId))
+      if (deletable.length === 0) return { deleted: 0, blocked: referenced.size }
+
+      const result = await pool.query(
+        `
+          delete from products
+          where organization_id = $1
+            and id = any($2::uuid[])
+        `,
+        [input.organizationId, deletable],
+      )
+      return { deleted: result.rowCount ?? 0, blocked: referenced.size }
+    },
+
+    async deleteImportedKiotVietProducts(input) {
+      await ensureProductCatalogSchema(pool)
+      await ensureProductUnitTables(pool)
+      await ensureInventoryProvisionalBalancesTable(pool)
+      await ensureProductBomTables(pool)
+
+      await pool.query('begin')
+      try {
+        await pool.query(
+          `
+            delete from inventory_provisional_balances
+            where organization_id = $1
+              and source_type = 'kiotviet_import'
+          `,
+          [input.organizationId],
+        )
+        await pool.query(
+          `
+            delete from product_boms
+            where organization_id = $1
+              and notes like 'Imported from KiotViet%'
+          `,
+          [input.organizationId],
+        )
+        const candidates = await pool.query(
+          `
+            select id
+            from products
+            where organization_id = $1
+          `,
+          [input.organizationId],
+        )
+        const candidateIds = candidates.rows.map((row) => String(row.id))
+        if (candidateIds.length === 0) {
+          await pool.query('commit')
+          return { deleted: 0, blocked: 0 }
+        }
+
+        await deleteOptionalImportRows(
+          pool,
+          `
+            delete from price_list_items
+            where organization_id = $1
+              and product_id = any($2::uuid[])
+          `,
+          [input.organizationId, candidateIds],
+        )
+
+        const guards = productReferenceGuards.filter((guard) => guard.table !== 'price_list_items' && guard.table !== 'product_boms')
+        const referenced = new Set<string>()
+        for (const guard of guards) {
+          for (const productId of await referencedProductIds(pool, guard.table, guard.column, input.organizationId, candidateIds, {
+            inTransaction: true,
+          })) {
+            referenced.add(productId)
+          }
+        }
+        const deletable = candidateIds.filter((productId) => !referenced.has(productId))
+        if (deletable.length === 0) {
+          await pool.query('commit')
+          return { deleted: 0, blocked: referenced.size }
+        }
+
+        const result = await pool.query(
+          `
+            delete from products
+            where organization_id = $1
+              and id = any($2::uuid[])
+          `,
+          [input.organizationId, deletable],
+        )
+        await pool.query('commit')
+        return { deleted: result.rowCount ?? 0, blocked: referenced.size }
       } catch (error) {
         await pool.query('rollback')
         throw error
@@ -547,6 +1528,479 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
   }
 }
 
+type ProductImportDbRow = Parameters<NonNullable<ServerRepository['upsertProductsByCode']>>[0]['rows'][number]
+
+function dbDateText(value: unknown) {
+  if (value === null || value === undefined) return null
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object' && 'toISOString' in value && typeof value.toISOString === 'function') {
+    return value.toISOString()
+  }
+  return String(value)
+}
+
+async function ensureProductCatalogSchema(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists product_groups (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      is_default boolean not null default false,
+      is_active boolean not null default true,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, code)
+    )
+  `)
+  await pool.query('create index if not exists idx_product_groups_org_active on product_groups (organization_id, is_active)')
+  await pool.query(`
+    create table if not exists products (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      status text not null default 'active',
+      unit_name text not null default 'Can cap nhat',
+      sell_method text not null default 'quantity',
+      product_kind text not null default 'goods',
+      product_group_id uuid references product_groups(id),
+      inventory_shape text not null default 'normal',
+      track_inventory boolean not null default true,
+      latest_purchase_cost numeric(18,2),
+      latest_purchase_cost_at timestamptz,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, code)
+    )
+  `)
+  await pool.query('alter table products add column if not exists product_group_id uuid references product_groups(id)')
+  await pool.query("alter table products add column if not exists sell_method text not null default 'quantity'")
+  await pool.query("alter table products add column if not exists product_kind text not null default 'goods'")
+  await pool.query("alter table products add column if not exists inventory_shape text not null default 'normal'")
+  await pool.query('alter table products add column if not exists track_inventory boolean not null default true')
+  await pool.query('alter table products add column if not exists latest_purchase_cost numeric(18,2)')
+  await pool.query('alter table products add column if not exists latest_purchase_cost_at timestamptz')
+  await pool.query('create index if not exists idx_products_org_group on products (organization_id, product_group_id)')
+  await pool.query('create index if not exists idx_products_org_inventory_shape on products (organization_id, inventory_shape)')
+  await pool.query('create index if not exists idx_products_org_product_kind on products (organization_id, product_kind)')
+  await pool.query('create index if not exists idx_products_org_status on products (organization_id, status)')
+  await pool.query('create index if not exists idx_products_org_updated on products (organization_id, updated_at desc, created_at desc)')
+}
+
+async function ensureProductUnitTables(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists inventory_units (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      unit_kind text not null default 'quantity' check (unit_kind in ('quantity', 'length', 'area', 'weight', 'volume', 'package')),
+      decimal_precision integer not null default 3 check (decimal_precision between 0 and 6),
+      is_active boolean not null default true,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, code)
+    )
+  `)
+  await pool.query('create index if not exists idx_inventory_units_org_active on inventory_units (organization_id, is_active)')
+  await pool.query('create index if not exists idx_inventory_units_org_kind on inventory_units (organization_id, unit_kind)')
+  await pool.query(`
+    create table if not exists product_inventory_settings (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id uuid not null references products(id) on delete cascade,
+      track_inventory boolean not null default true,
+      inventory_shape text not null default 'normal' check (inventory_shape in ('normal', 'roll', 'sheet')),
+      stock_unit_id uuid not null references inventory_units(id),
+      default_allow_negative boolean not null default true,
+      roll_default_margin_width_m numeric(12,3),
+      roll_default_margin_length_m numeric(12,3),
+      roll_allow_rotate boolean,
+      sheet_width_m numeric(12,3),
+      sheet_length_m numeric(12,3),
+      sheet_default_cut_margin_m numeric(12,3),
+      sheet_remnant_min_area_m2 numeric(12,3) not null default 0.300,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, product_id)
+    )
+  `)
+  await pool.query('create index if not exists idx_product_inventory_settings_org_shape on product_inventory_settings (organization_id, inventory_shape)')
+  await pool.query('create index if not exists idx_product_inventory_settings_stock_unit on product_inventory_settings (organization_id, stock_unit_id)')
+  await pool.query(`
+    create table if not exists product_unit_conversions (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id uuid not null references products(id) on delete cascade,
+      sale_unit_id uuid not null references inventory_units(id),
+      stock_unit_id uuid not null references inventory_units(id),
+      stock_qty_per_sale_unit numeric(18,6) not null check (stock_qty_per_sale_unit > 0),
+      is_default_purchase_unit boolean not null default false,
+      is_default_sale_unit boolean not null default false,
+      is_active boolean not null default true,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, product_id, sale_unit_id)
+    )
+  `)
+  await pool.query('create index if not exists idx_product_unit_conversions_product on product_unit_conversions (organization_id, product_id, is_active)')
+}
+
+async function ensurePriceListTables(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists price_lists (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      is_default boolean not null default false,
+      is_active boolean not null default true,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, code)
+    )
+  `)
+  await pool.query('create index if not exists idx_price_lists_org_default on price_lists (organization_id, is_default, is_active)')
+  await pool.query(`
+    create table if not exists price_list_items (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      price_list_id uuid not null references price_lists(id) on delete cascade,
+      product_id uuid not null references products(id) on delete cascade,
+      unit_price numeric(18,2) not null check (unit_price >= 0),
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `)
+  await pool.query('create unique index if not exists price_list_items_price_product_uidx on price_list_items (price_list_id, product_id)')
+  await pool.query('create index if not exists idx_price_list_items_org_product on price_list_items (organization_id, product_id)')
+}
+
+async function upsertInventoryUnit(pool: pg.Pool, organizationId: string, unitName: string) {
+  const name = unitName.trim() || 'Can cap nhat'
+  const result = await pool.query(
+    `
+      insert into inventory_units (id, organization_id, code, name, unit_kind, decimal_precision, is_active, created_at, updated_at)
+      values ($1, $2, $3, $4, $5, 3, true, now(), now())
+      on conflict (organization_id, code)
+      do update set
+        name = excluded.name,
+        unit_kind = excluded.unit_kind,
+        is_active = true,
+        updated_at = now()
+      returning id::text
+    `,
+    [randomUUID(), organizationId, inventoryUnitCode(name), name, inventoryUnitKind(name)],
+  )
+  return String(result.rows[0].id)
+}
+
+async function upsertProductInventorySettings(
+  pool: pg.Pool,
+  organizationId: string,
+  productId: string,
+  row: ProductImportDbRow,
+  stockUnitId: string,
+) {
+  await pool.query(
+    `
+      insert into product_inventory_settings (
+        id, organization_id, product_id, track_inventory, inventory_shape,
+        stock_unit_id, default_allow_negative, created_at, updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, true, now(), now())
+      on conflict (organization_id, product_id)
+      do update set
+        track_inventory = excluded.track_inventory,
+        inventory_shape = excluded.inventory_shape,
+        stock_unit_id = excluded.stock_unit_id,
+        updated_at = now()
+    `,
+    [randomUUID(), organizationId, productId, row.track_inventory, row.inventory_shape, stockUnitId],
+  )
+}
+
+async function upsertProductUnitConversions(
+  pool: pg.Pool,
+  organizationId: string,
+  productId: string,
+  stockUnitId: string,
+  conversions: ProductImportDbRow['unit_conversions'],
+) {
+  const activeSaleUnitIds: string[] = []
+  for (const conversion of conversions) {
+    if (conversion.stock_qty_per_unit <= 0) continue
+    const saleUnitId = await upsertInventoryUnit(pool, organizationId, conversion.unit_name)
+    activeSaleUnitIds.push(saleUnitId)
+    await pool.query(
+      `
+        insert into product_unit_conversions (
+          id, organization_id, product_id, sale_unit_id, stock_unit_id,
+          stock_qty_per_sale_unit, is_default_purchase_unit, is_default_sale_unit,
+          is_active, created_at, updated_at
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8, true, now(), now())
+        on conflict (organization_id, product_id, sale_unit_id)
+        do update set
+          stock_unit_id = excluded.stock_unit_id,
+          stock_qty_per_sale_unit = excluded.stock_qty_per_sale_unit,
+          is_default_purchase_unit = excluded.is_default_purchase_unit,
+          is_default_sale_unit = excluded.is_default_sale_unit,
+          is_active = true,
+          updated_at = now()
+      `,
+      [
+        randomUUID(),
+        organizationId,
+        productId,
+        saleUnitId,
+        stockUnitId,
+        conversion.stock_qty_per_unit,
+        conversion.is_default_purchase_unit,
+        conversion.is_default_sale_unit,
+      ],
+    )
+  }
+
+  await pool.query(
+    `
+      update product_unit_conversions
+      set is_active = false, updated_at = now()
+      where organization_id = $1
+        and product_id = $2
+        and not (sale_unit_id = any($3::uuid[]))
+    `,
+    [organizationId, productId, activeSaleUnitIds],
+  )
+}
+
+async function ensureInventoryProvisionalBalancesTable(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists inventory_provisional_balances (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id uuid not null references products(id) on delete cascade,
+      source_type text not null check (source_type in ('kiotviet_import')),
+      source_label text,
+      initial_qty numeric(18,6) not null check (initial_qty >= 0),
+      remaining_qty numeric(18,6) not null check (remaining_qty >= 0),
+      stock_unit_id uuid not null references inventory_units(id),
+      status text not null check (status in ('open', 'fully_normalized', 'closed')),
+      note text,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, product_id, source_type)
+    )
+  `)
+  await pool.query('alter table inventory_provisional_balances add column if not exists source_label text')
+  await pool.query('alter table inventory_provisional_balances add column if not exists initial_qty numeric(18,6)')
+  await pool.query('alter table inventory_provisional_balances add column if not exists remaining_qty numeric(18,6)')
+  await pool.query('alter table inventory_provisional_balances add column if not exists stock_unit_id uuid')
+  await pool.query('alter table inventory_provisional_balances add column if not exists status text')
+  await pool.query('alter table inventory_provisional_balances add column if not exists note text')
+  await pool.query('alter table inventory_provisional_balances add column if not exists created_at timestamptz not null default now()')
+  await pool.query('alter table inventory_provisional_balances add column if not exists updated_at timestamptz not null default now()')
+  await pool.query(`
+    create unique index if not exists inventory_provisional_balances_org_product_source_uidx
+    on inventory_provisional_balances (organization_id, product_id, source_type)
+  `)
+  await pool.query('create index if not exists idx_inventory_provisional_balances_product on inventory_provisional_balances (organization_id, product_id, status)')
+}
+
+async function ensureImportedStocktakeTables(pool: pg.Pool) {
+  await ensureProductUnitTables(pool)
+  await pool.query(`
+    create table if not exists stocktakes (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      status text not null check (status in ('draft', 'balanced', 'cancelled')),
+      source_type text not null check (source_type in ('manual', 'product_edit', 'kiotviet_import')),
+      source_system text,
+      source_code text,
+      source_created_at timestamptz,
+      source_balanced_at timestamptz,
+      note text,
+      balanced_at timestamptz,
+      created_by uuid null,
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, code)
+    )
+  `)
+  await pool.query('alter table stocktakes add column if not exists source_system text')
+  await pool.query('alter table stocktakes add column if not exists source_code text')
+  await pool.query('alter table stocktakes add column if not exists source_created_at timestamptz')
+  await pool.query('alter table stocktakes add column if not exists source_balanced_at timestamptz')
+  await pool.query('alter table stocktakes add column if not exists created_by uuid null')
+  await pool.query('alter table stocktakes alter column created_by drop not null')
+  await relaxCheckConstraint(pool, 'stocktakes', 'source_type', ['manual', 'product_edit', 'kiotviet_import'])
+  await pool.query(`
+    create unique index if not exists stocktakes_org_source_system_code_uidx
+    on stocktakes (organization_id, source_system, source_code)
+    where source_system is not null and source_code is not null
+  `)
+  await pool.query('create index if not exists idx_stocktakes_org_status_created on stocktakes (organization_id, status, created_at desc)')
+  await pool.query('create index if not exists idx_stocktakes_org_source on stocktakes (organization_id, source_system, source_code)')
+
+  await pool.query(`
+    create table if not exists stocktake_items (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      stocktake_id uuid not null references stocktakes(id) on delete cascade,
+      line_no integer not null,
+      product_id uuid null references products(id),
+      stock_unit_id uuid null references inventory_units(id),
+      system_qty numeric(18,6),
+      actual_qty numeric(18,6),
+      difference_qty numeric(18,6),
+      inventory_object_type text,
+      inventory_roll_id uuid,
+      inventory_sheet_id uuid,
+      note text,
+      source_row_number integer,
+      source_product_code text,
+      source_product_name text,
+      source_unit_name text,
+      line_difference_value numeric(18,2),
+      line_actual_value numeric(18,2),
+      created_at timestamptz not null default now(),
+      unique (stocktake_id, line_no)
+    )
+  `)
+  await pool.query('alter table stocktake_items alter column product_id drop not null')
+  await pool.query('alter table stocktake_items alter column stock_unit_id drop not null')
+  await pool.query('alter table stocktake_items alter column system_qty drop not null')
+  await pool.query('alter table stocktake_items alter column actual_qty drop not null')
+  await pool.query('alter table stocktake_items alter column difference_qty drop not null')
+  await pool.query('alter table stocktake_items add column if not exists source_row_number integer')
+  await pool.query('alter table stocktake_items add column if not exists source_product_code text')
+  await pool.query('alter table stocktake_items add column if not exists source_product_name text')
+  await pool.query('alter table stocktake_items add column if not exists source_unit_name text')
+  await pool.query('alter table stocktake_items add column if not exists line_actual_value numeric(18,2)')
+  await pool.query('alter table stocktake_items add column if not exists line_difference_value numeric(18,2)')
+  await pool.query('alter table stocktake_items add column if not exists inventory_object_type text')
+  await pool.query('alter table stocktake_items add column if not exists inventory_roll_id uuid')
+  await pool.query('alter table stocktake_items add column if not exists inventory_sheet_id uuid')
+  await pool.query('alter table stocktake_items add column if not exists updated_at timestamptz not null default now()')
+  await pool.query(`
+    create unique index if not exists stocktake_items_stocktake_source_row_uidx
+    on stocktake_items (stocktake_id, source_row_number)
+    where source_row_number is not null
+  `)
+  await pool.query('create index if not exists idx_stocktake_items_stocktake on stocktake_items (organization_id, stocktake_id, line_no)')
+  await pool.query('create index if not exists idx_stocktake_items_product on stocktake_items (organization_id, product_id)')
+}
+
+async function relaxCheckConstraint(pool: pg.Pool, tableName: string, columnName: string, allowedValues: string[]) {
+  const result = await pool.query(
+    `
+      select c.conname
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace
+      where n.nspname = current_schema()
+        and t.relname = $1
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) like '%' || $2 || '%'
+    `,
+    [tableName, columnName],
+  )
+  for (const row of result.rows) {
+    await pool.query(`alter table ${pgIdentifier(tableName)} drop constraint ${pgIdentifier(String(row.conname))}`)
+  }
+  const constraintName = `${tableName}_${columnName}_check`
+  const valueList = allowedValues.map(sqlStringLiteral).join(', ')
+  await pool.query(`alter table ${pgIdentifier(tableName)} add constraint ${pgIdentifier(constraintName)} check (${pgIdentifier(columnName)} in (${valueList}))`)
+}
+
+function importedStocktakeStatus(status: 'draft' | 'balanced' | 'cancelled' | 'unknown') {
+  return status === 'unknown' ? 'draft' : status
+}
+
+function importedStocktakeNote(rows: Array<{ note: string | null }>) {
+  return rows.find((row) => row.note?.trim())?.note?.trim() ?? 'Lịch sử kiểm kho KiotViet'
+}
+
+function pgIdentifier(value: string) {
+  return `"${value.replaceAll('"', '""')}"`
+}
+
+function sqlStringLiteral(value: string) {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+async function ensureProductBomTables(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists product_boms (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id uuid not null references products(id) on delete cascade,
+      version integer not null check (version > 0),
+      status text not null check (status in ('draft', 'active', 'archived')),
+      notes text,
+      created_at timestamptz not null default now(),
+      unique (organization_id, product_id, version)
+    )
+  `)
+  await pool.query('create index if not exists idx_product_boms_product_status on product_boms (organization_id, product_id, status)')
+  await pool.query(`
+    create table if not exists product_bom_items (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      bom_id uuid not null references product_boms(id) on delete cascade,
+      component_product_id uuid not null references products(id),
+      quantity numeric(18,6) not null check (quantity > 0),
+      calculation_payload jsonb not null default '{}'::jsonb,
+      sort_order integer not null default 1,
+      notes text
+    )
+  `)
+  await pool.query("alter table product_bom_items add column if not exists calculation_payload jsonb not null default '{}'::jsonb")
+  await pool.query('alter table product_bom_items add column if not exists sort_order integer not null default 1')
+  await pool.query('alter table product_bom_items add column if not exists notes text')
+  await pool.query('create index if not exists idx_product_bom_items_bom on product_bom_items (organization_id, bom_id, sort_order)')
+  await pool.query('create index if not exists idx_product_bom_items_component on product_bom_items (organization_id, component_product_id)')
+}
+
+async function findProductIdByCode(pool: pg.Pool, organizationId: string, productCode: string) {
+  const result = await pool.query(
+    `
+      select id::text
+      from products
+      where organization_id = $1
+        and code = $2
+      limit 1
+    `,
+    [organizationId, productCode],
+  )
+  return result.rows[0]?.id ? String(result.rows[0].id) : null
+}
+
+function inventoryUnitCode(unitName: string) {
+  const normalized = unitName
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/Đ/g, 'D')
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 32)
+  return `KV-${normalized || 'UNIT'}-${stableHash(unitName)}`
+}
+
+function inventoryUnitKind(unitName: string) {
+  const normalized = normalizeSearchText(unitName)
+  if (normalized === 'm' || normalized.includes('met')) return 'length'
+  if (normalized === 'm2' || normalized.includes('m2')) return 'area'
+  if (normalized.includes('kg') || normalized.includes('gram')) return 'weight'
+  if (normalized.includes('lit')) return 'volume'
+  if (normalized.includes('ram') || normalized.includes('cuon') || normalized.includes('bao') || normalized.includes('kho')) return 'package'
+  return 'quantity'
+}
+
 async function ensurePosProductUsageTable(pool: pg.Pool) {
   await pool.query(`
     create table if not exists pos_product_usage (
@@ -956,6 +2410,82 @@ function bankAccount(accountId?: string | null) {
     name: 'Vietcombank',
     account_type: 'bank',
   }
+}
+
+function productGroupImportCode(name: string) {
+  const normalized = name
+    .trim()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/Đ/g, 'D')
+    .replace(/[^A-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 24)
+  return `KV-${normalized || 'NHOM'}-${stableHash(name)}`
+}
+
+function stableHash(value: string) {
+  let hash = 0
+  for (const character of value) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+  }
+  return hash.toString(36).toUpperCase().padStart(6, '0')
+}
+
+async function referencedProductIds(
+  pool: pg.Pool,
+  table: (typeof productReferenceGuards)[number]['table'],
+  column: (typeof productReferenceGuards)[number]['column'],
+  organizationId: string,
+  productIds: string[],
+  options: { inTransaction?: boolean } = {},
+) {
+  const sql = `
+        select distinct ${column} as product_id
+        from ${table}
+        where organization_id = $1
+          and ${column} = any($2::uuid[])
+      `
+  try {
+    const result = options.inTransaction
+      ? await queryWithOptionalRelationSavepoint(pool, `guard_${table}_${column}`, sql, [organizationId, productIds])
+      : await pool.query(sql, [organizationId, productIds])
+    return result.rows.map((row) => String(row.product_id))
+  } catch (error) {
+    if (isMissingGuardRelationError(error)) return []
+    throw error
+  }
+}
+
+async function deleteOptionalImportRows(pool: pg.Pool, sql: string, values: unknown[]) {
+  try {
+    await queryWithOptionalRelationSavepoint(pool, 'delete_optional_import_rows', sql, values)
+  } catch (error) {
+    if (isMissingGuardRelationError(error)) return
+    throw error
+  }
+}
+
+async function queryWithOptionalRelationSavepoint(pool: pg.Pool, name: string, sql: string, values: unknown[]) {
+  const savepoint = `qcvl_optional_${name.replace(/[^a-zA-Z0-9_]/g, '_')}`
+  await pool.query(`savepoint ${savepoint}`)
+  try {
+    const result = await pool.query(sql, values)
+    await pool.query(`release savepoint ${savepoint}`)
+    return result
+  } catch (error) {
+    if (isMissingGuardRelationError(error)) {
+      await pool.query(`rollback to savepoint ${savepoint}`)
+      await pool.query(`release savepoint ${savepoint}`)
+    }
+    throw error
+  }
+}
+
+function isMissingGuardRelationError(error: unknown) {
+  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : ''
+  return code === '42P01' || code === '42703'
 }
 
 async function findWorkstation(pool: pg.Pool, organizationId: string, workstationId: string) {

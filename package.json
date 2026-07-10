@@ -19,6 +19,8 @@
     "smoke:nas": "node scripts/smoke-nas-ui.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:migrate:dry-run": "node scripts/db-migrate-dry-run.mjs",
+    "env:status": "node scripts/env-status.mjs",
+    "dev:seed-products": "node scripts/dev-seed-kiotviet-products.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
     "test": "vitest run src scripts/*.test.mjs tests/e2e/*.test.ts",

@@ -26,6 +26,17 @@ Export KiotViet file `DanhSachSanPham_KV07072026-121648-951.xlsx` dry-run ngày 
 - `646` dòng có tồn kho import được ghi nhận ở dry-run để phục vụ tồn tạm/soát dữ liệu.
 - Cột `Hàng thành phần` trong file này không có nội dung BOM đọc được, nên BOM import phải bổ sung nguồn định mức khác hoặc nhập/sửa trong UI `Vật tư cấu thành`.
 
+Export KiotViet file thật `DanhSachSanPham_KV09072026-215404-812.xlsx` được Owner cung cấp ngày `2026-07-09` có `657` dòng. Quyết định phạm vi sau khi đối chiếu file:
+
+- File có `517` sản phẩm chính và `140` dòng đơn vị quy đổi. Dòng có `Quy đổi` là đơn vị phụ của mã ở `Mã ĐVT Cơ bản`, không tạo sản phẩm riêng. Footer danh sách đi theo kiểu KV: `517 hàng hóa (657 mã hàng)`.
+- Cột `Đang kinh doanh` trong file thật có đủ giá trị: `1` là đang kinh doanh, `0` là ngừng kinh doanh. Parser phải giữ đúng cột khi gặp ô Excel tự đóng như `<c ... />`; nếu đọc lệch cột sẽ nhìn nhầm thành ô trống.
+- Không quản lý `Thương hiệu` trong QC-OMS. File có 49 dòng thương hiệu nhưng không đưa vào DB/filter/UI.
+- Cần quản lý `Tồn kho`; không quản lý `Tồn nhỏ nhất` và `Tồn lớn nhất`.
+- `Dự kiến hết hàng` làm sau khi import đủ dữ liệu thật. Logic phải dùng tồn kho và lịch sử sử dụng/bán hàng cũ để tính tốc độ tiêu thụ, không dùng cứng chuỗi KV như `15 ngày`.
+- Không thêm filter `Được bán trực tiếp` vì mô hình hiện tại chỉ bán trực tiếp; hàng `active` được xem là bán được.
+- Không quản lý `Vị trí`; cột này trong file đang trống.
+- `Nhà cung cấp` không lấy từ file hàng hóa này vì file không có cột NCC. Quan hệ hàng hóa - nhà cung cấp sẽ suy ra từ nhập hàng/phiếu nhập; một hàng có thể có nhiều nhà cung cấp.
+
 Áp dụng cho QC-OMS:
 
 - Giữ bộ lọc trạng thái để xem được hàng ngưng bán trong module Hàng hóa.
@@ -35,7 +46,7 @@ Export KiotViet file `DanhSachSanPham_KV07072026-121648-951.xlsx` dry-run ngày 
 - Nhiều đơn vị/quy đổi cần làm thật. File KV có `ĐVT`, `Mã ĐVT Cơ bản`, `Quy đổi`; đây là nền để mua một đơn vị nhưng bán/trừ kho theo đơn vị khác.
 - Không tạo field/module riêng cho thương hiệu hoặc kênh bán trong MVP.
 - Không đưa barcode/QR scan, tự động gợi ý thông tin hàng hóa, thuộc tính retail hoặc bảo hành/bảo trì vào MVP.
-- Nhà cung cấp chỉ đưa vào sau khi Purchase được chốt. Không làm vị trí kho trong scope hiện tại.
+- Nhà cung cấp chỉ đưa vào sau khi Purchase/phiếu nhập có dữ liệu thật. Quan hệ đúng là nhiều-nhiều giữa hàng hóa và nhà cung cấp, không dùng một `primary_supplier_id` duy nhất làm nguồn sự thật. Không làm vị trí kho trong scope hiện tại.
 - Tồn âm là dữ liệu thực tế nên danh sách/báo cáo cần hiển thị rõ để xử lý, không ẩn.
 - Cột `Vật tư cấu thành` xác nhận BOM/định mức là nghiệp vụ thật. QC-OMS hiện hỗ trợ nhập/sửa BOM cấp 1 khi tạo combo và trong chi tiết hàng hóa. Import script hiện import nhóm/hàng/đơn vị quy đổi qua public API và report BOM/tồn tạm trong dry-run; bulk import BOM/tồn tạm cần API riêng trước khi bật import thật cho phần này.
 
@@ -71,11 +82,13 @@ Màn này không thay thế POS bán hàng. Sản phẩm ngưng bán vẫn xem v
 | Bộ lọc | Hành vi |
 |---|---|
 | Tìm kiếm | Ô search dùng shared compact search, tìm bỏ dấu theo mã hàng/tên hàng. Khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm; dòng gợi ý gồm mã + tên hàng, nhóm/loại tồn, tồn hiện tại ở mép phải. Bấm gợi ý lọc danh sách theo đúng mã hàng. |
-| Loại hàng | Tất cả, hàng thường, dịch vụ, vật tư phụ, cuộn, tấm, combo. UI gửi `product_kind`; backend lưu ở `products.product_kind`. |
 | Nhóm hàng | Tất cả hoặc một nhóm hàng cụ thể. UI gửi `product_group_id`; nếu hàng chưa chọn nhóm thì backend gán nhóm mặc định `Giá chung`. |
+| Tồn kho | Tất cả, hàng thường, cuộn, tấm. UI gửi `inventory_shape`; backend lọc theo `products.inventory_shape`. Đây là filter kiểu tồn, không phải filter tồn nhỏ nhất/lớn nhất. |
+| Thời gian tạo | Mặc định `Toàn thời gian`. UI dùng control thời gian chung giống Hóa đơn/Kiểm kho: chọn nhanh theo ngày/tuần/tháng/quý/năm hoặc `Tùy chỉnh` từ ngày - đến ngày. Ô tùy chỉnh hiển thị `dd/MM/yyyy` như KV, ví dụ `31/07/2026`; frontend/service vẫn gửi `created_from` và `created_to` dạng `YYYY-MM-DD`; backend lọc theo `products.created_at`. |
+| Loại hàng | Tất cả, hàng thường, dịch vụ, vật tư phụ, cuộn, tấm, combo. UI gửi `product_kind`; backend lưu ở `products.product_kind`. |
 | Trạng thái hàng hóa | Đang kinh doanh, ngưng bán, tất cả |
 
-Sau MVP có thể bổ sung tồn kho, thời gian tạo, dự kiến hết hàng và nhà cung cấp. Không tạo bộ lọc thương hiệu/vị trí/kênh bán riêng trong MVP; nếu cần nhận diện thương hiệu thì ghi trong tên/mã/nhóm hàng.
+Sau import dữ liệu thật có thể bổ sung `Dự kiến hết hàng` bằng thuật toán tiêu thụ theo lịch sử. Sau khi Purchase đủ dữ liệu có thể bổ sung filter `Nhà cung cấp` lấy từ phiếu nhập. Không tạo bộ lọc thương hiệu/vị trí/kênh bán/bán trực tiếp riêng; nếu cần nhận diện thương hiệu thì ghi trong tên/mã/nhóm hàng.
 
 Không có bộ lọc barcode/thuộc tính retail/bảo hành trong MVP.
 
@@ -90,7 +103,7 @@ Không có bộ lọc barcode/thuộc tính retail/bảo hành trong MVP.
 | Mã hàng | Link mở chi tiết |
 | Tên hàng | Hiển thị tên hàng |
 | Giá vốn | Giá vốn gần nhất để tham khảo; giá bán nằm ở Bảng giá |
-| Giá bán | Hiện `Chưa có` cho tới khi nối Bảng giá/API giá bán mặc định |
+| Giá bán | Đọc từ `price_list_items` của bảng giá mặc định; hiện `Chưa có` nếu sản phẩm chưa có dòng giá |
 | Tồn kho | Hiện `Chưa có` cho tới khi nối tồn kho thật |
 | Đơn vị | Đơn vị bán/lưu chính |
 | Dự kiến hết hàng | Hiện `Chưa có`; cần logic tốc độ bán/tồn kho nên làm sau |
@@ -174,6 +187,57 @@ Nếu permission danh mục chưa rõ, tạo quyền riêng `perm.manage_product
 - Tab `Tồn kho` của hàng `roll`/`sheet` hiển thị bảng `Tồn theo cuộn tấm` gồm loại đối tượng, mã đối tượng, khổ rộng, chiều dài, diện tích và trạng thái.
 - Hàng `combo` không sửa tồn mã combo; bán combo trừ vật tư cấu thành theo BOM.
 - Hàng `service` không quản lý tồn.
+
+---
+
+## Import KiotViet nhiều lần
+
+Trang Hàng hóa có nút `Import` ở cụm thao tác phía phải của toolbar. Luồng chuẩn:
+
+1. Chọn file `.xlsx` xuất từ KiotViet.
+2. Bấm `Xem trước`.
+3. Kiểm tra tổng dòng, dòng hợp lệ, dòng lỗi, số tạo mới và số cập nhật.
+4. Nếu cần kiểm tra lại từ đầu, bấm nút riêng `Xóa dữ liệu cũ` trong dialog import. Nút này xóa dữ liệu import cũ của trang hiện tại trước, không nằm trong luồng `Xem trước`/`Import`.
+5. Chỉ bấm `Import` sau khi preview không còn dòng lỗi.
+
+Import dùng `Mã hàng` của dòng sản phẩm chính làm khóa upsert trong cùng organization. Dòng có `Quy đổi` và `Mã ĐVT Cơ bản` trỏ về mã cha là đơn vị quy đổi, không tạo sản phẩm riêng. Import lại nhiều lần cập nhật sản phẩm cũ theo mã, tạo sản phẩm mới khi mã chưa có, và không tự xóa sản phẩm vắng trong file mới.
+
+`Thời gian tạo` trong file KiotViet là ngày tạo sản phẩm gốc, không phải ngày import vào QCVL. File KV có thể trả ô này dạng số Excel serial như `46204.42164644676`; server import phải normalize thành ISO date và ghi vào `products.created_at`. Khi import lại cùng `Mã hàng`, nếu file có thời gian gốc hợp lệ thì QCVL cập nhật lại `products.created_at` để sửa các dòng cũ từng bị ghi theo thời điểm import. Bộ lọc `Thời gian tạo` chỉ đúng sau khi dữ liệu đã được import lại bằng rule này.
+
+Nếu trình duyệt không hỗ trợ giải nén `.xlsx` bằng `DecompressionStream`, frontend không tự parse file mà gửi `file_base64` lên API để server parse. Vì vậy lỗi không xem trước trong Codex/browser cũ không được xử lý bằng cách đổi server dev/prod; phải giữ fallback server-side parse.
+
+Phase hiện tại ghi: nhóm hàng, mã hàng, tên hàng, loại hàng, kiểu tồn kho, cách bán, đơn vị, giá vốn gần nhất, trạng thái kinh doanh, `Giá bán` vào bảng giá mặc định, và `Tồn kho` vào tồn tạm KiotViet.
+
+Nếu dòng thiếu `ĐVT`, import không chặn dòng đó. Hệ thống gán tạm `unit_name = Cần cập nhật`, preview báo số dòng cần sửa lại, và người dùng có thể vào chi tiết hàng hóa sửa đơn vị sau. Không dùng `NULL` cho đơn vị vì DB/POS cần giá trị hiển thị ổn định.
+
+Phase hiện tại chưa ghi: `Dự kiến hết hàng`. Phần này phải làm bằng luồng riêng có truy vết: dự báo theo lịch sử dùng hàng.
+
+`Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức` được parse thành BOM nháp trong `product_boms`/`product_bom_items`. BOM import từ KiotViet luôn để `status = draft` và ghi chú `Review before activating`; không tự kích hoạt để tránh POS trừ kho theo định mức cũ chưa rà soát.
+
+`Tồn kho` từ file KiotViet được lưu vào `inventory_provisional_balances` với `source_type = kiotviet_import`. Đây là tồn tạm để đối soát và khui/chuẩn hóa sau, không tự dựng cuộn/tấm vật lý và không thay thế `stock_movements`. Import lại cùng mã cập nhật tồn tạm của mã đó theo file mới nhất.
+
+Danh sách hàng hóa phải trả kèm metadata rà soát import. Tab `Tồn kho` hiển thị `Tồn tạm KiotViet`, số lượng và đơn vị từ `inventory_provisional_balances`, kèm trạng thái `Chưa phải tồn kho vận hành`. Tab `BOM/Vật tư cấu thành` hiển thị `BOM nháp KiotViet`, số vật tư và trạng thái `Cần rà soát trước khi kích hoạt`. Hai phần này chỉ là dữ liệu thật để kiểm tra sau import, không được dùng thay cho tồn kho/BOM active trong POS.
+
+Tab `Tồn kho` cũng hiển thị `Kiểm kho KiotViet gần nhất` nếu đã import file kiểm kho. Trường API là `latest_kiotviet_stocktake`, hydrate từ `stocktakes`/`stocktake_items` có `source_type = kiotviet_import` và `source_system = kiotviet`. Phần này chỉ là bằng chứng đối soát: hiển thị mã phiếu, ngày, số lượng thực tế, số lệch. Tuyệt đối không lấy `actual_qty` của phiếu kiểm kho để ghi đè `inventory_provisional_balances` hoặc tồn vận hành.
+
+`Giá bán` không lưu trong `products`. Import Hàng hóa chỉ là điểm nhập dữ liệu nhanh; backend phải ghi vào `price_list_items` của bảng giá mặc định và API danh sách hàng hóa trả `default_sale_price` để UI hiển thị.
+
+Các cột đã thống nhất bỏ qua: `Thương hiệu`, `Vị trí`, `Tồn nhỏ nhất`, `Tồn lớn nhất`, `Được bán trực tiếp`, ảnh, trọng lượng, mô tả dài và mẫu ghi chú.
+
+`Nhà cung cấp` không lấy từ file hàng hóa KiotViet. Sau này lấy từ phiếu nhập, vì một hàng có thể có nhiều nhà cung cấp.
+
+`Xóa dữ liệu cũ` thay thế checkbox xóa dữ liệu mẫu. Trên Hàng hóa, backend xóa dữ liệu phụ KiotViet (`inventory_provisional_balances.source_type = kiotviet_import`, BOM nháp KiotViet, giá import) và chỉ xóa sản phẩm nếu không còn tham chiếu nghiệp vụ thật. Nếu sản phẩm đang được hóa đơn/phiếu nhập/sổ kho/BOM thật dùng, backend phải trả `blocked_rows` để người dùng biết còn dữ liệu chưa thể xóa.
+
+---
+
+## Ghi chú triển khai 2026-07-10
+
+- Import KiotViet không chỉ hiển thị quy đổi ở UI. Backend phải ghi đơn vị tồn chính vào `inventory_units`, cấu hình tồn vào `product_inventory_settings`, đơn vị phụ vào `product_unit_conversions`, tồn tạm vào `inventory_provisional_balances`, và BOM nháp vào `product_boms`/`product_bom_items`.
+- `GET /api/v1/products` phải đọc `unit_conversions` từ `product_unit_conversions`; không được trả `[]` giả khi DB đã có dữ liệu.
+- `GET /api/v1/products` phải trả `kiotviet_provisional_stock`, `latest_kiotviet_stocktake` và `draft_bom` nếu có dữ liệu import cần rà soát. UI chỉ hiển thị ở tab chi tiết, không kích hoạt nghiệp vụ kho/POS.
+- Bộ lọc `Thời gian tạo` của Hàng hóa đã làm thật trên dev ngày `2026-07-10`: vỏ dùng class chung `management-filter-time-options`, `management-filter-quick-time-menu`, `management-filter-date-range`; ruột đi qua `CatalogPage.load` -> `catalog-service.ts` -> API `GET /products?created_from=&created_to=` -> repository lọc `products.created_at`.
+- Khi import lại cùng file, quy đổi hiện có được upsert theo `(organization_id, product_id, sale_unit_id)`. Quy đổi không còn trong file hiện tại của sản phẩm được chuyển `is_active = false`, không xóa cứng.
+- Footer danh sách giữ chuẩn KV theo filter hiện tại: `hàng hóa` là số sản phẩm chính, `(mã hàng)` là sản phẩm chính cộng đơn vị quy đổi active.
 
 ---
 

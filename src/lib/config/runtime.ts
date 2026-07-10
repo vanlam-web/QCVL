@@ -1,5 +1,5 @@
 const sharedServerHost = import.meta.env.VITE_SHARED_SERVER_HOST ?? '100.84.228.125'
-const fallbackApiBaseUrl = `http://${sharedServerHost}:3200`
+const fallbackApiBaseUrl = import.meta.env.DEV ? '' : `http://${sharedServerHost}:3200`
 
 export const runtimeConfig = {
   sharedServerHost,

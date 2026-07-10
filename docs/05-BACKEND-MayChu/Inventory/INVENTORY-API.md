@@ -94,6 +94,14 @@ TÃ¬m sáº£n pháº©m kÃ¨m thÃ´ng tin tá»“n kho tá»•ng há»£p.
    - `sheet`: tá»•ng tá»« `inventory_sheets.area_m2` cÃ²n `available`.
 4. Tráº£ danh sÃ¡ch kÃ¨m cáº£nh bÃ¡o tá»“n Ã¢m náº¿u cÃ³.
 
+**Catalog product-list import metadata:** `GET /api/v1/products` (màn Hàng hóa) phải trả thêm các trường rà soát import khi có dữ liệu:
+
+- `kiotviet_provisional_stock`: tồn tạm từ `inventory_provisional_balances`, lấy từ export Hàng hóa KiotViet.
+- `latest_kiotviet_stocktake`: phiếu kiểm kho KiotViet gần nhất từ `stocktakes`/`stocktake_items`, chỉ dùng làm bằng chứng đối soát.
+- `draft_bom`: BOM nháp import từ KiotViet.
+
+`latest_kiotviet_stocktake.actual_qty` không được dùng để cập nhật `inventory_provisional_balances`, tồn vận hành, hoặc tạo `stock_movements`.
+
 **Response data:**
 
 ```json
@@ -781,6 +789,75 @@ Query: `search`, `status`, `created_by`, `from`, `to`, `page`, `page_size`.
 ```
 
 CÃ¡c trÆ°á»ng giÃ¡ trá»‹ tá»•ng há»£p Ä‘Æ°á»£c hydrate tá»« `stocktake_items` vÃ  `products.latest_purchase_cost`. Náº¿u thiáº¿u giÃ¡ vá»‘n Ä‘á»ƒ tÃ­nh tiá»n, Backend tráº£ `null` cho `total_actual_value` hoáº·c `total_difference_value`; UI hiá»ƒn thá»‹ `ChÆ°a cÃ³`.
+
+### `POST /inventory/stocktakes/import/kiotviet/preview`
+
+Xem trước file chi tiết kiểm kho KiotViet trước khi import.
+
+**Permission:** `perm.manage_inventory`
+
+**Input:** gửi `rows` đã parse hoặc `file_base64` của file `DanhSachChiTietKiemKho_KV...xlsx`.
+
+**Response data:**
+
+```json
+{
+  "summary": {
+    "total_rows": 333,
+    "valid_rows": 333,
+    "invalid_rows": 0,
+    "stocktake_count": 333,
+    "product_code_count": 129,
+    "matched_product_count": 119,
+    "missing_product_count": 10,
+    "deleted_product_code_count": 10,
+    "formula_error_count": 0
+  },
+  "invalid_rows": [],
+  "missing_product_codes": ["SP001{DEL}"]
+}
+```
+
+Preview không ghi DB. Backend kiểm tra công thức `SL lệch = Kiểm thực tế - Tồn kho` với sai số nhỏ, map trạng thái KiotViet sang `draft`, `balanced`, `cancelled` hoặc `unknown`, và nhận diện mã hàng `{DEL}` là mã đã xóa/không còn khớp.
+
+### `POST /inventory/stocktakes/import/kiotviet`
+
+Import lịch sử kiểm kho KiotViet vào `stocktakes` và `stocktake_items`.
+
+**Permission:** `perm.manage_inventory`
+
+**Input:** giống preview, có thêm `allow_partial` nếu chủ động muốn bỏ qua dòng lỗi.
+
+**Rules:**
+
+- Upsert phiếu theo `(organization_id, source_system = 'kiotviet', source_code)`.
+- Upsert dòng theo dòng nguồn/line number.
+- Dòng mã hàng không khớp vẫn được lưu lịch sử với `product_id = null`.
+- Không insert `stock_movements`.
+- Không update `inventory_provisional_balances`.
+- Không thay tồn chính thức; muốn đổi tồn phải dùng flow cân bằng kho QCVL riêng.
+
+### `DELETE /inventory/stocktakes/import/kiotviet`
+
+Xóa dữ liệu kiểm kho cũ của lần import KiotViet để người dùng kiểm tra import lại từ đầu.
+
+**Permission:** `perm.manage_inventory`
+
+**Rules:**
+
+- Chỉ xóa phiếu/dòng kiểm kho có `stocktakes.source_type = kiotviet_import` hoặc `source_system = kiotviet`.
+- Không xóa hàng hóa.
+- Không xóa tồn vận hành.
+- Không xóa `stock_movements`.
+
+**Response data:**
+
+```json
+{
+  "deleted_rows": 333,
+  "blocked_rows": 0
+}
+```
 
 ### `GET /inventory/stocktakes/{id}`
 

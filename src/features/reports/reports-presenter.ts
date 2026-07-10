@@ -1,6 +1,7 @@
 import type { CustomerDebtSummary } from '../finance/types'
 import type { InventoryProduct } from '../inventory/types'
 import type { SalesDocumentListItem } from '../sales-documents/types'
+import { formatKvDateTime } from '../../lib/date-format'
 
 export function reportOverviewSummary({
   sales,
@@ -22,9 +23,7 @@ export function reportOverviewSummary({
 }
 
 export function reportDateText(value: string) {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
+  return formatKvDateTime(value)
 }
 
 export function reportNumberText(value: number) {

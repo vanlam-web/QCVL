@@ -1,4 +1,5 @@
 import type { Product } from './types'
+import { formatKvDateTime } from '../../lib/date-format'
 
 export interface CatalogBomFormLine {
   component_product_id: string
@@ -15,15 +16,7 @@ export function catalogStockCardMoneyText(value: number) {
 }
 
 export function catalogDateTimeText(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
+  return formatKvDateTime(value, value)
 }
 
 export function catalogInventoryShapeLabel(shape: NonNullable<Product['inventory_shape']>) {

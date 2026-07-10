@@ -420,9 +420,9 @@ it('filters sales documents by KiotViet-style custom time range', async () => {
 
   await userEvent.click(within(timeGroup).getByRole('radio', { name: 'Tùy chỉnh' }))
   await userEvent.clear(within(timeGroup).getByLabelText('Từ ngày'))
-  await userEvent.type(within(timeGroup).getByLabelText('Từ ngày'), '2026-07-01')
+  await userEvent.type(within(timeGroup).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.clear(within(timeGroup).getByLabelText('Đến ngày'))
-  await userEvent.type(within(timeGroup).getByLabelText('Đến ngày'), '2026-07-31')
+  await userEvent.type(within(timeGroup).getByLabelText('Đến ngày'), '31/07/2026')
 
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith({
     from: '2026-07-01',
@@ -696,7 +696,7 @@ it('opens invoice detail with item, price list, debt and stock snapshots', async
   expect(within(detailHeader).queryByText('Hoàn tất')).not.toBeInTheDocument()
   expect(within(detailRegion).queryByText('Người tạo:')).not.toBeInTheDocument()
   expect(within(detailRegion).getByText('Người bán:').closest('div')).toHaveTextContent('Người bán:Admin')
-  expect(within(detailRegion).getByText('Ngày bán:').closest('div')).toHaveTextContent('Ngày bán:00:08 1/7/26')
+  expect(within(detailRegion).getByText('Ngày bán:').closest('div')).toHaveTextContent('Ngày bán:30/06/2026 17:08')
   expect(within(detailRegion).getByText('Bảng giá chung')).toBeInTheDocument()
   expect(within(detailRegion).queryByText('Kênh bán:')).not.toBeInTheDocument()
   expect(within(detailRegion).queryByText('Chi nhánh')).not.toBeInTheDocument()
@@ -863,7 +863,7 @@ it('keeps payment history visible when receipt data misses optional nested field
 
   const paymentHistory = within(detailRegion).getByRole('table', { name: 'Lịch sử thanh toán' })
   expect(within(paymentHistory).getByText('PT000125')).toBeInTheDocument()
-  expect(within(paymentHistory).getByText('00:08 1/7/26')).toBeInTheDocument()
+  expect(within(paymentHistory).getByText('30/06/2026 17:08')).toBeInTheDocument()
   expect(within(paymentHistory).getByText('Admin')).toBeInTheDocument()
   expect(within(paymentHistory).queryByText('Chưa có dữ liệu')).not.toBeInTheDocument()
   expect(within(paymentHistory).getAllByText('-')).toHaveLength(1)

@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const root = process.cwd()
 const nasRoot = process.env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
+const nasEnvPath = process.env.QCVL_NAS_ENV_PATH ?? join(dirname(nasRoot), '.env')
 const restart = process.env.QCVL_NAS_RESTART === 'true'
 const confirmed = process.env.QCVL_NAS_DEPLOY_CONFIRM === 'true'
 
@@ -57,6 +58,58 @@ function copyFile(source, target) {
   ])
 }
 
+function readEnvFile(path) {
+  if (!existsSync(path)) return {}
+
+  const entries = {}
+  for (const rawLine of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = rawLine.trim()
+    if (!line || line.startsWith('#')) continue
+    const separator = line.indexOf('=')
+    if (separator < 1) continue
+    const key = line.slice(0, separator).trim()
+    const value = line.slice(separator + 1).trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1')
+    entries[key] = value
+  }
+  return entries
+}
+
+function nasMigrationEnv() {
+  const nasEnv = readEnvFile(nasEnvPath)
+  const databaseUrl = process.env.QCVL_NAS_DATABASE_URL
+    ?? process.env.DATABASE_URL
+    ?? nasEnv.DATABASE_URL
+    ?? postgresUrlFromParts(nasEnv)
+  return {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    ADMIN_EMAIL: process.env.QCVL_NAS_ADMIN_EMAIL ?? process.env.ADMIN_EMAIL ?? nasEnv.ADMIN_EMAIL,
+    ADMIN_PASSWORD: process.env.QCVL_NAS_ADMIN_PASSWORD ?? process.env.ADMIN_PASSWORD ?? nasEnv.ADMIN_PASSWORD,
+    ADMIN_NAME: process.env.QCVL_NAS_ADMIN_NAME ?? process.env.ADMIN_NAME ?? nasEnv.ADMIN_NAME,
+    QCVL_SKIP_ADMIN_SEED: process.env.QCVL_SKIP_ADMIN_SEED ?? 'true',
+  }
+}
+
+function postgresUrlFromParts(env) {
+  if (!env.POSTGRES_DB || !env.POSTGRES_USER || !env.POSTGRES_PASSWORD) return undefined
+
+  const host = process.env.QCVL_NAS_DB_HOST ?? env.POSTGRES_HOST ?? '100.84.228.125'
+  const port = process.env.QCVL_NAS_DB_PORT ?? env.POSTGRES_PORT ?? '55433'
+  return `postgres://${encodeURIComponent(env.POSTGRES_USER)}:${encodeURIComponent(env.POSTGRES_PASSWORD)}@${host}:${port}/${encodeURIComponent(env.POSTGRES_DB)}`
+}
+
+function migrateNasDatabase() {
+  if (!confirmed) {
+    console.log(`[dry-run] npm run db:migrate using NAS env ${nasEnvPath}`)
+    return
+  }
+
+  const env = nasMigrationEnv()
+  if (!env.DATABASE_URL) throw new Error(`DATABASE_URL is required for NAS migration. Set QCVL_NAS_DATABASE_URL or add DATABASE_URL to ${nasEnvPath}`)
+
+  run('npm', ['run', 'db:migrate'], { env })
+}
+
 run('npm', ['run', 'build:nas'])
 run('npm', ['run', 'verify:nas-bundle'])
 
@@ -80,10 +133,13 @@ for (const file of [
   'tsconfig.server.json',
   'scripts/build-nas.mjs',
   'scripts/db-migrate.mjs',
+  'scripts/db-migrate-dry-run.mjs',
   'scripts/seed-dev20-data.mjs',
 ]) {
   copyFile(join(root, file), join(nasRoot, file))
 }
+
+migrateNasDatabase()
 
 if (restart) {
   if (!confirmed) throw new Error('QCVL_NAS_DEPLOY_CONFIRM=true is required when QCVL_NAS_RESTART=true')

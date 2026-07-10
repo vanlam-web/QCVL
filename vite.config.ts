@@ -42,16 +42,14 @@ export default defineConfig({
     tailwindcss(),
     ...(process.env.VITE_ENABLE_PWA === 'true' ? [VitePWA(pwaOptions)] : []),
   ],
-  server: process.env.VITE_DEV_API_PROXY_TARGET
-    ? {
-        proxy: {
-          '/api': {
-            target: process.env.VITE_DEV_API_PROXY_TARGET,
-            changeOrigin: true,
-          },
-        },
-      }
-    : undefined,
+  server: {
+    proxy: {
+      '/api': {
+        target: process.env.VITE_DEV_API_PROXY_TARGET ?? 'http://127.0.0.1:3100',
+        changeOrigin: true,
+      },
+    },
+  },
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
     environment: 'jsdom',

@@ -248,7 +248,9 @@ Tham số hiện tại:
 | `search` | Tìm theo mã/tên; hỗ trợ tìm không dấu ở frontend và backend nếu có cột chuẩn hóa |
 | `status` | Lọc `active` / `inactive`; POS chỉ dùng `active` |
 | `sell_method` | Lọc cách tính bán |
+| `inventory_shape` | Lọc kiểu tồn kho: `normal`, `roll`, `sheet`; dùng cho sidebar Hàng hóa |
 | `product_kind` | Lọc loại hàng |
+| `created_from`, `created_to` | Lọc theo `products.created_at`; ngày dạng `YYYY-MM-DD`, `created_to` bao gồm hết ngày |
 | `page`, `page_size` | Phân trang |
 | `sort=pos_usage` | Dùng cho lưới sản phẩm nhanh POS; ưu tiên sản phẩm có `pos_product_usage.usage_count` cao hơn |
 
@@ -266,6 +268,9 @@ TÃ¬m sáº£n pháº©m/dá»‹ch vá»¥ Ä‘ang bÃ¡n trÃªn POS.
 | `status` | `string` | KhÃ´ng | POS máº·c Ä‘á»‹nh chá»‰ dÃ¹ng `active`; chá»‰ endpoint quáº£n lÃ½ Ä‘Æ°á»£c dÃ¹ng `inactive` hoáº·c `all` |
 | `product_group_id` | `uuid` | KhÃ´ng | Lá»c theo nhÃ³m hÃ ng trong module HÃ ng hÃ³a |
 | `product_kind` | `string` | KhÃ´ng | Lá»c loáº¡i hÃ ng: `goods`, `service`, `auxiliary_material`, `roll`, `sheet`, `combo` |
+| `inventory_shape` | `string` | KhÃ´ng | Lá»c kiá»ƒu tá»“n kho: `normal`, `roll`, `sheet` |
+| `created_from` | `date` | KhÃ´ng | Lá»c hÃ ng hÃ³a táº¡o tá»« ngÃ y `YYYY-MM-DD` |
+| `created_to` | `date` | KhÃ´ng | Lá»c hÃ ng hÃ³a táº¡o Ä‘áº¿n háº¿t ngÃ y `YYYY-MM-DD` |
 | `page` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `1` |
 | `page_size` | `number` | KhÃ´ng | Máº·c Ä‘á»‹nh `20`, tá»‘i Ä‘a `100` |
 
@@ -600,7 +605,94 @@ API nÃ y chá»‰ Ä‘á»c lá»‹ch sá»­. Viá»‡c ghi lá»‹ch 
 
 ---
 
-## 10. Error Handling
+## 10. Import KiotViet Hàng hóa
+
+### `POST /products/import/kiotviet/preview`
+
+Xem trước file hàng hóa KiotViet sau khi frontend parse `.xlsx` thành `rows`.
+
+Request:
+
+```json
+{
+  "cleanup_demo": false,
+  "file_name": "DanhSachSanPham_KV09072026-215404-812.xlsx",
+  "rows": [
+    {
+      "rowNumber": 2,
+      "Mã hàng": "A10T",
+      "Tên hàng": "Alu 3li 0.1 Trắng",
+      "ĐVT": "Tấm"
+    }
+  ]
+}
+```
+
+Response:
+
+```json
+{
+  "summary": {
+    "total_rows": 657,
+    "valid_rows": 646,
+    "invalid_rows": 11,
+    "unit_review_rows": 11,
+    "price_rows": 620,
+    "price_skipped_rows": 37,
+    "provisional_stock_rows": 517,
+    "provisional_stock_skipped_rows": 140,
+    "bom_rows": 189,
+    "bom_skipped_rows": 468,
+    "create_rows": 640,
+    "update_rows": 6,
+    "cleanup_demo_requested": false,
+    "ignored_columns": ["Thương hiệu", "Tồn nhỏ nhất", "Tồn lớn nhất", "Được bán trực tiếp", "Vị trí"],
+    "deferred_columns": ["Dự kiến hết hàng"]
+  },
+  "invalid_rows": []
+}
+```
+
+Preview không ghi DB.
+
+### `POST /products/import/kiotviet`
+
+Ghi import sau preview. Backend map lại rows bằng cùng contract, từ chối ghi bẩn bằng cách trả `invalid_rows` nếu thiếu mã hoặc tên.
+
+Nếu thiếu `ĐVT`, backend gán tạm `unit_name = "Cần cập nhật"` và tăng `unit_review_rows`; dòng vẫn được import để người dùng sửa đơn vị sau.
+
+Import dùng `organization_id + Mã hàng` làm khóa upsert. Không tự xóa sản phẩm vắng trong file. `cleanup_demo` chỉ còn là tương thích cũ; UI import dùng nút riêng `Xóa dữ liệu cũ`.
+
+Phase hiện tại ghi: nhóm hàng, mã, tên, loại hàng, kiểu tồn kho, cách bán, đơn vị, giá vốn gần nhất, trạng thái, giá bán vào bảng giá mặc định, và tồn kho vào `inventory_provisional_balances`.
+
+`Thời gian tạo` từ file KiotViet ghi vào `products.created_at`. Backend chấp nhận cả dạng text `dd/MM/yyyy HH:mm`, ISO date, và Excel serial number như `46204.42164644676`. Import lại cùng `Mã hàng` được phép cập nhật `products.created_at` khi file có thời gian nguồn hợp lệ; nếu thời gian nguồn thiếu/sai thì giữ `created_at` cũ, sản phẩm mới fallback về thời gian import.
+
+Tồn kho import từ KiotViet là tồn tạm với `source_type = kiotviet_import`; backend không tự tạo cuộn/tấm vật lý và không ghi `stock_movements` từ số tổng này.
+
+`Hàng thành phần` import từ KiotViet được parse theo dạng `Mã:Định mức|Mã:Định mức` và lưu thành BOM nháp (`product_boms.status = draft`) để quản lý rà soát trước khi kích hoạt. Backend không tự active BOM import, nên POS không trừ kho theo BOM KiotViet cho tới khi người dùng duyệt/sửa. `Dự kiến hết hàng` vẫn làm sau bằng luồng riêng.
+
+### `DELETE /products/import/kiotviet`
+
+Xóa dữ liệu hàng hóa cũ của lần import KiotViet để import lại từ đầu.
+
+**Rules:**
+
+- Xóa dữ liệu phụ KiotViet: tồn tạm `inventory_provisional_balances.source_type = kiotviet_import`, BOM nháp KiotViet, giá import liên quan.
+- Chỉ xóa sản phẩm nếu không còn tham chiếu nghiệp vụ thật.
+- Nếu sản phẩm đang được hóa đơn, phiếu nhập, sổ kho hoặc BOM thật dùng, backend không xóa và trả số lượng trong `blocked_rows`.
+
+**Response data:**
+
+```json
+{
+  "deleted_rows": 517,
+  "blocked_rows": 0
+}
+```
+
+---
+
+## 11. Error Handling
 
 | HTTP | Code | Khi dÃ¹ng |
 |---|---|---|

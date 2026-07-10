@@ -104,6 +104,43 @@ describe('inventory-service', () => {
     ])
   })
 
+  it('sends stocktake import cleanup flag to the server', async () => {
+    const originalDecompressionStream = globalThis.DecompressionStream
+    Object.defineProperty(globalThis, 'DecompressionStream', { configurable: true, value: undefined })
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createInventoryService({ request })
+    const file = new File([new Uint8Array([1, 2, 3])], 'stocktakes.xlsx')
+
+    await service.importKiotVietStocktakes({ file, cleanup_demo: true })
+
+    expect(calls[0][0]).toBe('/api/v1/inventory/stocktakes/import/kiotviet')
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+      cleanup_demo: true,
+      file_name: 'stocktakes.xlsx',
+      file_base64: 'AQID',
+    })
+    Object.defineProperty(globalThis, 'DecompressionStream', { configurable: true, value: originalDecompressionStream })
+  })
+
+  it('deletes old KiotViet stocktake import data with a dedicated endpoint', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { deleted_rows: 333, blocked_rows: 0 } as T
+    }
+    const service = createInventoryService({ request })
+
+    await service.deleteImportedKiotVietStocktakes()
+
+    expect(calls).toEqual([
+      ['/api/v1/inventory/stocktakes/import/kiotviet', { method: 'DELETE' }],
+    ])
+  })
+
   it('builds roll and sheet object inventory list filters', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

@@ -25,6 +25,33 @@ export function currentMonthRange() {
   return { from: localDateString(firstDay), to: localDateString(lastDay) }
 }
 
+export function toDisplayDateInput(value: string) {
+  if (!value) return ''
+  const [year, month, day] = value.slice(0, 10).split('-')
+  if (!year || !month || !day) return value
+  return `${day}/${month}/${year}`
+}
+
+export function normalizeDateInput(value: string) {
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  const kvMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  const year = isoMatch?.[1] ?? kvMatch?.[3]
+  const month = isoMatch?.[2] ?? kvMatch?.[2]
+  const day = isoMatch?.[3] ?? kvMatch?.[1]
+  if (!year || !month || !day) return null
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (
+    date.getFullYear() !== Number(year)
+    || date.getMonth() !== Number(month) - 1
+    || date.getDate() !== Number(day)
+  ) {
+    return null
+  }
+  return `${year}-${month}-${day}`
+}
+
 function addDays(date: Date, amount: number) {
   const next = new Date(date)
   next.setDate(next.getDate() + amount)

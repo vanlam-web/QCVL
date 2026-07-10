@@ -1,5 +1,6 @@
 import type { SalesDocumentListItem } from '../sales-documents/sales-document-service'
 import type { Customer } from './types'
+import { formatKvDateTime } from '../../lib/date-format'
 
 export function customerSalesDocumentStatusText(document: SalesDocumentListItem) {
   if (document.order_type === 'invoice') {
@@ -15,15 +16,7 @@ export function customerSalesDocumentStatusText(document: SalesDocumentListItem)
 }
 
 export function customerDateTime(value: string | null | undefined) {
-  if (!value) return 'Chưa có dữ liệu'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có dữ liệu'
-
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(parsed)
+  return formatKvDateTime(value, 'Chưa có dữ liệu')
 }
 
 export function customerVisibleSummary(customers: Array<Pick<Customer, 'total_debt_amount' | 'total_sales_amount'>>) {

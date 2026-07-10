@@ -17,6 +17,9 @@ export interface InventoryRouteHandlers {
   rolls(): RouteResult
   sheets(): RouteResult
   shortagePreview(): RouteResult
+  previewKiotVietStocktakeImport(): RouteResult
+  importKiotVietStocktakes(): RouteResult
+  deleteImportedKiotVietStocktakes(): RouteResult
   materialOpeningOptions(): RouteResult
   createMaterialOpening(): RouteResult
 }
@@ -33,6 +36,9 @@ export function handleInventoryRoute(context: InventoryRouteContext, handlers: I
   if (method === 'GET' && pathname === '/api/v1/inventory/rolls') return handlers.rolls()
   if (method === 'GET' && pathname === '/api/v1/inventory/sheets') return handlers.sheets()
   if (method === 'POST' && pathname === '/api/v1/inventory/pos-shortage-preview') return handlers.shortagePreview()
+  if (method === 'POST' && pathname === '/api/v1/inventory/stocktakes/import/kiotviet/preview') return handlers.previewKiotVietStocktakeImport()
+  if (method === 'POST' && pathname === '/api/v1/inventory/stocktakes/import/kiotviet') return handlers.importKiotVietStocktakes()
+  if (method === 'DELETE' && pathname === '/api/v1/inventory/stocktakes/import/kiotviet') return handlers.deleteImportedKiotVietStocktakes()
   if (method === 'GET' && pathname === '/api/v1/inventory/material-openings/options') return handlers.materialOpeningOptions()
   if (method === 'POST' && pathname === '/api/v1/inventory/material-openings') return handlers.createMaterialOpening()
 

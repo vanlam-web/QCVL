@@ -1,17 +1,16 @@
 import { createServer } from 'node:http'
 import { resolve } from 'node:path'
 import { createPgRepository } from './db.js'
+import { createDevMemoryRepository } from './dev-memory-repository.js'
 import { createHttpHandler } from './http.js'
 import { getStaticResponse } from './static.js'
 
 const port = Number(process.env.PORT ?? '3100')
 const databaseUrl = process.env.DATABASE_URL
 
-if (!databaseUrl) {
-  throw new Error('DATABASE_URL is required')
-}
-
-const repository = createPgRepository(databaseUrl)
+const repository = databaseUrl
+  ? createPgRepository(databaseUrl)
+  : await createDevMemoryRepository()
 const handler = createHttpHandler({ repository, version: process.env.npm_package_version ?? 'dev' })
 const staticRoot = resolve(process.env.STATIC_ROOT ?? 'dist')
 

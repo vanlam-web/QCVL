@@ -13,6 +13,9 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     getProductBom: vi.fn(async () => null),
     saveProductBom: vi.fn(),
     listProductGroups: vi.fn(async () => ({ items: [] })),
+    previewKiotVietProductImport: vi.fn(),
+    importKiotVietProducts: vi.fn(),
+    deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     listStockMovements: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
@@ -390,7 +393,7 @@ it('reactively filters customers by existing customer fields in the shared sideb
     customer_group_id: 'cg-1',
   })
 
-  await userEvent.type(within(sidebar).getByLabelText('Ngày tạo từ'), '2026-07-01')
+  await userEvent.type(within(sidebar).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.type(within(sidebar).getByLabelText('Tổng bán từ'), '500000')
   await userEvent.type(within(sidebar).getByLabelText('Nợ hiện tại tới'), '300000')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Người tạo' }), 'user-admin')
@@ -445,7 +448,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(infoPanel).getByText('Khách VIP')).toBeInTheDocument()
   expect(within(infoPanel).getByText('Theo nhóm: Khách VIP')).toBeInTheDocument()
   expect(within(infoPanel).getByText('Admin')).toBeInTheDocument()
-  expect(within(infoPanel).getByText('00:08 1/7/26')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('30/06/2026 17:08')).toBeInTheDocument()
   expect(within(infoPanel).queryByRole('button', { name: 'Xem phân tích' })).not.toBeInTheDocument()
   expect(within(infoPanel).queryByRole('region', { name: 'Xem phân tích khách hàng' })).not.toBeInTheDocument()
   await userEvent.click(within(detail).getByRole('button', { name: 'Xem phân tích' }))

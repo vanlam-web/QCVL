@@ -17,11 +17,13 @@
 - `npm test`
 - `npm run build:nas`
 - `npm run verify:nas-bundle`
-- Neu co doi DB: `npm run db:migrate:dry-run`
+- Neu co doi DB: tao migration trong `database/migrations`, roi chay `npm run db:migrate:dry-run`
+- Neu dang test tren `3202` bang DB NAS, nho rang import/xoa/sua tren `3202` se doi du lieu `3200`.
 
 ## Sau Khi Deploy NAS
 
 - `npm run health:nas`
+- `npm run env:status` voi DB dich; ket qua phai co `pending: []` va `in_sync: true`.
 - Neu co password smoke trong env: `npm run smoke:nas`
 - Mo `/pos`, `/sales-documents`, `/finance`, `/customers`.
 - Neu co thay doi DB/sales/finance: chay `npm run verify:sales-finance-persistence` truoc va sau restart.

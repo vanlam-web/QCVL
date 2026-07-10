@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, WalletCards,
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
+  ManagementDateRangeInputs,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -917,6 +918,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
       filter={
         <ManagementFilterSidebar
           ariaLabel="Bộ lọc tài chính"
+          onPopoverClose={() => setCashbookQuickTimeOpen(false)}
           popoverOpen={cashbookQuickTimeOpen}
         >
           <form id="cashbook-filter-form" aria-label="Bộ lọc sổ quỹ" className="management-filter-sidebar-form" onSubmit={filterCashbook}>
@@ -976,28 +978,14 @@ export function FinancePage({ service }: { service: FinanceService }) {
                   ))}
                 </div>
               ) : null}
-              {cashbookTimeFilter === 'custom' ? (
-                <div className="management-filter-date-range">
-                  <label>
-                    <span>Từ ngày</span>
-                    <input
-                      aria-label="Từ ngày"
-                      type="date"
-                      value={cashbookFrom}
-                      onChange={(event) => void applyCashbookCustomDateFilter({ from: event.target.value })}
-                    />
-                  </label>
-                  <label>
-                    <span>Đến ngày</span>
-                    <input
-                      aria-label="Đến ngày"
-                      type="date"
-                      value={cashbookTo}
-                      onChange={(event) => void applyCashbookCustomDateFilter({ to: event.target.value })}
-                    />
-                  </label>
-                </div>
-              ) : null}
+                {cashbookTimeFilter === 'custom' ? (
+                  <ManagementDateRangeInputs
+                    from={cashbookFrom}
+                    to={cashbookTo}
+                    onFromChange={(value) => void applyCashbookCustomDateFilter({ from: value })}
+                    onToChange={(value) => void applyCashbookCustomDateFilter({ to: value })}
+                  />
+                ) : null}
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Quỹ tiền">
               <label className={`management-filter-choice${cashbookFundMode === 'all' ? ' management-filter-choice-active' : ''}`}>

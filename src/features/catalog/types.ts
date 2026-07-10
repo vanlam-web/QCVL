@@ -12,11 +12,36 @@ export interface Product {
   sell_method: SellMethod
   latest_purchase_cost?: number | null
   latest_purchase_cost_at?: string | null
+  default_sale_price?: number | null
   product_group_id?: string | null
   product_group?: { id: string; code: string; name: string } | null
   inventory_shape?: 'normal' | 'roll' | 'sheet'
   track_inventory?: boolean
   unit_conversions?: ProductUnitConversion[]
+  kiotviet_provisional_stock?: {
+    quantity: number
+    unit_name: string
+    source_type: 'kiotviet_import'
+    source_label: string | null
+    status?: string
+    updated_at?: string | null
+  } | null
+  latest_kiotviet_stocktake?: {
+    code: string
+    source_created_at: string | null
+    source_balanced_at: string | null
+    system_qty: number | null
+    actual_qty: number | null
+    difference_qty: number | null
+    unit_name: string | null
+  } | null
+  draft_bom?: {
+    id: string
+    version: number
+    status: 'draft'
+    item_count: number
+    notes: string | null
+  } | null
 }
 
 export interface ProductUnitConversion {
@@ -55,7 +80,7 @@ export interface ProductBom {
   id: string
   product_id: string
   version: number
-  status: 'active' | 'archived'
+  status: 'draft' | 'active' | 'archived'
   notes: string | null
   created_at: string
   items: ProductBomItem[]
@@ -66,6 +91,7 @@ export interface ProductListResponse {
   page: number
   page_size: number
   total: number
+  total_all?: number
 }
 
 export interface ProductStockMovement {
@@ -102,6 +128,65 @@ export interface ProductStocktake {
   increased_qty: number
   decreased_qty: number
   note: string | null
+}
+
+export interface KiotVietProductInvalidRow {
+  rowNumber: number
+  code: string | null
+  name: string | null
+  errors: string[]
+}
+
+export interface KiotVietProductImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    create_rows: number
+    update_rows: number
+    unit_review_rows: number
+    price_rows?: number
+    price_skipped_rows?: number
+    provisional_stock_rows?: number
+    provisional_stock_skipped_rows?: number
+    bom_rows?: number
+    bom_skipped_rows?: number
+    price_list_name?: string | null
+    cleanup_demo_requested: boolean
+    ignored_columns: string[]
+    deferred_columns: string[]
+  }
+  invalid_rows: KiotVietProductInvalidRow[]
+}
+
+export interface KiotVietProductImportResult {
+  summary: {
+    total_rows?: number
+    valid_rows?: number
+    invalid_rows?: number
+    unit_review_rows?: number
+    created_rows: number
+    updated_rows: number
+    skipped_rows?: number
+    price_created_rows?: number
+    price_updated_rows?: number
+    price_skipped_rows?: number
+    provisional_stock_created_rows?: number
+    provisional_stock_updated_rows?: number
+    provisional_stock_skipped_rows?: number
+    bom_created_rows?: number
+    bom_updated_rows?: number
+    bom_skipped_rows?: number
+    price_list_name?: string | null
+    cleanup_deleted_rows: number
+    cleanup_blocked_rows: number
+  }
+  invalid_rows: KiotVietProductInvalidRow[]
+}
+
+export interface KiotVietImportDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }
 
 export interface CustomerGroup {
