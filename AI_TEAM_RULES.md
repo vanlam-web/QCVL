@@ -67,6 +67,7 @@ For any DB-affecting change:
 
 - Add a SQL migration in `database/migrations`.
 - Keep runtime schema guards in code if useful, but do not rely on guards alone.
+- Do not run schema guards from read/list API hot paths. Read APIs assume migrations have already made schema ready.
 - Run migration dry-run or status check before deploy.
 - Do not silently change money, debt, inventory, document, or import semantics without docs/test.
 

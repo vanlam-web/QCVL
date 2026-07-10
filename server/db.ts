@@ -170,12 +170,6 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     },
 
     async listProducts(input) {
-      await ensureProductCatalogSchema(pool)
-      await ensureProductUnitTables(pool)
-      await ensurePriceListTables(pool)
-      await ensureInventoryProvisionalBalancesTable(pool)
-      await ensureProductBomTables(pool)
-      await ensureImportedStocktakeTables(pool)
       const search = input.url.searchParams.get('search')?.trim() ?? ''
       const status = input.url.searchParams.get('status')
       const sellMethod = input.url.searchParams.get('sell_method')
@@ -927,7 +921,6 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     },
 
     async listStocktakes(input) {
-      await ensureImportedStocktakeTables(pool)
       const search = input.url.searchParams.get('search')?.trim() ?? ''
       const status = input.url.searchParams.get('status')
       const from = input.url.searchParams.get('from')

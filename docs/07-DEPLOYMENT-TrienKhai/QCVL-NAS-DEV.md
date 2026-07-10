@@ -28,6 +28,7 @@ Muc tieu: `127.0.0.1:3202` la noi test truoc, `100.84.228.125:3200` la ban NAS d
 Quy tac bat buoc:
 
 - Neu sua backend co tao bang/cot/index/constraint moi, phai them file `database/migrations/NNNN_*.sql`. Khong chi dua logic `ensure...` trong `server/db.ts`.
+- Khong goi schema guard trong API doc danh sach/doc du lieu nhu `/products` hoac `/inventory/stocktakes`. Cac API doc phai gia dinh migration da chay xong; neu thieu schema thi fail som de sua migration.
 - `deploy:nas` phai chay `db:migrate` truoc `health:nas`. Neu migration fail thi dung deploy, khong bao NAS san sang.
 - Moi lan lam tren `3202`, ghi thay doi vao docs/plan lien quan truoc khi dua `3200`.
 - Neu `3200` loi ma `3202` khong loi, kiem tra migration truoc: code giong nhung DB lech van la loi deploy.

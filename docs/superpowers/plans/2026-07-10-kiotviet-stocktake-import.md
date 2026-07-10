@@ -511,7 +511,7 @@ npm run lint
 
 Expected: all pass.
 
-- [ ] **Step 3: Browser QA**
+- [x] **Step 3: Browser QA**
 
 Open:
 
@@ -536,6 +536,8 @@ Verify:
 - The stocktake custom date range uses the same `management-filter-date-range` markup as sales documents.
 - Quick-time popovers close on outside click through shared `ManagementFilterSidebar.onPopoverClose`.
 - Automated verification passed for the shared layout and the three affected pages: management layout, inventory, sales documents, and finance cashbook.
+
+2026-07-10 Owner QA note: KV vs QCVL stocktake comparison is accepted as OK. Treat this plan's current import/stocktake comparison phase as done. Continue with the next deferred inventory work only when Owner asks for stock balancing or real operating-stock conversion.
 
 ---
 

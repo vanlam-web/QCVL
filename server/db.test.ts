@@ -102,12 +102,8 @@ describe('createPgRepository product units', () => {
       String(sql).includes('from products p'),
     )?.[0])
     expect(listSql).toContain('product_unit_conversions')
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists products'))).toBe(true)
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists product_groups'))).toBe(true)
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists product_group_id'))).toBe(true)
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists latest_purchase_cost'))).toBe(true)
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists price_lists'))).toBe(true)
-    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists price_list_items'))).toBe(true)
+    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists products'))).toBe(false)
+    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists product_group_id'))).toBe(false)
     expect(listSql).toContain('p.created_at >= $')
     expect(listSql).toContain(`p.created_at < ($`)
     expect(listSql).not.toContain(`'[]'::jsonb as unit_conversions`)
@@ -240,7 +236,7 @@ describe('createPgRepository product units', () => {
     )?.[0])
     expect(pgMock.query.mock.calls.some(([sql]) =>
       String(sql).includes('create table if not exists stocktakes'),
-    )).toBe(true)
+    )).toBe(false)
     expect(listSql).toContain('stocktake_items')
     expect(listSql).toContain('kiotviet_import')
     expect(products?.[0].latest_kiotviet_stocktake).toEqual({
