@@ -4,6 +4,7 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDateRangeInputs,
   ManagementDetailActionFooter,
   ManagementDetailRow,
   ManagementFilterGroup,
@@ -501,6 +502,7 @@ export function SalesDocumentsPage({
         <ManagementFilterSidebar
           activeSummary={activeFilterSummary || undefined}
           ariaLabel="Bộ lọc chứng từ bán hàng"
+          onPopoverClose={() => setQuickTimeOpen(false)}
           popoverOpen={quickTimeOpen}
           title="Bộ lọc"
         >
@@ -569,28 +571,14 @@ export function SalesDocumentsPage({
                 ))}
               </div>
             ) : null}
-            {timeFilter === 'custom' ? (
-              <div className="management-filter-date-range">
-                <label>
-                  <span>Từ ngày</span>
-                  <input
-                    aria-label="Từ ngày"
-                    type="date"
-                    value={dateFrom}
-                    onChange={(event) => void applyCustomDateFilter({ from: event.target.value })}
-                  />
-                </label>
-                <label>
-                  <span>Đến ngày</span>
-                  <input
-                    aria-label="Đến ngày"
-                    type="date"
-                    value={dateTo}
-                    onChange={(event) => void applyCustomDateFilter({ to: event.target.value })}
-                  />
-                </label>
-              </div>
-            ) : null}
+              {timeFilter === 'custom' ? (
+                <ManagementDateRangeInputs
+                  from={dateFrom}
+                  to={dateTo}
+                  onFromChange={(value) => void applyCustomDateFilter({ from: value })}
+                  onToChange={(value) => void applyCustomDateFilter({ to: value })}
+                />
+              ) : null}
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Loại hóa đơn">
             {allTypeFilters.map((value) => {

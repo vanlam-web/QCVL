@@ -1,10 +1,14 @@
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
 import type { InventoryRollListResponse, InventorySheetListResponse } from '../inventory/types'
+import { parseKiotVietProductWorkbook } from './kiotviet-product-import'
 import type {
   Customer,
   CustomerGroup,
   CustomerListResponse,
+  KiotVietProductImportPreview,
+  KiotVietProductImportResult,
+  KiotVietImportDeleteResult,
   ProductBom,
   PriceFormulaApplyResult,
   PriceFormulaInput,
@@ -48,6 +52,8 @@ export function createCatalogService(api: CatalogApiRequester) {
       inventory_shape?: Product['inventory_shape']
       product_kind?: ProductKind
       product_group_id?: string
+      created_from?: string
+      created_to?: string
       page?: number
       page_size?: number
       sort?: 'pos_usage'
@@ -59,6 +65,8 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.inventory_shape) params.set('inventory_shape', input.inventory_shape)
       if (input.product_kind) params.set('product_kind', input.product_kind)
       if (input.product_group_id) params.set('product_group_id', input.product_group_id)
+      if (input.created_from) params.set('created_from', input.created_from)
+      if (input.created_to) params.set('created_to', input.created_to)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
       if (input.sort) params.set('sort', input.sort)
@@ -66,6 +74,20 @@ export function createCatalogService(api: CatalogApiRequester) {
       return api.request<ProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
     },
     listProductGroups: () => api.request<{ items: ProductGroup[] }>('/api/v1/product-groups'),
+    previewKiotVietProductImport: async (input: { file: File; cleanup_demo: boolean }) =>
+      api.request<KiotVietProductImportPreview>('/api/v1/products/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietImportPayload(input)),
+      }),
+    importKiotVietProducts: async (input: { file: File; cleanup_demo: boolean }) =>
+      api.request<KiotVietProductImportResult>('/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietImportPayload(input)),
+      }),
+    deleteImportedKiotVietProducts: async () =>
+      api.request<KiotVietImportDeleteResult>('/api/v1/products/import/kiotviet', {
+        method: 'DELETE',
+      }),
     listStockMovements: (input: { product_id?: string; page?: number; page_size?: number } = {}) => {
       const params = new URLSearchParams()
       if (input.product_id) params.set('product_id', input.product_id)
@@ -194,6 +216,37 @@ export function createCatalogService(api: CatalogApiRequester) {
 }
 
 export type CatalogService = ReturnType<typeof createCatalogService>
+
+async function buildKiotVietImportPayload(input: { file: File; cleanup_demo: boolean }) {
+  const buffer = await input.file.arrayBuffer()
+  if (canParseCompressedXlsxInBrowser()) {
+    return {
+      cleanup_demo: input.cleanup_demo,
+      file_name: input.file.name,
+      rows: await parseKiotVietProductWorkbook(buffer),
+    }
+  }
+  return {
+    cleanup_demo: input.cleanup_demo,
+    file_name: input.file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+function canParseCompressedXlsxInBrowser() {
+  try {
+    return typeof DecompressionStream === 'function' && Boolean(new DecompressionStream('deflate-raw'))
+  } catch {
+    return false
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
 
 export function createBrowserCatalogService(getAccessToken: () => Promise<string | null>) {
   return createCatalogService(

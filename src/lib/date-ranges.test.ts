@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { currentMonthRange, localDateString, quickDateRange } from './date-ranges'
+import { currentMonthRange, localDateString, normalizeDateInput, quickDateRange, toDisplayDateInput } from './date-ranges'
 
 describe('date-ranges', () => {
   it('formats local dates as yyyy-mm-dd', () => {
@@ -27,5 +27,13 @@ describe('date-ranges', () => {
     expect(quickDateRange('all')).toEqual({ from: '', to: '' })
 
     vi.useRealTimers()
+  })
+
+  it('formats and normalizes KV-style date inputs', () => {
+    expect(toDisplayDateInput('2026-07-31')).toBe('31/07/2026')
+    expect(toDisplayDateInput('')).toBe('')
+    expect(normalizeDateInput('31/07/2026')).toBe('2026-07-31')
+    expect(normalizeDateInput('2026-07-31')).toBe('2026-07-31')
+    expect(normalizeDateInput('31/13/2026')).toBeNull()
   })
 })

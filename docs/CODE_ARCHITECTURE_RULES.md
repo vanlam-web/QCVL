@@ -1,6 +1,6 @@
 # Code Architecture Rules
 
-> Cap nhat: 2026-07-09. File nay la quy tac bat buoc de tranh sua UI lam hong nghiep vu.
+> Cap nhat: 2026-07-10. File nay la quy tac bat buoc de tranh sua UI lam hong nghiep vu.
 
 ## Muc Tieu
 
@@ -22,6 +22,8 @@ Khi sua ruot, phai co test va khong dua logic nghiep vu moi vao component UI.
 5. CSS phai uu tien class dung chung trong `src/styles/shared.css` hoac component shell co san.
 6. Khong copy logic tinh tien/no/trang thai vao nhieu page.
 7. Khong dung RAM fixture, localStorage hoac cache UI lam nguon luu du lieu nghiep vu.
+8. Dinh dang thoi gian UI phai uu tien helper chung `src/lib/date-format.ts`; filter ngay phai uu tien `src/lib/date-ranges.ts` va query di qua service/repository, khong tinh truc tiep trong JSX.
+9. O tuy chinh ngay trong bo loc phai dung `ManagementDateRangeInputs`. UI hien `dd/MM/yyyy` nhu KV, nhung service/API van nhan `YYYY-MM-DD`.
 
 ## Mau File Chuan Cho Moi Feature
 
@@ -105,6 +107,10 @@ Da tach them trong dot sau:
 - POS: `pos-core.ts` gom cart line total, line discount, checkout summary, checkout item payload, percent discount.
 - Reports: `reports-presenter.ts` gom report summary va format hien thi.
 - Catalog: `catalog-presenter.ts`, `catalog-storage.ts` gom format, label, normalize BOM, favorite storage.
+- Catalog ngay 2026-07-10: bo loc `Thoi gian tao` cua Hang hoa da tach theo ranh gioi: UI dung class chung trong sidebar; query nam o `catalog-service.ts`; backend/dev-memory loc theo `products.created_at`; contract ghi `created_from`/`created_to`.
+- Catalog import ngay 2026-07-10: `Thoi gian tao` tu file KiotViet la source time cua san pham, co the o dang Excel serial. Parser/import service chuan hoa va ghi vao `products.created_at`; import lai cung `Ma hang` duoc phep sua `created_at` sai cu. Khong tao field UI rieng hoac cache rieng cho ngay nay.
+- Shared time: `src/lib/date-format.ts` la helper chung cho hien thi `dd/MM/yyyy HH:mm`; cac presenter/page moi khong tu tao `Intl.DateTimeFormat` rieng neu khong co ly do ro trong doc.
+- Shared date filter: `ManagementDateRangeInputs` trong `src/components/ui-shell/management-layout.tsx` dung cho Hang hoa, Khach hang, Hoa don, Kiem kho, Phieu nhap va So quy. Khong tao lai cap input `type=date` rieng trong tung page vi browser/OS co the hien sai dinh dang KV.
 - Sales Documents: presenter gom list summary, date text, line sell price, quote print display helper.
 - Account/Admin/Auth/Dashboard: presenter/helper gom role/status/permission/form/date/chart/login normalization.
 

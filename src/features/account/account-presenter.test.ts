@@ -29,6 +29,7 @@ describe('account presenter', () => {
     expect(deviceSummaryText({ browser_name: 'Chrome', os_name: 'Windows', ip_address: '127.0.0.1' })).toBe('Chrome • Windows • 127.0.0.1')
     expect(deviceSummaryText({ browser_name: null, os_name: null, ip_address: null })).toBe('Chưa có thông tin thiết bị')
     expect(deviceSeenAtText('bad-date')).toBe('Chưa có')
+    expect(deviceSeenAtText('2026-07-06T14:00:00Z')).toBe('06/07/2026 14:00')
   })
 
   it('reads profile form values outside the page', () => {

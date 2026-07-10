@@ -39,7 +39,7 @@ export interface Stocktake {
   id: string
   code: string
   status: StocktakeStatus
-  source_type: 'manual' | 'product_edit'
+  source_type: 'manual' | 'product_edit' | 'kiotviet_import'
   created_at: string
   balanced_at: string | null
   total_actual_qty: number
@@ -55,6 +55,44 @@ export interface StocktakeListResponse {
   page: number
   page_size: number
   total: number
+}
+
+export interface KiotVietStocktakeImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    stocktake_count: number
+    product_code_count: number
+    matched_product_count: number
+    missing_product_count: number
+    deleted_product_code_count: number
+    formula_error_count: number
+  }
+  invalid_rows: Array<{ rowNumber: number; source_code: string | null; product_code: string | null; errors: string[] }>
+  missing_product_codes: string[]
+}
+
+export interface KiotVietStocktakeImportResult {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    stocktakes_created: number
+    stocktakes_updated: number
+    items_created: number
+    items_updated: number
+    missing_product_rows: number
+    cleanup_deleted_rows?: number
+    cleanup_blocked_rows?: number
+    creates_stock_movements: false
+  }
+  invalid_rows: KiotVietStocktakeImportPreview['invalid_rows']
+}
+
+export interface KiotVietImportDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }
 
 export interface InventoryRoll {

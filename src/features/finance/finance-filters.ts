@@ -1,4 +1,5 @@
 import { quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { formatKvDateTime } from '../../lib/date-format'
 import type { CashbookDirection, CashbookEntry, CashbookStatus } from './types'
 
 export type CashbookTimeFilter = QuickDateRangePreset | 'custom'
@@ -76,14 +77,7 @@ export function statusFilterFromSelection(selection: CashbookStatus[]): Cashbook
 }
 
 export function dateTimeInputText(date: Date) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(date)
+  return formatKvDateTime(date)
 }
 
 export function formatVoucherAmountInput(value: string) {

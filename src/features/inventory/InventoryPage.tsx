@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronRight, Search } from 'lucide-react'
+import { CalendarDays, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDateRangeInputs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -15,13 +16,50 @@ import {
 } from '../../components/ui-shell/management-layout'
 import type { InventoryProduct, InventoryProductStatus, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake } from './types'
 import type { InventoryService } from './inventory-service'
-import { dateText, inventoryListSummary, moneyText, numberText, shapeText, statusText, stocktakeStatusText } from './inventory-presenter'
+import {
+  dateText,
+  inventoryListSummary,
+  numberText,
+  shapeText,
+  statusText,
+  stocktakeDateTimeText,
+  stocktakeMoneyText,
+  stocktakeQuantityText,
+  stocktakeStatusText,
+} from './inventory-presenter'
+import { StocktakeImportDialog } from './StocktakeImportDialog'
+import { currentMonthRange, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 
 const pageSizeDefault = 15
 type InventoryView = 'products' | 'stocktakes' | 'objects'
+type StocktakeDateFilter = QuickDateRangePreset | 'custom'
+const stocktakeDateGroups: Array<{ title: string; presets: Array<Exclude<StocktakeDateFilter, 'custom'>> }> = [
+  { title: 'Theo ngày', presets: ['today', 'yesterday'] },
+  { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
+  { title: 'Theo tháng', presets: ['month', 'last_month', 'last_30_days'] },
+  { title: 'Theo quý', presets: ['quarter', 'last_quarter'] },
+  { title: 'Theo năm', presets: ['year', 'last_year', 'all'] },
+]
+const stocktakeDateLabels: Record<StocktakeDateFilter, string> = {
+  all: 'Toàn thời gian',
+  today: 'Hôm nay',
+  yesterday: 'Hôm qua',
+  week: 'Tuần này',
+  last_week: 'Tuần trước',
+  last_7_days: '7 ngày qua',
+  month: 'Tháng này',
+  last_month: 'Tháng trước',
+  last_30_days: '30 ngày qua',
+  quarter: 'Quý này',
+  last_quarter: 'Quý trước',
+  year: 'Năm nay',
+  last_year: 'Năm trước',
+  custom: 'Tùy chỉnh',
+}
+const defaultStocktakeStatuses: Array<Stocktake['status']> = ['draft', 'balanced', 'cancelled']
 
 export function InventoryPage({ service }: { service: InventoryService }) {
-  const [view, setView] = useState<InventoryView>('products')
+  const [view] = useState<InventoryView>('stocktakes')
   const [products, setProducts] = useState<InventoryProduct[] | null>(null)
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -38,6 +76,14 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [stocktakeTotal, setStocktakeTotal] = useState(0)
   const [stocktakePage, setStocktakePage] = useState(1)
   const [stocktakePageSize, setStocktakePageSize] = useState(pageSizeDefault)
+  const [stocktakeSearch, setStocktakeSearch] = useState('')
+  const [stocktakeLastSearch, setStocktakeLastSearch] = useState('')
+  const [stocktakeDateFilter, setStocktakeDateFilter] = useState<StocktakeDateFilter>('month')
+  const [stocktakeDateFrom, setStocktakeDateFrom] = useState(() => currentMonthRange().from)
+  const [stocktakeDateTo, setStocktakeDateTo] = useState(() => currentMonthRange().to)
+  const [stocktakeQuickTimeOpen, setStocktakeQuickTimeOpen] = useState(false)
+  const [stocktakeStatusSelection, setStocktakeStatusSelection] = useState<Array<Stocktake['status']>>(defaultStocktakeStatuses)
+  const [stocktakeImportOpen, setStocktakeImportOpen] = useState(false)
   const [rolls, setRolls] = useState<InventoryRoll[]>([])
   const [sheets, setSheets] = useState<InventorySheet[]>([])
   const [materialOpeningOpen, setMaterialOpeningOpen] = useState(false)
@@ -60,6 +106,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [adjusting, setAdjusting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const productSearchRequestId = useRef(0)
+  const stocktakeListRequestId = useRef(0)
 
   const { negativeCount, totalQty } = inventoryListSummary(products)
 
@@ -94,45 +141,44 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     }
   }
 
-  async function loadStocktakeList(input: { page?: number; page_size?: number } = {}) {
+  async function loadStocktakeList(input: {
+    search?: string
+    statusSelection?: Array<Stocktake['status']>
+    dateFilter?: StocktakeDateFilter
+    from?: string
+    to?: string
+    page?: number
+    page_size?: number
+  } = {}) {
+    const nextSearch = input.search ?? stocktakeLastSearch
+    const nextStatusSelection = input.statusSelection ?? stocktakeStatusSelection
+    const nextDateFilter = input.dateFilter ?? stocktakeDateFilter
+    const nextFrom = input.from ?? stocktakeDateFrom
+    const nextTo = input.to ?? stocktakeDateTo
     const nextPage = input.page ?? stocktakePage
     const nextPageSize = input.page_size ?? stocktakePageSize
+    const requestId = stocktakeListRequestId.current + 1
+    stocktakeListRequestId.current = requestId
     setError(null)
     try {
-      const result = await service.listStocktakes({ page: nextPage, page_size: nextPageSize })
+      const result = await service.listStocktakes({
+        ...(nextSearch.trim() ? { search: nextSearch.trim() } : {}),
+        status: stocktakeStatusQuery(nextStatusSelection),
+        ...(nextDateFilter !== 'all' && nextFrom ? { from: nextFrom } : {}),
+        ...(nextDateFilter !== 'all' && nextTo ? { to: nextTo } : {}),
+        page: nextPage,
+        page_size: nextPageSize,
+      })
+      if (stocktakeListRequestId.current !== requestId) return
       setStocktakes(result.items)
       setStocktakeTotal(result.total)
       setStocktakePage(result.page)
       setStocktakePageSize(result.page_size)
+      setStocktakeLastSearch(nextSearch.trim())
     } catch (cause) {
+      if (stocktakeListRequestId.current !== requestId) return
       setError(formatApiError(cause, 'Không tải được phiếu kiểm kho.'))
     }
-  }
-
-  async function showStocktakes() {
-    setView('stocktakes')
-    setDetail(null)
-    await loadStocktakeList({ page: 1, page_size: pageSizeDefault })
-  }
-
-  async function showObjects() {
-    setView('objects')
-    setDetail(null)
-    setError(null)
-    try {
-      const [rollResult, sheetResult] = await Promise.all([
-        service.listInventoryRolls({ page: 1, page_size: pageSizeDefault }),
-        service.listInventorySheets({ page: 1, page_size: pageSizeDefault }),
-      ])
-      setRolls(rollResult.items)
-      setSheets(sheetResult.items)
-    } catch (cause) {
-      setError(formatApiError(cause, 'Không tải được tồn theo cuộn/tấm.'))
-    }
-  }
-
-  function showProducts() {
-    setView('products')
   }
 
   function closeMaterialOpening() {
@@ -241,12 +287,38 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     let active = true
     async function loadInitial() {
       try {
-        const result = await service.listInventoryProducts({ status: 'active', page: 1, page_size: pageSizeDefault })
+        if (view === 'stocktakes') {
+          const range = currentMonthRange()
+          const result = await service.listStocktakes({
+            status: stocktakeStatusQuery(defaultStocktakeStatuses),
+            from: range.from,
+            to: range.to,
+            page: 1,
+            page_size: pageSizeDefault,
+          })
+          if (!active) return
+          setStocktakes(result.items)
+          setStocktakeTotal(result.total)
+          setStocktakePage(result.page)
+          setStocktakePageSize(result.page_size)
+          return
+        }
+        if (view === 'objects') {
+          const [rollResult, sheetResult] = await Promise.all([
+            service.listInventoryRolls({ page: 1, page_size: pageSizeDefault }),
+            service.listInventorySheets({ page: 1, page_size: pageSizeDefault }),
+          ])
+          if (!active) return
+          setRolls(rollResult.items)
+          setSheets(sheetResult.items)
+          return
+        }
+        const productResult = await service.listInventoryProducts({ status: 'active', page: 1, page_size: pageSizeDefault })
         if (!active) return
-        setProducts(result.items)
-        setTotal(result.total)
-        setPage(result.page)
-        setPageSize(result.page_size)
+        setProducts(productResult.items)
+        setTotal(productResult.total)
+        setPage(productResult.page)
+        setPageSize(productResult.page_size)
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được tồn kho.'))
       }
@@ -255,12 +327,48 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     return () => {
       active = false
     }
-  }, [service])
+  }, [service, view])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setProductSearchSuggestionsOpen(false)
     await applyFilters()
+  }
+
+  async function filterStocktakes(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setStocktakePage(1)
+    await loadStocktakeList({ search: stocktakeSearch, page: 1, page_size: stocktakePageSize })
+  }
+
+  function toggleStocktakeStatus(nextStatus: Stocktake['status']) {
+    setStocktakeStatusSelection((current) => {
+      const nextSelection = current.includes(nextStatus)
+        ? current.filter((candidate) => candidate !== nextStatus)
+        : [...current, nextStatus]
+      setStocktakeQuickTimeOpen(false)
+      void loadStocktakeList({ statusSelection: nextSelection, page: 1, page_size: stocktakePageSize })
+      return nextSelection
+    })
+  }
+
+  function applyStocktakeQuickDateFilter(nextFilter: Exclude<StocktakeDateFilter, 'custom'>) {
+    const range = quickDateRange(nextFilter)
+    setStocktakeDateFilter(nextFilter)
+    setStocktakeQuickTimeOpen(false)
+    setStocktakeDateFrom(range.from)
+    setStocktakeDateTo(range.to)
+    void loadStocktakeList({ dateFilter: nextFilter, from: range.from, to: range.to, page: 1, page_size: stocktakePageSize })
+  }
+
+  function applyStocktakeCustomDateFilter(input: { from?: string; to?: string } = {}) {
+    const nextFrom = input.from ?? stocktakeDateFrom
+    const nextTo = input.to ?? stocktakeDateTo
+    setStocktakeDateFilter('custom')
+    setStocktakeQuickTimeOpen(false)
+    setStocktakeDateFrom(nextFrom)
+    setStocktakeDateTo(nextTo)
+    void loadStocktakeList({ dateFilter: 'custom', from: nextFrom, to: nextTo, page: 1, page_size: stocktakePageSize })
   }
 
   async function applyFilters() {
@@ -344,12 +452,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     <ManagementPage
       title={view === 'stocktakes' ? 'Phiếu kiểm kho' : view === 'objects' ? 'Tồn theo cuộn/tấm' : 'Hàng hóa'}
       actions={
-        <>
-          <button className="button button-secondary" type="button" onClick={showProducts}>Hàng hóa</button>
-          <button className="button button-secondary" type="button" onClick={() => void showStocktakes()}>Phiếu kiểm kho</button>
-          <button className="button button-secondary" type="button" onClick={() => void showObjects()}>Tồn theo cuộn/tấm</button>
-          <button className="button button-secondary" type="button" onClick={() => setMaterialOpeningOpen(true)}>Khui vật tư</button>
-          {view === 'products' ? (
+        view === 'products' ? (
             <ManagementCompactToolbar ariaLabel="Lọc hàng hóa" onSubmit={filterProducts}>
               <ManagementCompactSearch
                 label="Tìm hàng hóa"
@@ -377,17 +480,24 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               />
             </ManagementCompactToolbar>
           ) : view === 'stocktakes' ? (
-            <div className="management-page-actions">
+            <ManagementCompactToolbar ariaLabel="Lọc phiếu kiểm kho" onSubmit={filterStocktakes}>
+              <ManagementCompactSearch
+                label="Tìm phiếu kiểm kho"
+                placeholder="Theo mã phiếu kiểm"
+                value={stocktakeSearch}
+                leadingIcon={<Search aria-hidden="true" size={16} />}
+                onChange={setStocktakeSearch}
+              />
               <button className="button button-secondary" type="button">+ Kiểm kho</button>
+              <button className="button button-secondary" type="button" onClick={() => setStocktakeImportOpen(true)}>Import KV</button>
               <button className="button button-secondary" type="button">Xuất file</button>
-            </div>
+            </ManagementCompactToolbar>
           ) : (
             <div className="management-page-actions">
               <button className="button button-secondary" type="button">+ Cuộn</button>
               <button className="button button-secondary" type="button">+ Tấm</button>
             </div>
-          )}
-        </>
+          )
       }
       kpis={view === 'products' ? (
         <MetricGrid ariaLabel="Tổng quan hàng hóa">
@@ -431,17 +541,96 @@ export function InventoryPage({ service }: { service: InventoryService }) {
             </ManagementFilterGroup>
           </ManagementFilterSidebar>
         ) : view === 'stocktakes' ? (
-          <ManagementFilterSidebar ariaLabel="Bộ lọc phiếu kiểm kho">
-            <ManagementFilterGroup title="Mã phiếu">
-              <input aria-label="Tìm phiếu kiểm kho" className="management-filter-input" placeholder="Theo mã phiếu kiểm" />
+          <ManagementFilterSidebar
+            ariaLabel="Bộ lọc phiếu kiểm kho"
+            onPopoverClose={() => setStocktakeQuickTimeOpen(false)}
+            popoverOpen={stocktakeQuickTimeOpen}
+          >
+            <ManagementFilterGroup title="Ngày tạo">
+              <div className="management-filter-time-options">
+                <div
+                  aria-expanded={stocktakeQuickTimeOpen}
+                  className={`management-filter-choice${stocktakeDateFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
+                  onClick={() => {
+                    if (stocktakeDateFilter === 'custom') applyStocktakeQuickDateFilter('month')
+                    else setStocktakeQuickTimeOpen((current) => !current)
+                  }}
+                >
+                  <input
+                    aria-label={stocktakeDateFilter === 'custom' ? stocktakeDateLabels.month : stocktakeDateLabels[stocktakeDateFilter]}
+                    checked={stocktakeDateFilter !== 'custom'}
+                    name="stocktake-date-filter"
+                    readOnly
+                    type="radio"
+                    onChange={() => undefined}
+                  />
+                  <span>{stocktakeDateFilter === 'custom' ? stocktakeDateLabels.month : stocktakeDateLabels[stocktakeDateFilter]}</span>
+                  <span className="management-filter-choice-trailing">
+                    <ChevronRight aria-hidden="true" size={17} />
+                  </span>
+                </div>
+                <label className={`management-filter-choice${stocktakeDateFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
+                  <input
+                    aria-label="Tùy chỉnh"
+                    checked={stocktakeDateFilter === 'custom'}
+                    name="stocktake-date-filter"
+                    type="radio"
+                    onChange={() => applyStocktakeCustomDateFilter()}
+                  />
+                  <span>{stocktakeDateFilter === 'custom' ? `${stocktakeDisplayDate(stocktakeDateFrom)} - ${stocktakeDisplayDate(stocktakeDateTo)}` : 'Tùy chỉnh'}</span>
+                  <CalendarDays aria-hidden="true" size={17} />
+                </label>
+              </div>
+              {stocktakeQuickTimeOpen ? (
+                <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
+                  {stocktakeDateGroups.map((group) => (
+                    <section key={group.title}>
+                      <h3>{group.title}</h3>
+                      <div>
+                        {group.presets.map((preset) => (
+                          <button
+                            className={stocktakeDateFilter === preset ? 'management-filter-quick-time-active' : undefined}
+                            key={preset}
+                            type="button"
+                            onClick={() => applyStocktakeQuickDateFilter(preset)}
+                          >
+                            {stocktakeDateLabels[preset]}
+                          </button>
+                        ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : null}
+                {stocktakeDateFilter === 'custom' ? (
+                  <ManagementDateRangeInputs
+                    from={stocktakeDateFrom}
+                    to={stocktakeDateTo}
+                    onFromChange={(value) => applyStocktakeCustomDateFilter({ from: value })}
+                    onToChange={(value) => applyStocktakeCustomDateFilter({ to: value })}
+                  />
+                ) : null}
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Trạng thái">
-              <select aria-label="Trạng thái phiếu kiểm" className="management-filter-select" defaultValue="all">
-                <option value="all">Tất cả</option>
-                <option value="draft">Phiếu tạm</option>
-                <option value="balanced">Đã cân bằng kho</option>
-                <option value="cancelled">Đã hủy</option>
-              </select>
+              {[
+                ['draft', 'Phiếu tạm'],
+                ['balanced', 'Đã cân bằng kho'],
+                ['cancelled', 'Đã hủy'],
+              ].map(([value, label]) => {
+                const stocktakeStatus = value as Stocktake['status']
+                const checked = stocktakeStatusSelection.includes(stocktakeStatus)
+                return (
+                  <label className={`management-filter-choice${checked ? ' management-filter-choice-active' : ''}`} key={value}>
+                    <input
+                      aria-label={label}
+                      checked={checked}
+                      type="checkbox"
+                      onChange={() => toggleStocktakeStatus(stocktakeStatus)}
+                    />
+                    <span>{label}</span>
+                  </label>
+                )
+              })}
             </ManagementFilterGroup>
           </ManagementFilterSidebar>
         ) : (
@@ -480,13 +669,13 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 {stocktakes.map((item) => (
                   <tr key={item.id}>
                     <td><strong>{item.code}</strong></td>
-                    <td>{dateText(item.created_at)}</td>
-                    <td>{dateText(item.balanced_at)}</td>
-                    <td>{numberText(item.total_actual_qty)}</td>
-                    <td>{moneyText(item.total_actual_value)}</td>
-                    <td>{moneyText(item.total_difference_value)}</td>
-                    <td>{numberText(item.increased_qty)}</td>
-                    <td>{numberText(item.decreased_qty)}</td>
+                    <td>{stocktakeDateTimeText(item.created_at)}</td>
+                    <td>{stocktakeDateTimeText(item.balanced_at)}</td>
+                    <td>{stocktakeQuantityText(item.total_actual_qty)}</td>
+                    <td>{stocktakeMoneyText(item.total_actual_value)}</td>
+                    <td>{stocktakeMoneyText(item.total_difference_value)}</td>
+                    <td>{stocktakeQuantityText(item.increased_qty)}</td>
+                    <td>{stocktakeQuantityText(item.decreased_qty)}</td>
                     <td>{item.note ?? 'Chưa có'}</td>
                     <td><StatusChip tone={item.status === 'balanced' ? 'success' : 'neutral'}>{stocktakeStatusText(item.status)}</StatusChip></td>
                   </tr>
@@ -697,7 +886,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                   <li key={item.id}>
                     <span>{item.code}</span>
                     <StatusChip tone={item.status === 'balanced' ? 'success' : 'neutral'}>{stocktakeStatusText(item.status)}</StatusChip>
-                    <small>{dateText(item.created_at)}</small>
+                    <small>{stocktakeDateTimeText(item.created_at)}</small>
                   </li>
                 ))}
               </ul>
@@ -858,6 +1047,24 @@ export function InventoryPage({ service }: { service: InventoryService }) {
           </section>
         </div>
       ) : null}
+
+      <StocktakeImportDialog
+        open={stocktakeImportOpen}
+        service={service}
+        onClose={() => setStocktakeImportOpen(false)}
+        onOldDataDeleted={() => void loadStocktakeList({ page: 1 })}
+        onImported={() => void loadStocktakeList({ page: 1 })}
+      />
     </ManagementPage>
   )
+}
+
+function stocktakeStatusQuery(selection: Array<Stocktake['status']>) {
+  return selection.length === 0 ? '__none__' : selection.join(',')
+}
+
+function stocktakeDisplayDate(value: string) {
+  if (!value) return '--/--/----'
+  const [year, month, day] = value.split('-')
+  return `${day}/${month}/${year}`
 }

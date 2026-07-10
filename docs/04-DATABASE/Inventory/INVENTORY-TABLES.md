@@ -550,7 +550,26 @@ Lưu từng dòng sản phẩm/vật tư được kiểm và số chênh lệch.
 
 ---
 
-## 13. Production reconciliation
+## 13. KiotViet stocktake import note
+
+Import lịch sử kiểm kho từ KiotViet là dữ liệu đối soát, không phải thao tác cân bằng kho vận hành của QCVL.
+
+- `stocktakes.source_type` cho phép thêm `kiotviet_import`.
+- `stocktakes.source_system = 'kiotviet'`.
+- `stocktakes.source_code` lưu mã kiểm kho gốc như `KK000333`.
+- `stocktakes.source_created_at` và `stocktakes.source_balanced_at` lưu thời gian gốc từ KiotViet.
+- `stocktakes.created_by` có thể null với dữ liệu import lịch sử.
+- `stocktake_items.product_id` có thể null nếu mã hàng KiotViet đã xóa (`{DEL}`) hoặc chưa có trong QCVL.
+- `stocktake_items.stock_unit_id` có thể null; ĐVT gốc lưu ở `source_unit_name`.
+- `stocktake_items.source_row_number`, `source_product_code`, `source_product_name`, `source_unit_name`, `line_actual_value`, `line_difference_value` giữ snapshot gốc để import lại nhiều lần không mất lịch sử.
+- Import KiotViet không insert `stock_movements`.
+- Import KiotViet không update `inventory_provisional_balances`.
+- Import KiotViet không thay tồn chính thức; muốn đổi tồn phải đi qua flow cân bằng kho QCVL riêng.
+- `GET /api/v1/products` hydrate `latest_kiotviet_stocktake` bằng cách đọc phiếu `stocktakes.source_type = 'kiotviet_import'` mới nhất theo `source_balanced_at`, `source_created_at`, rồi `created_at`. Đây là metadata hiển thị trong tab `Tồn kho`, không phải nguồn tính tồn.
+
+---
+
+## 14. Production reconciliation
 
 Inventory MVP không định nghĩa bảng production events.
 
@@ -564,7 +583,7 @@ Các bảng production/workstation sẽ được thiết kế trong domain Integ
 
 ---
 
-## 14. ERD tóm tắt
+## 15. ERD tóm tắt
 
 ```mermaid
 erDiagram

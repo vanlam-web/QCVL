@@ -1,12 +1,14 @@
 import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { CalendarDays, ChevronLeft, ChevronRight, Search, Upload, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { currentMonthRange, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
 import type { InventoryRoll, InventorySheet } from '../inventory/types'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDateRangeInputs,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -26,18 +28,22 @@ import {
   type CatalogBomFormLine,
 } from './catalog-presenter'
 import { readProductFavoriteIds, writeProductFavoriteIds } from './catalog-storage'
+import { ProductImportDialog } from './ProductImportDialog'
 
 interface CatalogState {
   products: Product[]
   page: number
   pageSize: number
   total: number
+  totalAll?: number
 }
 
 const productPageSize = 15
 const stockMovementPageSize = 15
 type ProductKindFilter = ProductKind | 'all'
 type ProductGroupFilter = string | 'all'
+type ProductInventoryShapeFilter = NonNullable<Product['inventory_shape']> | 'all'
+type ProductCreatedDateFilter = QuickDateRangePreset | 'custom'
 type ProductCreateKind = ProductKind
 type BomFormLine = CatalogBomFormLine
 type StockAdjustForm = { actualQty: string; reason: string }
@@ -89,6 +95,31 @@ const productKindLabels: Record<ProductKind, string> = {
   combo: 'Combo',
 }
 
+const productCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<ProductCreatedDateFilter, 'custom'>> }> = [
+  { title: 'Theo ngày', presets: ['today', 'yesterday'] },
+  { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
+  { title: 'Theo tháng', presets: ['month', 'last_month', 'last_30_days'] },
+  { title: 'Theo quý', presets: ['quarter', 'last_quarter'] },
+  { title: 'Theo năm', presets: ['year', 'last_year', 'all'] },
+]
+
+const productCreatedDateLabels: Record<ProductCreatedDateFilter, string> = {
+  all: 'Toàn thời gian',
+  today: 'Hôm nay',
+  yesterday: 'Hôm qua',
+  week: 'Tuần này',
+  last_week: 'Tuần trước',
+  last_7_days: '7 ngày qua',
+  month: 'Tháng này',
+  last_month: 'Tháng trước',
+  last_30_days: '30 ngày qua',
+  quarter: 'Quý này',
+  last_quarter: 'Quý trước',
+  year: 'Năm nay',
+  last_year: 'Năm trước',
+  custom: 'Tùy chỉnh',
+}
+
 const movementTypeLabels: Record<string, string> = {
   sale_deduction: 'Bán hàng',
   purchase_receipt: 'Nhập hàng',
@@ -106,6 +137,18 @@ const detailTabs: Array<{ key: ProductDetailTab; label: string }> = [
   { key: 'notes', label: 'Ghi chú' },
 ]
 
+function catalogProductInventoryText(product: Product) {
+  if (product.kiotviet_provisional_stock) {
+    return `${catalogQuantityText(product.kiotviet_provisional_stock.quantity)} ${product.kiotviet_provisional_stock.unit_name}`
+  }
+  return 'Chưa có'
+}
+
+function stocktakeQuantityText(value: number | null, unitName: string | null) {
+  if (value === null) return 'Chưa có'
+  return `${catalogQuantityText(value)}${unitName ? ` ${unitName}` : ''}`
+}
+
 
 export function CatalogPage({
   service,
@@ -117,6 +160,7 @@ export function CatalogPage({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [productImportOpen, setProductImportOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null)
   const [selectedDetailTab, setSelectedDetailTab] = useState<ProductDetailTab>('info')
@@ -141,6 +185,14 @@ export function CatalogPage({
   const [lastProductKindFilter, setLastProductKindFilter] = useState<ProductKindFilter>('all')
   const [productGroupFilter, setProductGroupFilter] = useState<ProductGroupFilter>('all')
   const [lastProductGroupFilter, setLastProductGroupFilter] = useState<ProductGroupFilter>('all')
+  const [inventoryShapeFilter, setInventoryShapeFilter] = useState<ProductInventoryShapeFilter>('all')
+  const [lastInventoryShapeFilter, setLastInventoryShapeFilter] = useState<ProductInventoryShapeFilter>('all')
+  const [productCreatedDateFilter, setProductCreatedDateFilter] = useState<ProductCreatedDateFilter>('all')
+  const [productCreatedDateFrom, setProductCreatedDateFrom] = useState('')
+  const [productCreatedDateTo, setProductCreatedDateTo] = useState('')
+  const [productCreatedQuickTimeOpen, setProductCreatedQuickTimeOpen] = useState(false)
+  const [lastProductCreatedDateFrom, setLastProductCreatedDateFrom] = useState('')
+  const [lastProductCreatedDateTo, setLastProductCreatedDateTo] = useState('')
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(productPageSize)
   const [form, setForm] = useState<{
@@ -169,6 +221,9 @@ export function CatalogPage({
     status?: ProductStatus | 'all'
     product_kind?: ProductKindFilter
     product_group_id?: ProductGroupFilter
+    inventory_shape?: ProductInventoryShapeFilter
+    created_from?: string
+    created_to?: string
     page?: number
     page_size?: number
   } = {}) {
@@ -176,6 +231,9 @@ export function CatalogPage({
     const nextStatus = filters.status ?? lastStatus
     const nextProductKind = filters.product_kind ?? lastProductKindFilter
     const nextProductGroup = filters.product_group_id ?? lastProductGroupFilter
+    const nextInventoryShape = filters.inventory_shape ?? lastInventoryShapeFilter
+    const nextCreatedFrom = filters.created_from ?? lastProductCreatedDateFrom
+    const nextCreatedTo = filters.created_to ?? lastProductCreatedDateTo
     const nextPage = filters.page ?? page
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
@@ -187,12 +245,18 @@ export function CatalogPage({
         status: nextStatus,
         ...(nextProductKind === 'all' ? {} : { product_kind: nextProductKind }),
         ...(nextProductGroup === 'all' ? {} : { product_group_id: nextProductGroup }),
+        ...(nextInventoryShape === 'all' ? {} : { inventory_shape: nextInventoryShape }),
+        ...(nextCreatedFrom ? { created_from: nextCreatedFrom } : {}),
+        ...(nextCreatedTo ? { created_to: nextCreatedTo } : {}),
       })
-      setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total })
+      setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total, totalAll: result.total_all })
       setLastSearch(nextSearch)
       setLastStatus(nextStatus)
       setLastProductKindFilter(nextProductKind)
       setLastProductGroupFilter(nextProductGroup)
+      setLastInventoryShapeFilter(nextInventoryShape)
+      setLastProductCreatedDateFrom(nextCreatedFrom)
+      setLastProductCreatedDateTo(nextCreatedTo)
       setPage(result.page)
       setPageSize(result.page_size)
       setSelectedProductId(null)
@@ -213,7 +277,7 @@ export function CatalogPage({
           service.listProductGroups(),
         ])
         if (!active) return
-        setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total })
+        setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total, totalAll: result.total_all })
         setProductGroups(groupResult.items)
         setPage(result.page)
         setPageSize(result.page_size)
@@ -233,7 +297,16 @@ export function CatalogPage({
     event.preventDefault()
     setProductSearchSuggestionsOpen(false)
     setPage(1)
-    await load({ search: search.trim(), status, product_kind: productKindFilter, product_group_id: productGroupFilter, page: 1 })
+    await load({
+      search: search.trim(),
+      status,
+      product_kind: productKindFilter,
+      product_group_id: productGroupFilter,
+      inventory_shape: inventoryShapeFilter,
+      created_from: productCreatedDateFrom,
+      created_to: productCreatedDateTo,
+      page: 1,
+    })
   }
 
   async function suggestProducts(nextSearch: string) {
@@ -252,6 +325,9 @@ export function CatalogPage({
         status,
         ...(productKindFilter === 'all' ? {} : { product_kind: productKindFilter }),
         ...(productGroupFilter === 'all' ? {} : { product_group_id: productGroupFilter }),
+        ...(inventoryShapeFilter === 'all' ? {} : { inventory_shape: inventoryShapeFilter }),
+        ...(productCreatedDateFrom ? { created_from: productCreatedDateFrom } : {}),
+        ...(productCreatedDateTo ? { created_to: productCreatedDateTo } : {}),
         page: 1,
         page_size: 8,
       })
@@ -269,28 +345,71 @@ export function CatalogPage({
     setSearch(product.code)
     setProductSearchSuggestionsOpen(false)
     setPage(1)
-    await load({ search: product.code, status, product_kind: productKindFilter, product_group_id: productGroupFilter, page: 1 })
+    await load({
+      search: product.code,
+      status,
+      product_kind: productKindFilter,
+      product_group_id: productGroupFilter,
+      inventory_shape: inventoryShapeFilter,
+      created_from: productCreatedDateFrom,
+      created_to: productCreatedDateTo,
+      page: 1,
+    })
   }
 
   async function applySidebarFilters(nextFilters: Partial<{
     status: ProductStatus | 'all'
     product_kind: ProductKindFilter
     product_group_id: ProductGroupFilter
+    inventory_shape: ProductInventoryShapeFilter
+    created_from: string
+    created_to: string
   }>) {
     const nextStatus = nextFilters.status ?? status
     const nextProductKind = nextFilters.product_kind ?? productKindFilter
     const nextProductGroup = nextFilters.product_group_id ?? productGroupFilter
+    const nextInventoryShape = nextFilters.inventory_shape ?? inventoryShapeFilter
+    const nextCreatedFrom = nextFilters.created_from ?? productCreatedDateFrom
+    const nextCreatedTo = nextFilters.created_to ?? productCreatedDateTo
     setStatus(nextStatus)
     setProductKindFilter(nextProductKind)
     setProductGroupFilter(nextProductGroup)
+    setInventoryShapeFilter(nextInventoryShape)
+    setProductCreatedDateFrom(nextCreatedFrom)
+    setProductCreatedDateTo(nextCreatedTo)
     setPage(1)
     await load({
       search: search.trim(),
       status: nextStatus,
       product_kind: nextProductKind,
       product_group_id: nextProductGroup,
+      inventory_shape: nextInventoryShape,
+      created_from: nextCreatedFrom,
+      created_to: nextCreatedTo,
       page: 1,
     })
+  }
+
+  function productDisplayDate(value: string) {
+    if (!value) return ''
+    const [year, month, day] = value.split('-')
+    return `${day}/${month}/${year}`
+  }
+
+  async function applyProductQuickDateFilter(nextFilter: Exclude<ProductCreatedDateFilter, 'custom'>) {
+    const range = quickDateRange(nextFilter)
+    setProductCreatedDateFilter(nextFilter)
+    setProductCreatedQuickTimeOpen(false)
+    await applySidebarFilters({ created_from: range.from, created_to: range.to })
+  }
+
+  async function applyProductCustomDateFilter(input: Partial<{ from: string; to: string }> = {}) {
+    const fallbackRange = productCreatedDateFrom || productCreatedDateTo ? { from: productCreatedDateFrom, to: productCreatedDateTo } : currentMonthRange()
+    const nextFrom = input.from ?? fallbackRange.from
+    const nextTo = input.to ?? fallbackRange.to
+    setProductCreatedDateFilter('custom')
+    setProductCreatedQuickTimeOpen(false)
+    await applySidebarFilters({ created_from: nextFrom, created_to: nextTo })
   }
 
   async function goToPage(nextPage: number) {
@@ -599,7 +718,7 @@ export function CatalogPage({
           <ManagementCompactSearch
             label="Tìm hàng hóa"
             leadingIcon={<Search aria-hidden="true" size={16} />}
-            placeholder="Tìm mã, tên hàng"
+            placeholder="Theo mã, tên hàng"
             trailingAction={
               <ManagementCompactCreateAction ariaLabel="Tạo hàng hóa" onClick={() => setCreateOpen(true)} />
             }
@@ -623,13 +742,19 @@ export function CatalogPage({
               if (product) void selectProductSuggestion(product)
             }}
           />
+          <button className="button button-secondary" type="button" onClick={() => setProductImportOpen(true)}>
+            <Upload aria-hidden="true" size={16} />
+            Import
+          </button>
         </ManagementCompactToolbar>
       }
       filter={
         <ManagementFilterSidebar
           activeSummary={activeFilterSummary}
           ariaLabel="Bộ lọc hàng hóa"
+          popoverOpen={productCreatedQuickTimeOpen}
           title="Bộ lọc"
+          onPopoverClose={() => setProductCreatedQuickTimeOpen(false)}
         >
           <button
             aria-label="Ẩn bộ lọc hàng hóa"
@@ -640,6 +765,103 @@ export function CatalogPage({
           >
             <ChevronLeft aria-hidden="true" size={16} />
           </button>
+          <ManagementFilterGroup title="Nhóm hàng">
+            <label>
+              <span className="sr-only">Nhóm hàng</span>
+              <select
+                aria-label="Nhóm hàng"
+                className="management-filter-select"
+                value={productGroupFilter}
+                onChange={(event) => void applySidebarFilters({ product_group_id: event.target.value as ProductGroupFilter })}
+              >
+                <option value="all">Chọn nhóm hàng</option>
+                {productGroups.map((group) => (
+                  <option key={group.id} value={group.id}>{group.name}</option>
+                ))}
+              </select>
+            </label>
+          </ManagementFilterGroup>
+          <ManagementFilterGroup title="Tồn kho">
+            <label>
+              <span className="sr-only">Tồn kho</span>
+              <select
+                aria-label="Tồn kho"
+                className="management-filter-select"
+                value={inventoryShapeFilter}
+                onChange={(event) => void applySidebarFilters({ inventory_shape: event.target.value as ProductInventoryShapeFilter })}
+              >
+                <option value="all">Tất cả</option>
+                <option value="normal">Hàng thường</option>
+                <option value="roll">Cuộn</option>
+                <option value="sheet">Tấm</option>
+              </select>
+            </label>
+          </ManagementFilterGroup>
+          <ManagementFilterGroup title="Thời gian tạo">
+            <div className="management-filter-time-options">
+              <div
+                aria-expanded={productCreatedQuickTimeOpen}
+                className={`management-filter-choice${productCreatedDateFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
+                onClick={() => {
+                  if (productCreatedDateFilter === 'custom') void applyProductQuickDateFilter('all')
+                  else setProductCreatedQuickTimeOpen((current) => !current)
+                }}
+              >
+                <input
+                  aria-label={productCreatedDateFilter === 'custom' ? productCreatedDateLabels.all : productCreatedDateLabels[productCreatedDateFilter]}
+                  checked={productCreatedDateFilter !== 'custom'}
+                  name="product-created-date-filter"
+                  readOnly
+                  type="radio"
+                  onChange={() => undefined}
+                />
+                <span>{productCreatedDateFilter === 'custom' ? productCreatedDateLabels.all : productCreatedDateLabels[productCreatedDateFilter]}</span>
+                <span className="management-filter-choice-trailing">
+                  <ChevronRight aria-hidden="true" size={17} />
+                </span>
+              </div>
+              <label className={`management-filter-choice${productCreatedDateFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
+                <input
+                  aria-label="Tùy chỉnh"
+                  checked={productCreatedDateFilter === 'custom'}
+                  name="product-created-date-filter"
+                  type="radio"
+                  onChange={() => void applyProductCustomDateFilter()}
+                />
+                <span>{productCreatedDateFilter === 'custom' ? `${productDisplayDate(productCreatedDateFrom)} - ${productDisplayDate(productCreatedDateTo)}` : 'Tùy chỉnh'}</span>
+                <CalendarDays aria-hidden="true" size={17} />
+              </label>
+            </div>
+            {productCreatedQuickTimeOpen ? (
+              <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
+                {productCreatedDateGroups.map((group) => (
+                  <section key={group.title}>
+                    <h3>{group.title}</h3>
+                    <div>
+                      {group.presets.map((preset) => (
+                        <button
+                          className={productCreatedDateFilter === preset ? 'management-filter-quick-time-active' : undefined}
+                          key={preset}
+                          type="button"
+                          onClick={() => void applyProductQuickDateFilter(preset)}
+                        >
+                          {productCreatedDateLabels[preset]}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
+            {productCreatedDateFilter === 'custom' ? (
+              <ManagementDateRangeInputs
+                from={productCreatedDateFrom}
+                to={productCreatedDateTo}
+                onFromChange={(value) => void applyProductCustomDateFilter({ from: value })}
+                onToChange={(value) => void applyProductCustomDateFilter({ to: value })}
+              />
+            ) : null}
+          </ManagementFilterGroup>
           <ManagementFilterGroup title="Loại hàng">
             <label>
               <span className="sr-only">Loại hàng</span>
@@ -652,22 +874,6 @@ export function CatalogPage({
                 <option value="all">Tất cả</option>
                 {Object.entries(productKindLabels).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-          </ManagementFilterGroup>
-          <ManagementFilterGroup title="Nhóm hàng">
-            <label>
-              <span className="sr-only">Nhóm hàng</span>
-              <select
-                aria-label="Nhóm hàng"
-                className="management-filter-select"
-                value={productGroupFilter}
-                onChange={(event) => void applySidebarFilters({ product_group_id: event.target.value as ProductGroupFilter })}
-              >
-                <option value="all">Tất cả</option>
-                {productGroups.map((group) => (
-                  <option key={group.id} value={group.id}>{group.name}</option>
                 ))}
               </select>
             </label>
@@ -785,8 +991,8 @@ export function CatalogPage({
                         </td>
                         <td>{product.name}</td>
                         <td>{formatMoney(product.latest_purchase_cost ?? 0)}</td>
-                        <td>Chưa có</td>
-                        <td>Chưa có</td>
+                        <td>{product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price)}</td>
+                        <td>{catalogProductInventoryText(product)}</td>
                         <td>{product.unit_name}</td>
                         <td>Chưa có</td>
                       </tr>
@@ -838,7 +1044,7 @@ export function CatalogPage({
                                   </div>
                                   <div>
                                     <dt>Giá bán</dt>
-                                    <dd>Thiết lập ở Bảng giá</dd>
+                                    <dd>{product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price)}</dd>
                                   </div>
                                   <div>
                                     <dt>Loại tồn</dt>
@@ -846,7 +1052,7 @@ export function CatalogPage({
                                   </div>
                                   <div>
                                     <dt>Tồn kho</dt>
-                                    <dd>Chưa có</dd>
+                                    <dd>{catalogProductInventoryText(product)}</dd>
                                   </div>
                                   <div>
                                     <dt>Trạng thái</dt>
@@ -891,6 +1097,18 @@ export function CatalogPage({
                                   <h3>BOM/Vật tư cấu thành</h3>
                                   {bomByProductId[product.id] ? <span>Version {bomByProductId[product.id]?.version}</span> : <span>Chưa có BOM</span>}
                                 </header>
+                                {product.draft_bom ? (
+                                  <dl className="management-detail-meta-grid management-detail-meta-grid-four">
+                                    <div>
+                                      <dt>BOM nháp KiotViet</dt>
+                                      <dd>{product.draft_bom.item_count} vật tư</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Trạng thái</dt>
+                                      <dd>Cần rà soát trước khi kích hoạt</dd>
+                                    </div>
+                                  </dl>
+                                ) : null}
                                 <table aria-label={`Vật tư cấu thành ${product.code}`} className="catalog-bom-table">
                                   <thead>
                                     <tr>
@@ -1048,6 +1266,38 @@ export function CatalogPage({
                                   <h3>Tồn kho</h3>
                                   <span>{catalogInventoryShapeLabel(product.inventory_shape ?? 'normal')}</span>
                                 </header>
+                                {product.kiotviet_provisional_stock ? (
+                                  <dl className="management-detail-meta-grid management-detail-meta-grid-four">
+                                    <div>
+                                      <dt>Tồn tạm KiotViet</dt>
+                                      <dd>{catalogQuantityText(product.kiotviet_provisional_stock.quantity)} {product.kiotviet_provisional_stock.unit_name}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Trạng thái</dt>
+                                      <dd>Chưa phải tồn kho vận hành</dd>
+                                    </div>
+                                  </dl>
+                                ) : null}
+                                {product.latest_kiotviet_stocktake ? (
+                                  <dl className="management-detail-meta-grid management-detail-meta-grid-four">
+                                    <div>
+                                      <dt>Kiểm kho KiotViet gần nhất</dt>
+                                      <dd>{product.latest_kiotviet_stocktake.code}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Kiểm thực tế</dt>
+                                      <dd>{stocktakeQuantityText(product.latest_kiotviet_stocktake.actual_qty, product.latest_kiotviet_stocktake.unit_name)}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>SL lệch</dt>
+                                      <dd>{stocktakeQuantityText(product.latest_kiotviet_stocktake.difference_qty, product.latest_kiotviet_stocktake.unit_name)}</dd>
+                                    </div>
+                                    <div>
+                                      <dt>Ghi chú</dt>
+                                      <dd>Chỉ là lịch sử đối soát, không thay tồn tạm hiện tại</dd>
+                                    </div>
+                                  </dl>
+                                ) : null}
                                 {stocktakeNotices[product.id] ? (
                                   <p role="status">
                                     Đã tạo phiếu kiểm kho {stocktakeNotices[product.id].code}.{' '}
@@ -1260,6 +1510,7 @@ export function CatalogPage({
               page={page}
               pageSize={pageSize}
               total={state.total}
+              totalDetail={state.totalAll !== undefined && state.totalAll !== state.total ? `${state.totalAll} mã hàng` : undefined}
               onFirst={() => void goToPage(1)}
               onLast={() => void goToPage(totalPages)}
               onNext={() => void goToPage(page + 1)}
@@ -1456,7 +1707,16 @@ export function CatalogPage({
           </section>
         </div>
       ) : null}
+      <ProductImportDialog
+        open={productImportOpen}
+        service={service}
+        onClose={() => setProductImportOpen(false)}
+        onOldDataDeleted={() => void load({ page: 1 })}
+        onImported={() => {
+          setProductImportOpen(false)
+          void load({ page: 1 })
+        }}
+      />
     </ManagementPage>
   )
 }
-

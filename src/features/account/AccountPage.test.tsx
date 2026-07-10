@@ -96,7 +96,7 @@ it('renders real signed-in devices on the account page', () => {
   expect(within(devicesCard).getByText('MacBook Pro')).toBeInTheDocument()
   expect(within(devicesCard).getByText('Đang dùng')).toBeInTheDocument()
   expect(within(devicesCard).getByText('Chrome • macOS • 203.0.113.10')).toBeInTheDocument()
-  expect(within(devicesCard).getByText('Hoạt động gần nhất: 06/07/2026 21:00')).toBeInTheDocument()
+  expect(within(devicesCard).getByText('Hoạt động gần nhất: 06/07/2026 14:00')).toBeInTheDocument()
   expect(within(devicesCard).getByRole('button', { name: 'Thiết bị này' })).toBeDisabled()
   expect(within(devicesCard).getByRole('button', { name: 'Đăng xuất' })).toBeEnabled()
   expect(within(devicesCard).queryByText('Chưa có dữ liệu thiết bị đăng nhập')).not.toBeInTheDocument()

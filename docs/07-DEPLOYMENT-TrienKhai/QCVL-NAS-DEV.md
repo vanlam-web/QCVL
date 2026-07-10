@@ -1,6 +1,58 @@
 # QCVL NAS Dev Runbook
 
-> Cập nhật: 2026-07-09.
+> Cập nhật: 2026-07-10.
+
+## Latest NAS Deploy - 2026-07-10 Product Import Schema Guard
+
+Da sua loi NAS `/products` va import hang hoa bi `May chu gap loi`:
+
+- Root cause: code da duoc copy tu dev len NAS, nhung PostgreSQL NAS van giu schema cu. Bang `inventory_provisional_balances` thieu cot `note` va thieu unique index `(organization_id, product_id, source_type)`, nen import KiotViet bi 500.
+- Fix code: `ensureInventoryProvisionalBalancesTable` phai `alter table ... add column if not exists` cho cac cot runtime can dung, va tao unique index `inventory_provisional_balances_org_product_source_uidx`.
+- Fix du lieu NAS ngay 2026-07-10: da bo sung cot/index tren PostgreSQL NAS, deploy code guard len NAS, `health:nas` tra `ok`.
+- Proof sau deploy: `GET /api/v1/products?status=active&page=1&page_size=15` tra `total=382`, `total_all=496`; preview import hang hoa thanh cong; full import file KiotViet thanh cong voi `valid_rows=382`, `updated_rows=382`, `provisional_stock_updated_rows=214`, `bom_updated_rows=103`.
+
+Quy tac bat buoc sau nay:
+
+- Deploy code khong dong nghia DB dev va DB NAS giong nhau. Moi thay doi backend co them bang/cot/index phai co schema guard hoac migration ro rang.
+- Neu API NAS tra `May chu gap loi` kem `req-...`, dung trace/log de tim loi goc. Khong sua UI truoc khi biet loi SQL/backend.
+- Sau deploy lien quan import, phai test ca 3 buoc: list page, preview import, full import.
+
+## Environment Parity Rule - 3202 va 3200
+
+Muc tieu: `127.0.0.1:3202` la noi test truoc, `100.84.228.125:3200` la ban NAS duoc dua len sau khi chot. Hai moi truong chi duoc coi la "giong nhau nhu duc" khi cung thoa ca 3 dieu kien:
+
+- Cung code/build tu workspace hien tai.
+- Cung danh sach migration da apply trong `schema_migrations`.
+- Cung quy trinh verify sau deploy: health, API danh sach, import preview/full neu thay doi import.
+
+Quy tac bat buoc:
+
+- Neu sua backend co tao bang/cot/index/constraint moi, phai them file `database/migrations/NNNN_*.sql`. Khong chi dua logic `ensure...` trong `server/db.ts`.
+- `deploy:nas` phai chay `db:migrate` truoc `health:nas`. Neu migration fail thi dung deploy, khong bao NAS san sang.
+- Moi lan lam tren `3202`, ghi thay doi vao docs/plan lien quan truoc khi dua `3200`.
+- Neu `3200` loi ma `3202` khong loi, kiem tra migration truoc: code giong nhung DB lech van la loi deploy.
+
+Lenh kiem tra trang thai moi truong:
+
+```powershell
+$env:QCVL_ENV_NAME='nas'
+$env:QCVL_ENV_BASE_URL='http://100.84.228.125:3200'
+$env:DATABASE_URL='<DATABASE_URL cua NAS hoac dev>'
+npm run env:status
+Remove-Item Env:\QCVL_ENV_NAME
+Remove-Item Env:\QCVL_ENV_BASE_URL
+Remove-Item Env:\DATABASE_URL
+```
+
+Deploy NAS chuan:
+
+```powershell
+$env:QCVL_NAS_DEPLOY_CONFIRM='true'
+npm run deploy:nas
+Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
+```
+
+`deploy:nas` se doc `.env` NAS tu `\\100.84.228.125\docker\QCVL\.env`, copy code/database, chay migration NAS, roi health check. Khong hardcode secret vao repo.
 
 ## Latest NAS Deploy - 2026-07-09 SalesDocuments Filter
 
@@ -16,9 +68,11 @@ Da deploy len NAS thay doi bo loc trang Hoa don/SalesDocuments:
 
 Luu y khi test local:
 
-- Neu khong set `VITE_API_BASE_URL`, frontend dev fallback sang `http://100.84.228.125:3200`.
-- Khi sua ca frontend va backend, phai test bang dung cap frontend/backend cung phien ban.
-- Loi da gap: frontend local `127.0.0.1:3202` gui `status=active,completed` vao backend NAS cu, backend cu chi so sanh chuoi don nen tra rong. Cach dung la deploy backend tuong ung len NAS, hoac chay API dev cung code moi.
+- Frontend dev `127.0.0.1:3201/3202` mac dinh goi API same-origin `/api`; Vite proxy sang API dev `http://127.0.0.1:3100`.
+- Khi sua ca frontend va backend, phai chay ca `npm run api:dev` va Vite dev de test dung cap frontend/backend cung phien ban.
+- Neu khong co `DATABASE_URL`, API dev dung memory repository chi de preview/test UI truoc khi deploy. Du lieu nay khong ben va khong thay the NAS PostgreSQL.
+- Khi restart API dev memory, danh sach Hang hoa se rong. Nap lai file KiotViet bang `npm run dev:seed-products` hoac chi ro file: `npm run dev:seed-products -- --file "C:\Users\Admin\Downloads\DanhSachSanPham_KV09072026-215404-812.xlsx"`.
+- Loi da gap: frontend local `127.0.0.1:3202` goi nham backend NAS cu nen route import moi tra `RESOURCE_NOT_FOUND`/`Khong tim thay du lieu can thao tac`. Cach dung la chay API dev cung code moi hoac deploy backend tuong ung len NAS khi Owner cho phep.
 
 ## 1. Trạng thái hiện hành
 
@@ -34,7 +88,7 @@ Luu y khi test local:
 | NAS database | PostgreSQL 16 container `qcvl-postgres` |
 | Runtime | React/Vite frontend + QCVL Node API + PostgreSQL |
 
-Browser chỉ được gọi API qua `http://100.84.228.125:3200`. Port `3100` là port trong container, không dùng trong frontend bundle.
+Bundle NAS chỉ được gọi API qua `http://100.84.228.125:3200`. Frontend dev local gọi `/api` same-origin và để Vite proxy sang `http://127.0.0.1:3100`; không hard-code NAS API khi test dev trước deploy.
 
 ## 2. Quyết định kiến trúc
 

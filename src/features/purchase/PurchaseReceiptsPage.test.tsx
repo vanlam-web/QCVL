@@ -213,8 +213,8 @@ it('filters purchase receipts by search status and dates', async () => {
   const searchInput = within(filterForm).getByLabelText('Tìm phiếu/NCC')
   await userEvent.type(searchInput, 'Nguyễn Phong')
   await userEvent.selectOptions(within(filterSidebar).getByRole('combobox', { name: 'Trạng thái' }), 'all')
-  await userEvent.type(within(filterSidebar).getByLabelText('Thời gian từ'), '2026-06-01')
-  await userEvent.type(within(filterSidebar).getByLabelText('Thời gian tới'), '2026-07-31')
+  await userEvent.type(within(filterSidebar).getByLabelText('Từ ngày'), '01/06/2026')
+  await userEvent.type(within(filterSidebar).getByLabelText('Đến ngày'), '31/07/2026')
   await userEvent.type(searchInput, '{Enter}')
 
   expect(service.listReceipts).toHaveBeenLastCalledWith({

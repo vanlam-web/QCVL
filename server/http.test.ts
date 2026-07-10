@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
+import { createDevMemoryRepository } from './dev-memory-repository'
 import { createHttpHandler, hashPassword, type ServerRepository } from './http'
 
 const user = {
@@ -397,6 +398,29 @@ describe('createHttpHandler', () => {
     expect(rollBody.data.items.every((item: { product_kind: string; product_group_id: string }) => item.product_kind === 'roll' && item.product_group_id === 'pg-mica')).toBe(true)
   })
 
+  test('filters demo products by created date range', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products?status=active&created_from=2020-01-01&created_to=2020-01-31&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.total).toBe(0)
+    expect(body.data.items).toEqual([])
+  })
+
   test('sorts POS quick products by persisted invoice and quote usage', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -432,6 +456,727 @@ describe('createHttpHandler', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.items[0].id).toBe('product-005')
+  })
+
+  test('previews KiotViet product import without writing products', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet/preview', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            {
+              rowNumber: 2,
+              'Loại hàng': 'Hàng hóa',
+              'Nhóm hàng(3 Cấp)': 'Alu>>Vật tư',
+              'Mã hàng': 'A10T',
+              'Tên hàng': 'Alu 3li 0.1 Trắng',
+              'Giá bán': 650000,
+              'Giá vốn': 200000,
+              'Giá bán': 650000,
+              ĐVT: 'Tấm',
+              'Đang kinh doanh': 1,
+            },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.summary).toMatchObject({ valid_rows: 1, invalid_rows: 0, create_rows: 1, update_rows: 0 })
+  })
+
+  test('previews KiotViet product import from uploaded xlsx base64 when browser cannot parse it', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+    const workbook = buildMinimalXlsxBase64([
+      ['Mã hàng', 'Tên hàng', 'ĐVT'],
+      ['A10T', 'Alu 3li 0.1 Trắng', 'Tấm'],
+      ['NO-UNIT', 'Thiếu đơn vị', ''],
+    ])
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet/preview', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ cleanup_demo: false, file_base64: workbook }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.summary).toMatchObject({ valid_rows: 2, invalid_rows: 0, unit_review_rows: 1 })
+  })
+
+  test('previews KiotViet stocktake import without writing inventory', async () => {
+    const findProductsByCodes = vi.fn(async () => new Set(['HDA5']))
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      findProductsByCodes,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet/preview', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Mã kiểm kho': 'KK1', 'Mã hàng': 'HDA5', 'Tồn kho': 60, 'Kiểm thực tế': 58, 'SL lệch': -2 },
+            { rowNumber: 3, 'Mã kiểm kho': 'KK1', 'Mã hàng': 'MISS', 'Tồn kho': 1, 'Kiểm thực tế': 2, 'SL lệch': 1 },
+            { rowNumber: 4, 'Mã kiểm kho': 'KK2', 'Mã hàng': 'BAD', 'Tồn kho': 5, 'Kiểm thực tế': 7, 'SL lệch': 3 },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(findProductsByCodes).toHaveBeenCalledWith({ organizationId: 'org-1', codes: ['HDA5', 'MISS'] })
+    expect(body.data.summary).toMatchObject({
+      total_rows: 3,
+      valid_rows: 2,
+      invalid_rows: 1,
+      stocktake_count: 1,
+      product_code_count: 2,
+      matched_product_count: 1,
+      missing_product_count: 1,
+      formula_error_count: 1,
+    })
+    expect(body.data.missing_product_codes).toEqual(['MISS'])
+  })
+
+  test('previews KiotViet stocktake import from uploaded xlsx base64', async () => {
+    const findProductsByCodes = vi.fn(async () => new Set(['HDA5']))
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      findProductsByCodes,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+    const workbook = buildMinimalXlsxBase64([
+      ['Ma kiem kho', 'Ma hang', 'Ton kho', 'Kiem thuc te', 'SL lech'],
+      ['KK1', 'HDA5', '60', '58', '-2'],
+    ])
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet/preview', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ file_base64: workbook }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.summary).toMatchObject({ total_rows: 1, valid_rows: 1, stocktake_count: 1 })
+    expect(findProductsByCodes).toHaveBeenCalledWith({ organizationId: 'org-1', codes: ['HDA5'] })
+  })
+
+  test('imports KiotViet stocktake history without changing stock movements', async () => {
+    const deleteDemoStocktakesForImport = vi.fn(async () => ({ deleted: 1, blocked: 0 }))
+    const upsertImportedKiotVietStocktakes = vi.fn(async () => ({
+      stocktakes_created: 1,
+      stocktakes_updated: 0,
+      items_created: 2,
+      items_updated: 0,
+      missing_product_rows: 1,
+    }))
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      deleteDemoStocktakesForImport,
+      upsertImportedKiotVietStocktakes,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: true,
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK1', 'Ma hang': 'HDA5', 'Ton kho': 60, 'Kiem thuc te': 58, 'SL lech': -2 },
+            { rowNumber: 3, 'Ma kiem kho': 'KK1', 'Ma hang': 'OLD{DEL}', 'Ton kho': 3, 'Kiem thuc te': 0, 'SL lech': -3 },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(deleteDemoStocktakesForImport).toHaveBeenCalledWith({ organizationId: 'org-1' })
+    expect(upsertImportedKiotVietStocktakes).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      rows: [
+        expect.objectContaining({ source_code: 'KK1', product_code: 'HDA5', difference_qty: -2 }),
+        expect.objectContaining({ source_code: 'KK1', product_code: 'OLD{DEL}', is_deleted_product_code: true }),
+      ],
+    })
+    expect(body.data.summary).toMatchObject({
+      valid_rows: 2,
+      invalid_rows: 0,
+      stocktakes_created: 1,
+      items_created: 2,
+      missing_product_rows: 1,
+      cleanup_deleted_rows: 1,
+      cleanup_blocked_rows: 0,
+      creates_stock_movements: false,
+    })
+  })
+
+  test('lists imported KiotViet stocktakes after import in dev memory repository', async () => {
+    const testRepository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK1', 'Ma hang': 'HDA5', 'Ton kho': 60, 'Kiem thuc te': 58, 'SL lech': -2 },
+          ],
+        }),
+      }),
+    )
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes?page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const listBody = await listResponse.json()
+
+    expect(importResponse.status).toBe(200)
+    expect(listResponse.status).toBe(200)
+    expect(listBody.data.items).toEqual([
+      expect.objectContaining({
+        code: 'KK1',
+        source_type: 'kiotviet_import',
+        total_actual_qty: 58,
+        decreased_qty: 2,
+      }),
+    ])
+  })
+
+  test('filters imported KiotViet stocktakes by search, status, and source date in dev memory repository', async () => {
+    const testRepository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK-JUNE', 'Thoi gian': '2026-06-15T09:30:00.000Z', 'Ma hang': 'HDA5', 'Trang thai': 'Da can bang', 'Ton kho': 60, 'Kiem thuc te': 58, 'SL lech': -2 },
+            { rowNumber: 3, 'Ma kiem kho': 'KK-JULY', 'Thoi gian': '2026-07-02T09:30:00.000Z', 'Ma hang': 'HDA5', 'Trang thai': 'Da huy', 'Ton kho': 60, 'Kiem thuc te': 60, 'SL lech': 0 },
+          ],
+        }),
+      }),
+    )
+    expect(importResponse.status).toBe(200)
+
+    const [statusResponse, dateResponse, searchResponse, noneResponse] = await Promise.all([
+      handler(new Request('http://api.local/api/v1/inventory/stocktakes?status=cancelled&page=1&page_size=15', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/inventory/stocktakes?from=2026-06-01&to=2026-06-30&page=1&page_size=15', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/inventory/stocktakes?search=KK-JULY&page=1&page_size=15', { headers: { authorization } })),
+      handler(new Request('http://api.local/api/v1/inventory/stocktakes?status=__none__&page=1&page_size=15', { headers: { authorization } })),
+    ])
+    const [statusBody, dateBody, searchBody, noneBody] = await Promise.all([
+      statusResponse.json(),
+      dateResponse.json(),
+      searchResponse.json(),
+      noneResponse.json(),
+    ])
+
+    expect(statusBody.data.items.map((item: { code: string }) => item.code)).toEqual(['KK-JULY'])
+    expect(dateBody.data.items.map((item: { code: string }) => item.code)).toEqual(['KK-JUNE'])
+    expect(searchBody.data.items.map((item: { code: string }) => item.code)).toEqual(['KK-JULY'])
+    expect(noneBody.data.items).toEqual([])
+  })
+
+  test('cleans dev stocktake test artifacts before KiotViet import', async () => {
+    const testRepository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const seedResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK-CLEANUP-CHECK', 'Ma hang': 'HDA5', 'Ton kho': 1, 'Kiem thuc te': 1, 'SL lech': 0 },
+          ],
+        }),
+      }),
+    )
+    expect(seedResponse.status).toBe(200)
+
+    const cleanupResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: true,
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK-REAL', 'Ma hang': 'HDA5', 'Ton kho': 2, 'Kiem thuc te': 2, 'SL lech': 0 },
+          ],
+        }),
+      }),
+    )
+    const cleanupBody = await cleanupResponse.json()
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes?page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const listBody = await listResponse.json()
+
+    expect(cleanupResponse.status).toBe(200)
+    expect(cleanupBody.data.summary.cleanup_deleted_rows).toBe(1)
+    expect(listBody.data.items.map((item: { code: string }) => item.code)).toEqual(['KK-REAL'])
+  })
+
+  test('deletes old KiotViet stocktake imports through a dedicated endpoint', async () => {
+    const testRepository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK-REAL', 'Ma hang': 'HDA5', 'Ton kho': 2, 'Kiem thuc te': 2, 'SL lech': 0 },
+          ],
+        }),
+      }),
+    )
+
+    const deleteResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'DELETE',
+        headers: { authorization },
+      }),
+    )
+    const deleteBody = await deleteResponse.json()
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes?page=1&page_size=15', { headers: { authorization } }),
+    )
+    const listBody = await listResponse.json()
+
+    expect(deleteResponse.status).toBe(200)
+    expect(deleteBody.data).toEqual({ deleted_rows: 1, blocked_rows: 0 })
+    expect(listBody.data.items).toEqual([])
+  })
+
+  test('deletes old KiotViet product imports through a dedicated endpoint', async () => {
+    const testRepository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma hang': 'P1', 'Ten hang': 'Product 1', DVT: 'tam' },
+            { rowNumber: 3, 'Ma hang': 'P2', 'Ten hang': 'Product 2', DVT: 'tam' },
+          ],
+        }),
+      }),
+    )
+
+    const deleteResponse = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'DELETE',
+        headers: { authorization },
+      }),
+    )
+    const deleteBody = await deleteResponse.json()
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?page=1&page_size=15', { headers: { authorization } }),
+    )
+    const listBody = await listResponse.json()
+
+    expect(deleteResponse.status).toBe(200)
+    expect(deleteBody.data).toEqual({ deleted_rows: 2, blocked_rows: 0 })
+    expect(listBody.data.items).toEqual([])
+  })
+
+  test('rejects KiotViet stocktake import when formulas are invalid', async () => {
+    const upsertImportedKiotVietStocktakes = vi.fn()
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      upsertImportedKiotVietStocktakes,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/inventory/stocktakes/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Ma kiem kho': 'KK1', 'Ma hang': 'BAD', 'Ton kho': 5, 'Kiem thuc te': 7, 'SL lech': 3 },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+    expect(upsertImportedKiotVietStocktakes).not.toHaveBeenCalled()
+  })
+
+  test('imports KiotViet products by upserting product codes', async () => {
+    const upsertProductsByCode = vi.fn(async () => ({ created: 1, updated: 0, skipped: 0 }))
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      deleteDemoProductsForImport: vi.fn(async () => ({ deleted: 0, blocked: 0 })),
+      upsertProductGroupsByName: vi.fn(async () => new Map([['Alu>>Vật tư', 'pg-alu']])),
+      upsertProductsByCode,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: true,
+          rows: [
+            {
+              rowNumber: 2,
+              'Loại hàng': 'Hàng hóa',
+              'Nhóm hàng(3 Cấp)': 'Alu>>Vật tư',
+              'Mã hàng': 'A10T',
+              'Tên hàng': 'Alu 3li 0.1 Trắng',
+              'Giá vốn': 200000,
+              ĐVT: 'Tấm',
+              'Đang kinh doanh': 1,
+            },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.summary).toMatchObject({ created_rows: 1, updated_rows: 0 })
+    expect(upsertProductsByCode).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      rows: [expect.objectContaining({ code: 'A10T', product_group_id: 'pg-alu' })],
+    })
+  })
+
+  test('lists products imported into the dev memory repository', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            {
+              rowNumber: 2,
+              'Loại hàng': 'Hàng hóa',
+              'Nhóm hàng(3 Cấp)': 'Alu',
+              'Mã hàng': 'A10T',
+              'Tên hàng': 'Alu 3li 0.1 Trắng',
+              'Giá vốn': 200000,
+              'Giá bán': 650000,
+              'ĐVT': 'Tấm',
+              'Đang kinh doanh': 1,
+            },
+          ],
+        }),
+      }),
+    )
+    expect(importResponse.status).toBe(200)
+
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?search=A10T&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await listResponse.json()
+
+    expect(listResponse.status).toBe(200)
+    expect(body.data.items).toEqual([
+      expect.objectContaining({ code: 'A10T', name: 'Alu 3li 0.1 Trắng', default_sale_price: 650000 }),
+    ])
+  })
+
+  test('lists KiotViet provisional stock and draft BOM metadata for imported products', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            { rowNumber: 2, 'Mã hàng': 'DCS', 'Tên hàng': 'Decal sua', ĐVT: 'm2', 'Tồn kho': 12, 'Đang kinh doanh': 1 },
+            { rowNumber: 3, 'Mã hàng': 'F5', 'Tên hàng': 'Fomex 5mm', ĐVT: 'tam', 'Đang kinh doanh': 1 },
+            { rowNumber: 4, 'Mã hàng': 'HH', 'Tên hàng': 'Hop hoa', ĐVT: 'cai', 'Tồn kho': 4, 'Hàng thành phần': 'DCS:0.6|F5:0.3', 'Đang kinh doanh': 1 },
+          ],
+        }),
+      }),
+    )
+    expect(importResponse.status).toBe(200)
+
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?search=HH&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await listResponse.json()
+
+    expect(listResponse.status).toBe(200)
+    expect(body.data.items).toEqual([
+      expect.objectContaining({
+        code: 'HH',
+        kiotviet_provisional_stock: expect.objectContaining({
+          quantity: 4,
+          unit_name: 'cai',
+          source_type: 'kiotviet_import',
+        }),
+        draft_bom: expect.objectContaining({
+          status: 'draft',
+          item_count: 2,
+        }),
+      }),
+    ])
+  })
+
+  test('returns latest KiotViet stocktake evidence in product list data', async () => {
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      listProducts: vi.fn(async () => [{
+        id: 'product-hda5',
+        code: 'HDA5',
+        name: 'Hiflex 3m2',
+        status: 'active',
+        product_kind: 'goods',
+        unit_name: 'Cuộn',
+        sell_method: 'quantity',
+        latest_purchase_cost: 48520,
+        latest_purchase_cost_at: null,
+        default_sale_price: null,
+        product_group_id: null,
+        product_group: null,
+        inventory_shape: 'normal',
+        track_inventory: true,
+        unit_conversions: [],
+        kiotviet_provisional_stock: { quantity: 60, unit_name: 'Cuộn', source_type: 'kiotviet_import', source_label: 'KiotViet product import' },
+        latest_kiotviet_stocktake: {
+          code: 'KK000333',
+          source_created_at: '2026-07-10T09:30:00.000Z',
+          source_balanced_at: '2026-07-10T09:45:00.000Z',
+          system_qty: 60,
+          actual_qty: 58,
+          difference_qty: -2,
+          unit_name: 'Cuộn',
+        },
+      }]),
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products?search=HDA5&page=1&page_size=15', {
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items[0].latest_kiotviet_stocktake).toMatchObject({
+      code: 'KK000333',
+      actual_qty: 58,
+      difference_qty: -2,
+      unit_name: 'Cuộn',
+    })
+  })
+
+  test('returns product code total for the current product filter for KiotViet style footer', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            { rowNumber: 2, 'Mã hàng': 'ACTIVE-1', 'Tên hàng': 'Active 1', 'ĐVT': 'Cái', 'Đang kinh doanh': 1 },
+            { rowNumber: 3, 'Mã hàng': 'ACTIVE-2', 'Tên hàng': 'Active 2', 'ĐVT': 'Cái', 'Đang kinh doanh': 1 },
+            { rowNumber: 4, 'Mã hàng': 'INACTIVE-1', 'Tên hàng': 'Inactive 1', 'ĐVT': 'Cái', 'Đang kinh doanh': 0 },
+          ],
+        }),
+      }),
+    )
+    expect(importResponse.status).toBe(200)
+
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?status=active&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await listResponse.json()
+
+    expect(listResponse.status).toBe(200)
+    expect(body.data.total).toBe(2)
+    expect(body.data.total_all).toBe(2)
+  })
+
+  test('counts KiotViet unit conversion rows as source codes but not products', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const importResponse = await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            { rowNumber: 2, 'Mã hàng': 'BT', 'Tên hàng': 'Bạt 300g Ojet Tím', 'ĐVT': 'm2', 'Mã ĐVT Cơ bản': '1', 'Quy đổi': '' },
+            { rowNumber: 3, 'Mã hàng': 'B50', 'Tên hàng': 'Bạt 300g Ojet Tím', 'ĐVT': 'Khổ 50', 'Mã ĐVT Cơ bản': 'BT', 'Quy đổi': 40 },
+          ],
+        }),
+      }),
+    )
+    expect(importResponse.status).toBe(200)
+
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?status=all&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await listResponse.json()
+
+    expect(body.data.total).toBe(1)
+    expect(body.data.total_all).toBe(2)
+    expect(body.data.items).toEqual([
+      expect.objectContaining({
+        code: 'BT',
+        unit_conversions: [expect.objectContaining({ unit_name: 'Khổ 50', stock_qty_per_unit: 40 })],
+      }),
+    ])
   })
 
   test('searches demo customers by POS query text', async () => {
@@ -1108,3 +1853,66 @@ describe('createHttpHandler', () => {
     }))
   })
 })
+
+function buildMinimalXlsxBase64(values: string[][]) {
+  const sheetRows = values.map((row, rowIndex) => {
+    const cells = row.map((value, columnIndex) => {
+      const cellRef = `${String.fromCharCode(65 + columnIndex)}${rowIndex + 1}`
+      return `<c r="${cellRef}" t="inlineStr"><is><t>${escapeXml(value)}</t></is></c>`
+    }).join('')
+    return `<row r="${rowIndex + 1}">${cells}</row>`
+  }).join('')
+  return buildStoredZip({
+    '[Content_Types].xml': '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types" />',
+    'xl/workbook.xml': '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />',
+    'xl/worksheets/sheet1.xml': `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`,
+  }).toString('base64')
+}
+
+function buildStoredZip(entries: Record<string, string>) {
+  const chunks: Buffer[] = []
+  const centralDirectory: Buffer[] = []
+  let offset = 0
+
+  for (const [name, content] of Object.entries(entries)) {
+    const nameBytes = Buffer.from(name)
+    const data = Buffer.from(content)
+    const local = Buffer.alloc(30 + nameBytes.length + data.length)
+    local.writeUInt32LE(0x04034b50, 0)
+    local.writeUInt16LE(20, 4)
+    local.writeUInt16LE(0, 8)
+    local.writeUInt32LE(data.length, 18)
+    local.writeUInt32LE(data.length, 22)
+    local.writeUInt16LE(nameBytes.length, 26)
+    nameBytes.copy(local, 30)
+    data.copy(local, 30 + nameBytes.length)
+    chunks.push(local)
+
+    const central = Buffer.alloc(46 + nameBytes.length)
+    central.writeUInt32LE(0x02014b50, 0)
+    central.writeUInt16LE(20, 4)
+    central.writeUInt16LE(20, 6)
+    central.writeUInt16LE(0, 10)
+    central.writeUInt32LE(data.length, 20)
+    central.writeUInt32LE(data.length, 24)
+    central.writeUInt16LE(nameBytes.length, 28)
+    central.writeUInt32LE(offset, 42)
+    nameBytes.copy(central, 46)
+    centralDirectory.push(central)
+    offset += local.length
+  }
+
+  const centralStart = offset
+  const centralSize = centralDirectory.reduce((sum, chunk) => sum + chunk.length, 0)
+  const end = Buffer.alloc(22)
+  end.writeUInt32LE(0x06054b50, 0)
+  end.writeUInt16LE(centralDirectory.length, 8)
+  end.writeUInt16LE(centralDirectory.length, 10)
+  end.writeUInt32LE(centralSize, 12)
+  end.writeUInt32LE(centralStart, 16)
+  return Buffer.concat([...chunks, ...centralDirectory, end])
+}
+
+function escapeXml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+}

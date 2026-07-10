@@ -85,9 +85,10 @@ async function main() {
   const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@qc-oms.local'
   const adminPassword = process.env.ADMIN_PASSWORD
   const adminName = process.env.ADMIN_NAME ?? 'Admin'
+  const skipAdminSeed = process.env.QCVL_SKIP_ADMIN_SEED === 'true'
 
   if (!databaseUrl) throw new Error('DATABASE_URL is required')
-  if (!adminPassword) throw new Error('ADMIN_PASSWORD is required for dev admin seed')
+  if (!skipAdminSeed && !adminPassword) throw new Error('ADMIN_PASSWORD is required for dev admin seed')
 
   const client = new Client({ connectionString: databaseUrl })
   await client.connect()
@@ -96,9 +97,9 @@ async function main() {
     const result = await runMigrations(client, defaultMigrationsDir(), {
       baseline: process.env.QCVL_MIGRATION_BASELINE === 'true',
     })
-    await seedAdmin(client, { adminEmail, adminPassword, adminName })
+    if (!skipAdminSeed) await seedAdmin(client, { adminEmail, adminPassword, adminName })
     await client.query('delete from sessions where expires_at <= now()')
-    console.log(JSON.stringify({ migrated: result.applied, baseline_stamped: result.baselineStamped, admin: adminEmail }))
+    console.log(JSON.stringify({ migrated: result.applied, baseline_stamped: result.baselineStamped, admin: skipAdminSeed ? null : adminEmail }))
   } finally {
     await client.end()
   }

@@ -323,6 +323,38 @@ it('renders filter sidebar content without a duplicated header summary', () => {
   expect(within(sidebar).getByRole('button', { name: 'Đặt lại bộ lọc' }).closest('.management-filter-actions')).not.toBeNull()
 })
 
+it('closes filter sidebar popovers when clicking outside', async () => {
+  function FilterPopoverHarness() {
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <ManagementFilterSidebar
+          ariaLabel="Bộ lọc kiểm kho"
+          onPopoverClose={() => setOpen(false)}
+          popoverOpen={open}
+        >
+          <ManagementFilterGroup title="Ngày tạo">
+            {open ? <div role="region" aria-label="Chọn nhanh thời gian">Tháng này</div> : null}
+          </ManagementFilterGroup>
+        </ManagementFilterSidebar>
+        <button type="button">Bên ngoài</button>
+      </>
+    )
+  }
+
+  render(<FilterPopoverHarness />)
+
+  const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc kiểm kho' })
+  expect(sidebar).toHaveClass('management-filter-sidebar-popover-open')
+  await userEvent.click(within(sidebar).getByRole('region', { name: 'Chọn nhanh thời gian' }))
+  expect(screen.getByRole('region', { name: 'Chọn nhanh thời gian' })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Bên ngoài' }))
+
+  expect(screen.queryByRole('region', { name: 'Chọn nhanh thời gian' })).not.toBeInTheDocument()
+  expect(sidebar).not.toHaveClass('management-filter-sidebar-popover-open')
+})
+
 it('renders a reusable management table footer with range page and disabled controls', () => {
   const onFirst = vi.fn()
   const onLast = vi.fn()

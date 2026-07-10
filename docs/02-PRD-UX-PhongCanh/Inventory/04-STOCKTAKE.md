@@ -78,11 +78,26 @@ Kiểm kho khác với khui vật tư:
 ### Trạng thái hiện tại trong app
 
 - Màn `Phiếu kiểm kho` nằm trong module `Hàng hóa`.
-- App đã có sidebar lọc mã phiếu/trạng thái, nút `+ Kiểm kho`, nút `Xuất file`, bảng danh sách và phân trang.
+- App đã có ô tìm `Theo mã phiếu kiểm` trên toolbar, nút `+ Kiểm kho`, nút `Import KV`, nút `Xuất file`, sidebar `Ngày tạo` + `Trạng thái`, bảng danh sách và phân trang.
 - Danh sách đang hiển thị các cột KiotViet-style: `Mã kiểm kho`, `Thời gian`, `Ngày cân bằng`, `SL thực tế`, `Tổng thực tế`, `Tổng chênh lệch`, `SL lệch tăng`, `SL lệch giảm`, `Ghi chú`, `Trạng thái`.
 - `Tổng thực tế` và `Tổng chênh lệch` tính từ `stocktake_items.actual_qty`, `stocktake_items.difference_qty` và `products.latest_purchase_cost`.
 - Nếu thiếu giá vốn để tính giá trị, UI hiển thị `Chưa có` thay vì đoán số.
 - API chi tiết phiếu hiện trả đầu phiếu + số tổng hợp; bảng dòng chi tiết trong màn tạo/sửa phiếu sẽ làm ở bước manual stocktake.
+
+### Chỉnh hướng UI theo KiotViet 2026-07-10
+
+- Giữ app shell QCVL hiện tại, không copy topbar xanh hoặc hotline của KiotViet.
+- Route `/inventory` mở thẳng danh sách `Phiếu kiểm kho`. Không đặt tab con `Hàng hóa`, `Phiếu kiểm kho`, `Tồn theo cuộn/tấm`, `Khui vật tư` trong header vì `Hàng hóa` đã có route riêng `/products`.
+- Ô tìm `Theo mã phiếu kiểm` đặt trên toolbar chính phía trên bảng, không để trong sidebar.
+- Toolbar có `+ Kiểm kho`, `Import KV`, `Xuất file`. `Import KV` dùng cho file `DanhSachChiTietKiemKho_KV...xlsx`.
+- Sidebar gồm `Ngày tạo`, `Trạng thái`, và sau này mới thêm `Người tạo` khi có dữ liệu user thật. Mặc định `Ngày tạo = Tháng này` để đồng bộ với bộ lọc `Thời gian` ở trang Hóa đơn; khi cần xem lịch sử KV 2016-2026 thì mở menu chọn nhanh và chọn `Toàn thời gian`.
+- Bộ lọc `Ngày tạo` dùng chung mẫu UI với Hóa đơn: nút nhanh hiện nhãn preset, menu `Chọn nhanh thời gian`, tùy chọn `Tùy chỉnh` với date range, và popup tự đóng khi bấm ra ngoài sidebar.
+- Trạng thái dùng checkbox: `Phiếu tạm`, `Đã cân bằng kho`, `Đã hủy`.
+- Click mã phiếu phải mở chi tiết dòng kiểm kho inline. Với dòng import từ KV, chi tiết gắn nhãn `Nguồn KiotViet`.
+- Import lịch sử KV chỉ ghi dữ liệu đối soát; không tạo `stock_movements` và không thay đổi tồn vận hành.
+- File import KV dùng cho nút `Import KV` là `DanhSachChiTietKiemKho_KV...xlsx`. Preview phải kiểm tra công thức `SL lệch = Kiểm thực tế - Tồn kho`; nếu có dòng lỗi thì không cho import trừ khi API được gọi với chế độ partial rõ ràng.
+- Import lại nhiều lần upsert theo `(organization_id, source_system, source_code)` và dòng nguồn; không nhân đôi phiếu kiểm kho.
+- Số `Kiểm thực tế` từ lịch sử KV không được dùng làm tồn hiện tại. Tồn hiện tại từ export hàng hóa KiotViet vẫn nằm ở `inventory_provisional_balances`; muốn đổi tồn QCVL phải có flow cân bằng kho riêng tạo `stock_movements`.
 
 ---
 

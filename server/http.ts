@@ -2,8 +2,20 @@ import { randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
 import { HttpError, emptyResponse, failure, success } from './http-response.js'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes.js'
 import { handleCatalogRoute } from './modules/catalog/catalog-routes.js'
+import {
+  applyKiotVietProductImport,
+  mapKiotVietProductRows,
+  parseKiotVietProductWorkbookBuffer,
+  previewKiotVietProductImport,
+  type ProductImportUpsertRow,
+} from './modules/catalog/product-import.js'
 import { handleFinanceRoute } from './modules/finance/finance-routes.js'
 import { handleInventoryRoute } from './modules/inventory/inventory-routes.js'
+import {
+  mapKiotVietStocktakeRows,
+  previewKiotVietStocktakeImport,
+  type KiotVietStocktakeImportRow,
+} from './modules/inventory/kiotviet-stocktake-import.js'
 import { handleProductionRoute } from './modules/production/production-routes.js'
 import { handlePurchaseRoute } from './modules/purchase/purchase-routes.js'
 import { handleSalesRoute } from './modules/sales/sales-routes.js'
@@ -56,6 +68,49 @@ export interface WorkstationData {
 }
 
 export type SalesDocumentData = ReturnType<typeof makeSalesDocument>
+export interface ProductListData {
+  id: string
+  code: string
+  name: string
+  status: string
+  product_kind: string
+  unit_name: string
+  sell_method: string
+  latest_purchase_cost: number | null
+  latest_purchase_cost_at: string | null
+  default_sale_price: number | null
+  product_group_id: string | null
+  product_group: { id: string; code: string; name: string } | null
+  inventory_shape: string
+  track_inventory: boolean
+  unit_conversions: unknown[]
+  kiotviet_provisional_stock?: {
+    quantity: number
+    unit_name: string
+    source_type: 'kiotviet_import'
+    source_label: string | null
+    status?: string
+    updated_at?: string | null
+  } | null
+  latest_kiotviet_stocktake?: {
+    code: string
+    source_created_at: string | null
+    source_balanced_at: string | null
+    system_qty: number | null
+    actual_qty: number | null
+    difference_qty: number | null
+    unit_name: string | null
+  } | null
+  draft_bom?: {
+    id: string
+    version: number
+    status: 'draft'
+    item_count: number
+    notes: string | null
+  } | null
+  created_at: string
+  updated_at: string
+}
 export type CashbookEntryData = ReturnType<typeof makeCashbookEntry> & {
   source?: { type: string; id: string; code: string; order_code: string | null }
   allocations?: Array<{
@@ -70,6 +125,20 @@ export type CashbookEntryData = ReturnType<typeof makeCashbookEntry> & {
 }
 export type CustomerDebtSummaryData = CustomerDebtItem
 export type CustomerDebtDetailData = ReturnType<typeof makeCustomerDebtDetail>
+export interface StocktakeListData {
+  id: string
+  code: string
+  status: string
+  source_type: string
+  created_at: string
+  balanced_at: string | null
+  total_actual_qty: number
+  total_actual_value: number | null
+  total_difference_value: number | null
+  increased_qty: number
+  decreased_qty: number
+  note: string | null
+}
 
 export interface ServerRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | null>
@@ -79,6 +148,48 @@ export interface ServerRepository {
   listWorkstations(organizationId: string): Promise<WorkstationData[]>
   getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
   recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
+  listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
+  findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
+  findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
+  deleteDemoProductsForImport?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteDemoStocktakesForImport?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteImportedKiotVietProducts?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteImportedKiotVietStocktakes?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  upsertProductGroupsByName?(input: { organizationId: string; names: string[] }): Promise<Map<string, string>>
+  upsertProductsByCode?(input: { organizationId: string; rows: ProductImportUpsertRow[] }): Promise<{
+    created: number
+    updated: number
+    skipped: number
+  }>
+  upsertDefaultPriceListItems?(input: {
+    organizationId: string
+    priceListId: string
+    rows: Array<{ product_code: string; unit_price: number }>
+  }): Promise<{ created: number; updated: number; skipped: number }>
+  upsertProvisionalStockBalances?(input: {
+    organizationId: string
+    rows: Array<{ product_code: string; quantity: number; unit_name: string; source_label: string }>
+  }): Promise<{ created: number; updated: number; skipped: number }>
+  upsertDraftProductBoms?(input: {
+    organizationId: string
+    rows: Array<{
+      product_code: string
+      source_text: string
+      components: Array<{ component_code: string; quantity: number }>
+      note: string
+    }>
+  }): Promise<{ created: number; updated: number; skipped: number }>
+  upsertImportedKiotVietStocktakes?(input: {
+    organizationId: string
+    rows: KiotVietStocktakeImportRow[]
+  }): Promise<{
+    stocktakes_created: number
+    stocktakes_updated: number
+    items_created: number
+    items_updated: number
+    missing_product_rows: number
+  }>
+  listStocktakes?(input: { organizationId: string; url: URL }): Promise<StocktakeListData[]>
   saveSalesDocument?(input: {
     organizationId: string
     document: SalesDocumentData
@@ -168,11 +279,14 @@ const products = Array.from({ length: 20 }, (_, index) => {
     sell_method: isService ? 'quantity' : isRoll ? 'area_m2' : 'sheet',
     latest_purchase_cost: isService ? null : 150000 + number * 10000,
     latest_purchase_cost_at: isService ? null : nowIso,
+    default_sale_price: isService ? null : 300000 + number * 25000,
     product_group_id: isService ? 'pg-service' : 'pg-mica',
     product_group: isService ? { id: 'pg-service', code: 'DV', name: 'Dich vu' } : { id: 'pg-mica', code: 'MICA', name: 'Mica' },
     inventory_shape: inventoryShape,
     track_inventory: !isService,
     unit_conversions: [],
+    created_at: nowIso,
+    updated_at: nowIso,
   }
 })
 
@@ -427,13 +541,22 @@ function optionalNumber(value: string | null) {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function latestTimestamp(item: Record<string, unknown>) {
+interface Timestamped {
+  last_activity_at?: unknown
+  updated_at?: unknown
+  posted_at?: unknown
+  balanced_at?: unknown
+  received_at?: unknown
+  created_at?: unknown
+}
+
+function latestTimestamp(item: Timestamped) {
   const value = item.last_activity_at ?? item.updated_at ?? item.posted_at ?? item.balanced_at ?? item.received_at ?? item.created_at
   return typeof value === 'string' ? Date.parse(value) || 0 : 0
 }
 
-function newestFirst<T extends Record<string, unknown>>(items: readonly T[]) {
-  return [...items].sort((left, right) => latestTimestamp(right) - latestTimestamp(left))
+function newestFirst<T>(items: readonly T[]) {
+  return [...items].sort((left, right) => latestTimestamp(right as Timestamped) - latestTimestamp(left as Timestamped))
 }
 
 function filterValues(url: URL, key: string) {
@@ -482,11 +605,16 @@ function filterSalesDocuments(url: URL) {
 }
 
 async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
-  const filtered = filterProducts(url)
+  const filtered: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
   if (url.searchParams.get('sort') !== 'pos_usage') return newestFirst(filtered)
 
   const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
   return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
+}
+
+async function countAllProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
+  const filteredProducts: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
+  return filteredProducts.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0)
 }
 
 function filterProducts(url: URL) {
@@ -496,6 +624,8 @@ function filterProducts(url: URL) {
   const inventoryShape = url.searchParams.get('inventory_shape')
   const productKind = url.searchParams.get('product_kind')
   const productGroupId = url.searchParams.get('product_group_id')
+  const createdFrom = url.searchParams.get('created_from')
+  const createdTo = url.searchParams.get('created_to')
 
   return products.filter((product) => {
     if (status && status !== 'all' && product.status !== status) return false
@@ -503,6 +633,7 @@ function filterProducts(url: URL) {
     if (inventoryShape && product.inventory_shape !== inventoryShape) return false
     if (productKind && product.product_kind !== productKind) return false
     if (productGroupId && product.product_group_id !== productGroupId) return false
+    if (!dateRangeMatches(product.created_at ?? '', createdFrom, createdTo)) return false
     if (search) {
       const haystack = normalizeSearchText(`${product.code} ${product.name}`)
       if (!haystack.includes(search)) return false
@@ -1123,10 +1254,32 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       if (error instanceof HttpError) {
         return failure(error.status, error.code, error.message, traceId)
       }
-      console.error(error)
+      console.error(JSON.stringify({
+        traceId,
+        method: request.method,
+        url: request.url,
+        error: serializeError(error),
+      }))
       return failure(500, 'INTERNAL_ERROR', 'An internal error occurred.', traceId)
     }
   }
+}
+
+function serializeError(error: unknown) {
+  if (error instanceof Error) {
+    const extra = error as Error & Record<string, unknown>
+    return {
+      name: error.name,
+      message: error.message,
+      code: extra.code,
+      table: extra.table,
+      column: extra.column,
+      constraint: extra.constraint,
+      detail: extra.detail,
+      stack: error.stack,
+    }
+  }
+  return error
 }
 
 export async function hashPassword(password: string) {
@@ -1172,7 +1325,48 @@ async function getDevApiResponse(
     { request, url, currentUser, repository },
     {
       productGroups: async () => ({ found: true, data: { items: productGroups } }),
-      listProducts: async () => ({ found: true, data: paged(await listProductsForRequest(url, repository, currentUser.organization.id), page, pageSize) }),
+      listProducts: async () => {
+        const items = await listProductsForRequest(url, repository, currentUser.organization.id)
+        return {
+          found: true,
+          data: {
+            ...paged(items, page, pageSize),
+            total_all: await countAllProductsForRequest(url, repository, currentUser.organization.id),
+          },
+        }
+      },
+      previewKiotVietProductImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietProductRows(importRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietProductImport({
+            organizationId: currentUser.organization.id,
+            repository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+            cleanupDemo: Boolean(body.cleanup_demo),
+          }),
+        }
+      },
+      importKiotVietProducts: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietProductRows(importRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietProductImport({
+            organizationId: currentUser.organization.id,
+            repository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+            cleanupDemo: Boolean(body.cleanup_demo),
+          }),
+        }
+      },
+      deleteImportedKiotVietProducts: async () => {
+        const result = await repository.deleteImportedKiotVietProducts?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
+      },
       getProductBom: async () => ({ found: true, data: null }),
       createProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
       updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
@@ -1221,10 +1415,67 @@ async function getDevApiResponse(
         const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
         return { found: true, data: paged(newestFirst(items), page, pageSize) }
       },
-      stocktakes: async () => ({ found: true, data: paged([makeStocktake()], page, pageSize) }),
+      stocktakes: async () => {
+        const items = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
+          ?? [makeStocktake()]
+        return { found: true, data: paged(items, page, pageSize) }
+      },
       rolls: async () => ({ found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }),
       sheets: async () => ({ found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }),
       shortagePreview: async () => ({ found: true, data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] } }),
+      previewKiotVietStocktakeImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietStocktakeRows(importRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietStocktakeImport({
+            organizationId: currentUser.organization.id,
+            repository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietStocktakes: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietStocktakeRows(importRowsFromBody(body))
+        const allowPartial = Boolean(body.allow_partial)
+        if (mapped.invalid.length > 0 && !allowPartial) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'KiotViet stocktake import has invalid rows.')
+        }
+        const cleanup = Boolean(body.cleanup_demo) && repository.deleteDemoStocktakesForImport
+          ? await repository.deleteDemoStocktakesForImport({ organizationId: currentUser.organization.id })
+          : { deleted: 0, blocked: 0 }
+        const result = await repository.upsertImportedKiotVietStocktakes?.({
+          organizationId: currentUser.organization.id,
+          rows: mapped.valid,
+        }) ?? {
+          stocktakes_created: 0,
+          stocktakes_updated: 0,
+          items_created: 0,
+          items_updated: 0,
+          missing_product_rows: 0,
+        }
+        return {
+          found: true,
+          data: {
+            summary: {
+              total_rows: mapped.valid.length + mapped.invalid.length,
+              valid_rows: mapped.valid.length,
+              invalid_rows: mapped.invalid.length,
+              ...result,
+              cleanup_deleted_rows: cleanup.deleted,
+              cleanup_blocked_rows: cleanup.blocked,
+              creates_stock_movements: false,
+            },
+            invalid_rows: mapped.invalid,
+          },
+        }
+      },
+      deleteImportedKiotVietStocktakes: async () => {
+        const result = await repository.deleteImportedKiotVietStocktakes?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
+      },
       materialOpeningOptions: async () => ({ found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }),
       createMaterialOpening: async () => ({ found: true, data: { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }, status: 201 }),
     },
@@ -1523,6 +1774,14 @@ async function readJson(request: Request): Promise<Record<string, unknown>> {
     return {}
   }
   return {}
+}
+
+function importRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietProductWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
 }
 
 function scrypt(

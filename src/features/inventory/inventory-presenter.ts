@@ -1,4 +1,5 @@
 import type { InventoryProduct, InventoryProductStatus, InventoryShape, Stocktake } from './types'
+import { formatKvDateTime } from '../../lib/date-format'
 
 export function shapeText(shape: InventoryShape | 'all') {
   if (shape === 'normal') return 'Hàng thường'
@@ -28,11 +29,22 @@ export function moneyText(value: number | null) {
   return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value).replaceAll('.', ' ')
 }
 
-export function dateText(value: string | null) {
+export function stocktakeQuantityText(value: number | null) {
   if (value === null) return 'Chưa có'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value)
+}
+
+export function stocktakeMoneyText(value: number | null) {
+  if (value === null) return 'Chưa có'
+  return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value)
+}
+
+export function dateText(value: string | null) {
+  return formatKvDateTime(value)
+}
+
+export function stocktakeDateTimeText(value: string | null) {
+  return formatKvDateTime(value)
 }
 
 export function inventoryListSummary(products: Pick<InventoryProduct, 'available_qty' | 'is_negative'>[] | null) {

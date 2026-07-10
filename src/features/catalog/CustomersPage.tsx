@@ -6,6 +6,7 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDateRangeInputs,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -493,26 +494,12 @@ export function CustomersPage({
             </label>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Ngày tạo">
-            <div className="management-filter-date-range">
-              <label>
-                <span>Từ</span>
-                <input
-                  aria-label="Ngày tạo từ"
-                  type="date"
-                  value={createdFrom}
-                  onChange={(event) => void applySidebarFilters({ createdFrom: event.target.value })}
-                />
-              </label>
-              <label>
-                <span>Tới</span>
-                <input
-                  aria-label="Ngày tạo tới"
-                  type="date"
-                  value={createdTo}
-                  onChange={(event) => void applySidebarFilters({ createdTo: event.target.value })}
-                />
-              </label>
-            </div>
+            <ManagementDateRangeInputs
+              from={createdFrom}
+              to={createdTo}
+              onFromChange={(value) => void applySidebarFilters({ createdFrom: value })}
+              onToChange={(value) => void applySidebarFilters({ createdTo: value })}
+            />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Người tạo">
             <label>

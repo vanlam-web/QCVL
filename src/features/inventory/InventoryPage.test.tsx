@@ -1,9 +1,18 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { InventoryPage } from './InventoryPage'
 import type { InventoryService } from './inventory-service'
 import type { InventoryProduct, StockMovement, Stocktake } from './types'
+import { currentMonthRange, toDisplayDateInput } from '../../lib/date-ranges'
+
+const defaultStocktakeQuery = {
+  status: 'draft,balanced,cancelled',
+  from: currentMonthRange().from,
+  to: currentMonthRange().to,
+  page: 1,
+  page_size: 15,
+}
 
 const normalProduct: InventoryProduct = {
   product_id: 'product-1',
@@ -51,13 +60,13 @@ const stocktake: Stocktake = {
   code: 'KK000001',
   status: 'balanced',
   source_type: 'manual',
-  created_at: '2026-07-05T02:05:00Z',
-  balanced_at: '2026-07-05T02:06:00Z',
-  total_actual_qty: 10,
-  total_actual_value: 100000,
-  total_difference_value: -5000,
-  increased_qty: 2,
-  decreased_qty: 3,
+  created_at: '2026-06-05T07:52:12.640Z',
+  balanced_at: '2026-06-05T07:53:12.640Z',
+  total_actual_qty: 1.5,
+  total_actual_value: 313550,
+  total_difference_value: -16.25,
+  increased_qty: 1.495,
+  decreased_qty: -15.678,
   note: 'Đếm lại kho',
 }
 
@@ -66,7 +75,37 @@ function makeService(overrides: Partial<InventoryService> = {}): InventoryServic
     listInventoryProducts: vi.fn(async () => ({ items: [normalProduct, rollProduct, sheetProduct], page: 1, page_size: 15, total: 3 })),
     getInventoryProduct: vi.fn(async () => normalProduct),
     listStockMovements: vi.fn(async () => ({ items: [movement], page: 1, page_size: 10, total: 1 })),
-    listStocktakes: vi.fn(async () => ({ items: [stocktake], page: 1, page_size: 10, total: 1 })),
+    listStocktakes: vi.fn(async (input = {}) => ({ items: [stocktake], page: input.page ?? 1, page_size: input.page_size ?? 10, total: 1 })),
+    previewKiotVietStocktakeImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 333,
+        valid_rows: 333,
+        invalid_rows: 0,
+        stocktake_count: 120,
+        product_code_count: 129,
+        matched_product_count: 119,
+        missing_product_count: 10,
+        deleted_product_code_count: 10,
+        formula_error_count: 0,
+      },
+      invalid_rows: [],
+      missing_product_codes: ['OLD{DEL}'],
+    })),
+    importKiotVietStocktakes: vi.fn(async () => ({
+      summary: {
+        total_rows: 333,
+        valid_rows: 333,
+        invalid_rows: 0,
+        stocktakes_created: 120,
+        stocktakes_updated: 0,
+        items_created: 333,
+        items_updated: 0,
+        missing_product_rows: 10,
+        creates_stock_movements: false as const,
+      },
+      invalid_rows: [],
+    })),
+    deleteImportedKiotVietStocktakes: vi.fn(async () => ({ deleted_rows: 333, blocked_rows: 0 })),
     listInventoryRolls: vi.fn(async () => ({
       items: [
         {
@@ -136,61 +175,23 @@ function makeService(overrides: Partial<InventoryService> = {}): InventoryServic
 }
 
 describe('InventoryPage', () => {
-  it('lists inventory products with filters and negative stock signal', async () => {
+  it('opens stocktake list by default and does not show duplicate inventory tabs', async () => {
     const service = makeService()
     render(<InventoryPage service={service} />)
 
-    expect(screen.getByText('Đang tải hàng hóa...')).toBeInTheDocument()
-    expect(await screen.findByText('MICA-3MM')).toBeInTheDocument()
-    expect(screen.getByText('DECAL-PP')).toBeInTheDocument()
-    expect(screen.getAllByText('Âm kho').length).toBeGreaterThan(0)
-    const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc hàng hóa' })
-    expect(within(sidebar).queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument()
-
-    await userEvent.type(screen.getByLabelText('Tìm hàng hóa'), 'mica')
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Loại hàng' }), 'normal')
-    await userEvent.click(within(sidebar).getByRole('button', { name: 'Áp dụng bộ lọc' }))
-
-    expect(service.listInventoryProducts).toHaveBeenLastCalledWith({
-      search: 'mica',
-      status: 'active',
-      inventory_shape: 'normal',
-      page: 1,
-      page_size: 15,
-    })
-  })
-
-  it('opens product detail, shows stock movement history, and adjusts normal stock', async () => {
-    const service = makeService()
-    render(<InventoryPage service={service} />)
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Xem hàng hóa MICA-3MM' }))
-
-    const detail = await screen.findByRole('region', { name: 'Chi tiết hàng hóa MICA-3MM' })
-    expect(within(detail).getByText('Mica 3mm')).toBeInTheDocument()
-    expect(within(detail).getByText('checkout')).toBeInTheDocument()
-    expect(within(detail).getByText('KK000001')).toBeInTheDocument()
-
-    await userEvent.clear(within(detail).getByLabelText('Tồn thực tế'))
-    await userEvent.type(within(detail).getByLabelText('Tồn thực tế'), '12')
-    await userEvent.type(within(detail).getByLabelText('Lý do điều chỉnh'), 'Đếm lại kho')
-    await userEvent.click(within(detail).getByRole('button', { name: 'Cân bằng kho' }))
-
-    expect(service.adjustNormalProductStock).toHaveBeenCalledWith('product-1', {
-      actual_qty: 12,
-      reason: 'Đếm lại kho',
-    })
-    await waitFor(() => expect(service.listInventoryProducts).toHaveBeenCalledTimes(2))
+    expect(await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hàng hóa' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Phiếu kiểm kho' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tồn theo cuộn/tấm' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Khui vật tư' })).not.toBeInTheDocument()
+    expect(service.listStocktakes).toHaveBeenCalledWith(defaultStocktakeQuery)
   })
 
   it('shows KiotViet-style stocktake list with aggregate columns', async () => {
     const service = makeService()
     render(<InventoryPage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Phiếu kiểm kho' }))
-
-    expect(screen.getByRole('heading', { name: 'Phiếu kiểm kho' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })).toBeInTheDocument()
     expect(screen.getByRole('complementary', { name: 'Bộ lọc phiếu kiểm kho' })).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Danh sách phiếu kiểm kho' })
     expect(within(table).getByRole('columnheader', { name: 'Mã kiểm kho' })).toBeInTheDocument()
@@ -198,121 +199,213 @@ describe('InventoryPage', () => {
     expect(within(table).getByRole('columnheader', { name: 'Tổng thực tế' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Tổng chênh lệch' })).toBeInTheDocument()
     expect(within(table).getByText('KK000001')).toBeInTheDocument()
-    expect(within(table).getByText('100 000')).toBeInTheDocument()
-    expect(within(table).getByText('-5 000')).toBeInTheDocument()
+    expect(within(table).getByText('05/06/2026 07:52')).toBeInTheDocument()
+    expect(within(table).getByText('313,550')).toBeInTheDocument()
+    expect(within(table).getByText('-16.25')).toBeInTheDocument()
+    expect(within(table).getByText('1.495')).toBeInTheDocument()
+    expect(within(table).getByText('-15.678')).toBeInTheDocument()
     expect(within(table).getByText('Đếm lại kho')).toBeInTheDocument()
-    expect(service.listStocktakes).toHaveBeenCalledWith({ page: 1, page_size: 15 })
+    expect(service.listStocktakes).toHaveBeenCalledWith(defaultStocktakeQuery)
   })
 
-  it('shows object-level roll and sheet inventory', async () => {
+  it('uses KiotViet-style stocktake toolbar and filter shell', async () => {
     const service = makeService()
     render(<InventoryPage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tồn theo cuộn/tấm' }))
+    const toolbar = await screen.findByRole('search', { name: 'Lọc phiếu kiểm kho' })
+    const searchInput = within(toolbar).getByLabelText('Tìm phiếu kiểm kho')
+    expect(searchInput).toHaveAttribute('placeholder', 'Theo mã phiếu kiểm')
+    expect(within(toolbar).getByRole('button', { name: '+ Kiểm kho' })).toBeInTheDocument()
+    expect(within(toolbar).getByRole('button', { name: 'Import KV' })).toBeInTheDocument()
+    expect(within(toolbar).getByRole('button', { name: 'Xuất file' })).toBeInTheDocument()
 
-    expect(screen.getByRole('heading', { name: 'Tồn theo cuộn/tấm' })).toBeInTheDocument()
-    expect(screen.getByRole('complementary', { name: 'Bộ lọc tồn theo cuộn tấm' })).toBeInTheDocument()
-    const table = screen.getByRole('table', { name: 'Danh sách tồn theo cuộn tấm' })
-    expect(within(table).getByRole('columnheader', { name: 'Mã đối tượng' })).toBeInTheDocument()
-    expect(within(table).getByText('ROLL-001')).toBeInTheDocument()
-    expect(within(table).getByText('SHEET-001')).toBeInTheDocument()
-    expect(within(table).getByText('57,6 m²')).toBeInTheDocument()
-    expect(within(table).getByText('2,977 m²')).toBeInTheDocument()
-    expect(service.listInventoryRolls).toHaveBeenCalledWith({ page: 1, page_size: 15 })
-    expect(service.listInventorySheets).toHaveBeenCalledWith({ page: 1, page_size: 15 })
-  })
+    const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc phiếu kiểm kho' })
+    const dateGroup = within(sidebar).getByRole('region', { name: 'Ngày tạo' })
+    expect(within(dateGroup).getByRole('radio', { name: 'Tháng này' })).toBeChecked()
+    expect(within(dateGroup).getByRole('radio', { name: 'Tùy chỉnh' })).not.toBeChecked()
 
-  it('opens a manual material opening modal from inventory and submits normal material opening', async () => {
-    const service = makeService()
-    render(<InventoryPage service={service} />)
+    const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái' })
+    expect(within(statusGroup).getByRole('checkbox', { name: 'Phiếu tạm' })).toBeChecked()
+    expect(within(statusGroup).getByRole('checkbox', { name: 'Đã cân bằng kho' })).toBeChecked()
+    expect(within(statusGroup).getByRole('checkbox', { name: 'Đã hủy' })).toBeChecked()
 
-    await screen.findByText('MICA-3MM')
-    await userEvent.click(screen.getByRole('button', { name: 'Khui vật tư' }))
-
-    const dialog = screen.getByRole('dialog', { name: 'Khui vật tư' })
-    await userEvent.selectOptions(within(dialog).getByLabelText('Vật tư khui'), 'product-1')
-    expect(service.getMaterialOpeningOptions).toHaveBeenCalledWith('product-1')
-
-    await userEvent.clear(within(dialog).getByLabelText('Số lượng khui mới'))
-    await userEvent.type(within(dialog).getByLabelText('Số lượng khui mới'), '2')
-    await userEvent.clear(within(dialog).getByLabelText('Phần cũ còn lại'))
-    await userEvent.type(within(dialog).getByLabelText('Phần cũ còn lại'), '3')
-    await userEvent.type(within(dialog).getByLabelText('Ghi chú khui'), 'Khui thủ công')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận khui' }))
+    await userEvent.type(searchInput, 'KK000333')
+    await userEvent.keyboard('{Enter}')
 
     await waitFor(() =>
-      expect(service.createMaterialOpening).toHaveBeenCalledWith({
-        product_id: 'product-1',
-        inventory_shape: 'normal',
-        opened_unit_id: 'unit-pack',
-        opened_qty: 2,
-        old_remaining_qty: 3,
-        note: 'Khui thủ công',
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        search: 'KK000333',
+        ...defaultStocktakeQuery,
       }),
     )
-    expect(await within(dialog).findByRole('status')).toHaveTextContent('Đã khui 100 tấm.')
   })
 
-  it('submits roll and sheet object material openings from inventory', async () => {
+  it('opens the stocktake quick time menu like sales documents', async () => {
+    const service = makeService()
+    render(<InventoryPage service={service} />)
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc phiếu kiểm kho' })
+    const dateGroup = within(sidebar).getByRole('region', { name: 'Ngày tạo' })
+
+    await userEvent.click(within(dateGroup).getByText('Tháng này'))
+    expect(within(dateGroup).getByRole('region', { name: 'Chọn nhanh thời gian' })).toBeInTheDocument()
+    await userEvent.click(within(dateGroup).getByRole('button', { name: 'Toàn thời gian' }))
+
+    await waitFor(() =>
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        status: 'draft,balanced,cancelled',
+        page: 1,
+        page_size: 15,
+      }),
+    )
+  })
+
+  it('reloads stocktakes when status and date filters change', async () => {
+    const service = makeService()
+    render(<InventoryPage service={service} />)
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Đã hủy' }))
+
+    await waitFor(() =>
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        status: 'draft,balanced',
+        from: currentMonthRange().from,
+        to: currentMonthRange().to,
+        page: 1,
+        page_size: 15,
+      }),
+    )
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-06-30' } })
+
+    await waitFor(() =>
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        status: 'draft,balanced',
+        from: '2026-06-01',
+        to: '2026-06-30',
+        page: 1,
+        page_size: 15,
+      }),
+    )
+  })
+
+  it('uses the current month when custom stocktake date filter is first enabled', async () => {
+    const service = makeService()
+    render(<InventoryPage service={service} />)
+    const currentMonth = currentMonthRange()
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
+
+    expect(screen.getByLabelText('Từ ngày')).toHaveValue(toDisplayDateInput(currentMonth.from))
+    expect(screen.getByLabelText('Đến ngày')).toHaveValue(toDisplayDateInput(currentMonth.to))
+    await waitFor(() =>
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        status: 'draft,balanced,cancelled',
+        from: currentMonth.from,
+        to: currentMonth.to,
+        page: 1,
+        page_size: 15,
+      }),
+    )
+  })
+
+  it('reloads stocktakes when browser date inputs emit input events', async () => {
+    const service = makeService()
+    render(<InventoryPage service={service} />)
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
+    fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '31/07/2026' } })
+
+    await waitFor(() =>
+      expect(service.listStocktakes).toHaveBeenLastCalledWith({
+        status: 'draft,balanced,cancelled',
+        from: '2026-06-01',
+        to: '2026-07-31',
+        page: 1,
+        page_size: 15,
+      }),
+    )
+  })
+
+  it('keeps the latest stocktake filter result when older requests finish later', async () => {
+    const pending: Array<{
+      input: Parameters<InventoryService['listStocktakes']>[0]
+      resolve: (value: Awaited<ReturnType<InventoryService['listStocktakes']>>) => void
+    }> = []
+    const listStocktakes = vi.fn((input: Parameters<InventoryService['listStocktakes']>[0] = {}) =>
+      new Promise<Awaited<ReturnType<InventoryService['listStocktakes']>>>((resolve) => {
+        pending.push({ input, resolve })
+      }),
+    )
     const service = makeService({
-      getMaterialOpeningOptions: vi.fn(async (productId: string) => ({
-        product: {
-          id: productId,
-          code: productId === 'product-2' ? 'DECAL-PP' : 'FOMEX-45',
-          name: productId === 'product-2' ? 'Decal PP' : 'Fomex 4.5mm',
-          inventory_shape: productId === 'product-2' ? 'roll' as const : 'sheet' as const,
-          stock_unit: { id: 'unit-m2', code: 'M2', name: 'm²' },
-        },
-        conversions: [],
-        warnings: [],
-      })),
-      createMaterialOpening: vi.fn(async (input) => ({
-        id: 'opening-object',
-        product_id: input.product_id,
-        inventory_shape: input.inventory_shape,
-        source_type: 'standard_object' as const,
-        opened_unit_id: null,
-        opened_qty: null,
-        opened_stock_qty: 0,
-        stock_movement_id: 'movement-object',
-        warnings: [],
-        created_at: '2026-07-05T02:00:00Z',
-      })),
+      listStocktakes,
     })
     render(<InventoryPage service={service} />)
 
-    await screen.findByText('DECAL-PP')
-    await userEvent.click(screen.getByRole('button', { name: 'Khui vật tư' }))
-    const dialog = screen.getByRole('dialog', { name: 'Khui vật tư' })
+    await waitFor(() => expect(pending).toHaveLength(1))
+    pending[0].resolve({ items: [stocktake], page: 1, page_size: 15, total: 1 })
+    expect(await screen.findByText('KK000001')).toBeInTheDocument()
 
-    await userEvent.selectOptions(within(dialog).getByLabelText('Vật tư khui'), 'product-2')
-    await userEvent.type(await within(dialog).findByLabelText('Cuộn cũ'), 'roll-1')
-    await userEvent.clear(within(dialog).getByLabelText('Dài cũ còn lại'))
-    await userEvent.type(within(dialog).getByLabelText('Dài cũ còn lại'), '0')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận khui' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
+    await waitFor(() => expect(pending).toHaveLength(2))
+    fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
+    await waitFor(() => expect(pending).toHaveLength(3))
 
-    await waitFor(() =>
-      expect(service.createMaterialOpening).toHaveBeenCalledWith({
-        product_id: 'product-2',
-        inventory_shape: 'roll',
-        old_inventory_roll_id: 'roll-1',
-        old_remaining_length_m: 0,
-      }),
-    )
+    pending[2].resolve({ items: [], page: 1, page_size: 15, total: 0 })
+    await waitFor(() => expect(screen.queryByText('KK000001')).not.toBeInTheDocument())
 
-    await userEvent.selectOptions(within(dialog).getByLabelText('Vật tư khui'), 'product-3')
-    await userEvent.clear(await within(dialog).findByLabelText('Tấm cũ'))
-    await userEvent.type(within(dialog).getByLabelText('Tấm cũ'), 'sheet-1')
-    await userEvent.click(within(dialog).getByLabelText('Bỏ phần tấm cũ'))
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận khui' }))
+    pending[1].resolve({ items: [stocktake], page: 1, page_size: 15, total: 1 })
+    await waitFor(() => expect(screen.queryByText('KK000001')).not.toBeInTheDocument())
+  })
 
-    await waitFor(() =>
-      expect(service.createMaterialOpening).toHaveBeenLastCalledWith({
-        product_id: 'product-3',
-        inventory_shape: 'sheet',
-        old_inventory_sheet_id: 'sheet-1',
-        discard_old_sheet: true,
-      }),
-    )
+  it('previews and imports KiotViet stocktake history from the stocktake toolbar', async () => {
+    const service = makeService()
+    render(<InventoryPage service={service} />)
+    const file = new File(['fake-xlsx'], 'DanhSachChiTietKiemKho_KV10072026-092956-003.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+    const dialog = screen.getByRole('dialog', { name: 'Import kiểm kho KiotViet' })
+    await userEvent.upload(within(dialog).getByLabelText('File KiotViet'), file)
+
+    expect(within(dialog).getByRole('button', { name: 'Import' })).toBeDisabled()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Xem trước' }))
+
+    expect(await within(dialog).findByText('333 dòng hợp lệ')).toBeInTheDocument()
+    expect(within(dialog).getByText('129 mã hàng')).toBeInTheDocument()
+    expect(within(dialog).getByText('119 mã khớp')).toBeInTheDocument()
+    expect(within(dialog).getByText('10 mã thiếu/xóa')).toBeInTheDocument()
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Import' }))
+
+    expect(service.previewKiotVietStocktakeImport).toHaveBeenCalledWith({ file, cleanup_demo: false })
+    expect(service.importKiotVietStocktakes).toHaveBeenCalledWith({ file, cleanup_demo: false })
+    await waitFor(() => expect(service.listStocktakes).toHaveBeenLastCalledWith(defaultStocktakeQuery))
+  })
+
+  it('deletes old KiotViet stocktake import data from the shared import dialog', async () => {
+    const service = makeService()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    render(<InventoryPage service={service} />)
+
+    await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
+    await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+    const dialog = screen.getByRole('dialog', { name: 'Import kiểm kho KiotViet' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa dữ liệu cũ' }))
+
+    expect(confirm).toHaveBeenCalled()
+    expect(service.deleteImportedKiotVietStocktakes).toHaveBeenCalled()
+    expect(await within(dialog).findByText('Đã xóa 333 dòng dữ liệu cũ.')).toBeInTheDocument()
+    await waitFor(() => expect(service.listStocktakes).toHaveBeenLastCalledWith(defaultStocktakeQuery))
+    confirm.mockRestore()
   })
 })

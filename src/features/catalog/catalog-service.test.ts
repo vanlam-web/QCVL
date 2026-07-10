@@ -16,13 +16,18 @@ describe('catalog-service', () => {
       status: 'active',
       sell_method: 'combo',
       product_kind: 'combo',
+      created_from: '2026-07-01',
+      created_to: '2026-07-31',
       page: 2,
       page_size: 15,
       sort: 'pos_usage',
     })
 
     expect(calls).toEqual([
-      ['/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&page=2&page_size=15&sort=pos_usage', undefined],
+      [
+        '/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&created_from=2026-07-01&created_to=2026-07-31&page=2&page_size=15&sort=pos_usage',
+        undefined,
+      ],
     ])
   })
 
@@ -111,6 +116,43 @@ describe('catalog-service', () => {
 
     expect(calls).toEqual([
       ['/api/v1/inventory/stock-movements?product_id=product-1&page=2&page_size=15', undefined],
+    ])
+  })
+
+  it('sends xlsx base64 to the server when the browser cannot decompress workbooks', async () => {
+    const originalDecompressionStream = globalThis.DecompressionStream
+    Object.defineProperty(globalThis, 'DecompressionStream', { configurable: true, value: undefined })
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createCatalogService({ request })
+    const file = new File([new Uint8Array([1, 2, 3])], 'products.xlsx')
+
+    await service.previewKiotVietProductImport({ file, cleanup_demo: false })
+
+    expect(calls[0][0]).toBe('/api/v1/products/import/kiotviet/preview')
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+      cleanup_demo: false,
+      file_name: 'products.xlsx',
+      file_base64: 'AQID',
+    })
+    Object.defineProperty(globalThis, 'DecompressionStream', { configurable: true, value: originalDecompressionStream })
+  })
+
+  it('deletes old KiotViet product import data with a dedicated endpoint', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { deleted_rows: 5, blocked_rows: 0 } as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.deleteImportedKiotVietProducts()
+
+    expect(calls).toEqual([
+      ['/api/v1/products/import/kiotviet', { method: 'DELETE' }],
     ])
   })
 

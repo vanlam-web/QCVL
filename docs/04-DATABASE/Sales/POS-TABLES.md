@@ -203,6 +203,11 @@ Lưu danh sách sản phẩm/dịch vụ phục vụ POS và trang Hàng hóa.
 | `product_group_id` | `uuid` | ✅ | FK → `public.product_groups.id`; nếu trống khi tạo thì backend gán nhóm mặc định |
 | `unit_name` | `text` | ❌ | Tên đơn vị hiển thị, ví dụ `m²`, `m`, `cái`, `bộ` |
 | `sell_method` | `text` | ❌ | Cách tính bán: `quantity`, `area_m2`, `linear_m`, `sheet`, `combo` |
+| `product_kind` | `text` | ❌ | Loại hàng nghiệp vụ: `goods`, `service`, `auxiliary_material`, `roll`, `sheet`, `combo` |
+| `inventory_shape` | `text` | ❌ | Kiểu tồn kho: `normal`, `roll`, `sheet` |
+| `track_inventory` | `boolean` | ❌ | Có quản lý tồn kho hay không; dịch vụ/combo thường là `false` |
+| `latest_purchase_cost` | `numeric(12,0)` | ✅ | Giá vốn/giá nhập cuối gần nhất để tham khảo và tính giá |
+| `latest_purchase_cost_at` | `timestamptz` | ✅ | Thời điểm cập nhật giá vốn/giá nhập cuối |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
 | `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật gần nhất |
 
@@ -211,6 +216,10 @@ Lưu danh sách sản phẩm/dịch vụ phục vụ POS và trang Hàng hóa.
 - `UNIQUE (organization_id, code)`
 - `status IN ('active', 'inactive')`
 - `sell_method IN ('quantity', 'area_m2', 'linear_m', 'sheet', 'combo')`
+- `product_kind IN ('goods', 'service', 'auxiliary_material', 'roll', 'sheet', 'combo')`
+- `inventory_shape IN ('normal', 'roll', 'sheet')`
+- `track_inventory = false` cho `product_kind IN ('service', 'combo')` trong nghiệp vụ hiện tại.
+- `latest_purchase_cost IS NULL OR latest_purchase_cost >= 0`
 - `name` không được rỗng sau khi trim.
 - `unit_name` không được rỗng sau khi trim.
 - POS bán hàng chỉ tìm và chọn sản phẩm có `status = 'active'`.
@@ -221,13 +230,36 @@ Lưu danh sách sản phẩm/dịch vụ phục vụ POS và trang Hàng hóa.
 - `idx_products_org_code` trên `(organization_id, code)`
 - `idx_products_org_name` trên `(organization_id, name)`
 - `idx_products_org_group` trên `(organization_id, product_group_id)`
+- `idx_products_org_kind` trên `(organization_id, product_kind)`
+- `idx_products_org_inventory_shape` trên `(organization_id, inventory_shape)`
 - Cần index hoặc cột phụ phục vụ tìm kiếm không dấu khi triển khai.
 
 ### Ghi chú đơn vị
 
+- `product_kind` trả lời câu hỏi "hàng này thuộc loại nghiệp vụ nào": hàng thường, dịch vụ, vật tư phụ, cuộn, tấm hoặc combo.
+- `inventory_shape` trả lời câu hỏi "tồn kho được quản lý theo kiểu nào": tổng thường, từng cuộn, hoặc từng tấm/tấm lỡ.
+- `sell_method` trả lời câu hỏi "POS tính tiền/trừ kho theo công thức nào": số lượng, m², mét tới, tấm hoặc combo.
 - `sell_method = 'linear_m'` dùng cho sản phẩm bán theo mét tới; `unit_price` trong `price_list_items` là giá cho `1 m tới`.
-- `Cuộn` không phải đơn vị bán trực tiếp trên POS Phase 1.
-- Quản lý tồn theo cuộn/tấm/lot thuộc Inventory, không nằm trong bảng này.
+- `Cuộn` không phải đơn vị bán trực tiếp; hàng cuộn thường có `product_kind = 'roll'`, `inventory_shape = 'roll'`, `sell_method = 'linear_m'`.
+- Hàng tấm thường có `product_kind = 'sheet'`, `inventory_shape = 'sheet'`, `sell_method = 'sheet'`.
+- Dịch vụ có `product_kind = 'service'`, `track_inventory = false`; không quản lý tồn.
+- Combo có `product_kind = 'combo'`, `sell_method = 'combo'`, `track_inventory = false`; khi bán trừ tồn vào vật tư cấu thành theo BOM, không trừ tồn mã combo.
+- Vật tư phụ có `product_kind = 'auxiliary_material'`; vẫn quản lý tồn như hàng thường nhưng được nhận diện riêng trong BOM/khui vật tư.
+- Quản lý tồn chi tiết theo cuộn/tấm/lot thuộc Inventory; bảng `products` chỉ giữ metadata để lọc, tạo hàng và tính POS.
+
+### Import KiotViet Phase 1
+
+- Khóa upsert sản phẩm: `UNIQUE (organization_id, code)`, trong đó `code` lấy từ cột `Mã hàng`.
+- Import nhiều lần được phép. Lần sau cập nhật `name`, `status`, `product_group_id`, `unit_name`, `sell_method`, `product_kind`, `inventory_shape`, `track_inventory`, `latest_purchase_cost` và `updated_at`.
+- `products.created_at` của hàng import từ KiotViet lưu `Thời gian tạo` gốc trong file KV, không phải thời điểm import. Import parser phải nhận cả Excel serial number và text date. Lần import sau được phép cập nhật `products.created_at` theo source time hợp lệ để sửa dữ liệu cũ từng bị ghi theo `now()`.
+- `latest_purchase_cost_at` chỉ đổi khi `latest_purchase_cost` đổi.
+- `Giá bán` ghi vào `price_list_items` của bảng giá mặc định, không ghi vào `products`.
+- `Tồn kho` ghi vào `inventory_provisional_balances` với `source_type = kiotviet_import`; không tự tạo cuộn/tấm vật lý và không ghi `stock_movements` từ số tổng này.
+- `Hàng thành phần` ghi thành BOM nháp (`product_boms.status = draft`) để rà soát; không tự active nên POS chưa dùng để trừ kho.
+- Chưa ghi `Dự kiến hết hàng` trong phase này.
+- Nếu file thiếu `ĐVT`, import ghi `unit_name = 'Cần cập nhật'` thay vì `NULL`. `unit_name` vẫn là trường bắt buộc để POS và danh sách hàng hóa không lỗi hiển thị.
+- Không tự xóa sản phẩm không còn xuất hiện trong file KiotViet mới.
+- Tùy chọn xóa dữ liệu mẫu chỉ được xóa các mã demo đã biết (`DEV20-SP-%`, `MICA-3MM`, `DECAL-PP`, `CUT-CNC`) khi không có tham chiếu ở `order_items`, `purchase_receipt_items`, `stock_movements`, `product_boms`, `product_bom_items`, `price_list_items`.
 
 ---
 

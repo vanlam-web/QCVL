@@ -10,6 +10,7 @@ import type {
   QuoteSummary,
 } from '../orders/order-service'
 import { formatApiError } from '../../lib/api/error-message'
+import { formatKvDateTime } from '../../lib/date-format'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { checkoutSummary, linesToCheckoutItems } from './pos-core'
 
@@ -575,23 +576,14 @@ function MoneyInput({
 }
 
 function formatCheckoutDateTime(value: string | undefined) {
-  const date = value === undefined ? new Date() : new Date(value)
-  if (Number.isNaN(date.getTime())) {
+  const formatted = formatKvDateTime(value ?? new Date(), '')
+  if (!formatted) {
     return { date: '', time: '' }
   }
+  const [date, time] = formatted.split(' ')
   return {
-    date: new Intl.DateTimeFormat('vi-VN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'Asia/Bangkok',
-    }).format(date),
-    time: new Intl.DateTimeFormat('vi-VN', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-      timeZone: 'Asia/Bangkok',
-    }).format(date),
+    date,
+    time,
   }
 }
 

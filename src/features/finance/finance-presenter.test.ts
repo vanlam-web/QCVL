@@ -67,6 +67,7 @@ describe('finance presenter', () => {
     expect(paymentMethodText('bank_transfer')).toBe('Ngân hàng')
     expect(sourceTypeText('payment_receipt_method')).toBe('Phiếu thu')
     expect(financeDateText('bad-date')).toBe('Chưa có')
+    expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
   })
 
   it('builds linked document display rows from allocations', () => {

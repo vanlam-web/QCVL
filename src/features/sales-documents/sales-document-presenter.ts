@@ -1,4 +1,5 @@
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
+import { formatKvDate, formatKvDateTime } from '../../lib/date-format'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
 import type { SalesDocumentDetail } from './types'
 import type { PaymentMethodFilter, PaymentStatusValue, SalesDocumentStatusFilter, SalesDocumentTypeFilter } from './sales-document-filters'
@@ -81,14 +82,7 @@ export function salesDocumentLineSellPrice(item: Pick<SalesDocumentDetail['items
 }
 
 export function salesDocumentDateTimeText(value: string | null | undefined, fallback?: string | null): string {
-  if (!value) return fallback ? salesDocumentDateTimeText(fallback) : '-'
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return fallback ? salesDocumentDateTimeText(fallback) : '-'
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(parsed)
+  return formatKvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '-')
 }
 
 export function salesDocumentMoneyText(value: number) {
@@ -100,10 +94,7 @@ export function salesDocumentMeasureText(value: number) {
 }
 
 export function salesDocumentQuoteDateText(value: string) {
-  return new Intl.DateTimeFormat('vi-VN', {
-    dateStyle: 'short',
-    timeZone: 'Asia/Ho_Chi_Minh',
-  }).format(new Date(value))
+  return formatKvDate(value, '-')
 }
 
 export function salesDocumentQuoteLineDimensionText(item: Pick<SalesDocumentDetail['items'][number], 'width_m' | 'height_m' | 'linear_m' | 'product'>) {

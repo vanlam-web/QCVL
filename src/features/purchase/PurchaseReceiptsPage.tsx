@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { formatKvDateTime } from '../../lib/date-format'
 import type {
   PurchaseReceipt,
   PurchaseReceiptFinanceAccount,
@@ -31,6 +32,7 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDateRangeInputs,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -1034,7 +1036,7 @@ export function PurchaseReceiptsPage({
                     {selectedReceipt.supplier_payments.map((payment) => (
                       <tr key={payment.id}>
                         <td>{payment.code}</td>
-                        <td>{new Date(payment.paid_at).toLocaleString('vi-VN')}</td>
+                        <td>{formatKvDateTime(payment.paid_at)}</td>
                         <td>{payment.payment_method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'}</td>
                         <td>{payment.status === 'posted' ? 'Đã ghi' : 'Đã hủy'}</td>
                         <td><MoneyText value={payment.amount} /></td>
@@ -1227,26 +1229,12 @@ export function PurchaseReceiptsPage({
               ))}
               <option value="custom">Tùy chỉnh</option>
             </select>
-            <div className="management-filter-date-range">
-              <label>
-                <span>Từ ngày</span>
-                <input
-                  aria-label="Thời gian từ"
-                  type="date"
-                  value={dateFrom}
-                  onChange={(event) => void applyReceiptFilters({ dateFrom: event.target.value, preset: null })}
-                />
-              </label>
-              <label>
-                <span>Đến ngày</span>
-                <input
-                  aria-label="Thời gian tới"
-                  type="date"
-                  value={dateTo}
-                  onChange={(event) => void applyReceiptFilters({ dateTo: event.target.value, preset: null })}
-                />
-              </label>
-            </div>
+            <ManagementDateRangeInputs
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={(value) => void applyReceiptFilters({ dateFrom: value, preset: null })}
+              onToChange={(value) => void applyReceiptFilters({ dateTo: value, preset: null })}
+            />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Người tạo">
             <select
@@ -1344,7 +1332,7 @@ export function PurchaseReceiptsPage({
                                   <strong>{receipt.code}</strong>
                                 </button>
                               </td>
-                              <td>{new Date(receipt.received_at).toLocaleString('vi-VN')}</td>
+                              <td>{formatKvDateTime(receipt.received_at)}</td>
                               <td>{`${receipt.supplier.code} - ${receipt.supplier.name}`}</td>
                               <td>{receipt.items.length}</td>
                               <td><MoneyText value={receipt.subtotal_amount} /></td>

@@ -233,9 +233,9 @@ it('shows compact payment header metadata and line summary', () => {
 
   expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('Văn Viết Phương Lâm')
   expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('08/07/2026')
-  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('14:29')
+  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('07:29')
   expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' }).textContent).toBe(
-    'Văn Viết Phương Lâm14:2908/07/2026',
+    'Văn Viết Phương Lâm07:2908/07/2026',
   )
   expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
   expect(screen.queryByText('Khách cần trả')).toBeInTheDocument()

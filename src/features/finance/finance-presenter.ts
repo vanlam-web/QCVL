@@ -1,4 +1,5 @@
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
+import { formatKvDateTime } from '../../lib/date-format'
 import type {
   CashbookBusinessAccountedFilter,
   CashbookEntry,
@@ -160,9 +161,7 @@ export function sourceTypeText(value: CashbookEntry['source_type']) {
 }
 
 export function financeDateText(value: string) {
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return 'Chưa có'
-  return new Intl.DateTimeFormat('vi-VN', { dateStyle: 'short', timeStyle: 'short' }).format(parsed)
+  return formatKvDateTime(value)
 }
 export function voucherTypeOptions(direction: CashbookEntry['direction']): Array<{ value: CreateCashbookVoucherInput['voucher_type']; label: string }> {
   if (direction === 'in') {
