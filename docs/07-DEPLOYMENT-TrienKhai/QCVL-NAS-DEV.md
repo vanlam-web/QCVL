@@ -67,6 +67,12 @@ Trang `Thiet lap > Quan ly nguoi dung` phai dung du lieu that trong PostgreSQL:
 
 DB schema duoc them qua migration `0004_user_management_profile.sql`: `username`, `phone`, `birthday`, `region`, `ward`, `address`, `note`, index username theo organization.
 
+Validation tao user:
+
+- UI khong goi API khi thieu truong bat buoc.
+- Truong bat buoc toi thieu: ten hien thi, email, ten dang nhap, mat khau, nhap lai mat khau, vai tro.
+- Backend cung chan `email`, `username`, `password`, `display_name` rong bang `VALIDATION_ERROR`.
+
 ## Latest NAS Deploy - 2026-07-09 SalesDocuments Filter
 
 Da deploy len NAS thay doi bo loc trang Hoa don/SalesDocuments:

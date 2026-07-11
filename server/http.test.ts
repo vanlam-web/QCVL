@@ -399,6 +399,34 @@ describe('createHttpHandler', () => {
     expect(listBody.data.items[1].email).toBe('cashier@example.test')
   })
 
+  test('rejects creating a user without required identity fields', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/users', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+        body: JSON.stringify({
+          email: 'cashier@example.test',
+          password: 'Password123!',
+          display_name: 'Cashier',
+          permissions: ['perm.create_order'],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+  })
+
   test('filters demo sales documents by customer and document type', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

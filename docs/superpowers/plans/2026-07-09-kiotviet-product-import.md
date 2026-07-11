@@ -10,6 +10,42 @@
 
 ---
 
+## Current Product Completion Roadmap 2026-07-11
+
+Final objective: finish the `Hang hoa` module as usable real data, not only finish the Excel import button. Work that appears outside `/products` still belongs to this objective when it is required for product correctness.
+
+Current path:
+
+1. Product import and product list foundation: done.
+   - Re-import KiotViet product files safely.
+   - Store product master data, price, source created time, unit conversion, provisional stock, and draft BOM.
+   - Default `/products` list and filters use real imported fields.
+
+2. Stocktake import: done as a supporting dependency.
+   - Reason: product stock could not be trusted without KV stocktake evidence.
+   - Current rule: KV stocktake import is history/evidence only, not operating stock.
+   - Linked plan: `docs/superpowers/plans/2026-07-10-kiotviet-stocktake-import.md`.
+
+3. User management / creator data: in progress as a supporting dependency.
+   - Reason: KV inventory and stocktake screens use `Nguoi tao`; QCVL must have real users before creator filters and imports can be accurate.
+   - Current rule: create QCVL users first where possible, then import/map creator fields.
+   - If a KV creator does not match a QCVL user, store a source snapshot instead of forcing a wrong `users.id`.
+   - Recent foundation: `/admin` user creation now persists real users; required-field validation was added before saving.
+
+4. Next product-module work after user foundation:
+   - Add creator snapshot/mapping for KiotViet stocktake import.
+   - Add `Nguoi tao` filter to `/inventory` only after imported creator data exists.
+   - Return to `/products` stock display: show provisional KV stock clearly, and prepare a separate operating-stock path.
+   - Do not start `Du kien het hang` until stock movement history is reliable.
+
+Scope guard:
+
+- The goal is still `Hoan thien Hang hoa`.
+- `Kiem kho`, `Nguoi tao`, and user management are side dependencies because product stock, product history, and product filters need them.
+- Do not expand into unrelated admin/settings work unless it blocks product completion.
+
+---
+
 ## Current Status 2026-07-10
 
 This plan is no longer the active task checklist. The implementation was completed, deployed to NAS, and merged through commit `38b8c9d`, with the later read-performance fix merged through commit `5efc3a6`.

@@ -40,6 +40,7 @@ interface RoleListItem {
 }
 
 type UserStatusFilter = 'all' | 'active' | 'inactive'
+type UserFormErrors = Partial<Record<'displayName' | 'email' | 'username' | 'password' | 'passwordConfirmation' | 'roleId', string>>
 
 const internalStaffDefaultPermissions = [
   permissions.createOrder,
@@ -82,6 +83,28 @@ const roleDefinitions = [
   permissions: Permission['code'][]
 }>
 
+function validateUserForm(form: {
+  displayName: string
+  email: string
+  username: string
+  password: string
+  passwordConfirmation: string
+  roleId: string
+}) {
+  const errors: UserFormErrors = {}
+  if (!form.displayName.trim()) errors.displayName = 'Tên hiển thị là bắt buộc.'
+  if (!form.email.trim()) errors.email = 'Email là bắt buộc.'
+  if (!form.username.trim()) errors.username = 'Tên đăng nhập là bắt buộc.'
+  if (!form.password) errors.password = 'Mật khẩu là bắt buộc.'
+  if (!form.passwordConfirmation) errors.passwordConfirmation = 'Nhập lại mật khẩu là bắt buộc.'
+  if (!form.roleId.trim()) errors.roleId = 'Vai trò là bắt buộc.'
+  return errors
+}
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <small className="management-form-error">{message}</small> : null
+}
+
 export function FoundationAdminPage({
   service,
 }: {
@@ -104,6 +127,7 @@ export function FoundationAdminPage({
     ward: '',
     note: '',
   })
+  const [userFormErrors, setUserFormErrors] = useState<UserFormErrors>({})
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
   const [customRoles, setCustomRoles] = useState<RoleListItem[]>([])
@@ -175,6 +199,7 @@ export function FoundationAdminPage({
       ward: '',
       note: '',
     })
+    setUserFormErrors({})
     setUserDialogOpen(true)
   }
 
@@ -189,12 +214,20 @@ export function FoundationAdminPage({
 
   async function createUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const validationErrors = validateUserForm(userForm)
+    if (Object.keys(validationErrors).length > 0) {
+      setUserFormErrors(validationErrors)
+      setError('Vui lòng nhập đủ các trường bắt buộc.')
+      return
+    }
     if (userForm.password !== userForm.passwordConfirmation) {
+      setUserFormErrors({ passwordConfirmation: 'Mật khẩu nhập lại không khớp.' })
       setError('Mật khẩu nhập lại không khớp.')
       return
     }
     setSavingUser(true)
     setError(null)
+    setUserFormErrors({})
     try {
       const role = findAdminRoleById(userForm.roleId, [...roleDefinitions, ...customRoles])
       await service.createUser({
@@ -448,16 +481,19 @@ export function FoundationAdminPage({
                     <X aria-hidden="true" size={18} />
                   </button>
                 </header>
-                <form aria-label="Tạo người dùng" className="admin-user-form" onSubmit={createUser}>
+                <form aria-label="Tạo người dùng" className="admin-user-form" noValidate onSubmit={createUser}>
                   <div className="admin-user-form-fields">
                     <label>
                       Tên hiển thị
                       <input
+                        aria-invalid={Boolean(userFormErrors.displayName)}
+                        required
                         value={userForm.displayName}
                         onChange={(event) =>
                           setUserForm((current) => ({ ...current, displayName: event.target.value }))
                         }
                       />
+                      <FieldError message={userFormErrors.displayName} />
                     </label>
                     <label>
                       Điện thoại
@@ -469,44 +505,58 @@ export function FoundationAdminPage({
                     <label>
                       Email
                       <input
+                        aria-invalid={Boolean(userFormErrors.email)}
                         ref={createUserEmailRef}
+                        required
                         type="email"
                         value={userForm.email}
                         onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
                       />
+                      <FieldError message={userFormErrors.email} />
                     </label>
                     <label>
                       Tên đăng nhập
                       <input
+                        aria-invalid={Boolean(userFormErrors.username)}
+                        required
                         value={userForm.username}
                         onChange={(event) =>
                           setUserForm((current) => ({ ...current, username: event.target.value }))
                         }
                       />
+                      <FieldError message={userFormErrors.username} />
                     </label>
                     <label>
                       Mật khẩu
                       <input
+                        aria-invalid={Boolean(userFormErrors.password)}
+                        required
                         type="password"
                         value={userForm.password}
                         onChange={(event) =>
                           setUserForm((current) => ({ ...current, password: event.target.value }))
                         }
                       />
+                      <FieldError message={userFormErrors.password} />
                     </label>
                     <label>
                       Nhập lại mật khẩu
                       <input
+                        aria-invalid={Boolean(userFormErrors.passwordConfirmation)}
+                        required
                         type="password"
                         value={userForm.passwordConfirmation}
                         onChange={(event) =>
                           setUserForm((current) => ({ ...current, passwordConfirmation: event.target.value }))
                         }
                       />
+                      <FieldError message={userFormErrors.passwordConfirmation} />
                     </label>
                     <label>
                       Vai trò
                       <select
+                        aria-invalid={Boolean(userFormErrors.roleId)}
+                        required
                         value={userForm.roleId}
                         onChange={(event) => setUserForm((current) => ({ ...current, roleId: event.target.value }))}
                       >
@@ -516,6 +566,7 @@ export function FoundationAdminPage({
                           </option>
                         ))}
                       </select>
+                      <FieldError message={userFormErrors.roleId} />
                     </label>
                   </div>
                   <section className="admin-user-form-section" aria-label="Thông tin khác">

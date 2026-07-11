@@ -187,6 +187,24 @@ it('maps API errors to operator-facing messages', async () => {
   )
 })
 
+it('blocks creating a user when required fields are missing', async () => {
+  const service = makeService()
+  render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('admin')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo người dùng' }))
+  const createUserForm = screen.getByRole('form', { name: 'Tạo người dùng' })
+
+  await userEvent.click(within(createUserForm).getByRole('button', { name: 'Lưu' }))
+
+  expect(service.createUser).not.toHaveBeenCalled()
+  expect(await screen.findByRole('alert')).toHaveTextContent('Vui lòng nhập đủ các trường bắt buộc.')
+  expect(within(createUserForm).getByText('Tên hiển thị là bắt buộc.')).toBeInTheDocument()
+  expect(within(createUserForm).getByText('Email là bắt buộc.')).toBeInTheDocument()
+  expect(within(createUserForm).getByText('Tên đăng nhập là bắt buộc.')).toBeInTheDocument()
+  expect(within(createUserForm).getByText('Mật khẩu là bắt buộc.')).toBeInTheDocument()
+})
+
 it('creates, disables, and updates permissions for users', async () => {
   const service = makeService()
   render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)

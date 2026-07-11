@@ -1366,23 +1366,24 @@ async function getDevApiResponse(
   }
   if (method === 'POST' && path === '/api/v1/users') {
     const body = await readJson(request)
+    const userInput = {
+      organizationId: currentUser.organization.id,
+      email: requiredString(body.email, 'email').toLowerCase(),
+      username: requiredString(body.username, 'username'),
+      phone: nullableString(body.phone),
+      birthday: nullableString(body.birthday),
+      region: nullableString(body.region),
+      ward: nullableString(body.ward),
+      address: nullableString(body.address),
+      note: nullableString(body.note),
+      passwordHash: await hashPassword(requiredString(body.password, 'password')),
+      displayName: requiredString(body.display_name, 'display_name'),
+      permissions: normalizePermissions(body.permissions),
+    }
     let created: UserListItemData
     try {
       created = repository.createUser
-        ? await repository.createUser({
-          organizationId: currentUser.organization.id,
-          email: requiredString(body.email, 'email').toLowerCase(),
-          username: nullableString(body.username),
-          phone: nullableString(body.phone),
-          birthday: nullableString(body.birthday),
-          region: nullableString(body.region),
-          ward: nullableString(body.ward),
-          address: nullableString(body.address),
-          note: nullableString(body.note),
-          passwordHash: await hashPassword(requiredString(body.password, 'password')),
-          displayName: requiredString(body.display_name, 'display_name'),
-          permissions: normalizePermissions(body.permissions),
-        })
+        ? await repository.createUser(userInput)
         : await makeUserResponseFromBody(body)
     } catch (error) {
       if (error instanceof Error && error.message === 'USER_ALREADY_EXISTS') {

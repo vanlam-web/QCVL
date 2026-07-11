@@ -12,6 +12,27 @@
 
 ---
 
+## Current Role In Product Completion 2026-07-11
+
+This plan supports the larger `Hoan thien Hang hoa` objective. It exists because product stock cannot be completed using only the product export:
+
+- Product export gives current provisional stock.
+- Stocktake export gives audit evidence for past adjustments.
+- QCVL must keep those two sources separate until operating stock and stock movements are ready.
+
+Current status:
+
+- KV stocktake import and KV/QCVL comparison are accepted as OK.
+- Imported stocktake data remains history/evidence only.
+- Next stocktake-related work for product completion is creator data:
+  - import KV `Nguoi tao` as a source snapshot,
+  - map to QCVL `users.id` only when a matching QCVL user exists,
+  - enable `Nguoi tao` filter after the data exists.
+
+Do not restart stock balancing from this plan unless Owner explicitly asks for operating-stock conversion.
+
+---
+
 ## Current Facts From Owner Files
 
 Files inspected:
