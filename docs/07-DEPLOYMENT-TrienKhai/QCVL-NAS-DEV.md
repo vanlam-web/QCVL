@@ -55,6 +55,18 @@ Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
 
 `deploy:nas` se doc `.env` NAS tu `\\100.84.228.125\docker\QCVL\.env`, copy code/database, chay migration NAS, roi health check. Khong hardcode secret vao repo.
 
+## Latest NAS Deploy - 2026-07-11 User Management Persistence
+
+Trang `Thiet lap > Quan ly nguoi dung` phai dung du lieu that trong PostgreSQL:
+
+- `POST /api/v1/users` tao user that, hash password, luu profile co ban va gan permissions.
+- `GET /api/v1/users` doc danh sach user theo organization, search va status filter.
+- `PATCH /api/v1/users/{id}` doi ten hien thi/trang thai.
+- `PUT /api/v1/users/{id}/permissions` thay permissions that.
+- Khong dung mock "chi tra user hien tai" cho NAS.
+
+DB schema duoc them qua migration `0004_user_management_profile.sql`: `username`, `phone`, `birthday`, `region`, `ward`, `address`, `note`, index username theo organization.
+
 ## Latest NAS Deploy - 2026-07-09 SalesDocuments Filter
 
 Da deploy len NAS thay doi bo loc trang Hoa don/SalesDocuments:

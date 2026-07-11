@@ -309,6 +309,96 @@ describe('createHttpHandler', () => {
     expect(response.headers.get('access-control-allow-headers')).toContain('x-client-device-id')
   })
 
+  test('creates users through repository and returns persisted user list', async () => {
+    const passwordHash = await hashPassword('ChangeMe123!')
+    const createdUsers: unknown[] = []
+    const base = repository(passwordHash)
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        async listUsers() {
+          return [
+            {
+              id: user.id,
+              email: user.email,
+              username: 'admin',
+              phone: null,
+              birthday: null,
+              region: null,
+              ward: null,
+              address: null,
+              note: null,
+              display_name: user.display_name,
+              status: 'active',
+              permissions: ['perm.manage_users'],
+            },
+            ...createdUsers,
+          ]
+        },
+        async createUser(input: unknown) {
+          createdUsers.push({
+            id: 'user-cashier',
+            email: 'cashier@example.test',
+            username: 'cashier-login',
+            phone: '0912345678',
+            birthday: '2026-07-07',
+            region: 'TP Ho Chi Minh',
+            ward: 'Phuong Ben Thanh',
+            address: '12 Nguyen Trai',
+            note: 'Ca toi',
+            display_name: 'Cashier',
+            status: 'active',
+            permissions: ['perm.create_order'],
+          })
+          return createdUsers[0]
+        },
+      } as ServerRepository,
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const create = await handler(
+      new Request('http://api.local/api/v1/users', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          email: 'cashier@example.test',
+          username: 'cashier-login',
+          phone: '0912345678',
+          birthday: '2026-07-07',
+          region: 'TP Ho Chi Minh',
+          ward: 'Phuong Ben Thanh',
+          address: '12 Nguyen Trai',
+          note: 'Ca toi',
+          password: 'Password123!',
+          display_name: 'Cashier',
+          permissions: ['perm.create_order'],
+        }),
+      }),
+    )
+    const createBody = await create.json()
+
+    expect(create.status).toBe(201)
+    expect(createBody.data.username).toBe('cashier-login')
+    expect(createdUsers).toHaveLength(1)
+
+    const list = await handler(
+      new Request('http://api.local/api/v1/users', {
+        headers: { authorization },
+      }),
+    )
+    const listBody = await list.json()
+
+    expect(listBody.data.items).toHaveLength(2)
+    expect(listBody.data.items[1].email).toBe('cashier@example.test')
+  })
+
   test('filters demo sales documents by customer and document type', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

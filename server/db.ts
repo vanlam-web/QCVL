@@ -8,6 +8,7 @@ import type {
   SalesDocumentData,
   ServerRepository,
   StocktakeListData,
+  UserListItemData,
   WorkstationData,
 } from './http.js'
 
@@ -47,6 +48,145 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [input.token, input.userId, input.expiresAt],
       )
+    },
+
+    async listUsers(input) {
+      await ensureUserManagementColumns(pool)
+      const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
+      const status = input.url.searchParams.get('status')
+      const params: unknown[] = [input.organizationId]
+      const filters = ['u.organization_id = $1']
+      if (status === 'active' || status === 'inactive') {
+        params.push(status)
+        filters.push(`u.status = $${params.length}`)
+      }
+      if (search) {
+        params.push(`%${search}%`)
+        filters.push(`
+          (
+            lower(u.display_name) like $${params.length}
+            or lower(u.email) like $${params.length}
+            or lower(coalesce(u.username, '')) like $${params.length}
+            or lower(coalesce(u.phone, '')) like $${params.length}
+          )
+        `)
+      }
+      const result = await pool.query(
+        `
+          select
+            u.id::text,
+            u.email,
+            u.username,
+            u.phone,
+            u.birthday,
+            u.region,
+            u.ward,
+            u.address,
+            u.note,
+            u.display_name,
+            u.status,
+            coalesce(
+              jsonb_agg(up.permission_code order by up.permission_code)
+                filter (where up.permission_code is not null),
+              '[]'::jsonb
+            ) as permissions
+          from users u
+          left join user_permissions up on up.user_id = u.id
+          where ${filters.join(' and ')}
+          group by u.id
+          order by u.created_at desc, u.display_name
+        `,
+        params,
+      )
+      return result.rows.map(userListItemFromRow)
+    },
+
+    async createUser(input) {
+      await ensureUserManagementColumns(pool)
+      await pool.query('begin')
+      try {
+        const inserted = await pool.query(
+          `
+            insert into users (
+              id, organization_id, email, username, phone, birthday, region, ward, address, note,
+              password_hash, display_name, status, created_at, updated_at
+            )
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'active', now(), now())
+            returning id::text
+          `,
+          [
+            randomUUID(),
+            input.organizationId,
+            input.email,
+            input.username,
+            input.phone,
+            input.birthday,
+            input.region,
+            input.ward,
+            input.address,
+            input.note,
+            input.passwordHash,
+            input.displayName,
+          ],
+        )
+        const userId = String(inserted.rows[0]?.id)
+        await replacePermissionsForUser(pool, userId, input.permissions)
+        const user = await findUserListItem(pool, input.organizationId, userId)
+        await pool.query('commit')
+        if (!user) throw new Error('Created user not found.')
+        return user
+      } catch (error) {
+        await pool.query('rollback')
+        if (isUniqueViolation(error)) throw new Error('USER_ALREADY_EXISTS')
+        throw error
+      }
+    },
+
+    async updateUser(input) {
+      await ensureUserManagementColumns(pool)
+      const assignments: string[] = []
+      const params: unknown[] = []
+      if (input.displayName !== undefined) {
+        params.push(input.displayName)
+        assignments.push(`display_name = $${params.length}`)
+      }
+      if (input.status !== undefined) {
+        params.push(input.status)
+        assignments.push(`status = $${params.length}`)
+      }
+      if (assignments.length > 0) {
+        params.push(input.organizationId, input.id)
+        await pool.query(
+          `
+            update users
+            set ${assignments.join(', ')}, updated_at = now()
+            where organization_id = $${params.length - 1} and id = $${params.length}
+          `,
+          params,
+        )
+      }
+      return findUserListItem(pool, input.organizationId, input.id)
+    },
+
+    async replaceUserPermissions(input) {
+      await pool.query('begin')
+      try {
+        const exists = await pool.query(
+          'select id from users where organization_id = $1 and id = $2',
+          [input.organizationId, input.id],
+        )
+        if (!exists.rows[0]) {
+          await pool.query('rollback')
+          return null
+        }
+        await replacePermissionsForUser(pool, input.id, input.permissions)
+        const user = await findUserListItem(pool, input.organizationId, input.id)
+        await pool.query('commit')
+        return user
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
     },
 
     async deleteSession(token) {
@@ -2322,6 +2462,98 @@ function normalizeSearchText(value: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/đ/g, 'd')
+}
+
+async function ensureUserManagementColumns(pool: pg.Pool) {
+  await pool.query('alter table users add column if not exists username text')
+  await pool.query('alter table users add column if not exists phone text')
+  await pool.query('alter table users add column if not exists birthday date')
+  await pool.query('alter table users add column if not exists region text')
+  await pool.query('alter table users add column if not exists ward text')
+  await pool.query('alter table users add column if not exists address text')
+  await pool.query('alter table users add column if not exists note text')
+  await pool.query(`
+    create unique index if not exists users_org_username_uidx
+    on users (organization_id, lower(username))
+    where username is not null and btrim(username) <> ''
+  `)
+  await pool.query('create index if not exists users_org_created_idx on users (organization_id, created_at desc)')
+}
+
+async function replacePermissionsForUser(pool: pg.Pool, userId: string, permissions: `perm.${string}`[]) {
+  await pool.query('delete from user_permissions where user_id = $1', [userId])
+  for (const permission of permissions) {
+    await pool.query(
+      `
+        insert into user_permissions (user_id, permission_code)
+        values ($1, $2)
+        on conflict (user_id, permission_code) do nothing
+      `,
+      [userId, permission],
+    )
+  }
+}
+
+async function findUserListItem(pool: pg.Pool, organizationId: string, id: string) {
+  await ensureUserManagementColumns(pool)
+  const result = await pool.query(
+    `
+      select
+        u.id::text,
+        u.email,
+        u.username,
+        u.phone,
+        u.birthday,
+        u.region,
+        u.ward,
+        u.address,
+        u.note,
+        u.display_name,
+        u.status,
+        coalesce(
+          jsonb_agg(up.permission_code order by up.permission_code)
+            filter (where up.permission_code is not null),
+          '[]'::jsonb
+        ) as permissions
+      from users u
+      left join user_permissions up on up.user_id = u.id
+      where u.organization_id = $1 and u.id = $2
+      group by u.id
+      limit 1
+    `,
+    [organizationId, id],
+  )
+  const row = result.rows[0]
+  return row ? userListItemFromRow(row) : null
+}
+
+function userListItemFromRow(row: Record<string, unknown>): UserListItemData {
+  return {
+    id: String(row.id),
+    email: String(row.email),
+    username: nullableDbString(row.username),
+    phone: nullableDbString(row.phone),
+    birthday: row.birthday instanceof Date ? row.birthday.toISOString().slice(0, 10) : nullableDbString(row.birthday),
+    region: nullableDbString(row.region),
+    ward: nullableDbString(row.ward),
+    address: nullableDbString(row.address),
+    note: nullableDbString(row.note),
+    display_name: String(row.display_name),
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    permissions: Array.isArray(row.permissions)
+      ? row.permissions.filter((permission): permission is `perm.${string}` => typeof permission === 'string' && permission.startsWith('perm.'))
+      : [],
+  }
+}
+
+function nullableDbString(value: unknown) {
+  if (value === null || value === undefined) return null
+  const result = String(value)
+  return result ? result : null
+}
+
+function isUniqueViolation(error: unknown) {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
 }
 
 function filterValues(url: URL, key: string) {

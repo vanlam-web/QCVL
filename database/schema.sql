@@ -11,6 +11,13 @@ create table if not exists users (
   id uuid primary key default gen_random_uuid(),
   organization_id uuid not null references organizations(id) on delete restrict,
   email text not null,
+  username text,
+  phone text,
+  birthday date,
+  region text,
+  ward text,
+  address text,
+  note text,
   password_hash text not null,
   display_name text not null,
   status text not null default 'active' check (status in ('active', 'inactive')),
@@ -20,7 +27,11 @@ create table if not exists users (
 );
 
 create unique index if not exists users_email_unique_idx on users (lower(email));
+create unique index if not exists users_org_username_uidx
+  on users (organization_id, lower(username))
+  where username is not null and btrim(username) <> '';
 create index if not exists users_organization_status_idx on users (organization_id, status);
+create index if not exists users_org_created_idx on users (organization_id, created_at desc);
 
 create table if not exists workstations (
   id uuid primary key default gen_random_uuid(),

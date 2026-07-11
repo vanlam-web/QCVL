@@ -60,6 +60,21 @@ export interface CurrentUserData {
   permissions: `perm.${string}`[]
 }
 
+export interface UserListItemData {
+  id: string
+  email: string
+  username: string | null
+  phone: string | null
+  birthday: string | null
+  region: string | null
+  ward: string | null
+  address: string | null
+  note: string | null
+  display_name: string
+  status: UserStatus
+  permissions: `perm.${string}`[]
+}
+
 export interface WorkstationData {
   id: string
   code: string
@@ -142,6 +157,32 @@ export interface StocktakeListData {
 
 export interface ServerRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | null>
+  listUsers?(input: { organizationId: string; url: URL }): Promise<UserListItemData[]>
+  createUser?(input: {
+    organizationId: string
+    email: string
+    username: string | null
+    phone: string | null
+    birthday: string | null
+    region: string | null
+    ward: string | null
+    address: string | null
+    note: string | null
+    passwordHash: string
+    displayName: string
+    permissions: `perm.${string}`[]
+  }): Promise<UserListItemData>
+  updateUser?(input: {
+    organizationId: string
+    id: string
+    displayName?: string
+    status?: UserStatus
+  }): Promise<UserListItemData | null>
+  replaceUserPermissions?(input: {
+    organizationId: string
+    id: string
+    permissions: `perm.${string}`[]
+  }): Promise<UserListItemData | null>
   createSession(input: { token: string; userId: string; expiresAt: Date }): Promise<void>
   deleteSession(token: string): Promise<void>
   getSessionUser(token: string, workstationId?: string | null): Promise<CurrentUserData | null>
@@ -1312,13 +1353,65 @@ async function getDevApiResponse(
   }
 
   if (method === 'GET' && path === '/api/v1/permissions') return { found: true, data: allPermissions }
-  if (method === 'GET' && path === '/api/v1/users') return { found: true, data: { items: [toUserListItem(currentUser)], total: 1 } }
-  if (method === 'GET' && /^\/api\/v1\/users\/[^/]+$/.test(path)) return { found: true, data: toUserListItem(currentUser) }
-  if (method === 'POST' && path === '/api/v1/users') return { found: true, data: await makeUserResponse(request), status: 201 }
-  if (method === 'PATCH' && /^\/api\/v1\/users\/[^/]+$/.test(path)) return { found: true, data: { ...toUserListItem(currentUser), ...(await readJson(request)) } }
+  if (method === 'GET' && path === '/api/v1/users') {
+    const items = await repository.listUsers?.({ organizationId: currentUser.organization.id, url })
+      ?? [toUserListItem(currentUser)]
+    return { found: true, data: { items, total: items.length } }
+  }
+  if (method === 'GET' && /^\/api\/v1\/users\/[^/]+$/.test(path)) {
+    const id = getIdFromPath(path)
+    const items = await repository.listUsers?.({ organizationId: currentUser.organization.id, url })
+      ?? [toUserListItem(currentUser)]
+    return { found: true, data: items.find((item) => item.id === id) ?? toUserListItem(currentUser) }
+  }
+  if (method === 'POST' && path === '/api/v1/users') {
+    const body = await readJson(request)
+    let created: UserListItemData
+    try {
+      created = repository.createUser
+        ? await repository.createUser({
+          organizationId: currentUser.organization.id,
+          email: requiredString(body.email, 'email').toLowerCase(),
+          username: nullableString(body.username),
+          phone: nullableString(body.phone),
+          birthday: nullableString(body.birthday),
+          region: nullableString(body.region),
+          ward: nullableString(body.ward),
+          address: nullableString(body.address),
+          note: nullableString(body.note),
+          passwordHash: await hashPassword(requiredString(body.password, 'password')),
+          displayName: requiredString(body.display_name, 'display_name'),
+          permissions: normalizePermissions(body.permissions),
+        })
+        : await makeUserResponseFromBody(body)
+    } catch (error) {
+      if (error instanceof Error && error.message === 'USER_ALREADY_EXISTS') {
+        throw new HttpError(409, 'RESOURCE_CONFLICT', 'User email or username already exists.')
+      }
+      throw error
+    }
+    return { found: true, data: created, status: 201 }
+  }
+  if (method === 'PATCH' && /^\/api\/v1\/users\/[^/]+$/.test(path)) {
+    const body = await readJson(request)
+    const id = getIdFromPath(path) ?? ''
+    const updated = await repository.updateUser?.({
+      organizationId: currentUser.organization.id,
+      id,
+      displayName: typeof body.display_name === 'string' ? body.display_name : undefined,
+      status: body.status === 'active' || body.status === 'inactive' ? body.status : undefined,
+    })
+    return { found: true, data: updated ?? { ...toUserListItem(currentUser), ...body } }
+  }
   if (method === 'PUT' && /^\/api\/v1\/users\/[^/]+\/permissions$/.test(path)) {
     const body = await readJson(request)
-    return { found: true, data: { ...toUserListItem(currentUser), permissions: normalizePermissions(body.permissions) } }
+    const id = getIdFromPath(path) ?? ''
+    const updated = await repository.replaceUserPermissions?.({
+      organizationId: currentUser.organization.id,
+      id,
+      permissions: normalizePermissions(body.permissions),
+    })
+    return { found: true, data: updated ?? { ...toUserListItem(currentUser), permissions: normalizePermissions(body.permissions) } }
   }
 
   const catalogRoute = await handleCatalogRoute(
@@ -1634,20 +1727,19 @@ async function getDevApiResponse(
   return { found: false }
 }
 
-async function makeUserResponse(request: Request) {
-  const body = await readJson(request)
+async function makeUserResponseFromBody(body: Record<string, unknown>): Promise<UserListItemData> {
   return {
     id: randomUUID(),
     email: String(body.email ?? 'user@qc-oms.local'),
-    username: null,
-    phone: null,
-    birthday: null,
-    region: null,
-    ward: null,
-    address: null,
-    note: null,
+    username: nullableString(body.username),
+    phone: nullableString(body.phone),
+    birthday: nullableString(body.birthday),
+    region: nullableString(body.region),
+    ward: nullableString(body.ward),
+    address: nullableString(body.address),
+    note: nullableString(body.note),
     display_name: String(body.display_name ?? body.email ?? 'User'),
-    status: body.status ?? 'active',
+    status: body.status === 'inactive' ? 'inactive' : 'active',
     permissions: normalizePermissions(body.permissions),
   }
 }
@@ -1719,6 +1811,17 @@ function getFinanceCustomerId(path: string) {
 function normalizePermissions(value: unknown) {
   if (!Array.isArray(value)) return allPermissions.map((permission) => permission.code)
   return value.filter((permission): permission is PermissionCode => typeof permission === 'string' && permission.startsWith('perm.'))
+}
+
+function requiredString(value: unknown, field: string) {
+  const result = String(value ?? '').trim()
+  if (!result) throw new HttpError(400, 'VALIDATION_ERROR', `${field} is required.`)
+  return result
+}
+
+function nullableString(value: unknown) {
+  const result = String(value ?? '').trim()
+  return result ? result : null
 }
 
 function makeStocktake() {
