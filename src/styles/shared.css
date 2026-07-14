@@ -494,7 +494,8 @@
   padding: var(--space-3);
 }
 
-.management-filter-column:has(.management-filter-sidebar-popover-open) {
+.management-filter-column:has(.management-filter-sidebar-popover-open),
+.management-filter-column:has(.management-date-picker-popover) {
   z-index: calc(var(--z-shell) + 3);
   overflow: visible;
 }
@@ -985,6 +986,12 @@
   box-shadow: none;
 }
 
+.management-filter-time-trigger {
+  justify-content: space-between;
+  width: 100%;
+  cursor: pointer;
+}
+
 .management-filter-segmented {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1100,30 +1107,165 @@
   gap: var(--space-2);
 }
 
-.management-filter-options .management-filter-date-range label {
-  display: grid;
-  gap: var(--space-1);
+.management-date-input-field {
+  position: relative;
+  display: flex;
   align-items: start;
   min-height: 0;
-  border-color: var(--color-border);
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
-  padding: var(--space-2);
+  padding: 0 var(--space-1) 0 var(--space-2);
 }
 
-.management-filter-date-range span {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  line-height: 1;
+.management-filter-options .management-date-input-field label {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
 }
 
-.management-filter-date-range input {
+.management-date-input-field input {
+  width: 100%;
+  min-height: 2.25rem;
   min-width: 0;
   border: 0;
   background: transparent;
   color: var(--color-text);
   font-size: 0.8125rem;
   outline: none;
+}
+
+.management-date-calendar-button {
+  display: inline-flex;
+  flex: 0 0 1.75rem;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  min-height: 2.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0;
+}
+
+.management-date-calendar-button:hover {
+  color: var(--color-text);
+}
+
+.management-date-picker-popover {
+  position: absolute;
+  top: 0;
+  z-index: calc(var(--z-popover) + 4);
+  width: min(19rem, calc(100vw - 2rem));
+  border: 1px solid var(--color-border-muted);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+}
+
+.management-date-picker-popover::before {
+  position: absolute;
+  top: -0.55rem;
+  width: 1rem;
+  height: 1rem;
+  background: var(--color-surface);
+  box-shadow: -1px -1px 0 var(--color-border-muted);
+  content: '';
+  transform: rotate(45deg);
+}
+
+.management-date-picker-popover-from {
+  left: calc(200% + var(--space-4) + var(--space-2) + var(--space-4));
+}
+
+.management-date-picker-popover-from::before {
+  left: -0.55rem;
+  top: 0.75rem;
+  box-shadow: -1px 1px 0 var(--color-border-muted);
+}
+
+.management-date-picker-popover-to {
+  left: calc(100% + var(--space-4) + var(--space-3));
+}
+
+.management-date-picker-popover-to::before {
+  left: -0.55rem;
+  top: 0.75rem;
+  box-shadow: -1px 1px 0 var(--color-border-muted);
+}
+
+.management-date-picker-header,
+.management-date-picker-weekdays,
+.management-date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  align-items: center;
+  text-align: center;
+}
+
+.management-date-picker-header {
+  grid-template-columns: 2.25rem 1fr 2.25rem;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.management-date-picker-header strong {
+  color: var(--color-text);
+  font-size: 1rem;
+}
+
+.management-date-picker-header button,
+.management-date-picker-grid button {
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.management-date-picker-header button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.management-date-picker-weekdays {
+  margin-bottom: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.management-date-picker-grid {
+  row-gap: var(--space-1);
+}
+
+.management-date-picker-grid button {
+  width: 2.2rem;
+  height: 2.2rem;
+  margin: 0 auto;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.management-date-picker-grid button:hover {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  outline: 1px solid var(--color-selected-border);
+}
+
+.management-date-picker-day-muted {
+  color: var(--color-text-muted) !important;
+}
+
+.management-date-picker-grid .management-date-picker-day-selected {
+  background: var(--color-accent);
+  color: var(--color-on-primary);
 }
 
 .management-list-surface {

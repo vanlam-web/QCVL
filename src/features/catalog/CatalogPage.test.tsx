@@ -460,8 +460,8 @@ it('reactively filters products by existing product fields in the shared sidebar
   expect(stockRegion.compareDocumentPosition(createdAtRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   expect(createdAtRegion.compareDocumentPosition(kindRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
-  expect(within(createdAtRegion).getByRole('radio', { name: 'Toàn thời gian' })).toBeChecked()
-  await userEvent.click(within(createdAtRegion).getByRole('radio', { name: 'Tùy chỉnh' }))
+  expect(within(createdAtRegion).getByRole('button', { name: 'Toàn thời gian' })).toBeInTheDocument()
+  expect(within(createdAtRegion).queryByRole('radio', { name: 'Tùy chỉnh' })).not.toBeInTheDocument()
   await userEvent.clear(within(createdAtRegion).getByLabelText('Từ ngày'))
   await userEvent.type(within(createdAtRegion).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.clear(within(createdAtRegion).getByLabelText('Đến ngày'))

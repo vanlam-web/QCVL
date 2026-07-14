@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Search, StickyNote, Trash2 } from 'lucide-react'
 import { MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
+import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -54,6 +55,30 @@ type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerPageSize = 15
 const customerHistoryPageSize = 10
+type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
+const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
+  { title: 'Theo ngày', presets: ['today', 'yesterday'] },
+  { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
+  { title: 'Theo tháng', presets: ['month', 'last_month', 'last_30_days'] },
+  { title: 'Theo quý', presets: ['quarter', 'last_quarter'] },
+  { title: 'Theo năm', presets: ['year', 'last_year', 'all'] },
+]
+const customerCreatedDateLabels: Record<CustomerCreatedDateFilter, string> = {
+  all: 'Toàn thời gian',
+  today: 'Hôm nay',
+  yesterday: 'Hôm qua',
+  week: 'Tuần này',
+  last_week: 'Tuần trước',
+  last_7_days: '7 ngày qua',
+  month: 'Tháng này',
+  last_month: 'Tháng trước',
+  last_30_days: '30 ngày qua',
+  quarter: 'Quý này',
+  last_quarter: 'Quý trước',
+  year: 'Năm nay',
+  last_year: 'Năm trước',
+  custom: 'Tùy chỉnh',
+}
 
 function customerCreatorLabel(customer: Customer) {
   if (customer.created_by?.name) return customer.created_by.name
@@ -102,6 +127,8 @@ export function CustomersPage({
   const [customerGroupId, setCustomerGroupId] = useState('all')
   const [createdFrom, setCreatedFrom] = useState('')
   const [createdTo, setCreatedTo] = useState('')
+  const [createdDateFilter, setCreatedDateFilter] = useState<CustomerCreatedDateFilter>('all')
+  const [createdQuickTimeOpen, setCreatedQuickTimeOpen] = useState(false)
   const [createdBy, setCreatedBy] = useState('all')
   const [totalSalesMin, setTotalSalesMin] = useState('')
   const [totalSalesMax, setTotalSalesMax] = useState('')
@@ -288,6 +315,32 @@ export function CustomersPage({
     })
   }
 
+  async function applyCustomerQuickDateFilter(nextFilter: Exclude<CustomerCreatedDateFilter, 'custom'>) {
+    const range = quickDateRange(nextFilter)
+    setCreatedDateFilter(nextFilter)
+    setCreatedQuickTimeOpen(false)
+    setCreatedFrom(range.from)
+    setCreatedTo(range.to)
+    await load({
+      createdFromValue: range.from,
+      createdToValue: range.to,
+      page: 1,
+    })
+  }
+
+  async function applyCustomerCustomDateFilter(nextFilters: Partial<{ from: string; to: string }> = {}) {
+    const nextFrom = nextFilters.from ?? createdFrom
+    const nextTo = nextFilters.to ?? createdTo
+    setCreatedDateFilter('custom')
+    setCreatedFrom(nextFrom)
+    setCreatedTo(nextTo)
+    await load({
+      createdFromValue: nextFrom,
+      createdToValue: nextTo,
+      page: 1,
+    })
+  }
+
   async function goToPage(nextPage: number) {
     await load({ page: nextPage })
   }
@@ -391,6 +444,12 @@ export function CustomersPage({
   const fallbackCustomerSummary = customerVisibleSummary(state?.customers ?? [])
   const visibleDebtTotal = state?.summary?.total_debt_amount ?? fallbackCustomerSummary.visibleDebtTotal
   const visibleSalesTotal = state?.summary?.total_sales_amount ?? fallbackCustomerSummary.visibleSalesTotal
+  const customerVisibleDateRange = createdDateFilter === 'custom'
+    ? { from: createdFrom, to: createdTo }
+    : displayDateRangeForData(
+        { from: createdFrom, to: createdTo },
+        dateRangeFromItems(state?.customers ?? [], (customer) => customer.created_at),
+      )
   const {
     sortedItems: sortedCustomers,
     sortState: customerSortState,
@@ -435,6 +494,8 @@ export function CustomersPage({
         <ManagementFilterSidebar
           activeSummary={activeFilterSummary}
           ariaLabel="Bộ lọc khách hàng"
+          onPopoverClose={() => setCreatedQuickTimeOpen(false)}
+          popoverOpen={createdQuickTimeOpen}
           title="Bộ lọc"
         >
           <button
@@ -461,11 +522,48 @@ export function CustomersPage({
             </ManagementFilterSelectField>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Ngày tạo">
+            <div className="management-filter-time-options">
+              <button
+                aria-expanded={createdQuickTimeOpen}
+                className="management-filter-choice management-filter-time-trigger"
+                type="button"
+                onClick={() => setCreatedQuickTimeOpen((current) => !current)}
+              >
+                <span>{createdDateFilter === 'custom' ? `${toDisplayDateInput(createdFrom)} - ${toDisplayDateInput(createdTo)}` : customerCreatedDateLabels[createdDateFilter]}</span>
+                <span className="management-filter-choice-trailing">
+                  <ChevronRight aria-hidden="true" size={17} />
+                </span>
+              </button>
+            </div>
+            {createdQuickTimeOpen ? (
+              <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
+                {customerCreatedDateGroups.map((group) => (
+                  <section key={group.title}>
+                    <h3>{group.title}</h3>
+                    <div>
+                      {group.presets.map((preset) => (
+                        <button
+                          className={createdDateFilter === preset ? 'management-filter-quick-time-active' : undefined}
+                          key={preset}
+                          type="button"
+                          onClick={() => void applyCustomerQuickDateFilter(preset)}
+                        >
+                          {customerCreatedDateLabels[preset]}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : null}
             <ManagementDateRangeInputs
+              displayFrom={customerVisibleDateRange.from}
+              displayTo={customerVisibleDateRange.to}
               from={createdFrom}
               to={createdTo}
-              onFromChange={(value) => void applySidebarFilters({ createdFrom: value })}
-              onToChange={(value) => void applySidebarFilters({ createdTo: value })}
+              onCalendarOpen={() => setCreatedQuickTimeOpen(false)}
+              onFromChange={(value) => void applyCustomerCustomDateFilter({ from: value })}
+              onToChange={(value) => void applyCustomerCustomDateFilter({ to: value })}
             />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Người tạo">

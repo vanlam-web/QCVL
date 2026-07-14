@@ -1,5 +1,6 @@
 import pg from 'pg'
 import { createHash, randomUUID } from 'node:crypto'
+import { displayDateRangeMatches } from './date-filter.js'
 import type {
   AuthUserRow,
   CashbookEntryData,
@@ -428,11 +429,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
       if (createdFrom) {
         values.push(createdFrom)
-        clauses.push(`p.created_at >= $${values.length}::date`)
+        clauses.push(`(p.created_at at time zone 'UTC')::date >= $${values.length}::date`)
       }
       if (createdTo) {
         values.push(createdTo)
-        clauses.push(`p.created_at < ($${values.length}::date + interval '1 day')`)
+        clauses.push(`(p.created_at at time zone 'UTC')::date <= $${values.length}::date`)
       }
       if (search) {
         values.push(`%${search}%`)
@@ -1564,11 +1565,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
       if (from) {
         values.push(from)
-        clauses.push(`coalesce(st.source_created_at, st.created_at) >= $${values.length}::date`)
+        clauses.push(`(coalesce(st.source_created_at, st.created_at) at time zone 'UTC')::date >= $${values.length}::date`)
       }
       if (to) {
         values.push(to)
-        clauses.push(`coalesce(st.source_created_at, st.created_at) < ($${values.length}::date + interval '1 day')`)
+        clauses.push(`(coalesce(st.source_created_at, st.created_at) at time zone 'UTC')::date <= $${values.length}::date`)
       }
       if (search) {
         values.push(`%${search}%`)
@@ -3463,12 +3464,7 @@ function filterValueMatches(values: string[], actual: string) {
 }
 
 function dateRangeMatches(value: string, from: string | null, to: string | null) {
-  const date = value.slice(0, 10)
-  const fromDate = from?.slice(0, 10)
-  const toDate = to?.slice(0, 10)
-  if (fromDate && date < fromDate) return false
-  if (toDate && date > toDate) return false
-  return true
+  return displayDateRangeMatches(value, from, to)
 }
 
 function salesDocumentMatches(url: URL, document: SalesDocumentData) {

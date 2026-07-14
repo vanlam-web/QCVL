@@ -40,7 +40,7 @@ Báo cáo cuối ngày là báo cáo động theo dữ liệu hiện tại. Nế
 
 | Bộ lọc | Quy tắc |
 |---|---|
-| Thời gian | Hôm nay, hôm qua, tuần này, tháng này, tùy chỉnh |
+| Thời gian | Hôm nay, hôm qua, tuần này, tháng này và khoảng ngày từ/đến. Không dùng radio `Tùy chỉnh`; khi chuẩn hóa UI thì dùng `ManagementDateRangeInputs`, hai ô ngày luôn hiển thị và icon lịch mở popup bên phải cột filter. |
 | Khách hàng | Tìm theo mã, tên, SĐT nếu có |
 | Nhân viên bán | Lọc người bán trên hóa đơn |
 | Người tạo | Lọc người tạo chứng từ |
@@ -120,7 +120,7 @@ QC-OMS MVP:
 
 ## 8. Acceptance Criteria UX
 
-1. Người dùng xem được báo cáo hôm nay và chọn được khoảng ngày tùy chỉnh.
+1. Người dùng xem được báo cáo hôm nay và chọn được khoảng ngày từ/đến.
 2. Báo cáo tách tiền mặt và từng tài khoản ngân hàng.
 3. Số thực thu khớp được với Sổ quỹ trong cùng kỳ.
 4. Công nợ mới và thu nợ cũ khớp với công nợ theo hóa đơn.

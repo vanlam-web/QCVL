@@ -1,5 +1,5 @@
-import { Fragment, cloneElement, isValidElement, useEffect, useRef, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type SyntheticEvent } from 'react'
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { Fragment, cloneElement, isValidElement, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type SyntheticEvent } from 'react'
+import { CalendarDays, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
 
 export interface ManagementSearchSuggestion {
@@ -181,33 +181,116 @@ export function ManagementFilterNumberRange({
 }
 
 export function ManagementDateRangeInputs({
+  displayFrom,
+  displayTo,
   from,
   to,
+  onCalendarOpen,
   onFromChange,
   onToChange,
 }: {
+  displayFrom?: string
+  displayTo?: string
   from: string
   to: string
+  onCalendarOpen?: () => void
   onFromChange: (value: string) => void
   onToChange: (value: string) => void
 }) {
+  const [openCalendar, setOpenCalendar] = useState<DateInputField | null>(null)
+  const dateRangeRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (openCalendar === null) return undefined
+
+    function closeCalendarOnOutsideClick(event: PointerEvent) {
+      if (dateRangeRef.current?.contains(event.target as Node)) return
+      setOpenCalendar(null)
+    }
+
+    document.addEventListener('pointerdown', closeCalendarOnOutsideClick)
+    return () => document.removeEventListener('pointerdown', closeCalendarOnOutsideClick)
+  }, [openCalendar])
+
+  function toggleCalendar(field: DateInputField) {
+    setOpenCalendar((current) => current === field ? null : field)
+  }
+
   return (
-    <div className="management-filter-date-range">
-      <ManagementDateInput label="Từ ngày" value={from} onChange={onFromChange} />
-      <ManagementDateInput label="Đến ngày" value={to} onChange={onToChange} />
+    <div className="management-filter-date-range" ref={dateRangeRef}>
+      <ManagementDateInput
+        calendarOpen={openCalendar === 'from'}
+        displayValue={displayFrom}
+        fieldId="from"
+        label="Từ ngày"
+        value={from}
+        onCalendarClose={() => setOpenCalendar(null)}
+        onCalendarOpen={onCalendarOpen}
+        onCalendarToggle={toggleCalendar}
+        onChange={onFromChange}
+      />
+      <ManagementDateInput
+        calendarOpen={openCalendar === 'to'}
+        displayValue={displayTo}
+        fieldId="to"
+        label="Đến ngày"
+        value={to}
+        onCalendarClose={() => setOpenCalendar(null)}
+        onCalendarOpen={onCalendarOpen}
+        onCalendarToggle={toggleCalendar}
+        onChange={onToChange}
+      />
     </div>
   )
 }
 
+type DateInputField = 'from' | 'to'
+
+function dateKeyToLocalDate(value: string) {
+  const normalized = normalizeDateInput(value)
+  if (!normalized) return new Date()
+  const [year, month, day] = normalized.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+function localDateKey(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function sameLocalDay(left: Date, right: Date) {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate()
+}
+
 function ManagementDateInput({
+  calendarOpen,
+  displayValue,
+  fieldId,
   label,
   value,
+  onCalendarClose,
+  onCalendarOpen,
+  onCalendarToggle,
   onChange,
 }: {
+  calendarOpen: boolean
+  displayValue?: string
+  fieldId: DateInputField
   label: string
   value: string
+  onCalendarClose: () => void
+  onCalendarOpen?: () => void
+  onCalendarToggle: (field: DateInputField) => void
   onChange: (value: string) => void
 }) {
+  const [visibleMonth, setVisibleMonth] = useState(() => dateKeyToLocalDate(value))
+  const selectedDate = dateKeyToLocalDate(value)
+  const inputValue = displayValue ?? value
+
   function updateDateInput(nextText: string) {
     const normalized = normalizeDateInput(nextText)
     if (normalized !== null && (normalized === '' || nextText.trim().length >= 10)) onChange(normalized)
@@ -218,19 +301,90 @@ function ManagementDateInput({
     input.value = normalized === null ? toDisplayDateInput(value) : toDisplayDateInput(normalized)
   }
 
+  function openCalendar() {
+    setVisibleMonth(dateKeyToLocalDate(value))
+    if (!calendarOpen) onCalendarOpen?.()
+    onCalendarToggle(fieldId)
+  }
+
+  function moveMonth(amount: number) {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + amount, 1))
+  }
+
+  function selectDate(date: Date) {
+    onChange(localDateKey(date))
+    onCalendarClose()
+  }
+
+  const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1)
+  const mondayOffset = (firstDay.getDay() + 6) % 7
+  const calendarStart = new Date(firstDay)
+  calendarStart.setDate(firstDay.getDate() - mondayOffset)
+  const days = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart)
+    date.setDate(calendarStart.getDate() + index)
+    return date
+  })
+  const monthTitle = `Tháng ${visibleMonth.getMonth() + 1} ${visibleMonth.getFullYear()}`
+
   return (
-    <label>
-      <span>{label}</span>
-      <input
-        aria-label={label}
-        defaultValue={toDisplayDateInput(value)}
-        inputMode="numeric"
-        key={value}
-        placeholder="dd/mm/yyyy"
-        onBlur={(event) => formatOnBlur(event.currentTarget)}
-        onChange={(event) => updateDateInput(event.target.value)}
-      />
-    </label>
+    <div className="management-date-input-field">
+      <label>
+        <span className="sr-only">{label}</span>
+        <input
+          aria-label={label}
+          defaultValue={toDisplayDateInput(inputValue)}
+          inputMode="numeric"
+          key={inputValue}
+          placeholder="dd/mm/yyyy"
+          onBlur={(event) => formatOnBlur(event.currentTarget)}
+          onChange={(event) => updateDateInput(event.target.value)}
+        />
+      </label>
+      <button
+        aria-expanded={calendarOpen}
+        aria-label={`Mở lịch ${label}`}
+        className="management-date-calendar-button"
+        type="button"
+        onClick={openCalendar}
+      >
+        <CalendarDays size={16} />
+      </button>
+      {calendarOpen ? (
+        <div aria-label={`Chọn ${label}`} className={`management-date-picker-popover management-date-picker-popover-${fieldId}`} role="dialog">
+          <div className="management-date-picker-header">
+            <button aria-label="Tháng trước" type="button" onClick={() => moveMonth(-1)}>
+              <ChevronLeft size={18} />
+            </button>
+            <strong>{monthTitle}</strong>
+            <button aria-label="Tháng sau" type="button" onClick={() => moveMonth(1)}>
+              <ChevronRight size={18} />
+            </button>
+          </div>
+          <div className="management-date-picker-weekdays" aria-hidden="true">
+            {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
+          </div>
+          <div className="management-date-picker-grid">
+            {days.map((date) => {
+              const dateKey = localDateKey(date)
+              const muted = date.getMonth() !== visibleMonth.getMonth()
+              const selected = sameLocalDay(date, selectedDate)
+              return (
+                <button
+                  aria-label={`Chọn ngày ${toDisplayDateInput(dateKey)}`}
+                  className={`${muted ? 'management-date-picker-day-muted' : ''}${selected ? ' management-date-picker-day-selected' : ''}`}
+                  key={dateKey}
+                  type="button"
+                  onClick={() => selectDate(date)}
+                >
+                  {date.getDate()}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      ) : null}
+    </div>
   )
 }
 

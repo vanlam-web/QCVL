@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
+import { displayDateRangeMatches } from './date-filter.js'
 import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
@@ -607,8 +608,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       return [...purchaseReceipts.values()]
         .filter((receipt) => {
           if (status && status !== 'all' && receipt.status !== status) return false
-          if (dateFrom && receipt.received_at.slice(0, 10) < dateFrom) return false
-          if (dateTo && receipt.received_at.slice(0, 10) > dateTo) return false
+          if (!dateRangeMatches(receipt.received_at, dateFrom, dateTo)) return false
           if (createdBy && createdBy !== 'all' && receipt.created_by.id !== createdBy) return false
           if (search && !normalize(`${receipt.code} ${receipt.supplier.code} ${receipt.supplier.name} ${receipt.supplier_document_no ?? ''} ${receipt.notes ?? ''}`).includes(search)) return false
           return true
@@ -2189,11 +2189,5 @@ function positiveNumber(value: unknown) {
 }
 
 function dateRangeMatches(value: string, from: string | null, to: string | null) {
-  const date = value.slice(0, 10)
-  const fromDate = from?.slice(0, 10)
-  const toDate = to?.slice(0, 10)
-  if (!date) return false
-  if (fromDate && date < fromDate) return false
-  if (toDate && date > toDate) return false
-  return true
+  return displayDateRangeMatches(value, from, to)
 }

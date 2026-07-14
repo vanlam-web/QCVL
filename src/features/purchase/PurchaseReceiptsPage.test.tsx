@@ -363,7 +363,8 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
   await screen.findByText('PN000673')
   const filterForm = screen.getByRole('search', { name: 'Lọc phiếu nhập' })
   const filterSidebar = screen.getByRole('complementary', { name: 'Bộ lọc phiếu nhập' })
-  await userEvent.selectOptions(within(filterSidebar).getByRole('combobox', { name: 'Thời gian nhanh' }), 'today')
+  await userEvent.click(within(filterSidebar).getByRole('button', { name: 'Toàn thời gian' }))
+  await userEvent.click(within(filterSidebar).getByRole('button', { name: 'Hôm nay' }))
 
   expect(service.listReceipts).toHaveBeenLastCalledWith(
     expect.objectContaining({

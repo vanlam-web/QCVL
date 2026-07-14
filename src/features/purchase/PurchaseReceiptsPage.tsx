@@ -47,6 +47,7 @@ import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../co
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
+import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 
 const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
@@ -105,6 +106,7 @@ export function PurchaseReceiptsPage({
   const [dateTo, setDateTo] = useState('')
   const [createdBy, setCreatedBy] = useState('all')
   const [activePreset, setActivePreset] = useState<string | null>(null)
+  const [receiptQuickTimeOpen, setReceiptQuickTimeOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null)
@@ -605,6 +607,14 @@ export function PurchaseReceiptsPage({
   const selectedCreatorName = creatorOptions.find((creator) => creator.id === createdBy)?.name ?? createdBy
   const receiptTimeQuickOptions = purchaseReceiptTimeQuickOptions()
   const selectedTimeQuickOption = receiptTimeQuickOptions.find((option) => option.from === dateFrom && option.to === dateTo)?.id ?? 'custom'
+  const selectedReceiptTimeLabel = receiptTimeQuickOptions.find((option) => option.id === selectedTimeQuickOption)?.label
+    ?? `${toDisplayDateInput(dateFrom)} - ${toDisplayDateInput(dateTo)}`
+  const receiptVisibleDateRange = selectedTimeQuickOption === 'custom'
+    ? { from: dateFrom, to: dateTo }
+    : displayDateRangeForData(
+        { from: dateFrom, to: dateTo },
+        dateRangeFromItems(receipts ?? [], (receipt) => receipt.received_at),
+      )
 
   const receiptFilterChips = [
     ...(activePreset
@@ -1165,6 +1175,8 @@ export function PurchaseReceiptsPage({
         <ManagementFilterSidebar
           activeSummary={activeFilterSummary || undefined}
           ariaLabel="Bộ lọc phiếu nhập"
+          onPopoverClose={() => setReceiptQuickTimeOpen(false)}
+          popoverOpen={receiptQuickTimeOpen}
           title="Bộ lọc"
         >
           <button
@@ -1192,25 +1204,47 @@ export function PurchaseReceiptsPage({
             </select>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Thời gian">
-            <select
-              aria-label="Thời gian nhanh"
-              className="management-filter-select"
-              value={selectedTimeQuickOption}
-              onChange={(event) => {
-                const option = receiptTimeQuickOptions.find((candidate) => candidate.id === event.target.value)
-                if (option) void applyReceiptFilters({ dateFrom: option.from, dateTo: option.to, preset: null })
-              }}
-            >
-              {receiptTimeQuickOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.label}
-                </option>
-              ))}
-              <option value="custom">Tùy chỉnh</option>
-            </select>
+            <div className="management-filter-time-options">
+              <button
+                aria-expanded={receiptQuickTimeOpen}
+                className="management-filter-choice management-filter-time-trigger"
+                type="button"
+                onClick={() => setReceiptQuickTimeOpen((current) => !current)}
+              >
+                <span>{selectedReceiptTimeLabel}</span>
+                <span className="management-filter-choice-trailing">
+                  <ChevronRight aria-hidden="true" size={17} />
+                </span>
+              </button>
+            </div>
+            {receiptQuickTimeOpen ? (
+              <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
+                <section>
+                  <h3>Chọn nhanh</h3>
+                  <div>
+                    {receiptTimeQuickOptions.map((option) => (
+                      <button
+                        className={selectedTimeQuickOption === option.id ? 'management-filter-quick-time-active' : undefined}
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          setReceiptQuickTimeOpen(false)
+                          void applyReceiptFilters({ dateFrom: option.from, dateTo: option.to, preset: null })
+                        }}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            ) : null}
             <ManagementDateRangeInputs
+              displayFrom={receiptVisibleDateRange.from}
+              displayTo={receiptVisibleDateRange.to}
               from={dateFrom}
               to={dateTo}
+              onCalendarOpen={() => setReceiptQuickTimeOpen(false)}
               onFromChange={(value) => void applyReceiptFilters({ dateFrom: value, preset: null })}
               onToChange={(value) => void applyReceiptFilters({ dateTo: value, preset: null })}
             />

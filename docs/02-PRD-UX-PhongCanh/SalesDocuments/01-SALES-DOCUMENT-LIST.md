@@ -39,7 +39,7 @@ Hiện tại đã triển khai:
 - tìm kiếm/lọc cơ bản
 - ô tìm `Mã chứng từ, khách hàng, ghi chú` lọc trực tiếp danh sách; search bỏ dấu tiếng Việt, tìm theo mã chứng từ, mã/tên khách và ghi chú chứng từ
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
-- bộ lọc thời gian dạng chọn nhanh/tùy chỉnh theo layout filter dùng chung
+- bộ lọc thời gian dùng control chung: nút chọn nhanh, hai ô từ ngày/đến ngày luôn hiển thị và icon lịch mở popup bên phải cột filter
 - bộ lọc trạng thái thanh toán, phương thức thanh toán, người bán/người tạo và bảng giá nếu dữ liệu/API hiện có hỗ trợ
 - bộ lọc nhiều chọn `Loại hóa đơn`, `Trạng thái hóa đơn`, `Thanh toán` đã chạy trên NAS ngày 2026-07-09; frontend và backend phải cùng hỗ trợ query comma, không được đổi UI sang nhiều chọn khi backend còn chỉ nhận một giá trị
 - exact document-code lookup không bị che bởi filter mặc định
@@ -100,7 +100,7 @@ QC-OMS chỉ làm luồng **bán đứt**:
 | Bộ lọc | Quy tắc |
 |---|---|
 | Tìm kiếm nhanh | Tìm theo mã chứng từ, mã khách, tên khách, SĐT nếu có, ghi chú đơn |
-| Thời gian | Mặc định tháng này; có bộ lọc hôm nay, hôm qua, tháng này, tùy chỉnh |
+| Thời gian | Mặc định tháng này; chọn nhanh theo ngày/tuần/tháng/quý/năm/toàn thời gian. Không còn radio `Tùy chỉnh`; hai ô từ ngày/đến ngày luôn hiển thị dạng `dd/MM/yyyy`, có icon lịch. Popup lịch mở bên phải cột filter như menu chọn nhanh, chỉ một popup/menu được mở tại một thời điểm. Preset hiện tại không hiển thị ngày kết thúc vượt quá hôm nay; `Toàn thời gian` hiển thị khoảng ngày có dữ liệu khi xác định được. |
 | Loại hóa đơn | Checkbox nhiều chọn: Hóa đơn, Báo giá. Mặc định chọn cả hai. API nhận `type=invoice,quote`; nếu bỏ hết thì gửi `__none__` và trả rỗng. |
 | Trạng thái hóa đơn | Checkbox nhiều chọn: Đang hiệu lực, Hoàn tất, Đã hủy. Mặc định chọn `active,completed`; `cancelled` chỉ hiện khi người dùng chọn. API nhận `status=active,completed,cancelled`. |
 | Thanh toán | Checkbox nhiều chọn: Chưa thanh toán, Thanh toán một phần, Đã thanh toán. Mặc định chọn cả ba. API nhận `payment_status=unpaid,partial,paid`. |

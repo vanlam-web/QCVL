@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from 'react'
-import { CalendarDays, ChevronRight, Copy, FileOutput, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronRight, Copy, FileOutput, Printer, Save, Search, Trash2 } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, StatusChip } from '../../components/ui-shell/primitives'
 import {
@@ -36,7 +36,7 @@ import {
   stocktakeStatusText,
 } from './inventory-presenter'
 import { StocktakeImportDialog } from './StocktakeImportDialog'
-import { quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 
 const pageSizeDefault = 15
 type InventoryView = 'products' | 'stocktakes' | 'objects'
@@ -160,6 +160,12 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     product_difference_qty: { kind: 'number', value: (stocktake) => stocktake.product_difference_qty },
     status: { kind: 'text', value: (stocktake) => stocktakeStatusText(stocktake.status) },
   })
+  const stocktakeVisibleDateRange = stocktakeDateFilter === 'custom'
+    ? { from: stocktakeDateFrom, to: stocktakeDateTo }
+    : displayDateRangeForData(
+        { from: stocktakeDateFrom, to: stocktakeDateTo },
+        dateRangeFromItems(stocktakes, (stocktake) => stocktake.created_at),
+      )
 
   async function loadProducts(input: {
     search?: string
@@ -640,38 +646,17 @@ export function InventoryPage({ service }: { service: InventoryService }) {
           >
             <ManagementFilterGroup title="Ngày tạo">
               <div className="management-filter-time-options">
-                <div
+                <button
                   aria-expanded={stocktakeQuickTimeOpen}
-                  className={`management-filter-choice${stocktakeDateFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
-                  onClick={() => {
-                    if (stocktakeDateFilter === 'custom') applyStocktakeQuickDateFilter('year')
-                    else setStocktakeQuickTimeOpen((current) => !current)
-                  }}
+                  className="management-filter-choice management-filter-time-trigger"
+                  type="button"
+                  onClick={() => setStocktakeQuickTimeOpen((current) => !current)}
                 >
-                  <input
-                    aria-label={stocktakeDateFilter === 'custom' ? stocktakeDateLabels.year : stocktakeDateLabels[stocktakeDateFilter]}
-                    checked={stocktakeDateFilter !== 'custom'}
-                    name="stocktake-date-filter"
-                    readOnly
-                    type="radio"
-                    onChange={() => undefined}
-                  />
-                  <span>{stocktakeDateFilter === 'custom' ? stocktakeDateLabels.year : stocktakeDateLabels[stocktakeDateFilter]}</span>
+                  <span>{stocktakeDateFilter === 'custom' ? `${stocktakeDisplayDate(stocktakeDateFrom)} - ${stocktakeDisplayDate(stocktakeDateTo)}` : stocktakeDateLabels[stocktakeDateFilter]}</span>
                   <span className="management-filter-choice-trailing">
                     <ChevronRight aria-hidden="true" size={17} />
                   </span>
-                </div>
-                <label className={`management-filter-choice${stocktakeDateFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
-                  <input
-                    aria-label="Tùy chỉnh"
-                    checked={stocktakeDateFilter === 'custom'}
-                    name="stocktake-date-filter"
-                    type="radio"
-                    onChange={() => applyStocktakeCustomDateFilter()}
-                  />
-                  <span>{stocktakeDateFilter === 'custom' ? `${stocktakeDisplayDate(stocktakeDateFrom)} - ${stocktakeDisplayDate(stocktakeDateTo)}` : 'Tùy chỉnh'}</span>
-                  <CalendarDays aria-hidden="true" size={17} />
-                </label>
+                </button>
               </div>
               {stocktakeQuickTimeOpen ? (
                 <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
@@ -694,14 +679,15 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                   ))}
                 </div>
               ) : null}
-                {stocktakeDateFilter === 'custom' ? (
-                  <ManagementDateRangeInputs
-                    from={stocktakeDateFrom}
-                    to={stocktakeDateTo}
-                    onFromChange={(value) => applyStocktakeCustomDateFilter({ from: value })}
-                    onToChange={(value) => applyStocktakeCustomDateFilter({ to: value })}
-                  />
-                ) : null}
+              <ManagementDateRangeInputs
+                displayFrom={stocktakeVisibleDateRange.from}
+                displayTo={stocktakeVisibleDateRange.to}
+                from={stocktakeDateFrom}
+                to={stocktakeDateTo}
+                onCalendarOpen={() => setStocktakeQuickTimeOpen(false)}
+                onFromChange={(value) => applyStocktakeCustomDateFilter({ from: value })}
+                onToChange={(value) => applyStocktakeCustomDateFilter({ to: value })}
+              />
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Trạng thái">
               {[

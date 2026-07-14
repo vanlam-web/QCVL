@@ -21,7 +21,7 @@ Quan sát bổ sung ngày `05/07/2026` từ KiotViet đang mở và file xuất 
   - thiết lập/hướng dẫn
 - Bộ lọc trái có:
   - Quỹ tiền: Tiền mặt, Ngân hàng, Ví điện tử, Tổng quỹ; khi chọn Ngân hàng mới chọn tài khoản cụ thể ở ô riêng
-  - Thời gian: Tháng này, Tùy chỉnh
+  - Thời gian: nút chọn nhanh (mặc định Tháng này) và 2 ô ngày luôn hiển thị
   - Loại chứng từ: Phiếu thu, Phiếu chi
   - Loại thu chi
   - Trạng thái: Đã thanh toán, Đã hủy
@@ -177,7 +177,7 @@ Không dùng ví điện tử trong MVP nếu chưa có nghiệp vụ riêng.
 | Bộ lọc | Giá trị |
 |---|---|
 | Quỹ tiền | Radio list chọn một theo thứ tự: `Tổng quỹ`, `Tiền mặt`, `Ngân hàng`. Mặc định chọn `Tổng quỹ`. `Ngân hàng` lọc tất cả dòng có loại sổ quỹ ngân hàng; khối `Tài khoản` bên dưới chỉ dùng để thu hẹp về một tài khoản cụ thể |
-| Thời gian | Hôm nay, hôm qua, tuần này, tuần trước, 7 ngày qua, tháng này, tháng trước, 30 ngày qua, quý này, quý trước, năm nay, năm trước, toàn thời gian, tùy chỉnh |
+| Thời gian | Hôm nay, hôm qua, tuần này, tuần trước, 7 ngày qua, tháng này, tháng trước, 30 ngày qua, quý này, quý trước, năm nay, năm trước, toàn thời gian. Không còn radio `Tùy chỉnh`; hai ô từ ngày/đến ngày luôn hiển thị, có icon lịch. Popup lịch mở bên phải cột filter như menu chọn nhanh và không chồng popup khác. Preset đang chạy không hiển thị ngày kết thúc vượt quá hôm nay; `Toàn thời gian` hiển thị khoảng ngày có dữ liệu khi xác định được. |
 | Loại chứng từ | Checkbox group: `Phiếu thu`, `Phiếu chi`; mặc định không tick nghĩa là xem cả hai |
 | Loại thu chi | Chưa có trong UI hiện tại; thuộc slice sau |
 | Trạng thái | Checkbox group: `Đã thanh toán` tick mặc định, `Đã hủy` không tick; tick cả hai hoặc không tick gì tương đương xem tất cả |

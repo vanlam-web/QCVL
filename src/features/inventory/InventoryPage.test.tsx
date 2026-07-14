@@ -465,8 +465,8 @@ describe('InventoryPage', () => {
 
     const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc phiếu kiểm kho' })
     const dateGroup = within(sidebar).getByRole('region', { name: 'Ngày tạo' })
-    expect(within(dateGroup).getByRole('radio', { name: 'Năm nay' })).toBeChecked()
-    expect(within(dateGroup).getByRole('radio', { name: 'Tùy chỉnh' })).not.toBeChecked()
+    expect(within(dateGroup).getByRole('button', { name: 'Năm nay' })).toBeInTheDocument()
+    expect(within(dateGroup).queryByRole('radio', { name: 'Tùy chỉnh' })).not.toBeInTheDocument()
 
     const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái' })
     expect(within(statusGroup).getByRole('checkbox', { name: 'Phiếu tạm' })).toBeChecked()
@@ -574,7 +574,6 @@ describe('InventoryPage', () => {
       }),
     )
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
     fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-06-30' } })
 
@@ -589,15 +588,14 @@ describe('InventoryPage', () => {
     )
   })
 
-  it('uses the current year when custom stocktake date filter is first enabled', async () => {
+  it('shows the current year clipped to today in stocktake date inputs', async () => {
     const service = makeService()
     render(<InventoryPage service={service} />)
 
     await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
-    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
 
     expect(screen.getByLabelText('Từ ngày')).toHaveValue(toDisplayDateInput(currentStocktakeDefaultRange.from))
-    expect(screen.getByLabelText('Đến ngày')).toHaveValue(toDisplayDateInput(currentStocktakeDefaultRange.to))
+    expect(screen.getByLabelText('Đến ngày')).toHaveValue(toDisplayDateInput(new Date().toISOString().slice(0, 10)))
     await waitFor(() =>
       expect(service.listStocktakes).toHaveBeenLastCalledWith({
         status: 'draft,balanced,cancelled',
@@ -614,7 +612,6 @@ describe('InventoryPage', () => {
     render(<InventoryPage service={service} />)
 
     await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
-    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
     fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '31/07/2026' } })
 
@@ -648,7 +645,7 @@ describe('InventoryPage', () => {
     pending[0].resolve({ items: [stocktake], page: 1, page_size: 15, total: 1 })
     expect(await screen.findByText('KK000001')).toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Tùy chỉnh' }))
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Đã hủy' }))
     await waitFor(() => expect(pending).toHaveLength(2))
     fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-06-01' } })
     await waitFor(() => expect(pending).toHaveLength(3))

@@ -12,6 +12,7 @@ export interface Product {
   sell_method: SellMethod
   latest_purchase_cost?: number | null
   latest_purchase_cost_at?: string | null
+  created_at?: string | null
   default_sale_price?: number | null
   product_group_id?: string | null
   product_group?: { id: string; code: string; name: string } | null

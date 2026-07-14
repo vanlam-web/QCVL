@@ -493,10 +493,9 @@ it('filters sales documents by KiotViet-style custom time range', async () => {
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc chứng từ bán hàng' })
   const timeGroup = within(sidebar).getByRole('region', { name: 'Thời gian' })
 
-  expect(within(timeGroup).getByRole('radio', { name: 'Tháng này' })).toBeChecked()
-  expect(within(timeGroup).getByRole('radio', { name: 'Tùy chỉnh' })).toBeInTheDocument()
+  expect(within(timeGroup).getByRole('button', { name: 'Tháng này' })).toBeInTheDocument()
+  expect(within(timeGroup).queryByRole('radio', { name: 'Tùy chỉnh' })).not.toBeInTheDocument()
 
-  await userEvent.click(within(timeGroup).getByRole('radio', { name: 'Tùy chỉnh' }))
   await userEvent.clear(within(timeGroup).getByLabelText('Từ ngày'))
   await userEvent.type(within(timeGroup).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.clear(within(timeGroup).getByLabelText('Đến ngày'))

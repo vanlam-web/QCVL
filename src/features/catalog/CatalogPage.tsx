@@ -1,7 +1,7 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Search, Upload, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Upload, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { currentMonthRange, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
 import type { InventoryRoll, InventorySheet } from '../inventory/types'
 import {
@@ -688,6 +688,12 @@ export function CatalogPage({
     unit_name: { kind: 'text', value: (product) => product.unit_name },
     out_of_stock: { kind: 'text', value: () => null },
   })
+  const productVisibleDateRange = productCreatedDateFilter === 'custom'
+    ? { from: productCreatedDateFrom, to: productCreatedDateTo }
+    : displayDateRangeForData(
+        { from: productCreatedDateFrom, to: productCreatedDateTo },
+        dateRangeFromItems(state?.products ?? [], (product) => product.created_at),
+      )
   const productColumns: Array<ManagementDataTableColumn<Product>> = [
     {
       key: 'select',
@@ -851,38 +857,17 @@ export function CatalogPage({
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Thời gian tạo">
             <div className="management-filter-time-options">
-              <div
+              <button
                 aria-expanded={productCreatedQuickTimeOpen}
-                className={`management-filter-choice${productCreatedDateFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
-                onClick={() => {
-                  if (productCreatedDateFilter === 'custom') void applyProductQuickDateFilter('all')
-                  else setProductCreatedQuickTimeOpen((current) => !current)
-                }}
+                className="management-filter-choice management-filter-time-trigger"
+                type="button"
+                onClick={() => setProductCreatedQuickTimeOpen((current) => !current)}
               >
-                <input
-                  aria-label={productCreatedDateFilter === 'custom' ? productCreatedDateLabels.all : productCreatedDateLabels[productCreatedDateFilter]}
-                  checked={productCreatedDateFilter !== 'custom'}
-                  name="product-created-date-filter"
-                  readOnly
-                  type="radio"
-                  onChange={() => undefined}
-                />
-                <span>{productCreatedDateFilter === 'custom' ? productCreatedDateLabels.all : productCreatedDateLabels[productCreatedDateFilter]}</span>
+                <span>{productCreatedDateFilter === 'custom' ? `${productDisplayDate(productCreatedDateFrom)} - ${productDisplayDate(productCreatedDateTo)}` : productCreatedDateLabels[productCreatedDateFilter]}</span>
                 <span className="management-filter-choice-trailing">
                   <ChevronRight aria-hidden="true" size={17} />
                 </span>
-              </div>
-              <label className={`management-filter-choice${productCreatedDateFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
-                <input
-                  aria-label="Tùy chỉnh"
-                  checked={productCreatedDateFilter === 'custom'}
-                  name="product-created-date-filter"
-                  type="radio"
-                  onChange={() => void applyProductCustomDateFilter()}
-                />
-                <span>{productCreatedDateFilter === 'custom' ? `${productDisplayDate(productCreatedDateFrom)} - ${productDisplayDate(productCreatedDateTo)}` : 'Tùy chỉnh'}</span>
-                <CalendarDays aria-hidden="true" size={17} />
-              </label>
+              </button>
             </div>
             {productCreatedQuickTimeOpen ? (
               <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
@@ -905,14 +890,15 @@ export function CatalogPage({
                 ))}
               </div>
             ) : null}
-            {productCreatedDateFilter === 'custom' ? (
-              <ManagementDateRangeInputs
-                from={productCreatedDateFrom}
-                to={productCreatedDateTo}
-                onFromChange={(value) => void applyProductCustomDateFilter({ from: value })}
-                onToChange={(value) => void applyProductCustomDateFilter({ to: value })}
-              />
-            ) : null}
+            <ManagementDateRangeInputs
+              displayFrom={productVisibleDateRange.from}
+              displayTo={productVisibleDateRange.to}
+              from={productCreatedDateFrom}
+              to={productCreatedDateTo}
+              onCalendarOpen={() => setProductCreatedQuickTimeOpen(false)}
+              onFromChange={(value) => void applyProductCustomDateFilter({ from: value })}
+              onToChange={(value) => void applyProductCustomDateFilter({ to: value })}
+            />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Loại hàng">
             <label>

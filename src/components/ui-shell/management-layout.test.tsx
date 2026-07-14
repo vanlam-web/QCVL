@@ -14,6 +14,7 @@ import {
   ManagementDetailRow,
   ManagementDataTable,
   ManagementFilterGroup,
+  ManagementDateRangeInputs,
   ManagementFilterNumberRange,
   ManagementFilterSidebar,
   ManagementFilterSelectField,
@@ -592,6 +593,71 @@ it('renders shared checkbox and favorite table controls with legacy-compatible c
   expect(screen.getByRole('checkbox', { name: 'Chọn tất cả dòng hàng hóa' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
   expect(screen.getByRole('button', { name: 'Chỉ hiện hàng ưu tiên' })).toHaveClass('finance-cashbook-star-button')
   expect(screen.getByRole('button', { name: 'Đánh dấu ưu tiên MICA-3MM' })).toHaveClass('finance-cashbook-star-button-active')
+})
+
+it('renders date range inputs as compact date boxes with calendar popovers', async () => {
+  const onFromChange = vi.fn()
+  const onToChange = vi.fn()
+
+  render(
+    <ManagementDateRangeInputs
+      from="2026-07-01"
+      to="2026-07-31"
+      onFromChange={onFromChange}
+      onToChange={onToChange}
+    />,
+  )
+
+  expect(screen.getByText('Từ ngày')).toHaveClass('sr-only')
+  expect(screen.getByText('Đến ngày')).toHaveClass('sr-only')
+  expect(screen.getByLabelText('Từ ngày')).toHaveValue('01/07/2026')
+  expect(screen.getByLabelText('Đến ngày')).toHaveValue('31/07/2026')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Mở lịch Từ ngày' }))
+
+  const calendar = screen.getByRole('dialog', { name: 'Chọn Từ ngày' })
+  expect(within(calendar).getByText('Tháng 7 2026')).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Mở lịch Đến ngày' }))
+
+  expect(screen.queryByRole('dialog', { name: 'Chọn Từ ngày' })).not.toBeInTheDocument()
+  expect(screen.getByRole('dialog', { name: 'Chọn Đến ngày' })).toBeInTheDocument()
+
+  await userEvent.click(document.body)
+
+  expect(screen.queryByRole('dialog', { name: 'Chọn Đến ngày' })).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Mở lịch Từ ngày' }))
+
+  const reopenedCalendar = screen.getByRole('dialog', { name: 'Chọn Từ ngày' })
+  await userEvent.click(within(reopenedCalendar).getByRole('button', { name: 'Chọn ngày 14/07/2026' }))
+
+  expect(onFromChange).toHaveBeenCalledWith('2026-07-14')
+})
+
+it('can display clipped date values while keeping calendar changes bound to real filter values', async () => {
+  const onFromChange = vi.fn()
+  const onToChange = vi.fn()
+
+  render(
+    <ManagementDateRangeInputs
+      displayFrom="2026-07-01"
+      displayTo="2026-07-14"
+      from="2026-07-01"
+      to="2026-07-31"
+      onFromChange={onFromChange}
+      onToChange={onToChange}
+    />,
+  )
+
+  const inputs = screen.getAllByPlaceholderText('dd/mm/yyyy')
+  expect(inputs[0]).toHaveValue('01/07/2026')
+  expect(inputs[1]).toHaveValue('14/07/2026')
+
+  await userEvent.click(screen.getAllByRole('button', { name: /lịch/ })[1])
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /20\/07\/2026/ }))
+
+  expect(onToChange).toHaveBeenCalledWith('2026-07-20')
 })
 
 it('renders shared inline detail tabs with an end action', async () => {

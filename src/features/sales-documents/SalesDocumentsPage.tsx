@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Copy, FilePlus2, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, FilePlus2, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -21,6 +21,7 @@ import { ManagementSortableHeader } from '../../components/ui-shell/management-s
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
+import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
 import type { SalesDocumentDetail, SalesDocumentListItem } from './types'
 import type { SalesDocumentService } from './sales-document-service'
 import type { OrderService, QuoteReopenPayload } from '../orders/order-service'
@@ -434,6 +435,9 @@ export function SalesDocumentsPage({
   const total = state?.total ?? 0
   const page = state?.page ?? 1
   const pageSize = state?.pageSize ?? salesDocumentsPageSize
+  const visibleDateRange = timeFilter === 'custom'
+    ? { from: dateFrom, to: dateTo }
+    : displayDateRangeForData({ from: dateFrom, to: dateTo }, dateRangeFromItems(documents, (document) => document.created_at))
   const hasFilter = lastSearch.length > 0
     || !sameFilterValues(typeFilter, allTypeFilters)
     || !sameFilterValues(statusFilter, defaultStatusFilters)
@@ -564,38 +568,17 @@ export function SalesDocumentsPage({
           </button>
           <ManagementFilterGroup title="Thời gian">
             <div className="management-filter-time-options">
-              <div
-                className={`management-filter-choice${timeFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
+              <button
+                className="management-filter-choice management-filter-time-trigger"
                 aria-expanded={quickTimeOpen}
-                onClick={() => {
-                  if (timeFilter === 'custom') void applyQuickTimeFilter('month')
-                  else setQuickTimeOpen((current) => !current)
-                }}
+                type="button"
+                onClick={() => setQuickTimeOpen((current) => !current)}
               >
-                <input
-                  aria-label={timeFilter === 'custom' ? quickTimeLabels.month : quickTimeLabels[timeFilter]}
-                  checked={timeFilter !== 'custom'}
-                  name="sales-document-time"
-                  readOnly
-                  type="radio"
-                  onChange={() => undefined}
-                />
-                <span>{timeFilter === 'custom' ? quickTimeLabels.month : quickTimeLabels[timeFilter]}</span>
+                <span>{timeFilter === 'custom' ? `${displayDate(dateFrom)} - ${displayDate(dateTo)}` : quickTimeLabels[timeFilter]}</span>
                 <span className="management-filter-choice-trailing">
                   <ChevronRight aria-hidden="true" size={17} />
                 </span>
-              </div>
-              <label className={`management-filter-choice${timeFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
-                <input
-                  aria-label="Tùy chỉnh"
-                  checked={timeFilter === 'custom'}
-                  name="sales-document-time"
-                  type="radio"
-                  onChange={() => void applyCustomDateFilter({})}
-                />
-                <span>{timeFilter === 'custom' ? `${displayDate(dateFrom)} - ${displayDate(dateTo)}` : 'Tùy chỉnh'}</span>
-                <CalendarDays aria-hidden="true" size={17} />
-              </label>
+              </button>
             </div>
             {quickTimeOpen ? (
               <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
@@ -618,14 +601,15 @@ export function SalesDocumentsPage({
                 ))}
               </div>
             ) : null}
-              {timeFilter === 'custom' ? (
-                <ManagementDateRangeInputs
-                  from={dateFrom}
-                  to={dateTo}
-                  onFromChange={(value) => void applyCustomDateFilter({ from: value })}
-                  onToChange={(value) => void applyCustomDateFilter({ to: value })}
-                />
-              ) : null}
+            <ManagementDateRangeInputs
+              displayFrom={visibleDateRange.from}
+              displayTo={visibleDateRange.to}
+              from={dateFrom}
+              to={dateTo}
+              onCalendarOpen={() => setQuickTimeOpen(false)}
+              onFromChange={(value) => void applyCustomDateFilter({ from: value })}
+              onToChange={(value) => void applyCustomDateFilter({ to: value })}
+            />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Loại hóa đơn">
             {allTypeFilters.map((value) => {

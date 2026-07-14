@@ -34,7 +34,7 @@ import type {
 } from './types'
 import type { FinanceService } from './finance-service'
 import { buildCashbookCsv } from './finance-service'
-import { currentMonthRange } from '../../lib/date-ranges'
+import { currentMonthRange, dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
 import { vietnamBankOptionLabel, vietnamBankOptions } from './vietnam-bank-catalog'
 import {
   accountTypeText,
@@ -233,6 +233,12 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const pagedVisibleCashbookEntries = sortedVisibleCashbookEntries.length > cashbookPageSize
     ? sortedVisibleCashbookEntries.slice((cashbookPage - 1) * cashbookPageSize, cashbookPage * cashbookPageSize)
     : sortedVisibleCashbookEntries
+  const cashbookVisibleDateRange = cashbookTimeFilter === 'custom'
+    ? { from: cashbookFrom, to: cashbookTo }
+    : displayDateRangeForData(
+        { from: cashbookFrom, to: cashbookTo },
+        dateRangeFromItems(cashbookEntries ?? [], (entry) => entry.created_at),
+      )
 
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
@@ -936,38 +942,17 @@ export function FinancePage({ service }: { service: FinanceService }) {
           <form id="cashbook-filter-form" aria-label="Bộ lọc sổ quỹ" className="management-filter-sidebar-form" onSubmit={filterCashbook}>
             <ManagementFilterGroup title="Thời gian">
               <div className="management-filter-time-options">
-                <div
+                <button
                   aria-expanded={cashbookQuickTimeOpen}
-                  className={`management-filter-choice${cashbookTimeFilter !== 'custom' ? ' management-filter-choice-active' : ''}`}
-                  onClick={() => {
-                    if (cashbookTimeFilter === 'custom') void applyCashbookQuickTimeFilter('month')
-                    else setCashbookQuickTimeOpen((current) => !current)
-                  }}
+                  className="management-filter-choice management-filter-time-trigger"
+                  type="button"
+                  onClick={() => setCashbookQuickTimeOpen((current) => !current)}
                 >
-                  <input
-                    aria-label={cashbookTimeFilter === 'custom' ? cashbookQuickTimeLabels.month : cashbookQuickTimeLabels[cashbookTimeFilter]}
-                    checked={cashbookTimeFilter !== 'custom'}
-                    name="cashbook-time"
-                    readOnly
-                    type="radio"
-                    onChange={() => undefined}
-                  />
-                  <span>{cashbookTimeFilter === 'custom' ? cashbookQuickTimeLabels.month : cashbookQuickTimeLabels[cashbookTimeFilter]}</span>
+                  <span>{cashbookTimeFilter === 'custom' ? `${displayDate(cashbookFrom)} - ${displayDate(cashbookTo)}` : cashbookQuickTimeLabels[cashbookTimeFilter]}</span>
                   <span className="management-filter-choice-trailing">
                     <ChevronRight aria-hidden="true" size={17} />
                   </span>
-                </div>
-                <label className={`management-filter-choice${cashbookTimeFilter === 'custom' ? ' management-filter-choice-active' : ''}`}>
-                  <input
-                    aria-label="Tùy chỉnh"
-                    checked={cashbookTimeFilter === 'custom'}
-                    name="cashbook-time"
-                    type="radio"
-                    onChange={() => void applyCashbookCustomDateFilter()}
-                  />
-                  <span>{cashbookTimeFilter === 'custom' ? `${displayDate(cashbookFrom)} - ${displayDate(cashbookTo)}` : 'Tùy chỉnh'}</span>
-                  <CalendarDays aria-hidden="true" size={17} />
-                </label>
+                </button>
               </div>
               {cashbookQuickTimeOpen ? (
                 <div aria-label="Chọn nhanh thời gian" className="management-filter-quick-time-menu" role="region">
@@ -990,14 +975,15 @@ export function FinancePage({ service }: { service: FinanceService }) {
                   ))}
                 </div>
               ) : null}
-                {cashbookTimeFilter === 'custom' ? (
-                  <ManagementDateRangeInputs
-                    from={cashbookFrom}
-                    to={cashbookTo}
-                    onFromChange={(value) => void applyCashbookCustomDateFilter({ from: value })}
-                    onToChange={(value) => void applyCashbookCustomDateFilter({ to: value })}
-                  />
-                ) : null}
+              <ManagementDateRangeInputs
+                displayFrom={cashbookVisibleDateRange.from}
+                displayTo={cashbookVisibleDateRange.to}
+                from={cashbookFrom}
+                to={cashbookTo}
+                onCalendarOpen={() => setCashbookQuickTimeOpen(false)}
+                onFromChange={(value) => void applyCashbookCustomDateFilter({ from: value })}
+                onToChange={(value) => void applyCashbookCustomDateFilter({ to: value })}
+              />
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Quỹ tiền">
               <label className={`management-filter-choice${cashbookFundMode === 'all' ? ' management-filter-choice-active' : ''}`}>

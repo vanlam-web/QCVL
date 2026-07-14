@@ -591,7 +591,7 @@ Verify:
 
 2026-07-10 filter QA/update:
 
-- `Ngày tạo` on `/inventory` now follows the same shared time-filter UI as `/sales-documents`: default `Năm nay`, quick presets, and `Tùy chỉnh` date range.
+- `Ngày tạo` on `/inventory` now follows the same shared time-filter UI as `/sales-documents`: default `Năm nay`, quick presets, always-visible from/to date inputs, and calendar icon popovers.
 - The stocktake custom date range uses the same `management-filter-date-range` markup as sales documents.
 - Quick-time popovers close on outside click through shared `ManagementFilterSidebar.onPopoverClose`.
 - Automated verification passed for the shared layout and the three affected pages: management layout, inventory, sales documents, and finance cashbook.

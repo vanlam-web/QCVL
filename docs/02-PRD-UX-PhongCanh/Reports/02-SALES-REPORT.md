@@ -16,7 +16,7 @@ QC-OMS chỉ dùng luồng bán đứt qua POS/checkout, nên báo cáo không c
 
 | Bộ lọc | Quy tắc |
 |---|---|
-| Thời gian | Hôm nay, hôm qua, tuần này, tháng này, tùy chỉnh |
+| Thời gian | Hôm nay, hôm qua, tuần này, tháng này và khoảng ngày từ/đến. Không dùng radio `Tùy chỉnh`; khi chuẩn hóa UI thì dùng `ManagementDateRangeInputs`, hai ô ngày luôn hiển thị và icon lịch mở popup bên phải cột filter. |
 | Khách hàng | Tìm theo mã/tên/SĐT nếu có |
 | Nhân viên bán | Người chốt hóa đơn |
 | Người tạo | Người tạo chứng từ |

@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { currentMonthRange, localDateString, normalizeDateInput, quickDateRange, toDisplayDateInput } from './date-ranges'
+import {
+  currentMonthRange,
+  dateRangeFromItems,
+  displayDateRangeForData,
+  localDateString,
+  normalizeDateInput,
+  quickDateRange,
+  toDisplayDateInput,
+} from './date-ranges'
 
 describe('date-ranges', () => {
   it('formats local dates as yyyy-mm-dd', () => {
@@ -35,5 +43,34 @@ describe('date-ranges', () => {
     expect(normalizeDateInput('31/07/2026')).toBe('2026-07-31')
     expect(normalizeDateInput('2026-07-31')).toBe('2026-07-31')
     expect(normalizeDateInput('31/13/2026')).toBeNull()
+  })
+
+  it('finds the min and max date keys from list items', () => {
+    const range = dateRangeFromItems([
+      { created_at: '2026-07-14T09:30:00Z' },
+      { created_at: '2026-07-01T02:00:00Z' },
+      { created_at: '' },
+      { created_at: 'not-date' },
+      { created_at: '2026-07-09T12:00:00Z' },
+    ], (item) => item.created_at)
+
+    expect(range).toEqual({ from: '2026-07-01', to: '2026-07-14' })
+  })
+
+  it('clips visible current-period ranges to today and uses data dates for all time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-14T10:30:00+07:00'))
+
+    expect(displayDateRangeForData(
+      { from: '2026-07-01', to: '2026-07-31' },
+      { from: '2026-07-01', to: '2026-07-12' },
+    )).toEqual({ from: '2026-07-01', to: '2026-07-14' })
+
+    expect(displayDateRangeForData(
+      { from: '', to: '' },
+      { from: '2026-06-01', to: '2026-07-14' },
+    )).toEqual({ from: '2026-06-01', to: '2026-07-14' })
+
+    vi.useRealTimers()
   })
 })

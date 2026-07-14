@@ -413,6 +413,7 @@ it('reactively filters customers by existing customer fields in the shared sideb
     customer_group_id: 'cg-1',
   })
 
+  await userEvent.clear(within(sidebar).getByLabelText('Từ ngày'))
   await userEvent.type(within(sidebar).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.type(within(sidebar).getByLabelText('Tổng bán từ'), '500000')
   await userEvent.type(within(sidebar).getByLabelText('Công nợ tới'), '300000')

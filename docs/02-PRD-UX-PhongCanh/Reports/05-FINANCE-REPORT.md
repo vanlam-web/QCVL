@@ -16,7 +16,7 @@ Báo cáo tài chính giúp xem dòng tiền và tình hình phải thu ở mứ
 
 | Bộ lọc | Quy tắc |
 |---|---|
-| Thời gian | Tháng này, quý này, năm nay, tùy chỉnh |
+| Thời gian | Tháng này, quý này, năm nay và khoảng ngày từ/đến. Không dùng radio `Tùy chỉnh`; khi chuẩn hóa UI thì dùng `ManagementDateRangeInputs`, hai ô ngày luôn hiển thị và icon lịch mở popup bên phải cột filter. |
 | Quỹ/tài khoản | Tiền mặt hoặc từng tài khoản ngân hàng |
 | Loại thu/chi | Thu bán hàng, thu nợ, thu khác, chi, điều chỉnh |
 | Người tạo | Nhân viên tạo phiếu |

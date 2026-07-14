@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
+import { displayDateKey, displayDateRangeMatches } from './date-filter.js'
 import { HttpError, emptyResponse, failure, success } from './http-response.js'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes.js'
 import { handleCatalogRoute } from './modules/catalog/catalog-routes.js'
@@ -913,12 +914,7 @@ function filterValueMatches(values: string[], actual: string) {
 }
 
 function dateRangeMatches(value: string, from: string | null, to: string | null) {
-  const date = value.slice(0, 10)
-  const fromDate = from?.slice(0, 10)
-  const toDate = to?.slice(0, 10)
-  if (fromDate && date < fromDate) return false
-  if (toDate && date > toDate) return false
-  return true
+  return displayDateRangeMatches(value, from, to)
 }
 
 function filterSalesDocuments(url: URL) {
@@ -1333,8 +1329,7 @@ function filterPurchaseReceipts(url: URL) {
 
   return newestFirst(purchaseReceipts.filter((receipt) => {
     if (status && status !== 'all' && receipt.status !== status) return false
-    if (dateFrom && receipt.received_at.slice(0, 10) < dateFrom) return false
-    if (dateTo && receipt.received_at.slice(0, 10) > dateTo) return false
+    if (!dateRangeMatches(receipt.received_at, dateFrom, dateTo)) return false
     if (createdBy && createdBy !== 'all' && receipt.created_by.id !== createdBy) return false
     if (search) {
       const haystack = normalizeSearchText(`${receipt.code} ${receipt.supplier.code} ${receipt.supplier.name} ${receipt.supplier_document_no ?? ''} ${receipt.notes ?? ''}`)
@@ -2679,10 +2674,10 @@ function cashbookEntriesUrl(url: URL) {
 }
 
 function cashbookListSummary(items: readonly CashbookEntryData[], options: { from?: string | null; sourceEntries?: readonly CashbookEntryData[] } = {}) {
-  const fromDate = options.from?.slice(0, 10)
+  const fromDate = displayDateKey(options.from)
   const openingBalance = fromDate
     ? (options.sourceEntries ?? items)
-      .filter((item) => item.created_at.slice(0, 10) < fromDate)
+      .filter((item) => displayDateKey(item.created_at) < fromDate)
       .reduce((sum, item) => sum + item.amount_delta, 0)
     : 0
   const totalIn = items.reduce((sum, item) => sum + Math.max(item.amount_delta, 0), 0)

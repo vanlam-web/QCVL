@@ -52,6 +52,37 @@ export function normalizeDateInput(value: string) {
   return `${year}-${month}-${day}`
 }
 
+export type DateRangeValue = { from: string; to: string }
+
+export function dateRangeFromItems<TItem>(items: TItem[], getValue: (item: TItem) => string | null | undefined): DateRangeValue | null {
+  let from = ''
+  let to = ''
+
+  for (const item of items) {
+    const rawValue = getValue(item)
+    if (!rawValue) continue
+    const date = new Date(rawValue)
+    if (Number.isNaN(date.getTime())) continue
+    const key = localDateString(date)
+    if (from === '' || key < from) from = key
+    if (to === '' || key > to) to = key
+  }
+
+  if (from === '' || to === '') return null
+  return { from, to }
+}
+
+export function displayDateRangeForData(selectedRange: DateRangeValue, dataRange: DateRangeValue | null): DateRangeValue {
+  if (dataRange === null) return selectedRange
+  if (selectedRange.from === '' && selectedRange.to === '') return dataRange
+
+  const today = localDateString(new Date())
+  if (selectedRange.from !== '' && selectedRange.from <= today && selectedRange.to > today) {
+    return { from: selectedRange.from, to: today }
+  }
+  return selectedRange
+}
+
 function addDays(date: Date, amount: number) {
   const next = new Date(date)
   next.setDate(next.getDate() + amount)

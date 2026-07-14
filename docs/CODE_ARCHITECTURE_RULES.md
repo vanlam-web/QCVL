@@ -23,7 +23,7 @@ Khi sua ruot, phai co test va khong dua logic nghiep vu moi vao component UI.
 6. Khong copy logic tinh tien/no/trang thai vao nhieu page.
 7. Khong dung RAM fixture, localStorage hoac cache UI lam nguon luu du lieu nghiep vu.
 8. Dinh dang thoi gian UI phai uu tien helper chung `src/lib/date-format.ts`; filter ngay phai uu tien `src/lib/date-ranges.ts` va query di qua service/repository, khong tinh truc tiep trong JSX.
-9. O tuy chinh ngay trong bo loc phai dung `ManagementDateRangeInputs`. UI hien `dd/MM/yyyy` nhu KV, nhung service/API van nhan `YYYY-MM-DD`.
+9. O ngay trong bo loc phai dung `ManagementDateRangeInputs`. UI hien `dd/MM/yyyy` nhu KV, co icon lich va popup lich chung; service/API van nhan `YYYY-MM-DD`.
 
 ## Mau File Chuan Cho Moi Feature
 
@@ -113,7 +113,7 @@ Da tach them trong dot sau:
 - Stock movement ngay 2026-07-12: khi chung tu nhap/ban dung ma don vi quy doi KiotViet, movement phai ghi vao san pham goc va quy doi so luong ve don vi ton chinh bang `quantity * stock_qty_per_unit`; khong tao movement rieng cho ma alias.
 - Purchase import ngay 2026-07-12: neu dong nhap hang KiotViet thieu `Ma nha cung cap`, parser phai map ve `NCC le` (`NCC lẻ` trong UI/data) va `Nha cung cap le`. Preview khong bao thieu NCC cho fallback nay; apply import phai upsert NCC le truoc khi ghi phieu.
 - Shared time: `src/lib/date-format.ts` la helper chung cho hien thi `dd/MM/yyyy HH:mm`; cac presenter/page moi khong tu tao `Intl.DateTimeFormat` rieng neu khong co ly do ro trong doc.
-- Shared date filter: `ManagementDateRangeInputs` trong `src/components/ui-shell/management-layout.tsx` dung cho Hang hoa, Khach hang, Hoa don, Kiem kho, Phieu nhap va So quy. Khong tao lai cap input `type=date` rieng trong tung page vi browser/OS co the hien sai dinh dang KV.
+- Shared date filter: `ManagementDateRangeInputs` trong `src/components/ui-shell/management-layout.tsx` dung cho Hang hoa, Khach hang, Hoa don, Kiem kho, Phieu nhap va So quy. Khong tao lai cap input `type=date` rieng trong tung page vi browser/OS co the hien sai dinh dang KV. Khong con radio `Tuy chinh`: preset hien bang button/menu nhanh, hai o tu ngay/den ngay luon hien. Icon lich mo popup lich o ben phai cot filter nhu menu thoi gian nhanh; chi mot popup duoc mo, mo lich thi dong menu nhanh va mo menu nhanh thi dong lich. Preset thoi gian hien tai (thang nay, quy nay, nam nay) khong hien den ngay vuot qua hom nay; `Toan thoi gian` hien min/max ngay dang co du lieu khi co the.
 - Sales Documents: presenter gom list summary, date text, line sell price, quote print display helper.
 - Account/Admin/Auth/Dashboard: presenter/helper gom role/status/permission/form/date/chart/login normalization.
 

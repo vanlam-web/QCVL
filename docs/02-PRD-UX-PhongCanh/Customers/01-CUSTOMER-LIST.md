@@ -65,7 +65,7 @@ Ngoài phạm vi V1:
 | Bộ lọc | Quy tắc |
 |---|---|
 | Nhóm khách | Tất cả hoặc một nhóm khách cụ thể |
-| Ngày tạo | Toàn thời gian, tháng này, hôm nay, tùy chỉnh |
+| Ngày tạo | Control thời gian chung: chọn nhanh theo ngày/tuần/tháng/quý/năm/toàn thời gian, hai ô từ ngày/đến ngày luôn hiển thị dạng `dd/MM/yyyy`, có icon lịch. Không còn radio `Tùy chỉnh`; popup lịch mở bên phải cột filter và không chồng với menu chọn nhanh. |
 | Công nợ | Tất cả, còn nợ, không nợ; có thể lọc khoảng tiền |
 | Tổng bán | Lọc khoảng tổng doanh thu |
 

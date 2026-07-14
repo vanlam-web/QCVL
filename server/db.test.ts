@@ -109,8 +109,8 @@ describe('createPgRepository product units', () => {
     expect(listSql).toContain('source_code')
     expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists products'))).toBe(false)
     expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists product_group_id'))).toBe(false)
-    expect(listSql).toContain('p.created_at >= $')
-    expect(listSql).toContain(`p.created_at < ($`)
+    expect(listSql).toContain(`(p.created_at at time zone 'UTC')::date >= $`)
+    expect(listSql).toContain(`(p.created_at at time zone 'UTC')::date <= $`)
     expect(listSql).not.toContain(`'[]'::jsonb as unit_conversions`)
     expect(products?.[0].unit_conversions).toEqual([{
       source_code: 'B50',
@@ -447,8 +447,8 @@ describe('createPgRepository product units', () => {
     expect(listSql).toContain('left join products search_product')
     expect(listSql).toContain('source_product_code')
     expect(listSql).toContain('source_product_name')
-    expect(listSql).toContain('coalesce(st.source_created_at, st.created_at) >=')
-    expect(listSql).toContain('coalesce(st.source_created_at, st.created_at) <')
+    expect(listSql).toContain(`(coalesce(st.source_created_at, st.created_at) at time zone 'UTC')::date >= $`)
+    expect(listSql).toContain(`(coalesce(st.source_created_at, st.created_at) at time zone 'UTC')::date <= $`)
     expect(listSql).toContain('left join users created_by_user')
     expect(listSql).toContain('list_sti.source_product_code')
     expect(listSql).toContain('list_sti.source_product_name')

@@ -58,7 +58,7 @@ Kiểm kho khác với khui vật tư:
 | Bộ lọc | Giá trị |
 |---|---|
 | Mã phiếu, mã hàng, tên hàng | Search text trên toolbar; tìm cả mã phiếu và dòng hàng trong phiếu |
-| Thời gian tạo | Hôm nay, tháng này, tùy chỉnh; khi màn trống cần có cách mở rộng khoảng tìm kiếm |
+| Thời gian tạo | Chọn nhanh theo ngày/tuần/tháng/quý/năm/toàn thời gian; hai ô từ ngày/đến ngày luôn hiển thị với icon lịch; popup lịch mở bên phải cột filter và không chồng menu chọn nhanh; khi màn trống cần có cách mở rộng khoảng tìm kiếm |
 | Trạng thái | Phiếu tạm, đã cân bằng kho, đã hủy |
 | Người tạo | Nhân viên |
 
@@ -95,7 +95,7 @@ Kiểm kho khác với khui vật tư:
 - Nút tạo phiếu kiểm kho nằm trong dấu `+` của ô tìm kiếm. Khi ô tìm có nội dung, dấu `+` đổi thành nút `x` để xóa tìm kiếm giống các trang quản lý khác.
 - Toolbar chỉ cần `Import KV` cho file `DanhSachChiTietKiemKho_KV...xlsx`. `Xuất file` không phải chức năng vận hành của Kiểm kho trong MVP.
 - Sidebar gồm `Ngày tạo`, `Trạng thái`, và `Người tạo`. Mặc định `Ngày tạo = Năm nay` để trang kiểm kho không trống khi dữ liệu phát sinh rải theo nhiều tháng; khi cần xem lịch sử KV 2016-2026 thì mở menu chọn nhanh và chọn `Toàn thời gian`.
-- Bộ lọc `Ngày tạo` dùng chung mẫu UI với Hóa đơn: nút nhanh hiện nhãn preset, menu `Chọn nhanh thời gian`, tùy chọn `Tùy chỉnh` với date range, và popup tự đóng khi bấm ra ngoài sidebar.
+- Bộ lọc `Ngày tạo` dùng chung mẫu UI với Hóa đơn: nút nhanh hiện nhãn preset, menu `Chọn nhanh thời gian`, hai ô ngày luôn hiển thị với icon lịch, popup lịch mở bên phải cột filter như menu chọn nhanh, tự đóng khi bấm ra ngoài sidebar và không chồng popup khác. Không còn radio `Tùy chỉnh`. Với preset hiện tại như `Năm nay`, ô đến ngày hiển thị tối đa hôm nay thay vì ngày cuối năm.
 - Trạng thái dùng checkbox: `Phiếu tạm`, `Đã cân bằng kho`, `Đã hủy`.
 - Bảng chính hiển thị mã hàng/tên hàng đầu tiên và 3 số lượng dễ hiểu: `Tồn trước`, `Kiểm được`, `Lệch`. Không hiện `Người tạo`, `SL lệch tăng`, `SL lệch giảm`, `Ghi chú`, `Tổng thực tế`, `Tổng chênh lệch` ở bảng chính để tránh rộng bảng và tránh nhầm giữa tiền/số lượng; các dữ liệu này vẫn giữ trong API/audit hoặc ô chi tiết khi cần.
 - Click nguyên dòng phiếu phải mở chi tiết kiểm kho inline. Với dòng import từ KV, chi tiết gắn nhãn `Nguồn KiotViet`.

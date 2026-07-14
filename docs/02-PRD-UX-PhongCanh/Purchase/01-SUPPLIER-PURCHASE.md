@@ -94,7 +94,7 @@ Nếu NCC cũng là khách hàng, tab Thông tin hiển thị liên kết tới 
 ### Bộ lọc
 
 - tìm theo mã phiếu nhập, tên/mã NCC, số chứng từ NCC
-- thời gian nhập
+- thời gian nhập dùng control thời gian chung: nút chọn nhanh, hai ô từ ngày/đến ngày luôn hiển thị dạng `dd/MM/yyyy`, icon lịch mở popup bên phải cột filter và không chồng menu chọn nhanh
 - trạng thái: phiếu tạm, đã nhập, đã hủy
 - người nhập/người tạo
 
