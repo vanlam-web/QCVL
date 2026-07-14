@@ -38,6 +38,13 @@ Hiện tại đã đọc dữ liệu đã có:
 - thao tác mở lại báo giá active vào POS draft local
 - tab `Thông tin` và `Lịch sử thanh toán` hiển thị ngay trong inline detail; tab lịch sử thanh toán không gọi API riêng mà dùng dữ liệu đã có trong response detail
 
+Shared management detail:
+
+- chi tiết chứng từ nằm trong detail row của `ManagementDataTable`;
+- detail dùng shared `management-*` shell, tab, note, detail table và footer action;
+- action theo nghiệp vụ chứng từ vẫn khai báo riêng ở SalesDocuments;
+- click trong vùng detail không được bubble làm đóng/mở lại row.
+
 Ngoài phạm vi hiện tại:
 
 - nút sửa hóa đơn

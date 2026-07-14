@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Search, StickyNote, Trash2 } from 'lucide-react'
 import { MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import {
@@ -7,14 +7,22 @@ import {
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDateRangeInputs,
-  ManagementDetailRow,
+  ManagementDataTable,
+  ManagementDetailActionFooter,
+  ManagementDetailInfoList,
+  ManagementDetailInlineNote,
   ManagementFilterGroup,
+  ManagementFilterNumberRange,
   ManagementFilterSidebar,
+  ManagementFilterSelectField,
+  ManagementInlineDetailTabs,
   ManagementListSurface,
   ManagementPage,
+  ManagementTableCheckboxControl,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
@@ -24,16 +32,20 @@ import type { SalesDocumentListItem, SalesDocumentService } from '../sales-docum
 import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType } from './customer-filters'
 import {
   customerDateTime as dateTime,
-  customerPriceRuleLabel,
   customerSalesDocumentStatusText as salesDocumentStatusText,
   customerVisibleSummary,
 } from './customer-presenter'
+import { CustomerImportDialog } from './CustomerImportDialog'
 
 interface CustomerState {
   customers: Customer[]
   total: number
   page: number
   pageSize: number
+  summary?: {
+    total_debt_amount: number
+    total_sales_amount: number
+  }
 }
 
 type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
@@ -42,6 +54,24 @@ type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerPageSize = 15
 const customerHistoryPageSize = 10
+
+function customerCreatorLabel(customer: Customer) {
+  if (customer.created_by?.name) return customer.created_by.name
+  return customer.source_creator_name?.trim() ? 'Chưa khớp tài khoản' : 'Chưa có dữ liệu'
+}
+
+function customerTypeLabel(customer: Customer) {
+  switch (customer.customer_type) {
+    case 'individual':
+      return 'Cá nhân'
+    case 'company':
+      return 'Công ty'
+    case 'other':
+      return 'Khác'
+    default:
+      return 'Chưa có dữ liệu'
+  }
+}
 
 export function CustomersPage({
   service,
@@ -56,6 +86,7 @@ export function CustomersPage({
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [customerImportOpen, setCustomerImportOpen] = useState(false)
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
   const [activeDetailTab, setActiveDetailTab] = useState<CustomerDetailTab>('info')
   const [customerHistoryType, setCustomerHistoryType] = useState<CustomerHistoryType>('invoice')
@@ -65,11 +96,8 @@ export function CustomersPage({
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
   const customerDebtRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
-  const customerSearchRequestId = useRef(0)
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState('')
-  const [customerSearchSuggestions, setCustomerSearchSuggestions] = useState<Customer[]>([])
-  const [customerSearchSuggestionsOpen, setCustomerSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [customerGroupId, setCustomerGroupId] = useState('all')
   const [createdFrom, setCreatedFrom] = useState('')
@@ -133,7 +161,7 @@ export function CustomersPage({
         totalDebtMin: nextTotalDebtMin,
         totalDebtMax: nextTotalDebtMax,
       }))
-      setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size })
+      setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       setLastSearch(nextSearch)
       setLastCustomerGroupId(nextCustomerGroupId)
       setLastCreatedFrom(nextCreatedFrom)
@@ -159,7 +187,7 @@ export function CustomersPage({
       try {
         const result = await service.listCustomers({ page: 1, page_size: customerPageSize })
         if (!active) return
-        setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size })
+        setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
         setPage(result.page)
         setPageSize(result.page_size)
       } catch (cause) {
@@ -192,12 +220,13 @@ export function CustomersPage({
   }, [service])
 
   async function filterCustomers(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = search.trim()
-    setCustomerSearchSuggestionsOpen(false)
+    preventManagementSearchSubmit(event, () => applyCustomerSearch(search))
+  }
+
+  function applyCustomerSearch(nextSearch: string) {
     setPage(1)
-    await load({
-      search: trimmed,
+    return load({
+      search: nextSearch,
       customerGroupIdValue: customerGroupId,
       createdFromValue: createdFrom,
       createdToValue: createdTo,
@@ -210,55 +239,11 @@ export function CustomersPage({
     })
   }
 
-  async function suggestCustomers(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = customerSearchRequestId.current + 1
-    customerSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setCustomerSearchSuggestions([])
-      setCustomerSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listCustomers(buildCustomerListFilters({
-        search: query,
-        page: 1,
-        page_size: 8,
-        customerGroupId,
-        createdFrom,
-        createdTo,
-        createdBy,
-        totalSalesMin,
-        totalSalesMax,
-        totalDebtMin,
-        totalDebtMax,
-      }))
-      if (customerSearchRequestId.current !== requestId) return
-      setCustomerSearchSuggestions(result.items)
-      setCustomerSearchSuggestionsOpen(true)
-    } catch {
-      if (customerSearchRequestId.current !== requestId) return
-      setCustomerSearchSuggestions([])
-      setCustomerSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectCustomerSuggestion(customer: Customer) {
-    setSearch(customer.code)
-    setCustomerSearchSuggestionsOpen(false)
-    setPage(1)
-    await load({
-      search: customer.code,
-      customerGroupIdValue: customerGroupId,
-      createdFromValue: createdFrom,
-      createdToValue: createdTo,
-      createdByValue: createdBy,
-      totalSalesMinValue: totalSalesMin,
-      totalSalesMaxValue: totalSalesMax,
-      totalDebtMinValue: totalDebtMin,
-      totalDebtMaxValue: totalDebtMax,
-      page: 1,
+  function changeCustomerSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      resetSelection: () => setSelectedCustomerId(null),
+      load: applyCustomerSearch,
     })
   }
 
@@ -385,9 +370,7 @@ export function CustomersPage({
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = lastSearch
-    ? `Tìm: ${lastSearch}`
-    : lastCustomerGroupId === 'all' &&
+  const activeFilterSummary = lastCustomerGroupId === 'all' &&
         lastCreatedFrom === '' &&
         lastCreatedTo === '' &&
         lastCreatedBy === 'all' &&
@@ -405,7 +388,9 @@ export function CustomersPage({
         .map((creator) => [creator.id, creator]),
     ).values(),
   )
-  const { visibleDebtTotal, visibleSalesTotal } = customerVisibleSummary(state?.customers ?? [])
+  const fallbackCustomerSummary = customerVisibleSummary(state?.customers ?? [])
+  const visibleDebtTotal = state?.summary?.total_debt_amount ?? fallbackCustomerSummary.visibleDebtTotal
+  const visibleSalesTotal = state?.summary?.total_sales_amount ?? fallbackCustomerSummary.visibleSalesTotal
   const {
     sortedItems: sortedCustomers,
     sortState: customerSortState,
@@ -420,8 +405,8 @@ export function CustomersPage({
   })
   const customerKpis = (
     <MetricGrid ariaLabel="Tổng quan khách hàng">
-      <MetricCard hint="Từ danh sách đang xem" label="Nợ hiện tại" tone={visibleDebtTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={visibleDebtTotal} />} />
-      <MetricCard hint="Từ danh sách đang xem" label="Tổng bán" tone="success" value={<MoneyText value={visibleSalesTotal} />} />
+      <MetricCard hint="Theo bộ lọc hiện tại" label="Công nợ" tone={visibleDebtTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={visibleDebtTotal} />} />
+      <MetricCard hint="Theo bộ lọc hiện tại" label="Tổng bán" tone="success" value={<MoneyText value={visibleSalesTotal} />} />
     </MetricGrid>
   )
 
@@ -438,25 +423,11 @@ export function CustomersPage({
               <ManagementCompactCreateAction ariaLabel="Tạo khách hàng" onClick={openCreateCustomer} />
             }
             value={search}
-            suggestions={
-              customerSearchSuggestionsOpen
-                ? customerSearchSuggestions.map((customer) => ({
-                    id: customer.id,
-                    primary: `${customer.code} ${customer.name}`,
-                    secondary: customer.phone ?? 'Chưa có số điện thoại',
-                    meta: customer.total_debt_amount === undefined ? undefined : <MoneyText value={customer.total_debt_amount} />,
-                    ariaLabel: `${customer.code} ${customer.name} ${customer.phone ?? ''}`.trim(),
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý khách hàng"
-            emptySuggestion="Không có kết quả phù hợp"
-            onChange={(nextSearch) => void suggestCustomers(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const customer = customerSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (customer) void selectCustomerSuggestion(customer)
-            }}
+            onChange={changeCustomerSearch}
           />
+          <button className="button button-secondary" type="button" onClick={() => setCustomerImportOpen(true)}>
+            Import KV
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={customerKpis}
@@ -475,23 +446,19 @@ export function CustomersPage({
           >
             <ChevronLeft aria-hidden="true" size={16} />
           </button>
-          <ManagementFilterGroup title="Nhóm khách hàng">
-            <label>
-              <span className="sr-only">Nhóm khách hàng</span>
-              <select
-                aria-label="Nhóm khách hàng"
-                className="management-filter-select"
-                value={customerGroupId}
-                onChange={(event) => void applySidebarFilters({ customerGroupId: event.target.value })}
-              >
-                <option value="all">Tất cả</option>
-                {customerGroups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <ManagementFilterGroup title="Nhóm khách">
+            <ManagementFilterSelectField
+              label="Nhóm khách"
+              value={customerGroupId}
+              onChange={(value) => void applySidebarFilters({ customerGroupId: value })}
+            >
+              <option value="all">Tất cả</option>
+              {customerGroups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+            </ManagementFilterSelectField>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Ngày tạo">
             <ManagementDateRangeInputs
@@ -502,78 +469,38 @@ export function CustomersPage({
             />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Người tạo">
-            <label>
-              <span className="sr-only">Người tạo</span>
-              <select
-                aria-label="Người tạo"
-                className="management-filter-select"
-                value={createdBy}
-                onChange={(event) => void applySidebarFilters({ createdBy: event.target.value })}
-              >
-                <option value="all">Tất cả</option>
-                {creatorOptions.map((creator) => (
-                  <option key={creator.id} value={creator.id}>
-                    {creator.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <ManagementFilterSelectField
+              label="Người tạo"
+              value={createdBy}
+              onChange={(value) => void applySidebarFilters({ createdBy: value })}
+            >
+              <option value="all">Tất cả</option>
+              {creatorOptions.map((creator) => (
+                <option key={creator.id} value={creator.id}>
+                  {creator.name}
+                </option>
+              ))}
+            </ManagementFilterSelectField>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Tổng bán">
-            <label>
-              <span className="sr-only">Tổng bán từ</span>
-              <input
-                aria-label="Tổng bán từ"
-                className="management-filter-number-input"
-                inputMode="numeric"
-                min="0"
-                placeholder="Từ"
-                type="number"
-                value={totalSalesMin}
-                onChange={(event) => void applySidebarFilters({ totalSalesMin: event.target.value })}
-              />
-            </label>
-            <label>
-              <span className="sr-only">Tổng bán tới</span>
-              <input
-                aria-label="Tổng bán tới"
-                className="management-filter-number-input"
-                inputMode="numeric"
-                min="0"
-                placeholder="Tới"
-                type="number"
-                value={totalSalesMax}
-                onChange={(event) => void applySidebarFilters({ totalSalesMax: event.target.value })}
-              />
-            </label>
+            <ManagementFilterNumberRange
+              fromLabel="Tổng bán từ"
+              fromValue={totalSalesMin}
+              toLabel="Tổng bán tới"
+              toValue={totalSalesMax}
+              onFromChange={(value) => void applySidebarFilters({ totalSalesMin: value })}
+              onToChange={(value) => void applySidebarFilters({ totalSalesMax: value })}
+            />
           </ManagementFilterGroup>
-          <ManagementFilterGroup title="Nợ hiện tại">
-            <label>
-              <span className="sr-only">Nợ hiện tại từ</span>
-              <input
-                aria-label="Nợ hiện tại từ"
-                className="management-filter-number-input"
-                inputMode="numeric"
-                min="0"
-                placeholder="Từ"
-                type="number"
-                value={totalDebtMin}
-                onChange={(event) => void applySidebarFilters({ totalDebtMin: event.target.value })}
-              />
-            </label>
-            <label>
-              <span className="sr-only">Nợ hiện tại tới</span>
-              <input
-                aria-label="Nợ hiện tại tới"
-                className="management-filter-number-input"
-                inputMode="numeric"
-                min="0"
-                placeholder="Tới"
-                type="number"
-                value={totalDebtMax}
-                onChange={(event) => void applySidebarFilters({ totalDebtMax: event.target.value })}
-              />
-            </label>
+          <ManagementFilterGroup title="Công nợ">
+            <ManagementFilterNumberRange
+              fromLabel="Công nợ từ"
+              fromValue={totalDebtMin}
+              toLabel="Công nợ tới"
+              toValue={totalDebtMax}
+              onFromChange={(value) => void applySidebarFilters({ totalDebtMin: value })}
+              onToChange={(value) => void applySidebarFilters({ totalDebtMax: value })}
+            />
           </ManagementFilterGroup>
         </ManagementFilterSidebar>
       }
@@ -670,150 +597,169 @@ export function CustomersPage({
         {state ? (
           <>
             <ManagementTableViewport>
-              <table aria-label="Danh sách khách hàng" className="customer-management-table">
-                <thead>
-                  <tr>
-                    <ManagementSortableHeader kind="text" sortKey="code" sortState={customerSortState} onSort={requestCustomerSort}>Mã KH</ManagementSortableHeader>
-                    <ManagementSortableHeader kind="text" sortKey="name" sortState={customerSortState} onSort={requestCustomerSort}>Tên khách hàng</ManagementSortableHeader>
-                    <ManagementSortableHeader kind="text" sortKey="phone" sortState={customerSortState} onSort={requestCustomerSort}>Điện thoại</ManagementSortableHeader>
-                    <ManagementSortableHeader kind="text" sortKey="group" sortState={customerSortState} onSort={requestCustomerSort}>Nhóm khách hàng</ManagementSortableHeader>
-                    <ManagementSortableHeader kind="number" sortKey="total_debt_amount" sortState={customerSortState} onSort={requestCustomerSort}>Nợ hiện tại</ManagementSortableHeader>
-                    <ManagementSortableHeader kind="number" sortKey="total_sales_amount" sortState={customerSortState} onSort={requestCustomerSort}>Tổng bán</ManagementSortableHeader>
-                </tr>
-              </thead>
-              <tbody>
-                {sortedCustomers.map((customer) => {
+              <ManagementDataTable
+                ariaLabel="Danh sách khách hàng"
+                columns={[
+                  {
+                    key: 'select',
+                    className: 'finance-cashbook-select-column',
+                    header: <ManagementTableCheckboxControl ariaLabel="Chọn tất cả dòng khách hàng" />,
+                    cell: (customer) => (
+                      <ManagementTableCheckboxControl
+                        ariaLabel={`Chọn dòng ${customer.code}`}
+                        onClick={(event) => event.stopPropagation()}
+                      />
+                    ),
+                  },
+                  {
+                    key: 'code',
+                    header: <ManagementSortableHeader kind="text" sortKey="code" sortState={customerSortState} onSort={requestCustomerSort}>Mã KH</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => (
+                      <button
+                        className="management-link-button"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          toggleCustomerDetail(customer)
+                        }}
+                      >
+                        <strong>{customer.code}</strong>
+                      </button>
+                    ),
+                  },
+                  {
+                    key: 'name',
+                    header: <ManagementSortableHeader kind="text" sortKey="name" sortState={customerSortState} onSort={requestCustomerSort}>Tên khách hàng</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => customer.name,
+                  },
+                  {
+                    key: 'phone',
+                    header: <ManagementSortableHeader kind="text" sortKey="phone" sortState={customerSortState} onSort={requestCustomerSort}>Điện thoại</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => customer.phone ?? '-',
+                  },
+                  {
+                    key: 'group',
+                    header: <ManagementSortableHeader kind="text" sortKey="group" sortState={customerSortState} onSort={requestCustomerSort}>Nhóm khách</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => customer.customer_group?.name ?? '-',
+                  },
+                  {
+                    key: 'debt',
+                    header: <ManagementSortableHeader kind="number" sortKey="total_debt_amount" sortState={customerSortState} onSort={requestCustomerSort}>Công nợ</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => customer.total_debt_amount === undefined || customer.total_debt_amount === null ? '-' : <MoneyText value={customer.total_debt_amount} />,
+                  },
+                  {
+                    key: 'sales',
+                    header: <ManagementSortableHeader kind="number" sortKey="total_sales_amount" sortState={customerSortState} onSort={requestCustomerSort}>Tổng bán</ManagementSortableHeader>,
+                    headerIsCell: true,
+                    cell: (customer) => customer.total_sales_amount === undefined ? '-' : <MoneyText value={customer.total_sales_amount} />,
+                  },
+                ]}
+                detailClassName="customer-inline-detail"
+                getDetailLabel={(customer) => `Chi tiết khách hàng ${customer.code}`}
+                getRowKey={(customer) => customer.id}
+                items={sortedCustomers}
+                selectedRowKey={selectedCustomerId}
+                renderDetail={(customer) => {
                   const debt = customerDebts[customer.id]
                   const history = customerHistories[customerHistoryKey(customer.id, customerHistoryType)]
-                  const debtAmount = customer.total_debt_amount ?? null
                   return (
-                    <Fragment key={customer.id}>
-                    <tr
-                      aria-expanded={selectedCustomerId === customer.id}
-                      className={`management-data-row${selectedCustomerId === customer.id ? ' management-data-row-selected' : ''}`}
-                      tabIndex={0}
-                      onClick={() => toggleCustomerDetail(customer)}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault()
-                          toggleCustomerDetail(customer)
-                        }
-                      }}
-                    >
-                      <td>
-                        <button
-                          className="management-link-button"
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation()
-                            toggleCustomerDetail(customer)
-                          }}
-                        >
-                          <strong>{customer.code}</strong>
-                        </button>
-                      </td>
-                      <td>{customer.name}</td>
-                      <td>{customer.phone ?? '-'}</td>
-                      <td>{customer.customer_group?.name ?? '-'}</td>
-                      <td>{debtAmount === null ? '-' : <MoneyText value={debtAmount} />}</td>
-                      <td>{customer.total_sales_amount === undefined ? '-' : <MoneyText value={customer.total_sales_amount} />}</td>
-                    </tr>
-                    {selectedCustomerId === customer.id ? (
-                      <ManagementDetailRow
-                        colSpan={6}
-                        detailClassName="customer-inline-detail"
-                        label={`Chi tiết khách hàng ${customer.code}`}
-                        rowClassName="management-detail-row-selected"
-                      >
-                            <div className="inline-detail-tabbar">
-                              <div aria-label="Chi tiết khách hàng" className="inline-detail-tabs" role="tablist">
-                                <button
-                                  aria-selected={activeDetailTab === 'info'}
-                                  role="tab"
-                                  type="button"
-                                  onClick={() => setActiveDetailTab('info')}
-                                >
-                                  Thông tin
-                                </button>
-                                <button
-                                  aria-selected={activeDetailTab === 'debt'}
-                                  role="tab"
-                                  type="button"
-                                  onClick={() => {
-                                    setActiveDetailTab('debt')
-                                    loadCustomerDebt(customer.id, { force: true })
-                                  }}
-                                >
-                                  Nợ cần thu
-                                </button>
-                                <button
-                                  aria-selected={activeDetailTab === 'history'}
-                                  role="tab"
-                                  type="button"
-                                  onClick={() => openCustomerHistory(customer.id)}
-                                >
-                                  Lịch sử
-                                </button>
-                              </div>
-                              <button
-                                aria-label="Xem phân tích"
-                                className="management-icon-button"
-                                title="Xem phân tích"
-                                type="button"
-                                onClick={() => setAnalysisCustomer(customer)}
-                              >
-                                <BarChart3 aria-hidden="true" size={17} />
-                              </button>
-                            </div>
-                            {activeDetailTab === 'info' ? (
-                              <section aria-label="Thông tin khách hàng" className="customer-detail-tab-panel" role="tabpanel">
-                                <dl>
-                                  <div>
-                                    <dt>MST</dt>
-                                    <dd>{customer.tax_code ?? 'Chưa có MST'}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Địa chỉ</dt>
-                                    <dd>{customer.address ?? 'Chưa có địa chỉ'}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Nhóm khách</dt>
-                                    <dd>{customer.customer_group?.name ?? 'Chưa có nhóm'}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Bảng giá áp dụng</dt>
-                                    <dd>{customerPriceRuleLabel(customer)}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Người tạo</dt>
-                                    <dd>{customer.created_by?.name || 'Chưa có dữ liệu'}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Ngày tạo</dt>
-                                    <dd>{dateTime(customer.created_at)}</dd>
-                                  </div>
-                                </dl>
-                              </section>
-                            ) : activeDetailTab === 'debt' ? (
-                              <section aria-label="Nợ cần thu khách hàng" className="customer-detail-tab-panel" role="tabpanel">
-                                <CustomerDebtPanel debt={debt} />
-                              </section>
-                            ) : (
-                              <section aria-label="Lịch sử khách hàng" className="customer-detail-tab-panel" role="tabpanel">
-                                <CustomerHistoryPanel
-                                  history={history}
-                                  historyType={customerHistoryType}
-                                  onSelectHistoryType={(historyType) => selectCustomerHistoryType(customer.id, historyType)}
-                                />
-                              </section>
-                            )}
-                      </ManagementDetailRow>
-                    ) : null}
-                    </Fragment>
+                    <>
+                      <ManagementInlineDetailTabs
+                        activeKey={activeDetailTab}
+                        ariaLabel="Chi tiết khách hàng"
+                        endAction={(
+                          <button
+                            aria-label="Xem phân tích"
+                            className="management-icon-button"
+                            title="Xem phân tích"
+                            type="button"
+                            onClick={() => setAnalysisCustomer(customer)}
+                          >
+                            <BarChart3 aria-hidden="true" size={17} />
+                          </button>
+                        )}
+                        tabs={[
+                          { key: 'info', label: 'Thông tin' },
+                          {
+                            key: 'debt',
+                            label: 'Nợ cần thu',
+                            onSelect: () => loadCustomerDebt(customer.id, { force: true }),
+                          },
+                          {
+                            key: 'history',
+                            label: 'Lịch sử',
+                            onSelect: () => openCustomerHistory(customer.id),
+                          },
+                        ]}
+                        onSelect={(key) => setActiveDetailTab(key as CustomerDetailTab)}
+                      />
+                      {activeDetailTab === 'info' ? (
+                        <section aria-label="Thông tin khách hàng" className="customer-detail-tab-panel" role="tabpanel">
+                          <ManagementDetailInfoList
+                            items={[
+                              { label: 'Loại khách', value: customerTypeLabel(customer) },
+                              { label: 'MST', value: customer.tax_code ?? 'Chưa có MST' },
+                              { label: 'Địa chỉ', value: customer.address ?? 'Chưa có địa chỉ' },
+                              { label: 'Người tạo', value: customerCreatorLabel(customer) },
+                              { label: 'Ngày tạo', value: dateTime(customer.created_at) },
+                            ]}
+                          />
+                          <ManagementDetailInlineNote icon={<StickyNote aria-hidden="true" size={16} />}>
+                            {customer.note?.trim() ? customer.note : 'Chưa có ghi chú'}
+                          </ManagementDetailInlineNote>
+                        </section>
+                      ) : activeDetailTab === 'debt' ? (
+                        <section aria-label="Nợ cần thu khách hàng" className="customer-detail-tab-panel" role="tabpanel">
+                          <CustomerDebtPanel debt={debt} />
+                        </section>
+                      ) : (
+                        <section aria-label="Lịch sử khách hàng" className="customer-detail-tab-panel" role="tabpanel">
+                          <CustomerHistoryPanel
+                            history={history}
+                            historyType={customerHistoryType}
+                            onSelectHistoryType={(historyType) => selectCustomerHistoryType(customer.id, historyType)}
+                          />
+                        </section>
+                      )}
+                      <ManagementDetailActionFooter
+                        leftActions={[
+                          {
+                            label: 'Xóa',
+                            danger: true,
+                            disabled: true,
+                            icon: <Trash2 aria-hidden="true" size={15} />,
+                          },
+                        ]}
+                        rightActions={[
+                          {
+                            label: 'Chỉnh sửa',
+                            disabled: true,
+                            variant: 'primary',
+                            icon: <Edit3 aria-hidden="true" size={15} />,
+                          },
+                          {
+                            label: customer.status === 'inactive' ? 'Kích hoạt' : 'Ngừng hoạt động',
+                            disabled: true,
+                            icon: <Lock aria-hidden="true" size={15} />,
+                          },
+                        ]}
+                      />
+                    </>
                   )
-                })}
-              </tbody>
-              </table>
+                }}
+                onRowClick={toggleCustomerDetail}
+                onRowKeyDown={(customer, event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    toggleCustomerDetail(customer)
+                  }
+                }}
+              />
             </ManagementTableViewport>
             <ManagementTableFooter
               ariaLabel="Phân trang khách hàng"
@@ -835,6 +781,15 @@ export function CustomersPage({
       {analysisCustomer ? (
         <CustomerAnalysisDialog customer={analysisCustomer} onClose={() => setAnalysisCustomer(null)} />
       ) : null}
+      <CustomerImportDialog
+        open={customerImportOpen}
+        service={service}
+        onClose={() => setCustomerImportOpen(false)}
+        onImported={() => {
+          setCustomerImportOpen(false)
+          void load({ page: 1 })
+        }}
+      />
     </ManagementPage>
   )
 }

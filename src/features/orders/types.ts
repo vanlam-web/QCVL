@@ -9,6 +9,8 @@ export interface CheckoutCartLine {
   linear_m?: number
   pieceCount?: number
   unitPrice: number
+  saleUnitName?: string
+  stockQtyPerSaleUnit?: number
   discountAmount?: number
   priceSource: string
   isManualPrice: boolean
@@ -40,6 +42,8 @@ export interface CheckoutInput {
     height_m?: number
     linear_m?: number
     unit_price: number
+    sale_unit_name?: string
+    stock_qty_per_sale_unit?: number
     discount_amount?: number
     price_source: string
     note?: string

@@ -14,6 +14,7 @@ export class HttpError extends Error {
     readonly status: number,
     readonly code: HttpErrorCode,
     message: string,
+    readonly fields?: Record<string, string[]>,
   ) {
     super(message)
   }
@@ -23,8 +24,8 @@ export function success<T>(data: T, traceId: string, status = 200) {
   return jsonResponse({ success: true, data, trace_id: traceId }, status)
 }
 
-export function failure(status: number, code: HttpError['code'], message: string, traceId: string) {
-  return jsonResponse({ success: false, error: { code, message }, trace_id: traceId }, status)
+export function failure(status: number, code: HttpError['code'], message: string, traceId: string, fields?: Record<string, string[]>) {
+  return jsonResponse({ success: false, error: { code, message, ...(fields ? { fields } : {}) }, trace_id: traceId }, status)
 }
 
 export function emptyResponse(traceId: string) {

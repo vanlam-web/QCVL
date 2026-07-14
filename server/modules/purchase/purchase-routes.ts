@@ -10,12 +10,18 @@ export interface PurchaseRouteContext {
 
 export interface PurchaseRouteHandlers {
   listSuppliers(): RouteResult
+  previewKiotVietSupplierImport(): RouteResult
+  importKiotVietSuppliers(): RouteResult
+  deleteImportedKiotVietSuppliers(): RouteResult
   getSupplier(): RouteResult
   createSupplier(): RouteResult
   updateSupplier(): RouteResult
   supplierPayableReceipts(): RouteResult
   paySupplier(): RouteResult
   listReceipts(): RouteResult
+  previewKiotVietPurchaseReceiptImport(): RouteResult
+  importKiotVietPurchaseReceipts(): RouteResult
+  deleteImportedKiotVietPurchaseReceipts(): RouteResult
   getReceipt(): RouteResult
   createReceipt(): RouteResult
   updateReceipt(): RouteResult
@@ -27,6 +33,9 @@ export function handlePurchaseRoute(context: PurchaseRouteContext, handlers: Pur
   const { pathname } = context.url
 
   if (method === 'GET' && pathname === '/api/v1/suppliers') return handlers.listSuppliers()
+  if (method === 'POST' && pathname === '/api/v1/suppliers/import/kiotviet/preview') return handlers.previewKiotVietSupplierImport()
+  if (method === 'POST' && pathname === '/api/v1/suppliers/import/kiotviet') return handlers.importKiotVietSuppliers()
+  if (method === 'DELETE' && pathname === '/api/v1/suppliers/import/kiotviet') return handlers.deleteImportedKiotVietSuppliers()
   if (method === 'GET' && /^\/api\/v1\/suppliers\/[^/]+$/.test(pathname)) return handlers.getSupplier()
   if (method === 'POST' && pathname === '/api/v1/suppliers') return handlers.createSupplier()
   if (method === 'PATCH' && /^\/api\/v1\/suppliers\/[^/]+$/.test(pathname)) return handlers.updateSupplier()
@@ -35,6 +44,15 @@ export function handlePurchaseRoute(context: PurchaseRouteContext, handlers: Pur
   }
   if (method === 'POST' && /^\/api\/v1\/suppliers\/[^/]+\/payments$/.test(pathname)) return handlers.paySupplier()
   if (method === 'GET' && pathname === '/api/v1/purchase/receipts') return handlers.listReceipts()
+  if (method === 'POST' && pathname === '/api/v1/purchase/receipts/import/kiotviet/preview') {
+    return handlers.previewKiotVietPurchaseReceiptImport()
+  }
+  if (method === 'POST' && pathname === '/api/v1/purchase/receipts/import/kiotviet') {
+    return handlers.importKiotVietPurchaseReceipts()
+  }
+  if (method === 'DELETE' && pathname === '/api/v1/purchase/receipts/import/kiotviet') {
+    return handlers.deleteImportedKiotVietPurchaseReceipts()
+  }
   if (method === 'GET' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(pathname)) return handlers.getReceipt()
   if (method === 'POST' && pathname === '/api/v1/purchase/receipts') return handlers.createReceipt()
   if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(pathname)) return handlers.updateReceipt()

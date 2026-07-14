@@ -30,6 +30,8 @@ Keep `3202` and `3200` aligned.
 
 - Treat `127.0.0.1:3202` as dev test surface.
 - Treat `100.84.228.125:3200` as NAS deploy surface.
+- If `3202` has no `DATABASE_URL`, Node API uses dev-memory persistence file `logs/dev-memory-state.json`. Do not restart API with a blank memory repository or imported product/stocktake test data will disappear.
+- `logs/dev-memory-state.json` is local test state only. It must not be copied to NAS and must not replace NAS PostgreSQL.
 - If `3202` runs against NAS PostgreSQL, writes/import/delete on `3202` also change `3200` data.
 - This shared-DB setup is acceptable while real data is still replaceable/importable.
 - If later data becomes important, split dev DB from NAS DB before risky testing.
@@ -109,6 +111,18 @@ Do not copy docs to NAS unless explicitly needed. NAS runtime needs app/build/so
 - Do not revert user changes unless explicitly requested.
 - When uncertain but safe to proceed, choose the simplest defensible option and record the tradeoff.
 - Ask Owner before changing business behavior that affects money, debt, inventory, invoices, or imports.
+
+Vietnamese text / encoding rule:
+
+- Do not copy Vietnamese UI text from terminal output, PowerShell output, git diff output, or test failure output back into source files. Those surfaces can show mojibake such as `CÃ´ng ty`, `Loáº¡i`, `ChÆ°a cÃ³`.
+- When editing Vietnamese UI text, type the real UTF-8 text directly in the patch, or copy from an already verified UTF-8 source file/browser UI.
+- After touching Vietnamese text, run a focused mojibake scan on changed files before finishing:
+
+```powershell
+rg -n "CÃ|Ã¡|Ã¢|Ã´|Ãª|Æ°|áº|á»|Ä‘|Â" <changed-files>
+```
+
+- If the scan finds strings introduced by the current change, fix them before running final tests.
 
 ## 8. Verification
 

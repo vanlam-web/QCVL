@@ -47,20 +47,20 @@ Trường tùy chọn:
 - SĐT.
 - MST.
 - Địa chỉ một dòng.
-- Nhóm khách hàng.
+- Nhóm khách.
 - Ghi chú.
 
 Quy tắc:
 
 - Mã khách hàng có thể tự sinh khi tạo mới nếu người dùng để trống.
 - Mã khách hàng được phép sửa, nhưng phải unique và đúng định dạng.
-- Tên khách hàng không được trùng trong cùng tổ chức sau khi trim, gộp khoảng trắng lặp và so sánh không phân biệt hoa/thường.
+- Tên khách hàng được phép trùng trong cùng tổ chức giống KiotViet; mã khách hàng là khóa nhận diện/import/update.
 - SĐT được phép trống.
-- Nếu có SĐT, phải chuẩn hóa và không trùng khách khác.
+- Nếu có SĐT, phải chuẩn hóa để tìm kiếm/phân biệt khách. Không dùng SĐT làm khóa import chính và không chặn import chỉ vì nguồn KV có hồ sơ cần giữ.
 - MST được phép trống; nếu nhập thì lưu theo hồ sơ khách để dùng khi xuất/chốt thông tin doanh nghiệp sau này.
-- Địa chỉ được phép trống; MVP chỉ lưu một dòng địa chỉ tự nhập, không tách khu vực/phường/xã.
-- Khi đổi nhóm khách, lần bán sau dùng bảng giá của nhóm mới.
-- Nếu khách không có nhóm khách, lần bán sau dùng bảng giá chung.
+- Địa chỉ được phép trống; MVP chỉ hiển thị một dòng địa chỉ hồ sơ. Import KiotViet có thể lưu riêng `Phường/Xã` và `Khu vực giao hàng` để bổ sung địa chỉ hồ sơ, nhưng không tạo luồng địa chỉ giao hàng.
+- Khi đổi nhóm khách, lần bán sau chỉ dùng bảng giá của nhóm nếu nhóm đó đã được cấu hình map bảng giá riêng.
+- Nếu khách không có nhóm khách hoặc nhóm chưa map bảng giá riêng, lần bán sau dùng bảng giá chung.
 - Nếu khách đang mở ở POS, POS sẽ cập nhật giá tự động cho các dòng chưa sửa giá thủ công sau khi hồ sơ được lưu và đồng bộ.
 
 Chi tiết khách MVP phải hiển thị readonly:
@@ -68,14 +68,13 @@ Chi tiết khách MVP phải hiển thị readonly:
 | Thông tin | Nguồn dữ liệu |
 |---|---|
 | Mã khách hàng, tên khách hàng, SĐT, MST, địa chỉ | `customers` |
-| Nhóm khách hàng | `customers.customer_group_id` -> `customer_groups` |
-| Bảng giá áp dụng | `customer_groups.price_list_id`; nếu không có nhóm thì lấy bảng giá chung |
+| Loại khách, công ty, ghi chú, phường/xã, khu vực | `customers` dữ liệu import/hồ sơ, chưa mở nghiệp vụ giao hàng |
 | Người tạo | `customers.created_by` -> `profiles.display_name`; khách cũ thiếu dữ liệu hiển thị `Chưa có dữ liệu` |
 | Ngày tạo | `customers.created_at` |
 | Tổng nợ hiện tại, hóa đơn còn nợ | Finance Customer Debt API |
 | Lịch sử | Sales Documents API lọc theo `customer_id` |
 
-Trên màn hình danh sách, các trường đã có ở dòng ngoài như mã khách hàng, tên khách hàng, SĐT, nhóm khách hàng, nợ hiện tại và trạng thái không lặp lại trong tab chi tiết. Khi mở một khách, dòng ngoài và ô chi tiết phải được tô thành một cụm trực quan để nhân viên biết rõ chi tiết đang thuộc dòng nào.
+Trên màn hình danh sách, các trường đã có ở dòng ngoài như mã khách hàng, tên khách hàng, SĐT, nhóm khách, công nợ và trạng thái không lặp lại trong tab chi tiết. `Nhóm khách` và `Bảng giá áp dụng` không hiển thị trong ô chi tiết vì dễ dư, nhất là khi nhóm/bảng giá chỉ là số như `35`. Khi mở một khách, dòng ngoài và ô chi tiết phải được tô thành một cụm trực quan để nhân viên biết rõ chi tiết đang thuộc dòng nào.
 
 Các trường như email, Facebook, sinh nhật, giới tính, địa chỉ nhận hàng nhiều dòng/nhiều cấp, CCCD/CMND, hộ chiếu và ngân hàng không nằm trong MVP chi tiết khách.
 
@@ -83,9 +82,12 @@ UI và lõi nghiệp vụ phải tách riêng:
 
 - Component chi tiết khách chỉ render dữ liệu từ contract/service, không nhúng truy vấn DB hoặc tự tính nghiệp vụ.
 - Các nguồn như người tạo, ngày tạo, lịch sử chứng từ, công nợ và phân tích phải đi qua DB/API/service.
+- Người tạo từ import KiotViet map vào tài khoản QCVL theo thứ tự: `users.username` sau khi bỏ `{DEL}`, tên hiển thị khớp chính xác, rồi tên hiển thị rút gọn khớp duy nhất. API danh sách phải resolve lại từ `source_creator_name` để dữ liệu import cũ và tài khoản đổi tên hiển thị vẫn hiện đúng.
 - Sau này đổi layout/tab/skin UI không được làm đổi quy tắc lưu `created_by`, `created_at`, lịch sử chứng từ hoặc công nợ.
 - `Xem phân tích` là nút icon biểu đồ nằm cùng hàng với tab `Thông tin` / `Nợ cần thu` / `Lịch sử`, nhưng đẩy sang bên phải để tách khỏi tab nội dung.
 - Khi bấm icon phân tích, mở popup riêng có bộ lọc như khoảng thời gian và các chỉ số thống kê. MVP chỉ hiển thị nhãn và `-` khi chưa có API phân tích; không đưa ghi chú/hướng dẫn lên UI và không dựng số giả.
+- Tab `Thông tin` phải hiển thị dòng ghi chú kiểu gọn giống KiotViet; nếu chưa có dữ liệu thì ghi `Chưa có ghi chú`.
+- Cuối ô chi tiết giữ cụm nút `Xóa`, `Chỉnh sửa`, `Ngừng hoạt động` giống KiotViet để người dùng thấy hướng thao tác. Giai đoạn hiện tại các nút này chỉ là UI khóa, chưa nối API; khi làm tiếp phải nối đúng route sửa/xóa/ngừng khách trước khi bật.
 
 ---
 
@@ -125,7 +127,9 @@ KiotViet hiển thị lịch sử bán/trả hàng chung. QC-OMS MVP trong tab n
 
 Nguồn dữ liệu chuẩn là Sales Documents lọc theo `customer_id` và `type = invoice | quote`. Nếu API danh sách chứng từ chưa hỗ trợ filter này, không được dựng dữ liệu giả; UI có thể ẩn tab lịch sử bán trong lát đó và phải ghi rõ ngoài phạm vi.
 
-`KH000001 - Khách lẻ` là hồ sơ khách mặc định của tổ chức. Báo giá/hóa đơn được tạo ở POS khi nhân viên chưa chọn khách vẫn phải có `customer_id` trỏ về `KH000001`, vì vậy tab lịch sử của `KH000001` phải thấy các chứng từ khách lẻ này thay vì phụ thuộc snapshot tên khách.
+`khachle - Khách lẻ` là hồ sơ khách mặc định của tổ chức. Báo giá/hóa đơn được tạo ở POS khi nhân viên chưa chọn khách vẫn phải có `customer_id` trỏ về khách có mã `khachle`, vì vậy tab lịch sử của `khachle` phải thấy các chứng từ khách lẻ này thay vì phụ thuộc snapshot tên khách.
+
+Trong mục tiêu hiện tại là hoàn thiện `Hàng hóa` để tồn vận hành đúng, tab `Lịch sử` của khách chỉ cần giữ mức đọc cơ bản khi đã có hóa đơn/báo giá thật. Không mở thêm bảng giao dịch giống KiotViet, không làm trả hàng bán và không dựng lịch sử giả trước khi hóa đơn/POS/nhập hàng phục vụ stock movement đã ổn.
 
 ---
 
@@ -153,11 +157,13 @@ Lát MVP hiện tại chỉ cần readonly công nợ theo hóa đơn còn nợ:
 - số hóa đơn còn nợ
 - danh sách hóa đơn còn nợ gồm mã, thời gian, tổng tiền, đã trả, còn nợ
 
-Trên danh sách khách, cột `Nợ hiện tại` tải tự động cho các khách đang hiển thị trên trang hiện tại bằng Finance Customer Debt API. Nếu chưa tải xong hoặc tải lỗi, hiển thị `-` thay vì đoán số.
+Trên danh sách khách, cột `Công nợ` tải tự động cho các khách đang hiển thị trên trang hiện tại bằng Finance Customer Debt API. Nếu chưa tải xong hoặc tải lỗi, hiển thị `-` thay vì đoán số.
 
-Nếu hóa đơn phát sinh nợ khi POS chưa chọn khách, khoản nợ thuộc `KH000001`. Ghi chú khách lẻ nếu có chỉ là thông tin nhận diện phụ của hóa đơn/khoản nợ, không tạo bucket công nợ `customer_id = null`.
+Nếu hóa đơn phát sinh nợ khi POS chưa chọn khách, khoản nợ thuộc khách mã `khachle`. Ghi chú khách lẻ nếu có chỉ là thông tin nhận diện phụ của hóa đơn/khoản nợ, không tạo bucket công nợ `customer_id = null`.
 
 Thu nợ độc lập, điều chỉnh công nợ, chiết khấu thanh toán và QR thanh toán là scope Finance/POS sau, không tự mở trong lát khách hàng này.
+
+Trong mục tiêu hiện tại là hoàn thiện `Hàng hóa` để tồn vận hành đúng, `Nợ cần thu` không nằm trên đường găng. Chỉ giữ readonly cơ bản nếu Finance API đã có dữ liệu thật; các dòng thanh toán, chiết khấu thanh toán, QR, điều chỉnh công nợ và xuất file công nợ làm sau.
 
 ---
 
@@ -182,3 +188,20 @@ KiotViet có thêm nhiều tab như lịch sử đặt hàng, công nợ, lịch
 | Ngừng hoạt động | Không hiện trong tìm kiếm POS mặc định; vẫn xem được trong danh sách khách bằng bộ lọc |
 
 Ngừng hoạt động không xóa lịch sử bán hàng, công nợ hoặc chứng từ cũ.
+
+---
+
+## 9. Shared Management Detail Rule
+
+Ô chi tiết Khách hàng đi theo cùng chuẩn `management-*` với Hàng hóa và Kiểm kho:
+
+- Bấm nguyên dòng khách hàng để mở/đóng chi tiết ngay dưới dòng đó.
+- Header chi tiết chỉ giữ thông tin nhận diện chính; tab mới chứa dữ liệu chi tiết.
+- Tab `Thông tin` chỉ hiển thị các field cần kiểm tra nhanh: loại khách, MST, địa chỉ, người tạo, ngày tạo, ghi chú.
+- Không lặp lại mã khách, tên khách, SĐT, nhóm khách hoặc bảng giá trong phần thông tin nếu ngoài bảng/header đã có.
+- `Người tạo` hiển thị tên tài khoản QCVL khi `source_creator_name` map được với username hoặc tên hiển thị duy nhất.
+- Nếu file import có `Người tạo` nhưng không khớp tài khoản QCVL nào, hiển thị `Chưa khớp tài khoản`.
+- Nếu file import không có `Người tạo`, hiển thị `Chưa có dữ liệu`.
+- Cụm action cuối chi tiết dùng `ManagementDetailActionFooter`; các nút chưa làm API được giữ disabled để thấy hướng chức năng sau.
+- Tabbar chi tiết dùng `ManagementInlineDetailTabs`; danh sách field dùng `ManagementDetailInfoList`; dòng ghi chú dùng `ManagementDetailInlineNote`.
+- Không thêm CSS riêng cho detail nếu class `management-*` hiện có đủ dùng.

@@ -19,8 +19,51 @@ export function financeAccountChoiceLabel(account: FinanceAccount) {
 }
 
 export function bankAccountDisplayText(account: FinanceAccount) {
-  return [account.code, account.account_number ?? account.name, account.account_holder].filter(Boolean).join(' - ')
+  const parts = bankAccountDisplayParts(account)
+  return [parts.primary, parts.secondary, parts.tertiary].filter(Boolean).join(' - ')
 }
+
+export function bankAccountTriggerText(account: FinanceAccount) {
+  return bankAccountDisplayParts(account).primary
+}
+
+export function bankAccountDisplayParts(account: FinanceAccount) {
+  if (account.account_type === 'cash') return { primary: 'Tiền mặt', secondary: null, tertiary: null }
+
+  const primary = cleanDeletedFinanceAccountText(account.account_number?.trim() || account.code)
+  const rawSecondary = cleanDeletedFinanceAccountText(account.name)
+  const rawTertiary = cleanDeletedFinanceAccountText(account.account_holder?.trim())
+
+  const uniqueParts = uniqueNonEmpty([primary, rawSecondary, rawTertiary])
+  return {
+    primary: uniqueParts[0] ?? primary,
+    secondary: uniqueParts[1] ?? null,
+    tertiary: uniqueParts[2] ?? null,
+  }
+}
+
+export function isDeletedFinanceAccount(account: FinanceAccount) {
+  return !account.is_active || [account.code, account.name, account.account_number, account.account_holder].some((value) => value?.includes('{DEL}'))
+}
+
+function cleanDeletedFinanceAccountText(value: string | null | undefined) {
+  return value?.replaceAll('{DEL}', '').trim() ?? ''
+}
+
+function uniqueNonEmpty(values: Array<string | null | undefined>) {
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const value of values) {
+    const trimmed = value?.trim()
+    if (!trimmed) continue
+    const key = trimmed.toLocaleLowerCase('vi')
+    if (seen.has(key)) continue
+    seen.add(key)
+    result.push(trimmed)
+  }
+  return result
+}
+
 
 export function cashFirstAccountSort(left: FinanceAccount, right: FinanceAccount) {
   if (left.account_type !== right.account_type) return left.account_type === 'cash' ? -1 : 1
@@ -68,6 +111,27 @@ export function cashbookDetailAccountLabel(entry: CashbookEntryDetail) {
   return entry.direction === 'in' ? 'Đến tài khoản' : 'Từ tài khoản'
 }
 
+export function cashbookDetailCreatorText(entry: CashbookEntryDetail) {
+  return entry.source.source_creator_name ?? entry.created_by.name
+}
+
+export function cashbookDetailCategoryText(entry: CashbookEntryDetail) {
+  return entry.source.category_name ?? sourceTypeText(entry.source_type)
+}
+
+export function cashbookDetailCounterpartyText(entry: CashbookEntryDetail) {
+  return [
+    entry.counterparty.name,
+    entry.counterparty.phone,
+    entry.source.counterparty_address,
+  ].filter((value) => value != null && value.trim().length > 0).join(', ') || '-'
+}
+
+export function cashbookDetailAccountText(entry: CashbookEntryDetail) {
+  if (entry.finance_account.account_type === 'cash') return 'Tiền mặt'
+  return [entry.finance_account.code, entry.finance_account.name].filter(Boolean).join(' - ')
+}
+
 export function cashbookLinkedDocumentMessage(entry: CashbookEntryDetail) {
   const code = cashbookLinkedDocumentCode(entry) ?? entry.source.code
   if (entry.direction === 'in') return `Phiếu thu tự động được gắn với hóa đơn ${code}.`
@@ -77,7 +141,17 @@ export function cashbookLinkedDocumentMessage(entry: CashbookEntryDetail) {
 export function cashbookLinkedDocumentCode(entry: CashbookEntryDetail) {
   if (entry.source.order_code !== null) return entry.source.order_code
   const noteDocumentMatch = entry.note?.match(/\b(?:HD|PN)\d+(?:\.\d+)?\b/i)
-  return noteDocumentMatch?.[0].toUpperCase() ?? null
+  if (noteDocumentMatch) return noteDocumentMatch[0].toUpperCase()
+  return linkedKiotVietDocumentCodeFromCashbookCode(entry.code)
+}
+
+function linkedKiotVietDocumentCodeFromCashbookCode(code: string) {
+  const normalizedCode = code.trim().toUpperCase()
+  const invoicePaymentMatch = normalizedCode.match(/^TTHD(\d+(?:\.\d+)?)$/)
+  if (invoicePaymentMatch) return `HD${invoicePaymentMatch[1]}`
+  const purchasePaymentMatch = normalizedCode.match(/^PCPN(\d+(?:\.\d+)?)$/)
+  if (purchasePaymentMatch) return `PN${purchasePaymentMatch[1]}`
+  return null
 }
 
 export function cashbookEntryNeedsCounterpartyHydration(entry: CashbookEntry) {
@@ -141,6 +215,8 @@ export function cashbookLinkedDocumentRows(entry: CashbookEntryDetail) {
 
 export function cashbookDetailNoteText(entry: CashbookEntryDetail) {
   if (entry.note?.match(/^Checkout\s+HD\d+(?:\.\d+)?$/i)) return 'Chưa có ghi chú'
+  if (entry.source.source_note) return entry.source.source_note
+  if (entry.source.transfer_content) return entry.source.transfer_content
   return entry.note ?? 'Chưa có ghi chú'
 }
 
@@ -157,7 +233,9 @@ export function paymentMethodText(value: CashbookEntryDetail['payment_method']) 
 }
 
 export function sourceTypeText(value: CashbookEntry['source_type']) {
-  return value === 'payment_receipt_method' ? 'Phiếu thu' : 'Phiếu quỹ'
+  if (value === 'payment_receipt_method') return 'Phiếu thu'
+  if (value === 'kiotviet_cashbook') return 'Sổ quỹ KV'
+  return 'Phiếu quỹ'
 }
 
 export function financeDateText(value: string) {

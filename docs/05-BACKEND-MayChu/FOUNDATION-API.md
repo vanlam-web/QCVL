@@ -305,16 +305,22 @@ Tráº£ profile, email, tráº¡ng thÃ¡i vÃ  permission cá»§a má»™t 
 
 **Validation:**
 
-- Email há»£p lá»‡ vÃ  chÆ°a tá»“n táº¡i.
-- `username` sau trim khÃ´ng rá»—ng, tá»‘i Ä‘a 100 kÃ½ tá»±; náº¿u khÃ´ng gá»­i thÃ¬ dÃ¹ng email.
-- `phone` cho phÃ©p trá»‘ng hoáº·c sá»‘/kÃ½ tá»± Ä‘iá»‡n thoáº¡i phá»• biáº¿n, 8-20 kÃ½ tá»±.
+- `email` bat buoc trong luong tao tai khoan van hanh that vi dung lam kenh khoi phuc mat khau/lien he bao mat.
+- Neu moi truong dev/import tam thoi bo trong email, backend co the tu sinh email noi bo dang `<username>@users.qcvl.local` de thoa rang buoc DB/Auth; khong dung email noi bo nay cho khach hang/nhan vien tu khoi phuc mat khau.
+- `username` sau trim khong rong, toi da 100 ky tu.
+- `phone` bat buoc, sau trim khong rong; cho phep so/ky tu dien thoai pho bien, 8-20 ky tu.
 - `birthday` cho phÃ©p trá»‘ng hoáº·c Ä‘á»‹nh dáº¡ng `YYYY-MM-DD`.
 - `region`, `ward`, `address`, `note` cho phÃ©p trá»‘ng; láº§n lÆ°á»£t tá»‘i Ä‘a 100, 100, 255, 500 kÃ½ tá»±.
-- Password Ä‘Ã¡p á»©ng policy Auth cá»§a mÃ´i trÆ°á»ng.
-- `display_name` sau trim khÃ´ng rá»—ng, tá»‘i Ä‘a 100 kÃ½ tá»±.
+- `password` bat buoc va dap ung policy Auth cua moi truong.
+- `display_name` sau trim khong rong, toi da 100 ky tu.
 - Má»i permission code tá»“n táº¡i vÃ  Ä‘ang active.
 - Actor cÃ³ `perm.manage_users` Ä‘Æ°á»£c gÃ¡n má»i permission code active trong cÃ¹ng organization.
 - KhÃ´ng Ä‘Æ°á»£c vÃ´ hiá»‡u hÃ³a user quáº£n trá»‹ cuá»‘i cÃ¹ng hoáº·c xÃ³a `perm.manage_users` khá»i user quáº£n trá»‹ cuá»‘i cÃ¹ng cá»§a organization.
+
+**Dev memory persistence:**
+
+- Moi truong 3202 co the chay `persistence: memory`; trong mot phien API, `POST /users` phai luu vao memory repository de `GET /users` tra lai tai khoan vua tao.
+- Memory repository can ho tro cung hanh vi admin co ban voi Postgres: tao user, loc search/status, cap nhat trang thai, va thay quyen.
 
 **Workflow:**
 
@@ -333,12 +339,25 @@ KhÃ´ng log hoáº·c tráº£ láº¡i password.
 
 ```json
 {
+  "email": "cashier@example.com",
+  "username": "cashier-01",
+  "phone": "0947900909",
+  "birthday": "1990-01-31",
+  "region": "TP Há»“ ChÃ­ Minh",
+  "ward": "PhÆ°á»ng Báº¿n ThÃ nh",
+  "address": "12 Nguyá»…n TrÃ£i",
+  "note": "Ca sáº¡ng",
+  "password": "new-temporary-secret",
   "display_name": "Thu ngÃ¢n ca sÃ¡ng",
   "status": "active"
 }
 ```
 
-KhÃ´ng dÃ¹ng endpoint nÃ y Ä‘á»ƒ thay permission hoáº·c password.
+- Tat ca field deu optional, nhung neu gui field nao thi backend validate/lưu field do.
+- `phone` bat buoc neu gui trong form sua tai khoan; khong duoc rong.
+- `email` nen la email that neu tai khoan can khoi phuc mat khau. Chi cho rong/null trong dev/import tam thoi; backend sinh email noi bo neu can.
+- `password` optional; chi cap nhat password khi co chuoi khong rong.
+- Khong dung endpoint nay de thay permission. Dung `PUT /users/{id}/permissions` sau khi sua vai tro/preset quyen.
 
 Khi chuyá»ƒn sang `inactive`, Backend pháº£i lÃ m máº¥t hiá»‡u lá»±c truy cáº­p á»©ng dá»¥ng sá»›m nháº¥t cÃ³ thá»ƒ; má»i request tiáº¿p theo bá»‹ `/me` vÃ  permission middleware tá»« chá»‘i.
 

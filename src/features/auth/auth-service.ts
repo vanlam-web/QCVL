@@ -2,7 +2,7 @@ import { ApiError } from '../../lib/api/client'
 import type { ApiErrorCode } from '../../lib/api/types'
 
 export interface AuthService {
-  signIn(email: string, password: string): Promise<void>
+  signIn(login: string, password: string): Promise<void>
   signOut(): Promise<void>
   getAccessToken(): Promise<string | null>
 }
@@ -19,11 +19,11 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
   const fetcher = options.fetch ?? fetch
 
   return {
-    async signIn(email, password) {
+    async signIn(login, password) {
       const response = await fetcher(`${options.baseUrl}/api/v1/auth/login`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        body: JSON.stringify({ login: login.trim().toLowerCase(), password }),
       })
       const body = (await response.json()) as {
         success: boolean

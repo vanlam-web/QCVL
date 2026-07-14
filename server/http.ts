@@ -1,7 +1,14 @@
-import { randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
+import { createHash, randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto'
 import { HttpError, emptyResponse, failure, success } from './http-response.js'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes.js'
 import { handleCatalogRoute } from './modules/catalog/catalog-routes.js'
+import {
+  applyKiotVietCustomerImport,
+  mapKiotVietCustomerRows,
+  parseKiotVietCustomerWorkbookBuffer,
+  previewKiotVietCustomerImport,
+  type CustomerImportUpsertRow,
+} from './modules/catalog/customer-import.js'
 import {
   applyKiotVietProductImport,
   mapKiotVietProductRows,
@@ -10,6 +17,14 @@ import {
   type ProductImportUpsertRow,
 } from './modules/catalog/product-import.js'
 import { handleFinanceRoute } from './modules/finance/finance-routes.js'
+import {
+  applyKiotVietCashbookImport,
+  mapKiotVietCashbookRows,
+  parseKiotVietCashbookWorkbookBuffer,
+  previewKiotVietCashbookImport,
+  type CashbookImportRepository,
+  type KiotVietCashbookImportRow,
+} from './modules/finance/kiotviet-cashbook-import.js'
 import { handleInventoryRoute } from './modules/inventory/inventory-routes.js'
 import {
   mapKiotVietStocktakeRows,
@@ -17,8 +32,31 @@ import {
   type KiotVietStocktakeImportRow,
 } from './modules/inventory/kiotviet-stocktake-import.js'
 import { handleProductionRoute } from './modules/production/production-routes.js'
+import {
+  applyKiotVietPurchaseReceiptImport,
+  mapKiotVietPurchaseReceiptRows,
+  parseKiotVietPurchaseReceiptWorkbookBuffer,
+  previewKiotVietPurchaseReceiptImport,
+  type KiotVietPurchaseReceiptImportRow,
+  type PurchaseReceiptImportRepository,
+} from './modules/purchase/purchase-receipt-import.js'
+import {
+  applyKiotVietSupplierImport,
+  mapKiotVietSupplierRows,
+  parseKiotVietSupplierWorkbookBuffer,
+  previewKiotVietSupplierImport,
+  type SupplierImportUpsertRow,
+} from './modules/purchase/supplier-import.js'
 import { handlePurchaseRoute } from './modules/purchase/purchase-routes.js'
 import { handleSalesRoute } from './modules/sales/sales-routes.js'
+import {
+  applyKiotVietInvoiceImport,
+  mapKiotVietInvoiceRows,
+  parseKiotVietInvoiceWorkbookBuffer,
+  previewKiotVietInvoiceImport,
+  type InvoiceImportRepository,
+  type KiotVietInvoiceImportRow,
+} from './modules/sales/kiotviet-invoice-import.js'
 
 export type UserStatus = 'active' | 'inactive'
 
@@ -83,6 +121,7 @@ export interface WorkstationData {
 }
 
 export type SalesDocumentData = ReturnType<typeof makeSalesDocument>
+export type PurchaseReceiptData = ReturnType<typeof makePurchaseReceipt>
 export interface ProductListData {
   id: string
   code: string
@@ -107,6 +146,13 @@ export interface ProductListData {
     status?: string
     updated_at?: string | null
   } | null
+  operating_stock?: {
+    quantity: number
+    unit_name: string
+    source_type: 'stock_movements'
+    source_label: string | null
+    updated_at?: string | null
+  } | null
   latest_kiotviet_stocktake?: {
     code: string
     source_created_at: string | null
@@ -126,8 +172,75 @@ export interface ProductListData {
   created_at: string
   updated_at: string
 }
+export interface CustomerListData {
+  id: string
+  code: string
+  name: string
+  phone: string | null
+  tax_code: string | null
+  address: string | null
+  customer_group_id: string | null
+  customer_group: { id: string; code: string; name: string } | null
+  created_by?: { id: string; name: string } | null
+  created_at: string
+  total_sales_amount: number
+  total_debt_amount: number
+  customer_type?: string | null
+  company_name?: string | null
+  area_name?: string | null
+  ward_name?: string | null
+  note?: string | null
+  source_creator_name?: string | null
+  last_transaction_at?: string | null
+  kiotviet_net_sales?: number | null
+  status?: string | null
+}
+export interface SupplierListData {
+  id: string
+  code: string
+  name: string
+  phone: string | null
+  email: string | null
+  address: string | null
+  tax_code: string | null
+  linked_customer_id: string | null
+  linked_customer: { id: string; code: string; name: string } | null
+  notes: string | null
+  status: string
+  current_payable_amount: number
+  total_purchase_amount: number
+  created_at?: string
+  source_creator_name?: string | null
+  source_created_at?: string | null
+  company_name?: string | null
+}
+export interface FinanceAccountData {
+  id: string
+  code: string
+  name: string
+  account_type: 'cash' | 'bank'
+  is_default_cash: boolean
+  is_active: boolean
+  account_number?: string | null
+  account_holder?: string | null
+  opening_balance?: number
+  note?: string | null
+  notify_on_transaction?: boolean
+}
 export type CashbookEntryData = ReturnType<typeof makeCashbookEntry> & {
-  source?: { type: string; id: string; code: string; order_code: string | null }
+  source?: {
+    type: string
+    id: string
+    code: string
+    order_code: string | null
+    category_name?: string | null
+    source_creator_name?: string | null
+    source_created_at?: string | null
+    source_note?: string | null
+    transfer_content?: string | null
+    counterparty_code?: string | null
+    counterparty_address?: string | null
+  }
   allocations?: Array<{
     order_id: string
     order_code: string
@@ -147,16 +260,57 @@ export interface StocktakeListData {
   source_type: string
   created_at: string
   balanced_at: string | null
+  source_creator_name?: string | null
+  created_by: { id: string; name: string } | null
   total_actual_qty: number
   total_actual_value: number | null
   total_difference_value: number | null
   increased_qty: number
   decreased_qty: number
+  product_code?: string | null
+  product_name?: string | null
+  product_system_qty?: number | null
+  product_actual_qty?: number | null
+  product_difference_qty?: number | null
   note: string | null
+}
+
+export interface StocktakeDetailItemData {
+  id: string
+  line_no: number
+  product_id: string | null
+  product_code: string
+  product_name: string
+  unit_name: string | null
+  system_qty: number | null
+  actual_qty: number | null
+  difference_qty: number | null
+  line_actual_value: number | null
+  line_difference_value: number | null
+  note: string | null
+}
+
+export interface StocktakeDetailData extends StocktakeListData {
+  items: StocktakeDetailItemData[]
+}
+
+export interface StockMovementData {
+  id: string
+  product_id: string
+  movement_type: string
+  quantity_delta: number
+  created_at: string
+  document_code: string | null
+  document_type: 'sale_invoice' | 'purchase_receipt' | 'stocktake' | 'manual' | 'material_opening' | null
+  transaction_price: number | null
+  cost_price: number | null
+  ending_qty: number | null
+  partner_name: string | null
 }
 
 export interface ServerRepository {
   findUserByEmail(email: string): Promise<AuthUserRow | null>
+  findUserByLogin?(login: string): Promise<AuthUserRow | null>
   listUsers?(input: { organizationId: string; url: URL }): Promise<UserListItemData[]>
   createUser?(input: {
     organizationId: string
@@ -175,6 +329,15 @@ export interface ServerRepository {
   updateUser?(input: {
     organizationId: string
     id: string
+    email?: string | null
+    username?: string | null
+    phone?: string | null
+    birthday?: string | null
+    region?: string | null
+    ward?: string | null
+    address?: string | null
+    note?: string | null
+    passwordHash?: string
     displayName?: string
     status?: UserStatus
   }): Promise<UserListItemData | null>
@@ -192,12 +355,48 @@ export interface ServerRepository {
   listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
+  listCustomers?(input: { organizationId: string; url: URL }): Promise<CustomerListData[]>
+  findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
+  findCustomersByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
+  listSuppliers?(input: { organizationId: string; url: URL }): Promise<SupplierListData[]>
+  listFinanceAccounts?(input: { organizationId: string; url: URL }): Promise<FinanceAccountData[]>
+  createFinanceAccount?(input: { organizationId: string; account: Omit<FinanceAccountData, 'id'> & { id?: string } }): Promise<FinanceAccountData>
+  updateFinanceAccount?(input: { organizationId: string; id: string; patch: Partial<FinanceAccountData> }): Promise<FinanceAccountData | null>
+  findSuppliersByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   deleteDemoProductsForImport?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   deleteDemoStocktakesForImport?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   deleteImportedKiotVietProducts?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteImportedKiotVietCustomers?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteImportedKiotVietSuppliers?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   deleteImportedKiotVietStocktakes?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  deleteImportedKiotVietPurchaseReceipts?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  listPurchaseReceipts?(input: { organizationId: string; url: URL }): Promise<PurchaseReceiptData[]>
+  getPurchaseReceipt?(input: { organizationId: string; id: string }): Promise<PurchaseReceiptData | null>
+  findPurchaseReceiptsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
+  listStockMovements?(input: { organizationId: string; url: URL }): Promise<StockMovementData[]>
+  upsertImportedKiotVietPurchaseReceipts?(input: {
+    organizationId: string
+    rows: KiotVietPurchaseReceiptImportRow[]
+  }): Promise<{
+    receipts_created: number
+    receipts_updated: number
+    items_created: number
+    items_updated: number
+    skipped_rows: number
+  }>
   upsertProductGroupsByName?(input: { organizationId: string; names: string[] }): Promise<Map<string, string>>
   upsertProductsByCode?(input: { organizationId: string; rows: ProductImportUpsertRow[] }): Promise<{
+    created: number
+    updated: number
+    skipped: number
+  }>
+  upsertCustomerGroupsByName?(input: { organizationId: string; names: string[] }): Promise<Map<string, string>>
+  upsertCustomersByCode?(input: { organizationId: string; rows: CustomerImportUpsertRow[] }): Promise<{
+    created: number
+    updated: number
+    skipped: number
+  }>
+  upsertSuppliersByCode?(input: { organizationId: string; rows: SupplierImportUpsertRow[] }): Promise<{
     created: number
     updated: number
     skipped: number
@@ -222,6 +421,7 @@ export interface ServerRepository {
   }): Promise<{ created: number; updated: number; skipped: number }>
   upsertImportedKiotVietStocktakes?(input: {
     organizationId: string
+    createdBy: { id: string; name: string } | null
     rows: KiotVietStocktakeImportRow[]
   }): Promise<{
     stocktakes_created: number
@@ -231,6 +431,9 @@ export interface ServerRepository {
     missing_product_rows: number
   }>
   listStocktakes?(input: { organizationId: string; url: URL }): Promise<StocktakeListData[]>
+  getStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
+  updateStocktakeNote?(input: { organizationId: string; id: string; note: string | null }): Promise<StocktakeDetailData | null>
+  cancelStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
   saveSalesDocument?(input: {
     organizationId: string
     document: SalesDocumentData
@@ -238,6 +441,30 @@ export interface ServerRepository {
   }): Promise<void>
   listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
   getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
+  cancelSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
+  findSalesDocumentsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
+  deleteImportedKiotVietInvoices?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  upsertImportedKiotVietInvoices?(input: {
+    organizationId: string
+    rows: KiotVietInvoiceImportRow[]
+  }): Promise<{
+    invoices_created: number
+    invoices_updated: number
+    items_created: number
+    items_updated: number
+    skipped_rows: number
+  }>
+  deleteImportedKiotVietCashbook?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
+  upsertImportedKiotVietCashbook?(input: {
+    organizationId: string
+    rows: KiotVietCashbookImportRow[]
+  }): Promise<{
+    accounts_created: number
+    accounts_updated: number
+    entries_created: number
+    entries_updated: number
+    skipped_rows: number
+  }>
   listCustomerDebts?(input: { organizationId: string; url: URL }): Promise<CustomerDebtSummaryData[]>
   getCustomerDebt?(input: { organizationId: string; customerId: string }): Promise<CustomerDebtDetailData>
   collectCustomerDebt?(input: {
@@ -262,6 +489,7 @@ export interface ServerRepository {
 
 export interface HttpHandlerOptions {
   repository: ServerRepository
+  persistence?: 'postgres' | 'memory'
   version?: string
 }
 
@@ -341,13 +569,13 @@ const customerGroups = [
   { id: 'cg-vip', code: 'SI', name: 'Khach si', price_list_id: 'pl-vip', is_active: true },
 ]
 
-const customers = Array.from({ length: 20 }, (_, index) => {
+const customers: CustomerListData[] = Array.from({ length: 20 }, (_, index) => {
   const number = index + 1
   const isRetail = number === 1
   const vip = number % 4 === 0
   return {
     id: isRetail ? 'customer-retail' : `customer-${pad(number)}`,
-    code: isRetail ? 'KH000001' : `DEV20-KH-${pad(number)}`,
+    code: isRetail ? 'khachle' : `DEV20-KH-${pad(number)}`,
     name: isRetail ? 'Khách lẻ' : `Khach demo ${pad(number)}`,
     phone: isRetail ? null : `090${String(8000000 + number).padStart(7, '0')}`,
     tax_code: isRetail ? null : `03123456${String(number).padStart(2, '0')}`,
@@ -361,7 +589,34 @@ const customers = Array.from({ length: 20 }, (_, index) => {
   }
 })
 
-const financeAccounts = [
+function defaultRetailCustomer() {
+  return customers.find((customer) => customer.code.trim().toLowerCase() === 'khachle') ?? customers[0]
+}
+
+async function resolveSalesCustomer(repository: ServerRepository, organizationId: string, customerId: string | undefined) {
+  const localCustomer = customerId ? customers.find((item) => item.id === customerId) : undefined
+  if (localCustomer) return localCustomer
+
+  if (repository.listCustomers) {
+    const allCustomers = await repository.listCustomers({
+      organizationId,
+      url: new URL('http://api.local/api/v1/customers'),
+    })
+    const selectedCustomer = customerId ? allCustomers.find((item) => item.id === customerId) : undefined
+    if (selectedCustomer) return selectedCustomer
+    const defaultCustomer = allCustomers.find((item) => item.code.trim().toLowerCase() === 'khachle')
+    if (defaultCustomer) return defaultCustomer
+  }
+
+  if (!customerId && repository.findCustomerByCode) {
+    const defaultCustomer = await repository.findCustomerByCode({ organizationId, code: 'khachle' })
+    if (defaultCustomer) return defaultCustomer
+  }
+
+  return defaultRetailCustomer()
+}
+
+const financeAccounts: FinanceAccountData[] = [
   {
     id: 'cash-main',
     code: 'TM',
@@ -386,9 +641,9 @@ const financeAccounts = [
     note: null,
     notify_on_transaction: true,
   },
-] as const
+]
 
-const suppliers = Array.from({ length: 20 }, (_, index) => {
+const suppliers: SupplierListData[] = Array.from({ length: 20 }, (_, index) => {
   const number = index + 1
   return {
     id: `supplier-${pad(number)}`,
@@ -404,6 +659,10 @@ const suppliers = Array.from({ length: 20 }, (_, index) => {
     status: 'active',
     current_payable_amount: number % 4 === 0 ? 0 : 500000 + number * 50000,
     total_purchase_amount: 2000000 + number * 400000,
+    created_at: nowIso,
+    source_creator_name: null,
+    source_created_at: null,
+    company_name: null,
   }
 })
 
@@ -424,7 +683,7 @@ const inventoryProducts = products.map((product, index) => ({
   is_negative: false,
 }))
 
-const stockMovements = products.flatMap((product) => (
+const stockMovements: StockMovementData[] = products.flatMap((product) => (
   Array.from({ length: 20 }, (_, index) => {
     const number = index + 1
     const movementType = number % 5 === 0 ? 'stocktake_adjustment' : number % 2 === 0 ? 'sale' : 'purchase'
@@ -502,7 +761,7 @@ function makePurchaseReceipt(number: number) {
     paid_amount: paidAmount,
     remaining_amount: Math.max(lineAmount - paidAmount, 0),
     notes: null,
-    created_by: 'Admin',
+    created_by: { id: 'user-dev-admin', name: 'Admin' },
     created_at: nowIso,
     updated_at: nowIso,
     items: [
@@ -576,6 +835,47 @@ function normalizeSearchText(value: string) {
     .replace(/đ/g, 'd')
 }
 
+function normalizeCreatorIdentity(value: string | null | undefined) {
+  return normalizeSearchText(String(value ?? '').replace(/\{DEL\}$/i, ''))
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function resolveCreatorByUsername(sourceCreatorName: string | null | undefined, users: UserListItemData[]) {
+  if (!sourceCreatorName?.trim()) return null
+  const normalized = normalizeCreatorIdentity(sourceCreatorName)
+  const matches = users.filter((user) => normalizeCreatorIdentity(user.username) === normalized)
+  if (matches.length !== 1) return null
+  return { id: matches[0].id, name: matches[0].display_name }
+}
+
+function resolveCustomerCreator(sourceCreatorName: string | null | undefined, users: UserListItemData[]) {
+  if (!sourceCreatorName?.trim()) return null
+  const usernameMatch = resolveCreatorByUsername(sourceCreatorName, users)
+  if (usernameMatch) return usernameMatch
+  const normalized = normalizeCreatorIdentity(sourceCreatorName)
+  const exactDisplayMatches = users.filter((user) => normalizeCreatorIdentity(user.display_name) === normalized)
+  if (exactDisplayMatches.length === 1) return { id: exactDisplayMatches[0].id, name: exactDisplayMatches[0].display_name }
+  const sourceTokens = new Set(normalized.split(' ').filter(Boolean))
+  const tokenMatches = users.filter((user) => {
+    const displayTokens = normalizeCreatorIdentity(user.display_name).split(' ').filter(Boolean)
+    return displayTokens.length > 0 && displayTokens.every((token) => sourceTokens.has(token))
+  })
+  if (tokenMatches.length !== 1) return null
+  return { id: tokenMatches[0].id, name: tokenMatches[0].display_name }
+}
+
+function resolveCustomerCreatedBy(
+  customer: { created_by?: { id: string; name: string } | null; source_creator_name?: string | null },
+  users: UserListItemData[],
+) {
+  if (customer.created_by) {
+    const user = users.find((item) => item.id === customer.created_by?.id)
+    return user ? { id: user.id, name: user.display_name } : customer.created_by
+  }
+  return resolveCustomerCreator(customer.source_creator_name, users)
+}
+
 function optionalNumber(value: string | null) {
   if (value === null || value.trim() === '') return undefined
   const parsed = Number(value)
@@ -647,7 +947,7 @@ function filterSalesDocuments(url: URL) {
 
 async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
   const filtered: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
-  if (url.searchParams.get('sort') !== 'pos_usage') return newestFirst(filtered)
+  if (url.searchParams.get('sort') !== 'pos_usage') return newestProductsFirst(filtered)
 
   const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
   return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
@@ -680,6 +980,13 @@ function filterProducts(url: URL) {
       if (!haystack.includes(search)) return false
     }
     return true
+  })
+}
+
+function newestProductsFirst<T extends { created_at?: string | null; code?: string }>(items: readonly T[]) {
+  return [...items].sort((left, right) => {
+    const compared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
+    return compared === 0 ? String(left.code ?? '').localeCompare(String(right.code ?? ''), 'vi', { numeric: true, sensitivity: 'base' }) : compared
   })
 }
 
@@ -807,11 +1114,13 @@ function addCustomerDebtDocument(debts: CustomerDebtItem[], document: DebtInvoic
 function filterCustomers(url: URL) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
   const customerGroupId = url.searchParams.get('customer_group_id')
+  const status = url.searchParams.get('status')
   const createdFrom = url.searchParams.get('created_from')
   const createdTo = url.searchParams.get('created_to')
 
   return customers.filter((customer) => {
     if (customerGroupId && customerGroupId !== 'all' && customer.customer_group_id !== customerGroupId) return false
+    if (status && status !== 'all' && customer.status !== status) return false
     if (!dateRangeMatches(customer.created_at, createdFrom, createdTo)) return false
     if (search) {
       const haystack = normalizeSearchText(`${customer.code} ${customer.name} ${customer.phone ?? ''}`)
@@ -819,6 +1128,155 @@ function filterCustomers(url: URL) {
     }
     return true
   })
+}
+
+function customerImportRepository(repository: ServerRepository) {
+  return {
+    ...repository,
+    findCustomersByCodes: repository.findCustomersByCodes ?? (async (input: { codes: string[] }) =>
+      new Set(customers.filter((customer) => input.codes.includes(customer.code)).map((customer) => customer.code))),
+    upsertCustomerGroupsByName: repository.upsertCustomerGroupsByName ?? (async (input: { names: string[] }) => {
+      const result = new Map<string, string>()
+      for (const name of input.names) {
+        const existing = customerGroups.find((group) => group.name === name || group.code === name)
+        if (existing) {
+          result.set(name, existing.id)
+          continue
+        }
+        const id = `cg-kv-${hashText(name)}`
+        customerGroups.push({
+          id,
+          code: name,
+          name,
+          price_list_id: 'pl-default',
+          is_active: true,
+        })
+        result.set(name, id)
+      }
+      return result
+    }),
+    upsertCustomersByCode: repository.upsertCustomersByCode ?? (async (input: { organizationId: string; rows: CustomerImportUpsertRow[] }) => {
+      let created = 0
+      let updated = 0
+      const users = await repository.listUsers?.({
+        organizationId: input.organizationId,
+        url: new URL('http://api.local/api/v1/users'),
+      }) ?? []
+      for (const row of input.rows) {
+        const group = row.customer_group_id
+          ? customerGroups.find((item) => item.id === row.customer_group_id) ?? null
+          : null
+        const patch = {
+          code: row.code,
+          name: row.name,
+          phone: row.phone,
+          tax_code: row.tax_code,
+          address: row.address,
+          customer_group_id: row.customer_group_id,
+          customer_group: group ? { id: group.id, code: group.code, name: group.name } : null,
+          created_by: resolveCustomerCreator(row.source_creator_name, users),
+          created_at: row.source_created_at ?? runtimeIso(),
+          total_sales_amount: row.kiotviet_net_sales ?? row.kiotviet_total_sales ?? 0,
+          total_debt_amount: row.kiotviet_current_debt ?? 0,
+          customer_type: row.customer_type,
+          company_name: row.company_name,
+          area_name: row.area_name,
+          ward_name: row.ward_name,
+          note: row.note,
+          source_creator_name: row.source_creator_name,
+          last_transaction_at: row.last_transaction_at,
+          kiotviet_net_sales: row.kiotviet_net_sales,
+          status: row.status,
+        }
+        const index = customers.findIndex((customer) => customer.code === row.code)
+        if (index >= 0) {
+          customers[index] = { ...customers[index], ...patch }
+          updated += 1
+        } else {
+          customers.push({
+            ...customers[0],
+            ...patch,
+            id: `customer-kv-${hashText(row.code)}`,
+          })
+          created += 1
+        }
+      }
+      return { created, updated, skipped: 0 }
+    }),
+    deleteImportedKiotVietCustomers: repository.deleteImportedKiotVietCustomers ?? (async () => {
+      let deleted = 0
+      for (let index = customers.length - 1; index >= 0; index -= 1) {
+        const customer = customers[index]
+        if (customer.code.trim().toLowerCase() === 'khachle') continue
+        const isImportedKiotVietRow = customer.id.startsWith('customer-kv-')
+        const isDemoCustomerRow = customer.code.startsWith('DEV20-KH-')
+        if (!isImportedKiotVietRow && !isDemoCustomerRow) continue
+        customers.splice(index, 1)
+        deleted += 1
+      }
+      return { deleted, blocked: 0 }
+    }),
+  }
+}
+
+function supplierImportRepository(repository: ServerRepository) {
+  return {
+    findSuppliersByCodes: repository.findSuppliersByCodes ?? (async (input: { organizationId: string; codes: string[] }) =>
+      new Set(input.codes.filter((code) => suppliers.some((supplier) => supplier.code === code)))),
+    upsertSuppliersByCode: repository.upsertSuppliersByCode ?? (async (input: { organizationId: string; rows: SupplierImportUpsertRow[] }) => {
+      let created = 0
+      let updated = 0
+      for (const row of input.rows) {
+        const patch = {
+          code: row.code,
+          name: row.name,
+          phone: row.phone,
+          email: row.email,
+          address: row.address,
+          tax_code: row.tax_code,
+          linked_customer_id: null,
+          linked_customer: null,
+          notes: row.note,
+          status: row.status,
+          current_payable_amount: row.kiotviet_current_payable ?? 0,
+          total_purchase_amount: row.kiotviet_total_purchase ?? 0,
+          created_at: row.source_created_at ?? runtimeIso(),
+          source_creator_name: row.source_creator_name,
+          source_created_at: row.source_created_at,
+          company_name: row.company_name,
+        }
+        const index = suppliers.findIndex((supplier) => supplier.code === row.code)
+        if (index >= 0) {
+          suppliers[index] = { ...suppliers[index], ...patch }
+          updated += 1
+        } else {
+          suppliers.push({
+            ...suppliers[0],
+            ...patch,
+            id: `supplier-kv-${hashText(row.code)}`,
+          })
+          created += 1
+        }
+      }
+      return { created, updated, skipped: 0 }
+    }),
+    deleteImportedKiotVietSuppliers: repository.deleteImportedKiotVietSuppliers ?? (async () => {
+      let deleted = 0
+      for (let index = suppliers.length - 1; index >= 0; index -= 1) {
+        const supplier = suppliers[index]
+        const isImportedKiotVietRow = supplier.id.startsWith('supplier-kv-')
+        const isDemoSupplierRow = supplier.code.startsWith('DEV20-NCC-')
+        if (!isImportedKiotVietRow && !isDemoSupplierRow) continue
+        suppliers.splice(index, 1)
+        deleted += 1
+      }
+      return { deleted, blocked: 0 }
+    }),
+  }
+}
+
+function hashText(value: string) {
+  return createHash('sha1').update(value).digest('hex').slice(0, 10)
 }
 
 function filterInventoryProducts(url: URL) {
@@ -877,7 +1335,7 @@ function filterPurchaseReceipts(url: URL) {
     if (status && status !== 'all' && receipt.status !== status) return false
     if (dateFrom && receipt.received_at.slice(0, 10) < dateFrom) return false
     if (dateTo && receipt.received_at.slice(0, 10) > dateTo) return false
-    if (createdBy && createdBy !== 'all' && receipt.created_by !== createdBy) return false
+    if (createdBy && createdBy !== 'all' && receipt.created_by.id !== createdBy) return false
     if (search) {
       const haystack = normalizeSearchText(`${receipt.code} ${receipt.supplier.code} ${receipt.supplier.name} ${receipt.supplier_document_no ?? ''} ${receipt.notes ?? ''}`)
       if (!haystack.includes(search)) return false
@@ -948,13 +1406,19 @@ function filterCashbookEntries(url: URL) {
 function makeOrderFromCheckout(body: {
   customer_id?: string
   note?: string
-  items?: Array<{ product_id?: string; quantity?: number; unit_price?: number; discount_amount?: number }>
+  items?: Array<{
+    product_id?: string
+    quantity?: number
+    unit_price?: number
+    sale_unit_name?: string
+    stock_qty_per_sale_unit?: number
+    discount_amount?: number
+  }>
   payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
-}, orderType: 'invoice' | 'quote') {
+}, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>) {
   const number = salesDocuments.length + 1
   const codeSuffix = `${pad(number)}-${randomUUID().slice(0, 8).toUpperCase()}`
   const createdAt = runtimeIso()
-  const customer = customers.find((item) => item.id === body.customer_id) ?? customers[0]
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
   const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
   const total = Math.max(subtotal - discount, 0)
@@ -980,7 +1444,18 @@ function makeOrderFromCheckout(body: {
     debt_amount: debtAmount,
     payment_status: checkoutPaymentStatus(orderType, paid, debtAmount),
     note: body.note ?? '',
-    items: checkoutProductIds(body).map((productId) => ({ product_id: productId })),
+    items: (body.items ?? [])
+      .filter((item) => typeof item.product_id === 'string' && item.product_id.trim() !== '')
+      .map((item) => ({
+        product_id: item.product_id as string,
+        quantity: Number(item.quantity ?? 1),
+        unit_price: Number(item.unit_price ?? 0),
+        sale_unit_name: typeof item.sale_unit_name === 'string' && item.sale_unit_name.trim() !== '' ? item.sale_unit_name : undefined,
+        stock_qty_per_sale_unit: Number.isFinite(Number(item.stock_qty_per_sale_unit)) && Number(item.stock_qty_per_sale_unit) > 0
+          ? Number(item.stock_qty_per_sale_unit)
+          : undefined,
+        discount_amount: Number(item.discount_amount ?? 0),
+      })),
   }
 }
 
@@ -1165,17 +1640,50 @@ async function collectCustomerDebt(request: Request) {
   return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
 }
 
-function makeSalesDocumentDetail(document: ReturnType<typeof makeSalesDocument>) {
-  const product = products[0]
-  return {
-    ...document,
-    price_list: { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le' },
-    change_returned_amount: 0,
-    items: [
-      {
+function makeSalesDocumentDetail(
+  document: ReturnType<typeof makeSalesDocument>,
+  productCatalog: ProductListData[] = products,
+) {
+  const rawItems = Array.isArray(document.items) ? document.items : []
+  const detailItems = rawItems.length > 0
+    ? rawItems.map((item, index) => {
+        const detailItem = item as {
+          product_id: string
+          quantity?: number
+          unit_price?: number
+          discount_amount?: number
+          sale_unit_name?: string
+          width_m?: number | null
+          height_m?: number | null
+          linear_m?: number | null
+        }
+        const product = productCatalog.find((candidate) => candidate.id === detailItem.product_id)
+          ?? products.find((candidate) => candidate.id === detailItem.product_id)
+          ?? products[0]
+        const quantity = Number(detailItem.quantity ?? 1)
+        const unitPrice = Number(detailItem.unit_price ?? document.subtotal_amount)
+        const discountAmount = Number(detailItem.discount_amount ?? 0)
+        const lineSubtotal = quantity * unitPrice
+        return {
+          id: `${document.id}-item-${index + 1}`,
+          line_no: index + 1,
+          product: { id: product.id, code: product.code, name: product.name, unit_name: detailItem.sale_unit_name ?? product.unit_name, sell_method: product.sell_method },
+          quantity,
+          width_m: detailItem.width_m ?? null,
+          height_m: detailItem.height_m ?? null,
+          linear_m: detailItem.linear_m ?? null,
+          unit_price: unitPrice,
+          line_subtotal_amount: lineSubtotal,
+          discount_amount: discountAmount,
+          line_total: Math.max(lineSubtotal - discountAmount, 0),
+          price_source: 'price_source' in item && typeof item.price_source === 'string' ? item.price_source : 'default_price_list',
+          note: 'note' in item && typeof item.note === 'string' ? item.note : null,
+        }
+      })
+    : [{
         id: `${document.id}-item-1`,
         line_no: 1,
-        product: { id: product.id, code: product.code, name: product.name, unit_name: product.unit_name, sell_method: product.sell_method },
+        product: { id: productCatalog[0]?.id ?? products[0].id, code: productCatalog[0]?.code ?? products[0].code, name: productCatalog[0]?.name ?? products[0].name, unit_name: productCatalog[0]?.unit_name ?? products[0].unit_name, sell_method: productCatalog[0]?.sell_method ?? products[0].sell_method },
         quantity: 1,
         width_m: null,
         height_m: null,
@@ -1186,8 +1694,12 @@ function makeSalesDocumentDetail(document: ReturnType<typeof makeSalesDocument>)
         line_total: document.total_amount,
         price_source: 'default_price_list',
         note: null,
-      },
-    ],
+      }]
+  return {
+    ...document,
+    price_list: { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le' },
+    change_returned_amount: 0,
+    items: detailItems,
     payment_receipts: [],
     debt_entries: document.debt_amount > 0
       ? [
@@ -1201,9 +1713,15 @@ function makeSalesDocumentDetail(document: ReturnType<typeof makeSalesDocument>)
           },
         ]
       : [],
-    stock_movements: [
-      { id: `${document.id}-sm-1`, product_id: product.id, movement_type: 'sale', quantity_delta: -1, created_at: nowIso, unit_name: product.unit_name, note: null },
-    ],
+    stock_movements: detailItems.map((item) => ({
+      id: `${document.id}-sm-${item.line_no}`,
+      product_id: item.product.id,
+      movement_type: 'sale',
+      quantity_delta: -item.quantity,
+      created_at: nowIso,
+      unit_name: item.product.unit_name,
+      note: null,
+    })),
     history: [{ at: nowIso, action: 'created', actor_name: 'Admin', note: null }],
   }
 }
@@ -1277,7 +1795,7 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       const url = new URL(request.url)
       if (request.method === 'GET' && url.pathname === '/api/v1/health') {
         return success(
-          { status: 'ok', service: 'qcvl-api', version: options.version ?? 'dev' },
+          { status: 'ok', service: 'qcvl-api', version: options.version ?? 'dev', persistence: options.persistence ?? 'unknown' },
           traceId,
         )
       }
@@ -1293,7 +1811,7 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       return failure(404, 'RESOURCE_NOT_FOUND', 'The requested resource was not found.', traceId)
     } catch (error) {
       if (error instanceof HttpError) {
-        return failure(error.status, error.code, error.message, traceId)
+        return failure(error.status, error.code, error.message, traceId, error.fields)
       }
       console.error(JSON.stringify({
         traceId,
@@ -1366,11 +1884,13 @@ async function getDevApiResponse(
   }
   if (method === 'POST' && path === '/api/v1/users') {
     const body = await readJson(request)
+    const username = requiredString(body.username, 'username')
+    const contactEmail = nullableString(body.email)
     const userInput = {
       organizationId: currentUser.organization.id,
-      email: requiredString(body.email, 'email').toLowerCase(),
-      username: requiredString(body.username, 'username'),
-      phone: nullableString(body.phone),
+      email: (contactEmail ?? makeInternalUserEmail(username)).toLowerCase(),
+      username,
+      phone: requiredString(body.phone, 'phone'),
       birthday: nullableString(body.birthday),
       region: nullableString(body.region),
       ward: nullableString(body.ward),
@@ -1396,12 +1916,31 @@ async function getDevApiResponse(
   if (method === 'PATCH' && /^\/api\/v1\/users\/[^/]+$/.test(path)) {
     const body = await readJson(request)
     const id = getIdFromPath(path) ?? ''
-    const updated = await repository.updateUser?.({
-      organizationId: currentUser.organization.id,
-      id,
-      displayName: typeof body.display_name === 'string' ? body.display_name : undefined,
-      status: body.status === 'active' || body.status === 'inactive' ? body.status : undefined,
-    })
+    const username = typeof body.username === 'string' ? body.username.trim() : undefined
+    const contactEmail = body.email === undefined ? undefined : nullableString(body.email)
+    let updated: UserListItemData | null | undefined
+    try {
+      updated = await repository.updateUser?.({
+        organizationId: currentUser.organization.id,
+        id,
+        email: contactEmail === undefined ? undefined : (contactEmail ?? makeInternalUserEmail(username ?? id)).toLowerCase(),
+        username,
+        phone: body.phone === undefined ? undefined : requiredString(body.phone, 'phone'),
+        birthday: body.birthday === undefined ? undefined : nullableString(body.birthday),
+        region: body.region === undefined ? undefined : nullableString(body.region),
+        ward: body.ward === undefined ? undefined : nullableString(body.ward),
+        address: body.address === undefined ? undefined : nullableString(body.address),
+        note: body.note === undefined ? undefined : nullableString(body.note),
+        passwordHash: typeof body.password === 'string' && body.password.length > 0 ? await hashPassword(body.password) : undefined,
+        displayName: typeof body.display_name === 'string' ? body.display_name : undefined,
+        status: body.status === 'active' || body.status === 'inactive' ? body.status : undefined,
+      })
+    } catch (error) {
+      if (error instanceof Error && error.message === 'USER_ALREADY_EXISTS') {
+        throw new HttpError(409, 'RESOURCE_CONFLICT', 'User email or username already exists.')
+      }
+      throw error
+    }
     return { found: true, data: updated ?? { ...toUserListItem(currentUser), ...body } }
   }
   if (method === 'PUT' && /^\/api\/v1\/users\/[^/]+\/permissions$/.test(path)) {
@@ -1468,19 +2007,58 @@ async function getDevApiResponse(
       customerGroups: async () => ({ found: true, data: { items: customerGroups } }),
       listCustomers: async () => {
         const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
-        const localActivity = repository.getCustomerFinancialTotals ? undefined : customerActivityFromSalesDocuments()
-        const filteredCustomers = filterCustomers(url).map((customer) => {
+        const userList = await repository.listUsers?.({
+          organizationId: currentUser.organization.id,
+          url: new URL('http://api.local/api/v1/users'),
+        }) ?? []
+        const repositoryCustomers = await repository.listCustomers?.({
+          organizationId: currentUser.organization.id,
+          url,
+        })
+        const localActivity = repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
+        const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer) => {
           const totals = financialTotals?.get(customer.id)
           const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
-          return { ...customer, ...totals, last_activity_at: lastActivityAt }
+          return { ...customer, ...totals, created_by: resolveCustomerCreatedBy(customer, userList), last_activity_at: lastActivityAt }
         })
-        return { found: true, data: paged(newestFirst(filteredCustomers), page, pageSize) }
+        const sortedCustomers = newestFirst(filteredCustomers)
+        return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
       },
       createCustomer: async () => {
         const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
         const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
         customers.push(created)
         return { found: true, data: created, status: 201 }
+      },
+      previewKiotVietCustomerImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCustomerRows(customerImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietCustomerImport({
+            organizationId: currentUser.organization.id,
+            repository: customerImportRepository(repository),
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietCustomers: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCustomerRows(customerImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietCustomerImport({
+            organizationId: currentUser.organization.id,
+            repository: customerImportRepository(repository),
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      deleteImportedKiotVietCustomers: async () => {
+        const result = await customerImportRepository(repository).deleteImportedKiotVietCustomers({ organizationId: currentUser.organization.id })
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
       },
       customerRecentPrices: async () => ({ found: true, data: { items: [{ unitPrice: 600000, soldAt: nowIso, orderCode: 'HD0001' }] } }),
       resolvePricing: async () => {
@@ -1501,18 +2079,52 @@ async function getDevApiResponse(
   const inventoryRoute = await handleInventoryRoute(
     { request, url, currentUser, repository },
     {
-      listProducts: async () => ({ found: true, data: paged(filterInventoryProducts(url), page, pageSize) }),
+      listProducts: async () => {
+        const items = filterInventoryProducts(url)
+        return { found: true, data: { ...paged(items, page, pageSize), summary: inventoryProductListSummary(items) } }
+      },
       getProduct: async () => ({ found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }),
-      adjustStock: async () => ({ found: true, data: makeStocktake() }),
+      adjustStock: async () => ({ found: true, data: makeStocktake(currentUser.user) }),
       stockMovements: async () => {
+        const repositoryMovements = await repository.listStockMovements?.({ organizationId: currentUser.organization.id, url })
         const productId = url.searchParams.get('product_id')
-        const items = productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements
+        const items = repositoryMovements ?? (productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements)
         return { found: true, data: paged(newestFirst(items), page, pageSize) }
       },
       stocktakes: async () => {
         const items = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
-          ?? [makeStocktake()]
-        return { found: true, data: paged(items, page, pageSize) }
+          ?? [makeStocktake(currentUser.user)]
+        const creatorUrl = new URL(url)
+        creatorUrl.searchParams.delete('created_by')
+        const creatorItems = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url: creatorUrl })
+          ?? items
+        return { found: true, data: { ...paged(items, page, pageSize), creator_options: stocktakeCreatorOptions(creatorItems) } }
+      },
+      getStocktake: async () => {
+        const item = await repository.getStocktake?.({ organizationId: currentUser.organization.id, id: getIdFromPath(path) ?? '' })
+        return item
+          ? { found: true, data: item }
+          : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
+      },
+      updateStocktake: async () => {
+        const body = await readJson(request)
+        if (body.status === 'cancelled') {
+          const item = await repository.cancelStocktake?.({
+            organizationId: currentUser.organization.id,
+            id: getIdFromPath(path) ?? '',
+          })
+          return item
+            ? { found: true, data: item }
+            : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
+        }
+        const item = await repository.updateStocktakeNote?.({
+          organizationId: currentUser.organization.id,
+          id: getIdFromPath(path) ?? '',
+          note: nullableString(body.note),
+        })
+        return item
+          ? { found: true, data: item }
+          : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
       },
       rolls: async () => ({ found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }),
       sheets: async () => ({ found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }),
@@ -1542,6 +2154,7 @@ async function getDevApiResponse(
           : { deleted: 0, blocked: 0 }
         const result = await repository.upsertImportedKiotVietStocktakes?.({
           organizationId: currentUser.organization.id,
+          createdBy: null,
           rows: mapped.valid,
         }) ?? {
           stocktakes_created: 0,
@@ -1579,14 +2192,100 @@ async function getDevApiResponse(
   const purchaseRoute = await handlePurchaseRoute(
     { request, url, currentUser, repository },
     {
-      listSuppliers: async () => ({ found: true, data: paged(filterSuppliers(url), page, pageSize) }),
-      getSupplier: async () => ({ found: true, data: suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }),
+      listSuppliers: async () => {
+        const repositorySuppliers = await repository.listSuppliers?.({
+          organizationId: currentUser.organization.id,
+          url,
+        })
+        const items = repositorySuppliers ?? filterSuppliers(url)
+        return { found: true, data: { ...paged(items, page, pageSize), summary: supplierListSummary(items) } }
+      },
+      previewKiotVietSupplierImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietSupplierRows(supplierImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietSupplierImport({
+            organizationId: currentUser.organization.id,
+            repository: supplierImportRepository(repository),
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietSuppliers: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietSupplierRows(supplierImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietSupplierImport({
+            organizationId: currentUser.organization.id,
+            repository: supplierImportRepository(repository),
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      deleteImportedKiotVietSuppliers: async () => {
+        const result = await supplierImportRepository(repository).deleteImportedKiotVietSuppliers({ organizationId: currentUser.organization.id })
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
+      },
+      getSupplier: async () => {
+        const repositorySuppliers = await repository.listSuppliers?.({
+          organizationId: currentUser.organization.id,
+          url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
+        })
+        return { found: true, data: repositorySuppliers?.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }
+      },
       createSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
       updateSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
       supplierPayableReceipts: async () => ({ found: true, data: { items: purchaseReceipts.slice(0, 10).map((receipt) => ({ id: receipt.id, code: receipt.code, supplier_document_no: receipt.supplier_document_no, received_at: receipt.received_at, payable_amount: receipt.payable_amount, paid_amount: receipt.paid_amount, remaining_amount: receipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: receipt.remaining_amount })) } }),
       paySupplier: async () => ({ found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }),
-      listReceipts: async () => ({ found: true, data: paged(filterPurchaseReceipts(url), page, pageSize) }),
-      getReceipt: async () => ({ found: true, data: purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }),
+      listReceipts: async () => {
+        const repositoryReceipts = await repository.listPurchaseReceipts?.({
+          organizationId: currentUser.organization.id,
+          url,
+        })
+        const items = repositoryReceipts ?? filterPurchaseReceipts(url)
+        return { found: true, data: { ...paged(items, page, pageSize), summary: purchaseReceiptListSummary(items) } }
+      },
+      previewKiotVietPurchaseReceiptImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietPurchaseReceiptRows(purchaseReceiptImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietPurchaseReceiptImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as PurchaseReceiptImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietPurchaseReceipts: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietPurchaseReceiptRows(purchaseReceiptImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietPurchaseReceiptImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as PurchaseReceiptImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      deleteImportedKiotVietPurchaseReceipts: async () => {
+        const result = await repository.deleteImportedKiotVietPurchaseReceipts?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
+      },
+      getReceipt: async () => {
+        const repositoryReceipt = await repository.getPurchaseReceipt?.({
+          organizationId: currentUser.organization.id,
+          id: getIdFromPath(path) ?? '',
+        })
+        return { found: true, data: repositoryReceipt ?? purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
+      },
       createReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }),
       updateReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }),
       postReceipt: async () => ({ found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }),
@@ -1600,7 +2299,8 @@ async function getDevApiResponse(
       validateCart: async () => ({ found: true, data: { valid: true } }),
       checkout: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-        const order = makeOrderFromCheckout(body, 'invoice')
+        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
+        const order = makeOrderFromCheckout(body, 'invoice', customer)
         await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
         const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment) : addCashbookEntriesFromCheckout(order, body.payment)
         if (repository.saveSalesDocument) {
@@ -1614,7 +2314,8 @@ async function getDevApiResponse(
       },
       createQuote: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-        const quote = makeOrderFromCheckout(body, 'quote')
+        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
+        const quote = makeOrderFromCheckout(body, 'quote', customer)
         await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
         if (repository.saveSalesDocument) {
           await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
@@ -1626,17 +2327,77 @@ async function getDevApiResponse(
       reopenQuotePayload: async () => ({ found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }),
       listSalesDocuments: async () => {
         if (repository.listSalesDocuments) {
-          return { found: true, data: paged(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), page, pageSize) }
+          const items = await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url })
+          return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
         }
-        return { found: true, data: paged(filterSalesDocuments(url), page, pageSize) }
+        const items = filterSalesDocuments(url)
+        return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
       },
       getSalesDocument: async () => {
         const id = getIdFromPath(path) ?? ''
         if (repository.getSalesDocument) {
           const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
-          return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0]) }
+          const productCatalog = repository.listProducts
+            ? await repository.listProducts({
+                organizationId: currentUser.organization.id,
+                url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
+              })
+            : products
+          return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0], productCatalog) }
         }
         return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === id) ?? salesDocuments[0]) }
+      },
+      updateSalesDocument: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request)
+        if (body.status !== 'cancelled') {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'Only sales document cancellation is supported.')
+        }
+        if (repository.cancelSalesDocument) {
+          const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
+          if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+          const productCatalog = repository.listProducts
+            ? await repository.listProducts({
+                organizationId: currentUser.organization.id,
+                url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
+              })
+            : products
+          return { found: true, data: makeSalesDocumentDetail(document, productCatalog) }
+        }
+        const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
+        if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+        salesDocuments[index] = { ...salesDocuments[index], status: 'cancelled' }
+        return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }
+      },
+      previewKiotVietInvoiceImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietInvoiceRows(invoiceImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietInvoiceImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as InvoiceImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietInvoices: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietInvoiceRows(invoiceImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietInvoiceImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as InvoiceImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      deleteImportedKiotVietInvoices: async () => {
+        const result = await repository.deleteImportedKiotVietInvoices?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
       },
     },
   )
@@ -1645,7 +2406,37 @@ async function getDevApiResponse(
   const financeRoute = await handleFinanceRoute(
     { request, url, currentUser, repository },
     {
-      listAccounts: async () => ({ found: true, data: { items: financeAccounts } }),
+      listAccounts: async () => ({
+        found: true,
+        data: { items: repository.listFinanceAccounts ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url }) : financeAccounts },
+      }),
+      createAccount: async () => {
+        const body = await readJson(request) as Partial<FinanceAccountData>
+        const account = financeAccountFromBody(body)
+        if (repository.createFinanceAccount) {
+          return {
+            found: true,
+            data: await repository.createFinanceAccount({ organizationId: currentUser.organization.id, account }),
+            status: 201,
+          }
+        }
+        const created = { ...account, id: randomUUID() }
+        financeAccounts.push(created)
+        return { found: true, data: created, status: 201 }
+      },
+      updateAccount: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request) as Partial<FinanceAccountData>
+        if (repository.updateFinanceAccount) {
+          const updated = await repository.updateFinanceAccount({ organizationId: currentUser.organization.id, id, patch: body })
+          if (updated === null) return { found: true, data: { message: 'Finance account not found' }, status: 404 }
+          return { found: true, data: updated }
+        }
+        const index = financeAccounts.findIndex((account) => account.id === id)
+        if (index === -1) return { found: true, data: { message: 'Finance account not found' }, status: 404 }
+        financeAccounts[index] = { ...financeAccounts[index], ...body, id }
+        return { found: true, data: financeAccounts[index] }
+      },
       listCustomerDebts: async () => {
         if (repository.listCustomerDebts) {
           return { found: true, data: paged(await repository.listCustomerDebts({ organizationId: currentUser.organization.id, url }), page, pageSize) }
@@ -1691,11 +2482,48 @@ async function getDevApiResponse(
       },
       cashbookBalances: async () => ({ found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }),
       cashbookVouchers: async () => ({ found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }),
+      previewKiotVietCashbookImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCashbookRows(cashbookImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await previewKiotVietCashbookImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as CashbookImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietCashbook: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCashbookRows(cashbookImportRowsFromBody(body))
+        return {
+          found: true,
+          data: await applyKiotVietCashbookImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as CashbookImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      deleteImportedKiotVietCashbook: async () => {
+        const result = await repository.deleteImportedKiotVietCashbook?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
+        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
+      },
       listCashbook: async () => {
+        const entriesUrl = cashbookEntriesUrl(url)
         const entries = repository.listCashbookEntries
-          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url })
-          : filterCashbookEntries(url)
-        return { found: true, data: { summary: { opening_balance: 20000000, total_in: 700000, total_out: 1000000, ending_balance: 19700000 }, items: entries.slice((page - 1) * pageSize, page * pageSize), page, page_size: pageSize, total: entries.length } }
+          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
+          : filterCashbookEntries(entriesUrl)
+        const summarySourceUrl = cashbookSummarySourceUrl(url)
+        const summarySourceEntries = summarySourceUrl
+          ? repository.listCashbookEntries
+            ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: summarySourceUrl })
+            : filterCashbookEntries(summarySourceUrl)
+          : entries
+        return { found: true, data: { ...paged(entries, page, pageSize), summary: cashbookListSummary(entries, { from: url.searchParams.get('from'), sourceEntries: summarySourceEntries }) } }
       },
       getCashbookEntry: async () => {
         const id = getIdFromPath(path) ?? ''
@@ -1719,7 +2547,7 @@ async function getDevApiResponse(
     {
       listQueue: async () => ({ found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }),
       history: async () => ({ found: true, data: paged([], page, pageSize) }),
-      addToDraft: async () => ({ found: true, data: { queue_item_id: path.split('/')[4], customer: customers[0], draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }),
+      addToDraft: async () => ({ found: true, data: { queue_item_id: path.split('/')[4], customer: defaultRetailCustomer(), draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }),
       setVisibility: async () => ({ found: true, data: {} }),
     },
   )
@@ -1799,6 +2627,85 @@ function paged<T>(items: readonly T[], page: number, pageSize: number) {
   return { items: items.slice(start, start + pageSize), page, page_size: pageSize, total: items.length }
 }
 
+function salesDocumentListSummary(items: readonly SalesDocumentData[]) {
+  return {
+    total_amount: items.reduce((sum, item) => sum + item.total_amount, 0),
+    debt_amount: items.reduce((sum, item) => sum + item.debt_amount, 0),
+  }
+}
+
+function customerListSummary(items: readonly CustomerListData[]) {
+  return {
+    total_debt_amount: items.reduce((sum, item) => sum + item.total_debt_amount, 0),
+    total_sales_amount: items.reduce((sum, item) => sum + item.total_sales_amount, 0),
+  }
+}
+
+function supplierListSummary(items: readonly SupplierListData[]) {
+  return {
+    current_payable_amount: items.reduce((sum, item) => sum + item.current_payable_amount, 0),
+    total_purchase_amount: items.reduce((sum, item) => sum + item.total_purchase_amount, 0),
+  }
+}
+
+function purchaseReceiptListSummary(items: readonly PurchaseReceiptData[]) {
+  return {
+    payable_amount: items.reduce((sum, item) => sum + item.payable_amount, 0),
+    remaining_amount: items.reduce((sum, item) => sum + item.remaining_amount, 0),
+  }
+}
+
+function inventoryProductListSummary(items: ReadonlyArray<{ available_qty: number; is_negative: boolean }>) {
+  return {
+    total_qty: items.reduce((sum, item) => sum + item.available_qty, 0),
+    negative_count: items.filter((item) => item.is_negative).length,
+  }
+}
+
+function cashbookSummarySourceUrl(url: URL) {
+  if (!url.searchParams.get('from')) return null
+  const summaryUrl = new URL(url)
+  summaryUrl.searchParams.delete('from')
+  summaryUrl.searchParams.delete('to')
+  return summaryUrl
+}
+
+function cashbookEntriesUrl(url: URL) {
+  const entriesUrl = new URL(url)
+  if (entriesUrl.searchParams.get('finance_account_type') === 'bank' && !entriesUrl.searchParams.get('finance_account_id')) {
+    entriesUrl.searchParams.set('exclude_replaced_deleted_accounts', 'true')
+  }
+  return entriesUrl
+}
+
+function cashbookListSummary(items: readonly CashbookEntryData[], options: { from?: string | null; sourceEntries?: readonly CashbookEntryData[] } = {}) {
+  const fromDate = options.from?.slice(0, 10)
+  const openingBalance = fromDate
+    ? (options.sourceEntries ?? items)
+      .filter((item) => item.created_at.slice(0, 10) < fromDate)
+      .reduce((sum, item) => sum + item.amount_delta, 0)
+    : 0
+  const totalIn = items.reduce((sum, item) => sum + Math.max(item.amount_delta, 0), 0)
+  const totalOut = items.reduce((sum, item) => sum + Math.max(-item.amount_delta, 0), 0)
+  return {
+    opening_balance: openingBalance,
+    total_in: totalIn,
+    total_out: totalOut,
+    ending_balance: openingBalance + totalIn - totalOut,
+  }
+}
+
+function stocktakeCreatorOptions(items: readonly StocktakeListData[]) {
+  const creators = new Map<string, string>()
+  for (const item of items) {
+    if (!item.created_by) continue
+    creators.set(item.created_by.id, item.created_by.name)
+  }
+  return [...creators.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'vi'))
+}
+
 function getIdFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
   return parts.at(-1) === 'post' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' ? parts.at(-2) : parts.at(-1)
@@ -1809,6 +2716,22 @@ function getFinanceCustomerId(path: string) {
   return parts.at(-2) ?? 'customer-an'
 }
 
+function financeAccountFromBody(body: Partial<FinanceAccountData>): Omit<FinanceAccountData, 'id'> {
+  const accountType = body.account_type === 'cash' ? 'cash' : 'bank'
+  return {
+    code: requiredString(body.code, 'code'),
+    name: requiredString(body.name, 'name'),
+    account_type: accountType,
+    is_default_cash: Boolean(body.is_default_cash),
+    is_active: body.is_active ?? true,
+    account_number: body.account_number ?? null,
+    account_holder: body.account_holder ?? null,
+    opening_balance: Number(body.opening_balance ?? 0),
+    note: body.note ?? null,
+    notify_on_transaction: Boolean(body.notify_on_transaction),
+  }
+}
+
 function normalizePermissions(value: unknown) {
   if (!Array.isArray(value)) return allPermissions.map((permission) => permission.code)
   return value.filter((permission): permission is PermissionCode => typeof permission === 'string' && permission.startsWith('perm.'))
@@ -1816,7 +2739,7 @@ function normalizePermissions(value: unknown) {
 
 function requiredString(value: unknown, field: string) {
   const result = String(value ?? '').trim()
-  if (!result) throw new HttpError(400, 'VALIDATION_ERROR', `${field} is required.`)
+  if (!result) throw new HttpError(400, 'VALIDATION_ERROR', `${field} is required.`, { [field]: [`${field} is required.`] })
   return result
 }
 
@@ -1825,7 +2748,16 @@ function nullableString(value: unknown) {
   return result ? result : null
 }
 
-function makeStocktake() {
+function makeInternalUserEmail(username: string) {
+  const normalized = username.trim().toLowerCase()
+  const safeLocalPart = normalized.replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+  if (safeLocalPart && safeLocalPart === normalized) return `${safeLocalPart}@users.qcvl.local`
+  const digest = createHash('sha1').update(username).digest('hex').slice(0, 10)
+  return `${safeLocalPart || 'user'}-${digest}@users.qcvl.local`
+}
+
+function makeStocktake(createdBy: { id: string; display_name?: string; name?: string } = { id: 'admin', name: 'Admin' }) {
+  const creatorName = createdBy.display_name ?? createdBy.name ?? createdBy.id
   return {
     id: randomUUID(),
     code: 'KK0001',
@@ -1833,19 +2765,24 @@ function makeStocktake() {
     source_type: 'manual',
     created_at: nowIso,
     balanced_at: nowIso,
+    created_by: { id: createdBy.id, name: creatorName },
     total_actual_qty: 1,
     total_actual_value: 250000,
     total_difference_value: 0,
     increased_qty: 0,
     decreased_qty: 0,
+    product_system_qty: 0,
+    product_actual_qty: 1,
+    product_difference_qty: 1,
     note: null,
   }
 }
 
 function makeQuoteReopenPayload(quoteId: string) {
+  const customer = defaultRetailCustomer()
   return {
     quote: { id: quoteId, code: 'BG0001', status: 'active' },
-    customer: { customer_id: customers[0].id, snapshot: { code: customers[0].code, name: customers[0].name, phone: customers[0].phone }, warnings: [] },
+    customer: { customer_id: customer.id, snapshot: { code: customer.code, name: customer.name, phone: customer.phone }, warnings: [] },
     price_list: { price_list_id: 'pl-default', snapshot: { code: 'BG-LE', name: 'Bang gia le' }, warnings: [] },
     items: [
       {
@@ -1884,6 +2821,46 @@ function importRowsFromBody(body: Record<string, unknown>) {
   if (Array.isArray(body.rows)) return body.rows
   if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
     return parseKiotVietProductWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function customerImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietCustomerWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function supplierImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietSupplierWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function purchaseReceiptImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietPurchaseReceiptWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function invoiceImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietInvoiceWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function cashbookImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietCashbookWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
   }
   return []
 }

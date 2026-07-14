@@ -63,6 +63,26 @@ describe('mapKiotVietStocktakeRows', () => {
     expect(result.valid.map((row) => row.status)).toEqual(['draft', 'balanced', 'cancelled', 'unknown'])
   })
 
+  it('maps optional KiotViet creator from shown stocktake detail exports', () => {
+    const result = mapKiotVietStocktakeRows([
+      {
+        rowNumber: 2,
+        'Ma kiem kho': 'KK-CREATOR',
+        'Nguoi tao': 'Nguyen Thi Mai Phuong',
+        'Ma hang': 'HDA5',
+        'Ton kho': 60,
+        'Kiem thuc te': 58,
+        'SL lech': -2,
+      },
+    ])
+
+    expect(result.invalid).toEqual([])
+    expect(result.valid[0]).toMatchObject({
+      source_code: 'KK-CREATOR',
+      source_creator_name: 'Nguyen Thi Mai Phuong',
+    })
+  })
+
   it('marks rows invalid when required codes are missing or formulas do not match', () => {
     const result = mapKiotVietStocktakeRows([
       { rowNumber: 2, 'Mã kiểm kho': '', 'Mã hàng': 'A', 'Tồn kho': 1, 'Kiểm thực tế': 1, 'SL lệch': 0 },

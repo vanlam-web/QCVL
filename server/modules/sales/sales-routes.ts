@@ -16,6 +16,10 @@ export interface SalesRouteHandlers {
   reopenQuotePayload(): RouteResult
   listSalesDocuments(): RouteResult
   getSalesDocument(): RouteResult
+  updateSalesDocument(): RouteResult
+  previewKiotVietInvoiceImport(): RouteResult
+  importKiotVietInvoices(): RouteResult
+  deleteImportedKiotVietInvoices(): RouteResult
 }
 
 export function handleSalesRoute(context: SalesRouteContext, handlers: SalesRouteHandlers): RouteResult {
@@ -30,7 +34,11 @@ export function handleSalesRoute(context: SalesRouteContext, handlers: SalesRout
     return handlers.reopenQuotePayload()
   }
   if (method === 'GET' && pathname === '/api/v1/sales-documents') return handlers.listSalesDocuments()
+  if (method === 'POST' && pathname === '/api/v1/sales-documents/import/kiotviet/preview') return handlers.previewKiotVietInvoiceImport()
+  if (method === 'POST' && pathname === '/api/v1/sales-documents/import/kiotviet') return handlers.importKiotVietInvoices()
+  if (method === 'DELETE' && pathname === '/api/v1/sales-documents/import/kiotviet') return handlers.deleteImportedKiotVietInvoices()
   if (method === 'GET' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(pathname)) return handlers.getSalesDocument()
+  if (method === 'PATCH' && /^\/api\/v1\/sales-documents\/[^/]+$/.test(pathname)) return handlers.updateSalesDocument()
 
   return Promise.resolve({ found: false })
 }

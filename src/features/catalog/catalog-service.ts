@@ -6,6 +6,8 @@ import type {
   Customer,
   CustomerGroup,
   CustomerListResponse,
+  KiotVietCustomerImportPreview,
+  KiotVietCustomerImportResult,
   KiotVietProductImportPreview,
   KiotVietProductImportResult,
   KiotVietImportDeleteResult,
@@ -181,6 +183,20 @@ export function createCatalogService(api: CatalogApiRequester) {
       return api.request<CustomerListResponse>(`/api/v1/customers${query ? `?${query}` : ''}`)
     },
     listCustomerGroups: () => api.request<{ items: CustomerGroup[] }>('/api/v1/customer-groups'),
+    previewKiotVietCustomerImport: async (input: { file: File }) =>
+      api.request<KiotVietCustomerImportPreview>('/api/v1/customers/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietCustomerImportPayload(input)),
+      }),
+    importKiotVietCustomers: async (input: { file: File }) =>
+      api.request<KiotVietCustomerImportResult>('/api/v1/customers/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietCustomerImportPayload(input)),
+      }),
+    deleteImportedKiotVietCustomers: async () =>
+      api.request<KiotVietImportDeleteResult>('/api/v1/customers/import/kiotviet', {
+        method: 'DELETE',
+      }),
     createCustomer: (input: {
       code?: string
       name: string
@@ -228,6 +244,14 @@ async function buildKiotVietImportPayload(input: { file: File; cleanup_demo: boo
   }
   return {
     cleanup_demo: input.cleanup_demo,
+    file_name: input.file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+async function buildKiotVietCustomerImportPayload(input: { file: File }) {
+  const buffer = await input.file.arrayBuffer()
+  return {
     file_name: input.file.name,
     file_base64: arrayBufferToBase64(buffer),
   }

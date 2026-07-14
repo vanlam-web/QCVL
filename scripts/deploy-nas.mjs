@@ -1,12 +1,13 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
 
 const root = process.cwd()
 const nasRoot = process.env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
 const nasEnvPath = process.env.QCVL_NAS_ENV_PATH ?? join(dirname(nasRoot), '.env')
-const restart = process.env.QCVL_NAS_RESTART === 'true'
 const confirmed = process.env.QCVL_NAS_DEPLOY_CONFIRM === 'true'
+const restartPlan = restartPlanFromEnv(process.env, confirmed)
 
 function run(command, args, options = {}) {
   const executable = process.platform === 'win32' && command === 'npm' ? 'cmd.exe' : command
@@ -141,16 +142,22 @@ for (const file of [
 
 migrateNasDatabase()
 
-if (restart) {
-  if (!confirmed) throw new Error('QCVL_NAS_DEPLOY_CONFIRM=true is required when QCVL_NAS_RESTART=true')
+console.log(`NAS restart plan: ${restartPlan.reason}`)
+requireRestartConfig({ confirmed, restart: restartPlan.restart, sshTarget: process.env.QCVL_NAS_SSH_TARGET })
 
-  const sshTarget = process.env.QCVL_NAS_SSH_TARGET
-  if (!sshTarget) throw new Error('QCVL_NAS_SSH_TARGET is required when QCVL_NAS_RESTART=true')
-
-  run('ssh', ['-tt', '-o', 'StrictHostKeyChecking=no', sshTarget, 'sudo -S /usr/local/bin/docker restart qcvl-app'])
+if (restartPlan.restart) {
+  run('ssh', [
+    '-tt',
+    '-o',
+    'StrictHostKeyChecking=no',
+    process.env.QCVL_NAS_SSH_TARGET,
+    'sudo /usr/local/bin/docker restart qcvl-app',
+  ])
 }
 
-run('npm', ['run', 'health:nas'])
+run('npm', ['run', 'health:nas'], {
+  env: { ...process.env, QCVL_NAS_REQUIRE_PERSISTENCE: 'postgres' },
+})
 
 if (!confirmed) {
   console.log('NAS deploy dry-run complete. Set QCVL_NAS_DEPLOY_CONFIRM=true to copy files.')

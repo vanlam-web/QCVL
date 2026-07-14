@@ -381,8 +381,8 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 | `revision_no` | `integer` | ❌ | Số lần sửa; bản gốc là `0`, bản sửa đầu là `1` |
 | `revised_from_order_id` | `uuid` | ✅ | FK → `public.orders.id`; chứng từ cũ gần nhất nếu đây là bản sửa |
 | `replaced_by_order_id` | `uuid` | ✅ | FK → `public.orders.id`; chứng từ mới thay thế nếu bản này bị hủy do sửa |
-| `customer_id` | `uuid` | ✅ | FK → `public.customers.id`; POS/báo giá/hóa đơn không chọn khách phải resolve về `KH000001 - Khách lẻ` trước khi lưu |
-| `customer_snapshot` | `jsonb` | ❌ | Snapshot khách hàng tại thời điểm lưu; với khách lẻ dùng snapshot của `KH000001` |
+| `customer_id` | `uuid` | ✅ | FK → `public.customers.id`; POS/báo giá/hóa đơn không chọn khách phải resolve về `khachle - Khách lẻ` trước khi lưu |
+| `customer_snapshot` | `jsonb` | ❌ | Snapshot khách hàng tại thời điểm lưu; với khách lẻ dùng snapshot của `khachle` |
 | `price_list_id` | `uuid` | ✅ | FK → `public.price_lists.id`; bảng giá áp dụng nếu có |
 | `subtotal_amount` | `numeric(12,0)` | ❌ | Tổng tiền hàng trước chiết khấu |
 | `discount_amount` | `numeric(12,0)` | ❌ | Tổng chiết khấu trên chứng từ |
@@ -407,7 +407,7 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 - Với `order_type = 'quote'`, `code` dùng prefix `BG`.
 - Với `order_type = 'invoice'`, `code` dùng prefix `HD`.
 - `status` hợp lệ theo `order_type`.
-- Runtime POS không tạo bucket `customer_id = null` cho khách lẻ. Nếu Frontend bỏ trống khách hàng, Backend dùng `public.resolve_sales_customer_id(...)` để gán `KH000001`.
+- Runtime POS không tạo bucket `customer_id = null` cho khách lẻ. Nếu Frontend bỏ trống khách hàng, Backend dùng `public.resolve_sales_customer_id(...)` để gán `khachle`.
 - `subtotal_amount >= 0`
 - `discount_amount >= 0`
 - `total_amount >= 0`

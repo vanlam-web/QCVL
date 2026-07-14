@@ -31,8 +31,11 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           address: '12 Nguyễn Trãi, Quận 1',
           customer_group_id: null,
           customer_group: { id: 'cg-1', code: 'VIP', name: 'Khách VIP' },
+          customer_type: 'company',
           created_by: { id: 'user-admin', name: 'Admin' },
           created_at: '2026-06-30T17:08:00Z',
+          note: 'Ghi chú khách KV',
+          status: 'active',
           total_sales_amount: 750000,
           total_debt_amount: 250000,
         },
@@ -46,6 +49,9 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
         { id: 'cg-1', code: 'VIP', name: 'Khách VIP', price_list_id: 'pl-1', is_active: true },
       ],
     })),
+    previewKiotVietCustomerImport: vi.fn(),
+    importKiotVietCustomers: vi.fn(),
+    deleteImportedKiotVietCustomers: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     createCustomer: vi.fn(async () => ({
       id: 'customer-2',
       code: 'KH000124',
@@ -196,17 +202,19 @@ it('lists customers in the shared management layout', async () => {
   const summary = screen.getByRole('region', { name: 'Tổng quan khách hàng' })
   expect(summary.closest('.management-filter-column')).not.toBeNull()
   expect(within(summary).queryByText('Tổng KH')).not.toBeInTheDocument()
-  expect(within(summary).getByText('Nợ hiện tại')).toBeInTheDocument()
+  expect(within(summary).getByText('Công nợ')).toBeInTheDocument()
   expect(within(summary).getByText('Tổng bán')).toBeInTheDocument()
   expect(screen.getByRole('region', { name: 'Danh sách khách hàng' })).toHaveClass('management-list-surface')
 
   const grid = screen.getByRole('table', { name: 'Danh sách khách hàng' })
-  expect(grid).toHaveClass('customer-management-table')
+  expect(grid).toHaveClass('management-table')
   expect(
     within(grid).getByRole('row', {
-      name: 'Mã KH Tên khách hàng Điện thoại Nhóm khách hàng Nợ hiện tại Tổng bán',
+      name: 'Chọn tất cả dòng khách hàng Mã KH Tên khách hàng Điện thoại Nhóm khách Công nợ Tổng bán',
     }),
   ).toBeInTheDocument()
+  expect(within(grid).getByRole('checkbox', { name: 'Chọn tất cả dòng khách hàng' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
+  expect(within(grid).getByRole('checkbox', { name: 'Chọn dòng KH000123' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
   expect(within(grid).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
   expect(within(grid).getByText('Công ty Phong Cảnh')).toBeInTheDocument()
   expect(within(grid).getByText('Khách VIP')).toBeInTheDocument()
@@ -224,6 +232,14 @@ it('lists customers in the shared management layout', async () => {
   expect(within(footer).getByRole('button', { name: 'Trang trước' })).toBeDisabled()
   expect(within(footer).getByRole('button', { name: 'Trang sau' })).toBeDisabled()
   expect(footer.closest('.management-table-viewport')).toBeNull()
+})
+
+it('does not open customer detail when clicking the row checkbox', async () => {
+  render(<CustomersPage service={makeService()} orderService={makeOrderService()} />)
+
+  await userEvent.click(await screen.findByRole('checkbox', { name: 'Chọn dòng KH000123' }))
+
+  expect(screen.queryByRole('region', { name: 'Chi tiết khách hàng KH000123' })).not.toBeInTheDocument()
 })
 
 it('uses the shared pagination footer to move between customer pages', async () => {
@@ -286,8 +302,8 @@ it('searches and creates a customer from the search action', async () => {
   const searchForm = screen.getByRole('search', { name: 'Lọc khách hàng' })
   expect(searchForm.closest('.management-page-header')).not.toBeNull()
   expect(within(searchForm).getByLabelText('Tìm khách hàng').closest('.management-compact-search')).not.toBeNull()
-  await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), 'Phong{Enter}')
-  expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 1, page_size: 15, search: 'Phong' })
+  await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), 'Phong')
+  await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'Phong' }))
   expect(screen.queryByText('Tìm: Phong')).not.toBeInTheDocument()
 
   expect(screen.queryByRole('dialog', { name: 'Tạo khách hàng' })).not.toBeInTheDocument()
@@ -317,11 +333,22 @@ it('searches and creates a customer from the search action', async () => {
   })
 })
 
+it('opens KiotViet customer import from the customer toolbar', async () => {
+  const service = makeService()
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+
+  expect(screen.getByRole('dialog', { name: 'Import khách hàng KiotViet' })).toBeInTheDocument()
+  expect(screen.getByLabelText('File KiotViet')).toBeInTheDocument()
+})
+
 it.each([
   ['mã', 'KH000888'],
   ['tên', 'Anh Nam'],
   ['số điện thoại', '0908123456'],
-])('shows matching customer suggestions by %s while typing', async (_label, keyword) => {
+])('filters customers by %s while typing without opening a suggestion dropdown', async (_label, keyword) => {
   const suggestedCustomer = {
     id: 'customer-suggested',
     code: 'KH000888',
@@ -338,10 +365,7 @@ it.each([
   }
   const service = makeService({
     listCustomers: vi.fn(async (input = {}) => {
-      if (input.search && input.page_size === 8) {
-        return { items: [suggestedCustomer], page: 1, page_size: 8, total: 1 }
-      }
-      if (input.search === 'KH000888') {
+      if (input.search === keyword) {
         return { items: [suggestedCustomer], page: 1, page_size: 15, total: 1 }
       }
       return { items: [suggestedCustomer], page: 1, page_size: 15, total: 1 }
@@ -355,18 +379,14 @@ it.each([
   const searchInput = within(searchForm).getByLabelText('Tìm khách hàng')
   await userEvent.type(searchInput, keyword)
 
-  const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý khách hàng' })
-  expect(within(suggestions).getByRole('option', { name: /KH000888 Anh Nam 0908123456/i })).toBeInTheDocument()
-  expect(within(suggestions).getByText('0908123456')).toBeInTheDocument()
-  expect(within(suggestions).getByText('125 000')).toBeInTheDocument()
-
-  await userEvent.click(within(suggestions).getByRole('option', { name: /KH000888/i }))
-
-  expect(service.listCustomers).toHaveBeenLastCalledWith({
+  await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith(expect.objectContaining({
     page: 1,
     page_size: 15,
-    search: 'KH000888',
-  })
+    search: keyword,
+  })))
+
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(screen.getByText('KH000888')).toBeInTheDocument()
 })
 
 it('reactively filters customers by existing customer fields in the shared sidebar', async () => {
@@ -376,16 +396,16 @@ it('reactively filters customers by existing customer fields in the shared sideb
   await screen.findByText('KH000123')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })
 
-  expect(within(sidebar).getByRole('region', { name: 'Nhóm khách hàng' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Nhóm khách' })).toBeInTheDocument()
   expect(within(sidebar).getByRole('region', { name: 'Ngày tạo' })).toBeInTheDocument()
   expect(within(sidebar).getByRole('region', { name: 'Người tạo' })).toBeInTheDocument()
   expect(within(sidebar).getByRole('region', { name: 'Tổng bán' })).toBeInTheDocument()
-  expect(within(sidebar).getByRole('region', { name: 'Nợ hiện tại' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: 'Công nợ' })).toBeInTheDocument()
   expect(within(sidebar).queryByRole('region', { name: 'Giới tính' })).not.toBeInTheDocument()
   expect(within(sidebar).queryByRole('region', { name: 'Sinh nhật' })).not.toBeInTheDocument()
   expect(within(sidebar).queryByRole('region', { name: 'Trạng thái' })).not.toBeInTheDocument()
 
-  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Nhóm khách hàng' }), 'cg-1')
+  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Nhóm khách' }), 'cg-1')
   expect(service.listCustomers).toHaveBeenLastCalledWith({
     page: 1,
     page_size: 15,
@@ -395,7 +415,7 @@ it('reactively filters customers by existing customer fields in the shared sideb
 
   await userEvent.type(within(sidebar).getByLabelText('Từ ngày'), '01/07/2026')
   await userEvent.type(within(sidebar).getByLabelText('Tổng bán từ'), '500000')
-  await userEvent.type(within(sidebar).getByLabelText('Nợ hiện tại tới'), '300000')
+  await userEvent.type(within(sidebar).getByLabelText('Công nợ tới'), '300000')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Người tạo' }), 'user-admin')
 
   expect(service.listCustomers).toHaveBeenLastCalledWith({
@@ -445,10 +465,18 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(infoPanel).queryByText('0909000000')).not.toBeInTheDocument()
   expect(within(infoPanel).getByText('0312345678')).toBeInTheDocument()
   expect(within(infoPanel).getByText('12 Nguyễn Trãi, Quận 1')).toBeInTheDocument()
-  expect(within(infoPanel).getByText('Khách VIP')).toBeInTheDocument()
-  expect(within(infoPanel).getByText('Theo nhóm: Khách VIP')).toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Nhóm khách')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Khách VIP')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Bảng giá áp dụng')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Theo nhóm: Khách VIP')).not.toBeInTheDocument()
+  expect(within(infoPanel).getByText('Loại khách')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Công ty')).toBeInTheDocument()
   expect(within(infoPanel).getByText('Admin')).toBeInTheDocument()
   expect(within(infoPanel).getByText('30/06/2026 17:08')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Ghi chú khách KV')).toBeInTheDocument()
+  expect(within(detail).getByRole('button', { name: 'Xóa' })).toBeDisabled()
+  expect(within(detail).getByRole('button', { name: 'Chỉnh sửa' })).toBeDisabled()
+  expect(within(detail).getByRole('button', { name: 'Ngừng hoạt động' })).toBeDisabled()
   expect(within(infoPanel).queryByRole('button', { name: 'Xem phân tích' })).not.toBeInTheDocument()
   expect(within(infoPanel).queryByRole('region', { name: 'Xem phân tích khách hàng' })).not.toBeInTheDocument()
   await userEvent.click(within(detail).getByRole('button', { name: 'Xem phân tích' }))
@@ -524,7 +552,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(screen.queryByRole('region', { name: 'Chi tiết khách hàng KH000123' })).not.toBeInTheDocument()
 })
 
-it('shows common price list when the customer has no group', async () => {
+it('does not repeat customer group or price list in customer detail', async () => {
   const service = makeService({
     listCustomers: vi.fn(async () => ({
       items: [
@@ -551,7 +579,40 @@ it('shows common price list when the customer has no group', async () => {
   await userEvent.click(await screen.findByText('KH000124'))
   const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000124' })
   const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
-  expect(within(infoPanel).getByText('Bảng giá chung')).toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Bảng giá chung')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Bảng giá áp dụng')).not.toBeInTheDocument()
+  expect(within(infoPanel).queryByText('Nhóm khách')).not.toBeInTheDocument()
+})
+
+it('shows an unmatched creator state when imported customer creator does not match a username', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-kv-1',
+          code: 'KH000521',
+          name: 'Khách import',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: null,
+          customer_group: null,
+          created_by: null,
+          source_creator_name: 'Phạm Nhật Linh',
+          created_at: '2026-07-01T03:00:00Z',
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+  render(<CustomersPage service={service} orderService={makeOrderService({ getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-kv-1', total_debt: 0, invoices: [] })) })} />)
+
+  await userEvent.click(await screen.findByText('KH000521'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000521' })
+  const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
+  expect(within(infoPanel).getByText('Chưa khớp tài khoản')).toBeInTheDocument()
 })
 
 it('reloads customer debt when the debt tab is opened again', async () => {

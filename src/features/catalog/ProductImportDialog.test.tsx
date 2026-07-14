@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ProductImportDialog } from './ProductImportDialog'
 
@@ -91,14 +91,13 @@ it('deletes old KiotViet product import data from a separate action', async () =
     deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 517, blocked_rows: 0 })),
   }
   const onImported = vi.fn()
-  const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
   render(<ProductImportDialog open service={service as never} onClose={vi.fn()} onImported={onImported} />)
 
   await userEvent.click(screen.getByRole('button', { name: 'Xóa dữ liệu cũ' }))
+  const confirmDialog = screen.getByRole('alertdialog', { name: 'Xác nhận xóa dữ liệu cũ' })
+  await userEvent.click(within(confirmDialog).getByRole('button', { name: 'Xóa' }))
 
-  expect(confirm).toHaveBeenCalled()
   expect(service.deleteImportedKiotVietProducts).toHaveBeenCalled()
   expect(await screen.findByText('Đã xóa 517 dòng dữ liệu cũ.')).toBeInTheDocument()
   expect(onImported).toHaveBeenCalled()
-  confirm.mockRestore()
 })

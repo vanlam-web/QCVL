@@ -176,6 +176,42 @@ Cáº­p nháº­t thÃ´ng tin khÃ¡ch hÃ ng phá»¥c vá»¥ POS.
 - `customer_group_id = null` nghÄ©a lÃ  khÃ¡ch khÃ´ng gÃ¡n nhÃ³m vÃ  dÃ¹ng báº£ng giÃ¡ chung.
 - Náº¿u `customer_group_id` khÃ¡c null, nhÃ³m khÃ¡ch pháº£i active vÃ  cÃ¹ng organization.
 
+### `POST /customers/import/kiotviet/preview`
+
+Xem trước file khách hàng KiotViet. Preview không ghi DB.
+
+Import dùng `organization_id + Mã khách hàng` làm khóa upsert. `Tên khách hàng` bắt buộc nhưng được phép trùng giống KiotViet. SĐT không bắt buộc.
+
+Các trường vận hành hiện dùng: mã khách, tên khách, loại khách, công ty, điện thoại, MST, địa chỉ một dòng, phường/xã, khu vực giao hàng, nhóm khách, ghi chú, người tạo nguồn, ngày tạo nguồn, ngày giao dịch cuối, trạng thái.
+
+`Nợ cần thu hiện tại`, `Tổng bán`, `Tổng bán trừ trả hàng` chỉ là số tham chiếu KiotViet, không phải công nợ chính của QCVL.
+
+### `POST /customers/import/kiotviet`
+
+Ghi import khách hàng sau preview. Backend map lại rows bằng cùng contract và trả `invalid_rows` nếu thiếu `Mã khách hàng` hoặc `Tên khách hàng`.
+
+Không tự xóa khách vắng trong file. Muốn nhập lại từ đầu phải dùng nút riêng `Xóa dữ liệu cũ` trong dialog import.
+
+### `DELETE /customers/import/kiotviet`
+
+Xóa dữ liệu khách hàng cũ của lần import KiotViet để import lại từ đầu.
+
+**Rules:**
+
+- Chỉ xóa dữ liệu khách hàng được tạo từ import KiotViet của trang Khách hàng.
+- Không xóa khách tạo tay.
+- Nếu khách đang được hóa đơn, công nợ hoặc lịch sử bán hàng dùng, backend không xóa và trả số lượng trong `blocked_rows`.
+- Với demo fallback hiện tại, backend xóa khách import có id prefix `customer-kv-*` và khách mẫu local có mã `DEV20-KH-*`. Backend giữ lại `khachle` và khách tạo tay; khách đã tồn tại rồi bị import cập nhật sẽ không rollback vì không có snapshot cũ.
+
+**Response data:**
+
+```json
+{
+  "deleted_rows": 531,
+  "blocked_rows": 0
+}
+```
+
 ---
 
 ## 5. Customer groups
@@ -255,6 +291,8 @@ Tham số hiện tại:
 | `sort=pos_usage` | Dùng cho lưới sản phẩm nhanh POS; ưu tiên sản phẩm có `pos_product_usage.usage_count` cao hơn |
 
 Với `sort=pos_usage`, backend join theo `(organization_id, product_id)`, sắp `usage_count DESC`, rồi fallback theo thứ tự sản phẩm ổn định. Không dùng cache trình duyệt cho thứ tự này.
+
+POS chỉ dùng `sort=pos_usage&page_size=120` cho lưới sản phẩm nhanh. Ô tìm hàng POS phải gọi lại `GET /products?status=active&search=...`, không được coi cache lưới nhanh là nguồn tìm kiếm đầy đủ. Kết quả tìm phải bao gồm cả `sell_method = combo`; frontend có thể merge với cache nhanh nhưng phải ưu tiên khớp exact mã/tên, rồi khớp đầu chuỗi/từ, rồi mới khớp chứa ở giữa. Ví dụ tìm `In bạt` phải trả/ưu tiên sản phẩm hoặc combo tên đúng `In bạt` trước `Linh kiện máy in bạt`.
 
 TÃ¬m sáº£n pháº©m/dá»‹ch vá»¥ Ä‘ang bÃ¡n trÃªn POS.
 
@@ -664,6 +702,8 @@ Nếu thiếu `ĐVT`, backend gán tạm `unit_name = "Cần cập nhật"` và 
 Import dùng `organization_id + Mã hàng` làm khóa upsert. Không tự xóa sản phẩm vắng trong file. `cleanup_demo` chỉ còn là tương thích cũ; UI import dùng nút riêng `Xóa dữ liệu cũ`.
 
 Phase hiện tại ghi: nhóm hàng, mã, tên, loại hàng, kiểu tồn kho, cách bán, đơn vị, giá vốn gần nhất, trạng thái, giá bán vào bảng giá mặc định, và tồn kho vào `inventory_provisional_balances`.
+
+Với dòng đơn vị quy đổi trong file KiotViet, `Mã hàng` của dòng đó không tạo sản phẩm riêng. Backend lưu mã này vào `product_unit_conversions.source_code` làm alias của sản phẩm gốc trong `Mã ĐVT Cơ bản`, ví dụ `B260` khớp về `BT`. Các import chứng từ sau phải lookup sản phẩm bằng cả `products.code` và alias này.
 
 `Thời gian tạo` từ file KiotViet ghi vào `products.created_at`. Backend chấp nhận cả dạng text `dd/MM/yyyy HH:mm`, ISO date, và Excel serial number như `46204.42164644676`. Import lại cùng `Mã hàng` được phép cập nhật `products.created_at` khi file có thời gian nguồn hợp lệ; nếu thời gian nguồn thiếu/sai thì giữ `created_at` cũ, sản phẩm mới fallback về thời gian import.
 

@@ -141,6 +141,30 @@ describe('catalog-service', () => {
     Object.defineProperty(globalThis, 'DecompressionStream', { configurable: true, value: originalDecompressionStream })
   })
 
+  it('sends KiotViet customer import files to customer import endpoints', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createCatalogService({ request })
+    const file = new File([new Uint8Array([1, 2, 3])], 'customers.xlsx')
+
+    await service.previewKiotVietCustomerImport({ file })
+    await service.importKiotVietCustomers({ file })
+
+    expect(calls[0][0]).toBe('/api/v1/customers/import/kiotviet/preview')
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+      file_name: 'customers.xlsx',
+      file_base64: 'AQID',
+    })
+    expect(calls[1][0]).toBe('/api/v1/customers/import/kiotviet')
+    expect(JSON.parse(String(calls[1][1]?.body))).toEqual({
+      file_name: 'customers.xlsx',
+      file_base64: 'AQID',
+    })
+  })
+
   it('deletes old KiotViet product import data with a dedicated endpoint', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -153,6 +177,21 @@ describe('catalog-service', () => {
 
     expect(calls).toEqual([
       ['/api/v1/products/import/kiotviet', { method: 'DELETE' }],
+    ])
+  })
+
+  it('deletes old KiotViet customer import data with a dedicated endpoint', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { deleted_rows: 531, blocked_rows: 0 } as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.deleteImportedKiotVietCustomers()
+
+    expect(calls).toEqual([
+      ['/api/v1/customers/import/kiotviet', { method: 'DELETE' }],
     ])
   })
 

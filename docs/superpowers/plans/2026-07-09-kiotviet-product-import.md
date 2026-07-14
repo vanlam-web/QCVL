@@ -10,9 +10,16 @@
 
 ---
 
-## Current Product Completion Roadmap 2026-07-11
+## Current Product Completion Roadmap 2026-07-12
 
 Final objective: finish the `Hang hoa` module as usable real data, not only finish the Excel import button. Work that appears outside `/products` still belongs to this objective when it is required for product correctness.
+
+Active product-completion rule:
+
+- This plan is the parent plan.
+- `Kiem kho`, `Nguoi tao`, and `/admin` user management are dependency work, not separate product goals.
+- When work moves to another page, record why that page blocks `Hang hoa`, finish only the needed slice, then return to the product completion path.
+- Do not add broad admin/settings/inventory features unless they directly unblock product data, stock, creator attribution, or product filters.
 
 Current path:
 
@@ -23,26 +30,170 @@ Current path:
 
 2. Stocktake import: done as a supporting dependency.
    - Reason: product stock could not be trusted without KV stocktake evidence.
-   - Current rule: KV stocktake import is history/evidence only, not operating stock.
+   - Current rule: KV stocktake import is history/evidence by default. A specific early KV stocktake may become the QCVL opening balance only when Owner explicitly selects it as the starting checkpoint.
    - Linked plan: `docs/superpowers/plans/2026-07-10-kiotviet-stocktake-import.md`.
 
-3. User management / creator data: in progress as a supporting dependency.
+3. User management / creator data: foundation done as a supporting dependency.
    - Reason: KV inventory and stocktake screens use `Nguoi tao`; QCVL must have real users before creator filters and imports can be accurate.
-   - Current rule: create QCVL users first where possible, then import/map creator fields.
+   - Current rule: create QCVL users first where possible, then import/map creator fields by account identity only.
    - If a KV creator does not match a QCVL user, store a source snapshot instead of forcing a wrong `users.id`.
-   - Recent foundation: `/admin` user creation now persists real users; required-field validation was added before saving.
+   - Recent foundation: `/admin` user creation now persists real users in both Postgres and 3202 dev-memory API; required-field validation was added before saving.
+   - Account direction recorded: login should support `Ten dang nhap` or `So dien thoai`; email is required for password recovery/security contact in real operations, not the primary login identity.
+   - 2026-07-11 update: KiotViet stocktake detail has at least 2 formats. Older 18-column export has no `Nguoi tao`; newer 22-column export has `Nguoi tao`.
+   - 2026-07-11 update: stocktake import stores raw KV creator in `stocktakes.source_creator_name`, then maps to QCVL `created_by` only by `users.username` after stripping `{DEL}`. Do not map by display name, phone, or email.
+   - 2026-07-11 update: stocktake APIs and `/inventory` expose `created_by` as `{id, name}` only when the source maps to a real QCVL account. Lists hydrate the current account display name, so account edits show in old imported stocktakes without re-import.
+   - 2026-07-11 update: purchase receipt creator filter now follows the same rule: `created_by.id` is the API/filter value and `created_by.name` is the visible label.
+   - QCVL importer must not be displayed as KV `Nguoi tao`. Raw KV creator is audit/mapping data only; UI/filter use one people source: QCVL `created_by`.
+   - Keep QCVL users complete enough for future KV creator matching; do not show `username` as the visible creator label when a display name exists.
 
 4. Next product-module work after user foundation:
-   - Add creator snapshot/mapping for KiotViet stocktake import.
-   - Add `Nguoi tao` filter to `/inventory` only after imported creator data exists.
+   - Creator snapshot/mapping for KiotViet stocktake import is done.
+   - `Nguoi tao` filter can use imported/mapped QCVL account data where present.
    - Return to `/products` stock display: show provisional KV stock clearly, and prepare a separate operating-stock path.
    - Do not start `Du kien het hang` until stock movement history is reliable.
+
+5. Product stock completion target:
+   - `/products` must show imported KV stock as comparison-only data, clearly labeled `Ton KV tam nhap` so it is not confused with official QCVL operating stock.
+   - KV product export stock remains audit/comparison only. It must not become an opening balance, baseline movement, or automatic correction.
+   - KV stocktake history remains audit/comparison by default. Exception: one explicit initial KV stocktake can become an opening-balance checkpoint after Owner chooses the stocktake code/date and confirms that earlier documents should not be counted for current stock.
+   - Official operating stock must be calculated from an opening checkpoint plus QCVL movement sources before it can drive POS, stock cards, or expected-out-of-stock calculations: the selected initial stocktake sets opening quantity, purchase/import receipts after the checkpoint increase stock, sales invoices/POS after the checkpoint decrease stock, returns reverse the related direction, later stocktake balance adjusts differences, and roll/sheet/object operations write their own movements.
+   - Movement sources have upstream dependencies: purchase/import receipts need supplier data; sales invoices/POS need customer data. Do not treat product stock as complete until Customer, Supplier, Purchase, Sales/POS, and Stocktake all write/read the same stock movement story.
+   - Stocktake balance belongs in `/inventory` `Phiếu kiểm kho`; `/products` only displays stock, source labels, evidence, and links into stocktake flows.
+
+6. Dependency order for real operating stock:
+   - Pick one initial KV stocktake checkpoint as opening balance if Owner confirms it is the first trusted count.
+   - Customer foundation first: invoice/POS stock-out and customer debt/history depend on stable customer records, including `Khach le`.
+   - Supplier foundation next: purchase/import stock-in and product supplier history depend on stable supplier records.
+   - Purchase/import receipts after the opening checkpoint then write stock-in movements.
+   - Sales invoices/POS after the opening checkpoint then write stock-out movements.
+   - Returns after the checkpoint write opposite-direction movements.
+   - Later stocktake/can bang kho then writes adjustment movements from counted differences.
+   - `/products` reads the result and compares QCVL-calculated stock with `Ton KV tam nhap`; it does not create stock by itself.
+
+7. Deferred until product stock is reliable:
+   - `Nha cung cap`: derive from purchase/import receipt history, because one product can have multiple suppliers.
+   - `Du kien het hang`: compute from reliable sales/purchase/stock movement history, not from copied KV text.
+   - BOM activation: use imported BOM as draft only until reviewed.
 
 Scope guard:
 
 - The goal is still `Hoan thien Hang hoa`.
 - `Kiem kho`, `Nguoi tao`, and user management are side dependencies because product stock, product history, and product filters need them.
 - Do not expand into unrelated admin/settings work unless it blocks product completion.
+
+Current next-step order:
+
+1. Stop broad `/admin` work unless it directly blocks creator mapping or product correctness.
+2. Treat KV stocktake creator mapping as done: raw `source_creator_name`, username-only account mapping, current display-name hydration.
+3. Do not block the runnable version on manual `+ Kiem kho`. If a product is physically checked and needs a correction, use Product edit/direct stock correction for now; manual stocktake creation is deferred.
+4. Stocktake detail now has working `Luu` note and `Huy` status change. `Huy` uses an in-app confirmation dialog, calls `PATCH /api/v1/inventory/stocktakes/{id}` with `status: cancelled`, and does not write/delete stock movements. `Sao chep`, `Xuat file`, and `In` remain visible but disabled placeholders for later; do not block the runnable version on them.
+5. Customer foundation is the active dependency before invoices/POS. Review real imported customer fields, `Khach le`, search, detail tabs, creator mapping, and safe cleanup before leaving Customers.
+6. Supplier foundation is now good enough for the stock plan: imported real KV suppliers, safe delete/re-import flow, shared search/table/detail shell, and no need to deepen supplier debt/history/report before stock-in.
+7. Purchase receipt list UI is done with `ManagementDataTable`. Current visible columns are checkbox, favorite star, `Ma nhap hang`, `Nha cung cap`, `Tong so luong`, `Tong tien hang`, `Can tra NCC`, and `Tien da tra NCC`; do not bring back `Thoi gian`, `Ma NCC`, `Con phai tra`, or `Trang thai` on the main list unless Owner reopens that decision. Posted imported purchase receipts now expose stock-in movement data in dev-memory, including unit-conversion alias quantity conversion.
+8. Sales documents stock-out is now started: KiotViet invoice import exists on `/sales-documents`, groups rows by `Ma hoa don`, maps blank/`Khach le` customers to `khachle`, auto-creates inactive placeholders for KV-deleted customer/product codes ending `{DEL...}`, maps seller/creator into one QCVL account, ignores sales channel/wallet/card fields, and writes completed invoices as `sale_deduction` stock-out movements in dev-memory. POS stock-out remains the later live-sales source.
+9. Stocktake adjustment comes after the movement story is stable. KiotViet stocktake stays evidence only unless one initial KV stocktake is explicitly selected as the opening checkpoint.
+10. Product stock display must read formula-based QCVL stock from opening balance + `stock_movements` and compare it with `Tồn KV tạm nhập`; it must not turn KV product export stock into an opening balance.
+11. Later, build `Du kien het hang` only when reliable stock movement history exists.
+
+### Reality Update 2026-07-12: Operating Stock Direction
+
+This plan remains the parent path for finishing `Hang hoa`. The current work is dependency work for correct stock, not random module hopping.
+
+Official QCVL stock formula:
+
+`QCVL ton hien tai = selected opening stocktake balance + stock-in purchase movements after checkpoint - stock-out sales movements after checkpoint +/- returns and later adjustment movements`
+
+Rules:
+
+- KiotViet product `Ton kho` is comparison/audit data only.
+- KiotViet stocktake counts are comparison/audit data by default.
+- One initial KiotViet stocktake may be promoted to opening balance only by an explicit Owner-selected checkpoint. This is not automatic import behavior.
+- When an opening checkpoint is selected, documents before that date do not affect current stock. They may be kept as history only.
+- `/products` shows two concepts separately: QCVL calculated stock and `Ton KV tam nhap`.
+- If movement sources are incomplete, Product must say stock is not finalized instead of showing KV data as official stock.
+
+Locked dependency path:
+
+1. Confirm the initial KV stocktake checkpoint when ready to build stock calculation.
+2. Customers stable enough for invoices/POS and `Khach le`.
+3. Suppliers stable enough for purchase receipts. Defer deep supplier payable/history/report work until after product stock path is runnable.
+4. Purchase receipts after checkpoint write trusted stock-in movements. Dev-memory import path is done for posted KiotViet receipts.
+5. Sales invoices/POS after checkpoint write trusted stock-out movements. This is the next stock-correctness dependency.
+6. Returns after checkpoint reverse stock as needed.
+7. Later stocktake writes explicit adjustment movements.
+8. Products displays calculated QCVL stock and compares with KV evidence.
+
+Current status:
+
+- Customers: current active page to review. It must be stable for invoice/POS import and `Khach le` before moving deeper into stock-out.
+- Suppliers: checkpoint reached for current goal. Import KV NCC works, old import cleanup works, real supplier list is back after re-import, and deep supplier debt/history/report is deferred.
+- Purchase receipts: imported for the current data slice. List/table/detail shell is done. Import KV uses `DanhSachChiTietNhapHang_KV...xlsx`, groups rows by `Ma nhap hang`, maps supplier by `Ma nha cung cap`, maps product by `Ma hang`, and has a separate `Xoa du lieu cu` action. Current file `DanhSachChiTietNhapHang_KV12072026-135400-901.xlsx` imported 1,737 detail rows / 684 posted receipts. Blank supplier codes map to `NCC le` / `Nha cung cap le`; import upserts that supplier before writing receipts. Unit-conversion item codes such as `B260` resolve through `product_unit_conversions.source_code`. Historical KV-deleted product codes that still appear in receipts are created as inactive, non-inventory-tracked products so receipt history can match without making those products count as current operating stock. Posted imported receipts now read as `stock_movements.purchase_receipt` stock-in in dev-memory; conversion-code quantities are converted to the parent product stock unit.
+- Sales/POS: KiotViet invoice import is now the historical stock-out source for current local data. POS remains the live checkout source and is excluded from shared management UI cleanup.
+- Stocktake: KV import/detail/cancel/note foundation done; manual `+ Kiem kho` deferred for runnable version.
+- Products: product import and KV comparison data done. Stock-in from purchase receipts is available; stock-out from imported sales invoices is available in dev-memory. Imported balanced stocktakes now act as stock checkpoints: the movement story resets to `actual_qty` at the balanced time, then later purchase/sales movements continue from that checkpoint. Imported sales invoice rows for combo products now deduct draft BOM component stock, matching KV `Ban hang [Combo - Dong goi]` stock-card behavior. `/products` main table shows `Ton QCVL` from current `stock_movements`, while `Ton KV tam nhap` stays in the inventory detail as comparison evidence. This slice still does not include returns, live POS gaps, or the Postgres aggregate path.
+
+### Reality Update 2026-07-12: Operating Stock Formula vs KiotViet
+
+Investigation on KV product `BT` showed the root causes of the earlier large stock mismatch:
+
+- KV stock card for `BT` has many `Ban hang [Combo - Dong goi]` rows. QCVL was only deducting direct invoice lines where `product_code = BT`, not combo BOM component usage.
+- QCVL direct `BT` sales deduction was about `3,353.641`; combo BOM sales should deduct about `55,874.836` more.
+- KV stocktake `KK000328` on `2026-05-28` reset `BT` actual stock to `2,500`. After applying later document movements, QCVL calculates `1,910.2492`, matching KV `1,910.249` within rounding.
+- Current API comparison after the fix: active products `383`, tracked comparable rows `214`, matched `193`, mismatched `21`. Remaining large mismatches start with `SP000184`, `SP000166`, and `DCS`; inspect missing stocktake rows, unit conversions, BOM definitions, or return/adjustment sources per code before claiming full stock parity.
+- Follow-up import hardening: repeated KiotViet invoice import must replace the item set for each `Ma hoa don` in the current batch, not append by `rowNumber`. KiotViet row numbers differ across exported files, so keeping old row numbers creates duplicated invoice lines. Regression test added in dev-memory repository. Current dev-memory invoices were deleted/re-imported from all `DanhSachChiTietHoaDon_KV12072026*.xlsx` files after this fix.
+- After re-import with the replace-by-invoice rule, meaningful stock mismatches are down to 6 rows with `abs(diff) > 0.001`: `SP000184`, `SP000166`, `DCS`, `PP`, `MD`, `A6XD2008`. Only 4 are above `1` unit: `SP000184`, `SP000166`, `DCS`, `PP`.
+- `SP000184` evidence: product export says current KV stock `309.8 ml`, QCVL formula says `2154.8 ml`; imported stocktake files contain no row for `SP000184`/`Muc in epsion`. QCVL sees one purchase `2500 ml` and only `345.2 ml` BOM consumption. This cannot be made exact from current imported files without KV stock card/adjustment history or historical BOM versions.
+- Remaining mismatch direction likely comes from one of these missing sources: stock card adjustments not present in the stocktake export, return/adjustment files not imported yet, or historical combo BOM changes. Current QCVL applies the latest imported BOM to all historical combo invoices, while KV stock card deducts the BOM version effective at sale time.
+- Owner exported `BaoCaoXuatNhapTonChiTiet_KV12072026-232213-326.xlsx` from KiotViet Product Report (`Xuat nhap ton chi tiet`, range `2020-12-29` to `2026-07-12`). This report is now the strongest aggregate evidence for remaining stock mismatches.
+- Report finding for 6 meaningful mismatches:
+  - `SP000184`: KV `Nhap NCC 2500`, `Xuat ban 2190.2`, `Ton cuoi 309.8`; QCVL only sees `Xuat ban 345.2`. Missing source is sale/BOM history, not stocktake, Xuat huy, or Xuat dung noi bo.
+  - `SP000166`: KV `Nhap NCC 363`, `Nhap kiem 12.1`, `Xuat ban 239.312`, `Ton cuoi 135.788`; QCVL currently derives `Nhap kiem 189.162` and `Xuat ban 606.571`, so both stocktake handling and BOM sale history are wrong for this code.
+  - `DCS`: KV `Xuat ban 11551.16673`, QCVL sees `11376.68001`; missing about `174.487` sales/BOM deduction.
+  - `PP`: KV `Xuat ban 4942.6352`, QCVL sees `4944.0752`; QCVL over-deducts about `1.44`.
+  - `MD`: KV `Nhap kiem 21.125666`, `Xuat ban 83.537499`, QCVL sees `Nhap kiem 16.296922`, `Xuat ban 78.089055`; mismatch comes from both stocktake and sales/BOM.
+  - `A6XD2008`: KV `Xuat ban 1.4465`, `Xuat kiem 0.25`, QCVL sees `Xuat ban 1.00178`, `Xuat kiem 0.43768`; mismatch comes from sales/BOM and stocktake delta handling.
+- Important correction: KiotViet XNT report treats stocktake as `Nhap kiem` / `Xuat kiem` using the exported difference quantities. QCVL should not blindly reset every balanced stocktake to `actual_qty` for all history if the goal is matching KV movement columns. The earlier BT match was partly compensating errors: QCVL over-counted `Xuat ban` from latest BOM and under-counted `Xuat kiem` from reset logic, ending stock happened to match.
+- 2026-07-12 update: Added `server/modules/inventory/kiotviet-xnt-report.ts` and `scripts/compare-kiotviet-xnt.ts` to parse the KiotViet XNT workbook and compare QCVL movement buckets against KV buckets. Latest run with `BaoCaoXuatNhapTonChiTiet_KV12072026-232213-326.xlsx` wrote evidence to `logs/kiotviet-xnt-comparison-latest.json`.
+- Latest XNT comparison: KV rows `328`, QCVL movements `29637`, raw mismatches `17`, active/tracked/non-combo mismatches `8`, KV-only deleted/history rows `7`.
+- Active/tracked mismatches to inspect next:
+  - `SP000184`: QCVL `2154.8`, KV `309.8`, diff `+1845`; QCVL missing `1845` sale/BOM out.
+  - `SP000166`: QCVL `-54.409`, KV `135.788`, diff `-190.197`; QCVL stocktake-in and sale/BOM buckets are both off.
+  - `DCS`: QCVL `1620.61999`, KV `1446.13327`, diff `+174.48672`; QCVL missing sale/BOM out.
+  - `GB160A4`: QCVL `-724.1`, KV `-721.1`, diff `-3`; small stocktake/sale bucket compensation.
+  - `PP`: QCVL `1631.2248`, KV `1632.6648`, diff `-1.44`; QCVL over-counts sale out by `1.44`.
+  - `F10`: QCVL `0.4182`, KV `-0.2292`, diff `+0.6474`; QCVL missing sale/BOM out.
+  - `MD`: QCVL `29.207867`, KV `28.588167`, diff `+0.6197`; stocktake and sale/BOM buckets differ.
+  - `A6XD2008`: QCVL `2.81054`, KV `2.5535`, diff `+0.25704`; sale/BOM and stocktake-out buckets differ.
+- Next stock-parity decision should not guess from the UI. Use the XNT comparison evidence first, then choose: (a) import XNT as trusted reconciliation snapshot for imported history, or (b) rebuild exact historical stock movements by adding historical BOM versions and KiotViet stocktake difference movements.
+- Owner approved option (a): use the XNT report as the trusted reconciliation checkpoint for imported history. Do not rebuild old BOM versions now.
+- Implementation update: `scripts/apply-kiotviet-xnt-checkpoint.ts` applies the XNT ending stock through the existing KiotViet stocktake import endpoint as a balanced checkpoint. Applied source code: `XNT-KV-2026-07-12-232213`, rows `328`, missing product rows `7` (deleted/history codes).
+- Bug fixed during checkpoint: deleted KiotViet codes such as `SP000111{DEL}` must not strip to `SP000111` when the exact placeholder product is missing. Otherwise a deleted/history row can reset the active product incorrectly.
+- Latest result after checkpoint + `{DEL}` resolver fix: raw mismatches `3`, active/tracked/non-combo mismatches `0`, KV-only deleted/history rows `7`. Product stock parity for active tracked goods is now reached for the imported history snapshot.
+- POS/live update: new QCVL checkout invoices now persist line `quantity`, `unit_price`, and `discount_amount` into dev-memory `salesDocumentItems` through `saveSalesDocument`. These saved invoices feed the same `sale_deduction` stock movement path as imported KiotViet invoices, so stock decreases from the XNT checkpoint forward.
+- BOM decision: Owner confirmed BOM imported from KiotViet is trusted. Do not require a separate BOM approval gate for the runnable version. POS/live invoices selling combo/BOM products deduct trusted KV BOM components, not the combo product itself.
+- POS cancel rule: hủy hóa đơn POS must update the sales document status to `cancelled`, not delete the document/items. Operating stock restores automatically because only `completed` sales documents create `sale_deduction` movements.
+
+### Reality Update 2026-07-12: KiotViet Invoice Import
+
+Implemented for the current stock-correctness path:
+
+- `/sales-documents` has an `Import KV` dialog using the shared KiotViet import shell and separate `Xoa du lieu cu` cleanup action.
+- Backend endpoints:
+  - `POST /api/v1/sales-documents/import/kiotviet/preview`
+  - `POST /api/v1/sales-documents/import/kiotviet`
+  - `DELETE /api/v1/sales-documents/import/kiotviet`
+- Import groups rows by `Ma hoa don`; repeated import updates by invoice code.
+- Blank customer code or `Khach le` maps to customer code `khachle`.
+- If `khachle` is missing, import auto-creates that default customer.
+- Customer/product codes ending `{DEL}`, `{DEL1}`, `{DEL2}`, ... are treated as KiotViet-deleted history. Import auto-creates inactive placeholders; deleted product placeholders have `track_inventory = false`, so they keep invoice history without creating current stock deduction.
+- `Nguoi ban` and `Nguoi tao` are treated as one QCVL seller/account source for now.
+- Dropped from import scope by Owner decision: `Kenh ban`, wallet, card. Keep only cash and bank transfer totals.
+- Invoice time uses KiotViet `Thoi gian` as QCVL `created_at`, matching the KiotViet invoice list. `Thoi gian tao` is fallback only when `Thoi gian` is missing. Example: `HD011050.01` shows `06/07/2026 11:03` from `Thoi gian`, not `07/07/2026 10:15` from `Thoi gian tao`.
+- Sales-document date filters compare the stored/displayed source date part (`YYYY-MM-DD`) directly. Do not convert imported KV timestamps through local timezone for filtering; otherwise `2026-06-30T17:08Z` appears as July locally and leaks into `Thang nay` while the UI displays `30/06/2026`.
+- Product codes can match the product code or a unit-conversion source code such as `B260`; quantity converts to the parent product stock unit before creating stock movements.
+- Completed imported invoices produce `stock_movements.sale_deduction` in dev-memory. Cancelled invoices do not deduct stock.
+- POS invoices use the same stock-out rule after checkout persistence. Cancelling a POS invoice through `PATCH /api/v1/sales-documents/{id}` with `status: cancelled` removes its stock-out effect from calculated operating stock while keeping audit history.
+- KiotViet invoice import is historical stock-out evidence/source, not a replacement for live POS checkout behavior.
 
 ---
 
@@ -64,7 +215,8 @@ Still deferred:
 
 - `Nha cung cap`: derive from purchase/import receipt history, because one product can have many suppliers.
 - `Du kien het hang`: compute after enough sales/purchase/stock history exists; do not copy KiotViet text.
-- Official operating stock conversion: requires explicit review/balance flow from provisional stock/history into stock movements.
+- Official operating stock: requires reliable QCVL movement sources and formula-based calculation. Do not convert provisional KV stock/history directly into stock movements.
+- Cross-module dependencies for official stock: Customer must be stable before invoice/POS stock-out; Supplier must be stable before purchase/import stock-in; Product stock display comes after those movement sources, not before them.
 - Draft BOM activation: requires human review before POS uses BOM.
 
 ---
@@ -83,7 +235,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 | `Tên hàng` | `products.name` |
 | `Giá vốn` | `products.latest_purchase_cost` |
 | `ĐVT` | `products.unit_name` |
-| `Mã ĐVT Cơ bản` + `Quy đổi` | `unit_conversions` payload when different from `ĐVT` and factor > 0 |
+| `Mã ĐVT Cơ bản` + `Quy đổi` | `unit_conversions` payload when different from `ĐVT` and factor > 0; `Mã hàng` on this conversion row is stored as `source_code` alias for the base product |
 | `Đang kinh doanh` | `status = active` when `1`, otherwise `inactive` |
 | `Giá bán` | `price_list_items` of default active price list; not written to `products` |
 | `Tồn kho` | `inventory_provisional_balances` with `source_type = kiotviet_import`; not written to `stock_movements` |
@@ -102,7 +254,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 
 **Deletion rule:** The UI may offer `Xóa dữ liệu mẫu trước khi import`, but the server only deletes known demo products that have no real linked documents. Phase 1 demo patterns are `DEV20-SP-%`, `MICA-3MM`, `DECAL-PP`, and `CUT-CNC`. The server must refuse deletion for any matched product that appears in sales documents, purchase receipts, stock movements, BOM, price list items, or other real linked tables.
 
-**Out of scope for this plan:** NAS deploy, Git push, supplier relationship import, expected-out-of-stock calculation, activating BOM, and converting KiotViet total stock into real roll/sheet stock movements.
+**Out of scope for this plan:** NAS deploy, Git push, supplier relationship import, expected-out-of-stock calculation, activating BOM, and using KiotViet total stock as a direct source for real roll/sheet stock movements.
 
 ---
 
@@ -110,7 +262,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 
 1. `Dự kiến hết hàng`: chưa làm. Phải có lịch sử bán/tiêu thụ thật và tồn kho chuẩn hóa trước, sau đó mới tính tốc độ dùng hàng. Không copy chuỗi dự kiến từ KiotViet.
 2. `Nhà cung cấp`: chưa làm ở import Hàng hóa. Nguồn đúng là phiếu nhập, vì một mã hàng có thể có nhiều nhà cung cấp.
-3. Tồn tạm KiotViet: đã lưu vào `inventory_provisional_balances`, nhưng chưa chuyển thành tồn kho thật/stock movements. Bước sau cần màn đối soát và quy trình khui cuộn/tấm nếu muốn dùng làm tồn vận hành.
+3. `Tồn KV tạm nhập`: đã lưu vào `inventory_provisional_balances`, nhưng chỉ dùng để đối chiếu. Không chuyển trực tiếp thành tồn kho thật/stock movements. Bước sau cần dữ liệu vận hành thật: phiếu nhập, bán hàng, kiểm kho/cân bằng kho và quy trình cuộn/tấm.
 4. BOM nháp: đã lưu draft BOM, nhưng chưa có quy trình duyệt/kích hoạt. POS chỉ được dùng BOM sau khi người dùng rà định mức và active.
 5. Import nhiều file KV mới: upsert theo `Mã hàng` đã sẵn sàng. Khi KV đổi dữ liệu, import lại file mới để cập nhật; hệ thống không tự xóa mã vắng trong file mới.
 
@@ -134,17 +286,18 @@ Owner provided KiotViet stocktake detail export `DanhSachChiTietKiemKho_KV100720
 
 Observed relationship:
 
-- Product export `Tồn kho` is the current KiotViet stock snapshot and remains the source for `inventory_provisional_balances`.
+- Product export `Tồn kho` is the KiotViet stock snapshot for comparison only and remains the source for `inventory_provisional_balances`; QCVL UI labels this as `Tồn KV tạm nhập`.
 - Stocktake detail export is historical audit data. It explains past adjustments but does not equal current stock after later sales/purchases/stocktakes.
 - Formula is stable: `SL lệch = Kiểm thực tế - Tồn kho`.
 - Latest stocktake actual quantity must not overwrite product provisional stock. Example: `HDA5` product export stock is `60 Cuốn`, but latest stocktake actual is `0 Cuốn`.
+- Official QCVL stock correctness depends on enough QCVL movement sources: purchase/import receipt entries, sales deductions, stocktake balance, and roll/sheet/object operations. KV stock is only a comparison value to find differences.
 
 Decision:
 
 - Do not add stocktake history into the Product Import plan.
 - Implement KiotViet stocktake import under Inventory/Kiểm kho.
 - New implementation plan: `docs/superpowers/plans/2026-07-10-kiotviet-stocktake-import.md`.
-- Official QCVL stock still requires explicit review/balance flow after imported history is available.
+- Official QCVL stock still requires QCVL movement sources and formula-based calculation after imported history is available for comparison.
 
 ---
 ## File Structure

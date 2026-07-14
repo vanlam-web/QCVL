@@ -271,6 +271,50 @@ Lưu số hệ thống, số thực tế và chênh lệch theo từng quỹ/tà
 
 ---
 
+## 7A. KiotViet So Quy Import - current direction 2026-07-13
+
+Source file checked in Downloads:
+
+- `SoQuy_KV24062026-181948-016.xlsx`
+- 205 valid rows / 209 raw rows
+- Columns: `Ma phieu`, `Thoi gian`, `Nguoi tao`, `Nhan vien`, `Loai thu chi`, `Ten tai khoan`, `So tai khoan`, `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, `So dien thoai`, `Gia tri`, `Loai so quy`, `Trang thai`
+
+Observed KiotViet data:
+
+| Field | Values seen |
+|---|---|
+| `Loai so quy` | `Tien mat` 96 rows, `Ngan hang` 109 rows |
+| `Trang thai` | `Da thanh toan` 204 rows, `Da huy` 1 row |
+| Cash account fields | `Ten tai khoan` and `So tai khoan` blank |
+| Bank account fields | Filled by KiotViet account name and number |
+
+Finance account import rule:
+
+- Rows with `Loai so quy = Tien mat` map to one default cash account. Blank `Ten tai khoan` / `So tai khoan` is valid for cash.
+- Rows with `Loai so quy = Ngan hang` map to bank accounts by normalized pair `(Ten tai khoan, So tai khoan)`.
+- `finance_accounts` must be a real persisted table/repository. Do not store account choices as UI-only JSON or hard-coded constants.
+- Imported account rows should preserve KiotViet display name and account number so later cashbook/debt screens can filter by the same account seen in KV.
+
+Cashbook row import rule:
+
+- Use `Ma phieu` as source key for KiotViet import.
+- `Thoi gian` maps to `cashbook_entries.entry_time`.
+- `Gia tri > 0` maps to `direction = in`; `Gia tri < 0` maps to `direction = out`.
+- Store absolute voucher amount where a voucher record is created; keep signed delta in `cashbook_entries.amount_delta`.
+- `Trang thai = Da thanh toan` maps to `posted`; `Trang thai = Da huy` maps to `cancelled`.
+- `Loai thu chi` maps to cashbook category/voucher type. Unknown categories should be preserved as source text instead of dropped.
+- `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, and `So dien thoai` are counterparty source fields. Match to customer/supplier only when a reliable code exists; otherwise keep source text.
+- Imported KiotViet historical rows must be traceable with `source_system = kiotviet` and source code/file metadata. Manual QCVL rows and POS-generated rows must not overwrite imported KV rows.
+
+Implementation order:
+
+1. Build persisted finance account repository/API on local `3202`.
+2. Add parser tests for `SoQuy_KV*.xlsx`.
+3. Add preview/import/delete-old import flow for KiotViet cashbook.
+4. Verify totals by filter against KiotViet before promoting to NAS.
+
+---
+
 ## 8. ERD tóm tắt
 
 ```mermaid

@@ -19,7 +19,7 @@ export function formatApiError(cause: unknown, fallback: string): string {
     case 'AUTH_REQUIRED':
       return 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
     case 'LOGIN_FAILED':
-      return 'Tài khoản hoặc mật khẩu không đúng.'
+      return 'Tên đăng nhập/SĐT hoặc mật khẩu không đúng.'
     case 'WORKSTATION_INVALID':
       return 'Phiên làm việc không còn hợp lệ. Vui lòng đăng nhập lại.'
     case 'CONFIGURATION_ERROR':

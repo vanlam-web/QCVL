@@ -90,15 +90,28 @@ Form tạo mới:
 - tên hiển thị
 - mật khẩu tạm
 - preset quyền hoặc danh sách quyền tick chọn
-- nhóm mở rộng `Thông tin khác`: sinh nhật, địa chỉ, khu vực, phường/xã
-- nhóm mở rộng `Ghi chú`: textarea ghi chú nội bộ
+- nhóm mở rộng `Thông tin khác`: sinh nhật, địa chỉ, khu vực, phường/xã, ghi chú nội bộ
 
 Quy tắc:
 
+- `Ten hien thi` la nhan hien thi trong UI, bang, bo loc `Nguoi tao`, POS, bao cao va lich su thao tac.
+- `Ten dang nhap` la dinh danh dang nhap/noi bo; khong dung lam nhan hien thi chinh khi da co `Ten hien thi`.
+- Cac bo loc `Nguoi tao` nhu kiem kho, khach hang, hoa don, phieu nhap phai gui `users.id` ve API nhung hien nhan bang `Ten hien thi`.
+- Neu du lieu import tu KiotViet khong co cot nguoi tao, khong duoc gan nguoi import QCVL thanh `Nguoi tao`; UI hien `Chua co du lieu`.
+- Neu du lieu import tu KiotViet co cot nguoi tao, chi map ve tai khoan QCVL bang `Ten dang nhap` (`users.username`) sau khi bo hau to `{DEL}`. Khong map bang `Ten hien thi`, SĐT, hoac email. Sau khi map, UI hien thong tin hien tai cua tai khoan QCVL.
+- Khi mo hop thoai tao tai khoan, con tro tu dong nam o `Ten hien thi`.
+- Loi nhap lieu cua form tao tai khoan hien ngay trong hop thoai; loi tung truong hien trong o lien quan.
+- Loi truong bat buoc hien trong o nhap bang text loi va dau `!` mau do, khong day layout form xuong.
+- Neu backend tra `VALIDATION_ERROR`, form phai hien field loi cu the nhu `SĐT`, `Ten dang nhap`, `Mat khau`; khong chi hien cau chung `Du lieu chua hop le`.
+- Nhom `Thong tin khac` mac dinh thu gon; khi xo ra gom sinh nhat, dia chi, khu vuc, phuong/xa va ghi chu.
+- Truong bat buoc: ten hien thi, so dien thoai, ten dang nhap, mat khau tam, nhap lai mat khau, vai tro/preset quyen.
+- Email bat buoc khi tao tai khoan neu QCVL dung email de khoi phuc mat khau/lien he bao mat.
+- Huong phat trien tiep theo: dang nhap bang `Ten dang nhap` hoac `So dien thoai`; email khong phai tai khoan dang nhap chinh ma la kenh khoi phuc mat khau.
+- Sau khi luu thanh cong, hop thoai dong va bang tai khoan reload tu API; tai khoan moi phai hien ngay neu khong bi an boi bo loc.
 - Tài khoản mới trong MVP nên mặc định chọn preset `Nhân viên nội bộ` với đủ quyền thao tác chính, để tránh admin phải tick nhiều quyền lặt vặt.
 - Nếu tạo tài khoản quản trị, admin chọn preset `Chủ xưởng/Quản trị` có thêm quyền quản lý user/quyền và cấu hình hệ thống.
 - Nếu cần tài khoản hạn chế đặc biệt, admin có thể bỏ tick thủ công.
-- Email phải hợp lệ và chưa tồn tại.
+- Email phai hop le va chua ton tai.
 - Thông tin khác và ghi chú là không bắt buộc; nếu nhập thì lưu thật vào profile nhân viên khi tạo tài khoản.
 - Mật khẩu tạm không hiển thị lại sau khi lưu.
 - Sau khi tạo, admin gửi mật khẩu tạm cho nhân viên bằng kênh nội bộ; QC-OMS không tự gửi email trong MVP/current scope.
@@ -106,6 +119,17 @@ Quy tắc:
 ---
 
 ## 5. Chi tiết tài khoản
+
+Trong bảng tài khoản, cột `Thao tác` có icon sửa. Bấm icon này mở lại form tài khoản ở chế độ `Sửa tài khoản`.
+
+Quy tắc sửa nhanh:
+
+- Form sửa dùng chung giao diện với form tạo để tránh mỗi nơi một kiểu.
+- Các trường bắt buộc khi sửa: tên hiển thị, số điện thoại, tên đăng nhập, vai trò/preset quyền.
+- Email bắt buộc nếu tài khoản cần hỗ trợ khôi phục mật khẩu; không để trống trong luồng vận hành thật.
+- Mật khẩu không bắt buộc khi sửa. Nếu nhập mật khẩu mới thì phải nhập lại mật khẩu và hai giá trị phải khớp.
+- Bấm `Lưu` cập nhật thông tin tài khoản qua `PATCH /users/{id}`, sau đó cập nhật vai trò/quyền qua `PUT /users/{id}/permissions`.
+- Sau khi lưu thành công, hộp thoại đóng và bảng tài khoản reload từ API.
 
 Chi tiết gồm các tab:
 

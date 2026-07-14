@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
@@ -27,22 +27,26 @@ import {
 } from './purchase-receipt-calculations'
 import { purchaseReceiptTimeQuickOptions } from './purchase-receipt-filters'
 import { isExactPurchaseReceiptCode, money, statusText } from './purchase-receipt-presenter'
-import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { EmptyState, MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDataTable,
   ManagementDateRangeInputs,
-  ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
   ManagementPage,
+  ManagementTableCheckboxControl,
+  ManagementTableFavoriteButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 
 const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
@@ -68,7 +72,15 @@ const blankForm: PurchaseReceiptInput = {
 }
 
 const purchaseReceiptPageSize = 15
-type PurchaseReceiptSortKey = 'code' | 'received_at' | 'supplier' | 'line_count' | 'subtotal_amount' | 'payable_amount' | 'paid_amount' | 'remaining_amount' | 'status'
+type PurchaseReceiptSortKey = 'code' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
+
+function receiptTotalQuantity(receipt: PurchaseReceipt) {
+  return receipt.items.reduce((total, item) => total + Number(item.quantity || 0), 0)
+}
+
+function quantityText(value: number) {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+}
 
 export function PurchaseReceiptsPage({
   service,
@@ -84,11 +96,10 @@ export function PurchaseReceiptsPage({
   const [productsLoaded, setProductsLoaded] = useState(false)
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
+  const [receiptListSummary, setReceiptListSummary] = useState<{ payable_amount: number; remaining_amount: number } | null>(null)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(purchaseReceiptPageSize)
   const [search, setSearch] = useState('')
-  const [receiptSearchSuggestions, setReceiptSearchSuggestions] = useState<PurchaseReceipt[]>([])
-  const [receiptSearchSuggestionsOpen, setReceiptSearchSuggestionsOpen] = useState(false)
   const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>('posted')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -105,14 +116,15 @@ export function PurchaseReceiptsPage({
   const [posting, setPosting] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [financeAccountId, setFinanceAccountId] = useState('')
+  const [favoriteReceiptIds, setFavoriteReceiptIds] = useState<string[]>([])
+  const [showFavoriteReceiptsOnly, setShowFavoriteReceiptsOnly] = useState(false)
   const [supplierPaymentOpen, setSupplierPaymentOpen] = useState(false)
   const [supplierPaymentAmount, setSupplierPaymentAmount] = useState(0)
   const [supplierPaymentMethod, setSupplierPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [supplierPaymentFinanceAccountId, setSupplierPaymentFinanceAccountId] = useState('')
   const [rollLengthTexts, setRollLengthTexts] = useState<Record<number, string>>({})
+  const [importOpen, setImportOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const receiptSearchRequestId = useRef(0)
-
   const totals = useMemo(() => {
     return purchaseReceiptTotals(form)
   }, [form])
@@ -137,22 +149,29 @@ export function PurchaseReceiptsPage({
   const isReadOnly = editingStatus !== null && editingStatus !== 'draft'
   const selectedReceiptOutstanding = selectedReceipt ? receiptOutstandingAfterPost(selectedReceipt) : 0
   const isCreatingReceipt = detailOpen && editingId === null
-  const receiptSummary = useMemo(() => purchaseReceiptListSummary(receipts ?? []), [receipts])
+  const receiptSummary = useMemo(() => {
+    const fallback = purchaseReceiptListSummary(receipts ?? [])
+    return {
+      payable: receiptListSummary?.payable_amount ?? fallback.payable,
+      remaining: receiptListSummary?.remaining_amount ?? fallback.remaining,
+    }
+  }, [receiptListSummary, receipts])
   const {
     sortedItems: sortedReceipts,
     sortState: receiptSortState,
     requestSort: requestReceiptSort,
   } = useManagementTableSort<PurchaseReceipt, PurchaseReceiptSortKey>(receipts ?? [], {
     code: { kind: 'text', value: (receipt) => receipt.code },
-    received_at: { kind: 'date', value: (receipt) => receipt.received_at },
-    supplier: { kind: 'text', value: (receipt) => receipt.supplier.name },
-    line_count: { kind: 'number', value: (receipt) => receipt.items.length },
+    supplier_name: { kind: 'text', value: (receipt) => receipt.supplier.name },
+    total_quantity: { kind: 'number', value: (receipt) => receiptTotalQuantity(receipt) },
     subtotal_amount: { kind: 'number', value: (receipt) => receipt.subtotal_amount },
     payable_amount: { kind: 'number', value: (receipt) => receipt.payable_amount },
     paid_amount: { kind: 'number', value: (receipt) => receipt.paid_amount },
-    remaining_amount: { kind: 'number', value: (receipt) => receipt.remaining_amount },
-    status: { kind: 'text', value: (receipt) => receipt.status },
   })
+  const visibleReceipts = useMemo(() => {
+    if (!showFavoriteReceiptsOnly) return sortedReceipts
+    return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
+  }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
 
   async function loadReceipts(
     input: {
@@ -184,6 +203,7 @@ export function PurchaseReceiptsPage({
       })
       setReceipts(result.items)
       setTotal(result.total)
+      setReceiptListSummary(result.summary ?? null)
       setPage(result.page)
       setPageSize(result.page_size)
     } catch (cause) {
@@ -201,6 +221,7 @@ export function PurchaseReceiptsPage({
         if (!active) return
         setReceipts(receiptResult.items)
         setTotal(receiptResult.total)
+        setReceiptListSummary(receiptResult.summary ?? null)
         setPage(receiptResult.page)
         setPageSize(receiptResult.page_size)
       } catch (cause) {
@@ -240,20 +261,21 @@ export function PurchaseReceiptsPage({
   }
 
   async function filterReceipts(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setReceiptSearchSuggestionsOpen(false)
+    preventManagementSearchSubmit(event, () => applyReceiptSearch(search, { exactCodePriority: true }))
+  }
+
+  function applyReceiptSearch(nextSearch: string, options: { exactCodePriority?: boolean } = {}) {
     setPage(1)
-    if (isExactPurchaseReceiptCode(search)) {
+    if (options.exactCodePriority && isExactPurchaseReceiptCode(nextSearch)) {
       setStatus('all')
       setDateFrom('')
       setDateTo('')
       setCreatedBy('all')
       setActivePreset(null)
-      await loadReceipts({ search: search.trim(), status: 'all', page: 1, page_size: pageSize })
-      return
+      return loadReceipts({ search: nextSearch.trim(), status: 'all', page: 1, page_size: pageSize })
     }
-    await loadReceipts({
-      search: search.trim() || undefined,
+    return loadReceipts({
+      search: nextSearch.trim() || undefined,
       status,
       date_from: dateFrom || undefined,
       date_to: dateTo || undefined,
@@ -263,48 +285,15 @@ export function PurchaseReceiptsPage({
     })
   }
 
-  async function suggestReceipts(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = receiptSearchRequestId.current + 1
-    receiptSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setReceiptSearchSuggestions([])
-      setReceiptSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listReceipts({
-        search: query,
-        status,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
-        created_by: createdBy === 'all' ? undefined : createdBy,
-        page: 1,
-        page_size: 8,
-      })
-      if (receiptSearchRequestId.current !== requestId) return
-      setReceiptSearchSuggestions(result.items)
-      setReceiptSearchSuggestionsOpen(true)
-    } catch {
-      if (receiptSearchRequestId.current !== requestId) return
-      setReceiptSearchSuggestions([])
-      setReceiptSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectReceiptSuggestion(receipt: PurchaseReceipt) {
-    setSearch(receipt.code)
-    setReceiptSearchSuggestionsOpen(false)
-    setPage(1)
-    await loadReceipts({
-      search: receipt.code,
-      status,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined,
-      created_by: createdBy === 'all' ? undefined : createdBy,
-      page: 1,
-      page_size: pageSize,
+  function changeReceiptSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      resetSelection: () => {
+        setSelectedReceipt(null)
+        setDetailOpen(false)
+        setEditingId(null)
+      },
+      load: (query) => applyReceiptSearch(query),
     })
   }
 
@@ -404,6 +393,14 @@ export function PurchaseReceiptsPage({
     } finally {
       setLoadingReceiptId(null)
     }
+  }
+
+  function toggleReceiptFavorite(receipt: PurchaseReceipt) {
+    setFavoriteReceiptIds((current) =>
+      current.includes(receipt.id)
+        ? current.filter((receiptId) => receiptId !== receipt.id)
+        : [...current, receipt.id],
+    )
   }
 
   async function saveReceipt(event: React.FormEvent<HTMLFormElement>) {
@@ -599,22 +596,17 @@ export function PurchaseReceiptsPage({
   }
 
   const creatorOptions = useMemo(() => {
-    const creators = new Set((receipts ?? []).map((receipt) => receipt.created_by).filter(Boolean))
-    return Array.from(creators).sort((left, right) => left.localeCompare(right))
+    const creators = new Map<string, string>()
+    for (const receipt of receipts ?? []) {
+      creators.set(receipt.created_by.id, receipt.created_by.name)
+    }
+    return Array.from(creators, ([id, name]) => ({ id, name })).sort((left, right) => left.name.localeCompare(right.name))
   }, [receipts])
+  const selectedCreatorName = creatorOptions.find((creator) => creator.id === createdBy)?.name ?? createdBy
   const receiptTimeQuickOptions = purchaseReceiptTimeQuickOptions()
   const selectedTimeQuickOption = receiptTimeQuickOptions.find((option) => option.from === dateFrom && option.to === dateTo)?.id ?? 'custom'
 
   const receiptFilterChips = [
-    ...(search.trim()
-      ? [
-          {
-            id: 'search',
-            label: `Tìm: ${search.trim()}`,
-            onClear: () => void applyReceiptFilters({ search: '', preset: null }),
-          },
-        ]
-      : []),
     ...(activePreset
       ? [
           {
@@ -637,7 +629,7 @@ export function PurchaseReceiptsPage({
       ? [
           {
             id: 'created-by',
-            label: `Người tạo: ${createdBy}`,
+            label: `Người tạo: ${selectedCreatorName}`,
             onClear: () => void applyReceiptFilters({ createdBy: 'all' }),
           },
         ]
@@ -1156,29 +1148,16 @@ export function PurchaseReceiptsPage({
             label="Tìm phiếu/NCC"
             leadingIcon={<Search aria-hidden="true" size={16} />}
             placeholder="Tìm mã phiếu, NCC"
-            suggestions={
-              receiptSearchSuggestionsOpen
-                ? receiptSearchSuggestions.map((receipt) => ({
-                    id: receipt.id,
-                    primary: `${receipt.code} ${receipt.supplier.name}`,
-                    secondary: `${receipt.supplier.code} - ${receipt.supplier.name}`,
-                    meta: money(receipt.payable_amount),
-                    ariaLabel: `${receipt.code} ${receipt.supplier.name}`,
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý phiếu nhập"
-            emptySuggestion="Không có kết quả phù hợp"
             trailingAction={
               <ManagementCompactCreateAction ariaLabel="Tạo phiếu nhập" onClick={() => void openCreateReceipt()} />
             }
             value={search}
-            onChange={(nextSearch) => void suggestReceipts(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const receipt = receiptSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (receipt) void selectReceiptSuggestion(receipt)
-            }}
+            onChange={changeReceiptSearch}
           />
+          <button className="button button-secondary" type="button" onClick={() => setImportOpen(true)}>
+            <FilePlus2 aria-hidden="true" size={16} />
+            Import KV
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={receiptKpis}
@@ -1245,8 +1224,8 @@ export function PurchaseReceiptsPage({
             >
               <option value="all">Tất cả người tạo</option>
               {creatorOptions.map((creator) => (
-                <option key={creator} value={creator}>
-                  {creator}
+                <option key={creator.id} value={creator.id}>
+                  {creator.name}
                 </option>
               ))}
             </select>
@@ -1288,81 +1267,107 @@ export function PurchaseReceiptsPage({
                 </EmptyState>
               ) : (
                 <ManagementTableViewport>
-                  <table>
-                    <thead>
-                      <tr>
-                        <ManagementSortableHeader kind="text" sortKey="code" sortState={receiptSortState} onSort={requestReceiptSort}>Mã PN</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="date" sortKey="received_at" sortState={receiptSortState} onSort={requestReceiptSort}>Thời gian</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="text" sortKey="supplier" sortState={receiptSortState} onSort={requestReceiptSort}>Nhà cung cấp</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="number" sortKey="line_count" sortState={receiptSortState} onSort={requestReceiptSort}>Số dòng</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng tiền hàng</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="number" sortKey="payable_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Cần trả</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Đã trả</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="number" sortKey="remaining_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Còn phải trả</ManagementSortableHeader>
-                        <ManagementSortableHeader kind="text" sortKey="status" sortState={receiptSortState} onSort={requestReceiptSort}>Trạng thái</ManagementSortableHeader>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sortedReceipts.map((receipt) => {
-                        const detailForRow = editingId === receipt.id
-                        const loadingForRow = loadingReceiptId === receipt.id
-                        return (
-                          <Fragment key={receipt.id}>
-                            <tr
-                              aria-expanded={detailForRow || loadingForRow}
-                              className={`management-data-row${detailForRow || loadingForRow ? ' management-data-row-selected' : ''}`}
-                              tabIndex={0}
-                              onClick={() => void openReceipt(receipt)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  event.preventDefault()
-                                  void openReceipt(receipt)
-                                }
-                              }}
-                            >
-                              <td>
-                                <button
-                                  className="management-link-button"
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation()
-                                    void openReceipt(receipt)
-                                  }}
-                                >
-                                  <strong>{receipt.code}</strong>
-                                </button>
-                              </td>
-                              <td>{formatKvDateTime(receipt.received_at)}</td>
-                              <td>{`${receipt.supplier.code} - ${receipt.supplier.name}`}</td>
-                              <td>{receipt.items.length}</td>
-                              <td><MoneyText value={receipt.subtotal_amount} /></td>
-                              <td><MoneyText value={receipt.payable_amount} /></td>
-                              <td><MoneyText value={receipt.paid_amount} /></td>
-                              <td><MoneyText value={receipt.remaining_amount} /></td>
-                              <td>
-                                <StatusChip
-                                  tone={receipt.status === 'draft' ? 'info' : receipt.status === 'posted' ? 'success' : 'danger'}
-                                >
-                                  {statusText(receipt.status)}
-                                </StatusChip>
-                              </td>
-                            </tr>
-                            {detailForRow || loadingForRow ? (
-                              <ManagementDetailRow
-                                colSpan={9}
-                                detailClassName="management-detail-panel"
-                                label={`Chi tiết phiếu nhập ${receipt.code}`}
-                              >
-                                {loadingForRow
-                                  ? receiptDetailLoading(`Đang tải chi tiết ${receipt.code}`)
-                                  : receiptDetailContent(`Nội dung chi tiết ${receipt.code}`)}
-                              </ManagementDetailRow>
-                            ) : null}
-                          </Fragment>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                  <ManagementDataTable
+                    ariaLabel="Danh sách phiếu nhập"
+                    columns={[
+                      {
+                        key: 'select',
+                        className: 'finance-cashbook-select-column',
+                        header: <ManagementTableCheckboxControl ariaLabel="Chọn tất cả phiếu nhập" />,
+                        cell: (receipt) => (
+                          <ManagementTableCheckboxControl
+                            ariaLabel={`Chọn phiếu nhập ${receipt.code}`}
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        ),
+                      },
+                      {
+                        key: 'favorite',
+                        className: 'finance-cashbook-star-column',
+                        header: (
+                          <ManagementTableFavoriteButton
+                            active={showFavoriteReceiptsOnly}
+                            ariaLabel={showFavoriteReceiptsOnly ? 'Hiện tất cả phiếu nhập' : 'Chỉ hiện phiếu nhập ưu tiên'}
+                            onClick={() => setShowFavoriteReceiptsOnly(!showFavoriteReceiptsOnly)}
+                          />
+                        ),
+                        cell: (receipt) => (
+                          <ManagementTableFavoriteButton
+                            active={favoriteReceiptIds.includes(receipt.id)}
+                            ariaLabel={favoriteReceiptIds.includes(receipt.id) ? `Bỏ ưu tiên ${receipt.code}` : `Đánh dấu ưu tiên ${receipt.code}`}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              toggleReceiptFavorite(receipt)
+                            }}
+                          />
+                        ),
+                      },
+                      {
+                        key: 'code',
+                        header: <ManagementSortableHeader kind="text" sortKey="code" sortState={receiptSortState} onSort={requestReceiptSort}>Mã nhập hàng</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => (
+                          <button
+                            className="management-link-button"
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void openReceipt(receipt)
+                            }}
+                          >
+                            <strong>{receipt.code}</strong>
+                          </button>
+                        ),
+                      },
+                      {
+                        key: 'supplier-name',
+                        header: <ManagementSortableHeader kind="text" sortKey="supplier_name" sortState={receiptSortState} onSort={requestReceiptSort}>Nhà cung cấp</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => receipt.supplier.name,
+                      },
+                      {
+                        key: 'total-quantity',
+                        header: <ManagementSortableHeader kind="number" sortKey="total_quantity" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng số lượng</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => quantityText(receiptTotalQuantity(receipt)),
+                      },
+                      {
+                        key: 'subtotal',
+                        header: <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng tiền hàng</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => <MoneyText value={receipt.subtotal_amount} />,
+                      },
+                      {
+                        key: 'payable',
+                        header: <ManagementSortableHeader kind="number" sortKey="payable_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Cần trả NCC</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => <MoneyText value={receipt.payable_amount} />,
+                      },
+                      {
+                        key: 'paid',
+                        header: <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tiền đã trả NCC</ManagementSortableHeader>,
+                        headerIsCell: true,
+                        cell: (receipt) => <MoneyText value={receipt.paid_amount} />,
+                      },
+                    ]}
+                    detailClassName="management-detail-panel"
+                    getDetailLabel={(receipt) => `Chi tiết phiếu nhập ${receipt.code}`}
+                    getRowKey={(receipt) => receipt.id}
+                    items={visibleReceipts}
+                    renderDetail={(receipt) => (
+                      loadingReceiptId === receipt.id
+                        ? receiptDetailLoading(`Đang tải chi tiết ${receipt.code}`)
+                        : receiptDetailContent(`Nội dung chi tiết ${receipt.code}`)
+                    )}
+                    selectedRowKey={loadingReceiptId ?? editingId}
+                    onRowClick={(receipt) => void openReceipt(receipt)}
+                    onRowKeyDown={(receipt, event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        void openReceipt(receipt)
+                      }
+                    }}
+                  />
                 </ManagementTableViewport>
               )}
               <ManagementTableFooter
@@ -1382,6 +1387,13 @@ export function PurchaseReceiptsPage({
             </>
           ) : null}
       </ManagementListSurface>
+      <PurchaseReceiptImportDialog
+        open={importOpen}
+        service={service}
+        onClose={() => setImportOpen(false)}
+        onImported={() => void loadReceipts({ page: 1, page_size: pageSize })}
+        onOldDataDeleted={() => void loadReceipts({ page: 1, page_size: pageSize })}
+      />
     </ManagementPage>
   )
 }

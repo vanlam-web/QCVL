@@ -7,6 +7,7 @@ import {
   paymentReceiptMethodTotal,
   paymentReceiptStatusLabel,
   salesDocumentDateTimeText,
+  salesDocumentCreatedDateTimeText,
   salesDocumentLineSellPrice,
   salesDocumentListSummary,
   salesDocumentMeasureText,
@@ -94,6 +95,17 @@ describe('sales document presenter', () => {
   it('formats sales document date text outside the page', () => {
     expect(salesDocumentDateTimeText(null)).toBe('-')
     expect(salesDocumentDateTimeText('bad-date', '2026-07-09T03:00:00Z')).not.toBe('-')
+  })
+
+  it('formats POS-created invoices in local time but keeps KiotViet source clock unchanged', () => {
+    expect(salesDocumentCreatedDateTimeText({
+      code: 'HD-POS-021-37F1D9E6',
+      created_at: '2026-07-12T17:20:00.000Z',
+    })).toBe('13/07/2026 00:20')
+    expect(salesDocumentCreatedDateTimeText({
+      code: 'HD011143',
+      created_at: '2026-07-12T17:20:00.000Z',
+    })).toBe('12/07/2026 17:20')
   })
 
   it('formats quote print values outside the print page', () => {

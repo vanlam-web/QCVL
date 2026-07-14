@@ -138,6 +138,55 @@ describe('finance-service', () => {
     ])
   })
 
+  it('creates and updates finance accounts through API', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'bank-1', code: 'VCB', name: 'Vietcombank', account_type: 'bank', is_default_cash: false, is_active: false } as T
+    }
+    const service = createFinanceService({ request })
+
+    await (service as any).createFinanceAccount({
+      code: 'VCB',
+      name: 'Vietcombank',
+      account_type: 'bank',
+      is_default_cash: false,
+      is_active: true,
+      account_number: '0771000598653',
+      account_holder: 'VAN VIET PHUONG LAM',
+      opening_balance: 0,
+      notify_on_transaction: true,
+    })
+    await (service as any).updateFinanceAccount('bank-1', { is_active: false })
+
+    expect(calls).toEqual([
+      [
+        '/api/v1/finance/accounts',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: 'VCB',
+            name: 'Vietcombank',
+            account_type: 'bank',
+            is_default_cash: false,
+            is_active: true,
+            account_number: '0771000598653',
+            account_holder: 'VAN VIET PHUONG LAM',
+            opening_balance: 0,
+            notify_on_transaction: true,
+          }),
+        },
+      ],
+      [
+        '/api/v1/finance/accounts/bank-1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ is_active: false }),
+        },
+      ],
+    ])
+  })
+
   it('posts manual cashbook voucher revise payload', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -181,6 +230,30 @@ describe('finance-service', () => {
     ])
   })
 
+  it('calls KiotViet cashbook import endpoints', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createFinanceService({ request })
+    const file = new File([new Uint8Array([1, 2, 3])], 'SoQuy_KV.xlsx')
+
+    await service.previewKiotVietCashbookImport({ file })
+    await service.importKiotVietCashbook({ file })
+    await service.deleteImportedKiotVietCashbook()
+
+    expect(calls.map(([path, init]) => [path, init?.method])).toEqual([
+      ['/api/v1/finance/cashbook/import/kiotviet/preview', 'POST'],
+      ['/api/v1/finance/cashbook/import/kiotviet', 'POST'],
+      ['/api/v1/finance/cashbook/import/kiotviet', 'DELETE'],
+    ])
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({
+      file_name: 'SoQuy_KV.xlsx',
+      file_base64: 'AQID',
+    })
+  })
+
   it('builds a cashbook CSV from visible rows', () => {
     expect(buildCashbookCsv([
       {
@@ -197,8 +270,8 @@ describe('finance-service', () => {
         counterparty: { type: 'supplier', name: 'Thu Nghĩa', phone: '000100' },
       },
     ])).toBe([
-      '\uFEFFMã phiếu,Thời gian,Loại thu chi,Người nộp/nhận,Giá trị,Quỹ/Tài khoản,Trạng thái,Ghi chú,Hạch toán KQKD',
-      'CTM001180,2026-07-04T07:46:00.000Z,,Thu Nghĩa,-30000,CASH,posted,Vận chuyển,true',
+      '\uFEFFMã phiếu,Thời gian,Người tạo,Loại thu chi,Số tài khoản,Người nộp/nhận,Giá trị,Ghi chú',
+      'CTM001180,2026-07-04T07:46:00.000Z,,,,Thu Nghĩa,-30000,Vận chuyển',
     ].join('\n'))
   })
 })

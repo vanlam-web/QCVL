@@ -107,17 +107,19 @@ async function main() {
 
 async function seedAdmin(client, { adminEmail, adminPassword, adminName }) {
   const passwordHash = await hashPassword(adminPassword)
+  const adminUsername = adminUsernameFromEmail(adminEmail)
   await client.query(
     `
       with org as (
         select id from organizations where code = 'VAN-LAM'
       ),
       upserted_user as (
-        insert into users (organization_id, email, password_hash, display_name, status)
-        select org.id, lower($1), $2, $3, 'active'
+        insert into users (organization_id, email, username, password_hash, display_name, status)
+        select org.id, lower($1), $4, $2, $3, 'active'
         from org
         on conflict (organization_id, email) do update
-        set password_hash = excluded.password_hash,
+        set username = excluded.username,
+            password_hash = excluded.password_hash,
             display_name = excluded.display_name,
             status = 'active',
             updated_at = now()
@@ -129,8 +131,12 @@ async function seedAdmin(client, { adminEmail, adminPassword, adminName }) {
       cross join permissions
       on conflict do nothing
     `,
-    [adminEmail, passwordHash, adminName],
+    [adminEmail, passwordHash, adminName, adminUsername],
   )
+}
+
+export function adminUsernameFromEmail(adminEmail) {
+  return String(adminEmail).trim().toLowerCase().split('@')[0] || 'admin'
 }
 
 async function hashPassword(password) {

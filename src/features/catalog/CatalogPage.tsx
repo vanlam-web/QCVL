@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight, Search, Upload, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { currentMonthRange, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
@@ -8,15 +8,21 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDataTable,
+  type ManagementDataTableColumn,
   ManagementDateRangeInputs,
-  ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
   ManagementPage,
+  ManagementTableCheckboxControl,
+  ManagementTableFavoriteButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CatalogService } from './catalog-service'
 import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStockMovement, SellMethod } from './types'
 import {
@@ -49,6 +55,7 @@ type BomFormLine = CatalogBomFormLine
 type StockAdjustForm = { actualQty: string; reason: string }
 type StocktakeNotice = { id: string; code: string }
 type ProductDetailTab = 'info' | 'unit-conversion' | 'bom' | 'inventory' | 'stock-card' | 'notes'
+type ProductSortKey = 'code' | 'name' | 'latest_purchase_cost' | 'default_sale_price' | 'operating_stock' | 'unit_name' | 'out_of_stock'
 
 interface StockMovementState {
   items: ProductStockMovement[]
@@ -138,8 +145,8 @@ const detailTabs: Array<{ key: ProductDetailTab; label: string }> = [
 ]
 
 function catalogProductInventoryText(product: Product) {
-  if (product.kiotviet_provisional_stock) {
-    return `${catalogQuantityText(product.kiotviet_provisional_stock.quantity)} ${product.kiotviet_provisional_stock.unit_name}`
+  if (product.operating_stock) {
+    return `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}`
   }
   return 'Chưa có'
 }
@@ -176,8 +183,6 @@ export function CatalogPage({
   const [stocktakeNotices, setStocktakeNotices] = useState<Record<string, StocktakeNotice>>({})
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
   const [search, setSearch] = useState('')
-  const [productSearchSuggestions, setProductSearchSuggestions] = useState<Product[]>([])
-  const [productSearchSuggestionsOpen, setProductSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
@@ -214,8 +219,6 @@ export function CatalogPage({
     latestPurchaseCost: '0',
     productGroupId: '',
   })
-  const productSearchRequestId = useRef(0)
-
   async function load(filters: {
     search?: string
     status?: ProductStatus | 'all'
@@ -294,11 +297,13 @@ export function CatalogPage({
   }, [service])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setProductSearchSuggestionsOpen(false)
+    preventManagementSearchSubmit(event, () => applyProductSearch(search))
+  }
+
+  function applyProductSearch(nextSearch: string) {
     setPage(1)
-    await load({
-      search: search.trim(),
+    return load({
+      search: nextSearch,
       status,
       product_kind: productKindFilter,
       product_group_id: productGroupFilter,
@@ -309,51 +314,14 @@ export function CatalogPage({
     })
   }
 
-  async function suggestProducts(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = productSearchRequestId.current + 1
-    productSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setProductSearchSuggestions([])
-      setProductSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listProducts({
-        search: query,
-        status,
-        ...(productKindFilter === 'all' ? {} : { product_kind: productKindFilter }),
-        ...(productGroupFilter === 'all' ? {} : { product_group_id: productGroupFilter }),
-        ...(inventoryShapeFilter === 'all' ? {} : { inventory_shape: inventoryShapeFilter }),
-        ...(productCreatedDateFrom ? { created_from: productCreatedDateFrom } : {}),
-        ...(productCreatedDateTo ? { created_to: productCreatedDateTo } : {}),
-        page: 1,
-        page_size: 8,
-      })
-      if (productSearchRequestId.current !== requestId) return
-      setProductSearchSuggestions(result.items)
-      setProductSearchSuggestionsOpen(true)
-    } catch {
-      if (productSearchRequestId.current !== requestId) return
-      setProductSearchSuggestions([])
-      setProductSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectProductSuggestion(product: Product) {
-    setSearch(product.code)
-    setProductSearchSuggestionsOpen(false)
-    setPage(1)
-    await load({
-      search: product.code,
-      status,
-      product_kind: productKindFilter,
-      product_group_id: productGroupFilter,
-      inventory_shape: inventoryShapeFilter,
-      created_from: productCreatedDateFrom,
-      created_to: productCreatedDateTo,
-      page: 1,
+  function changeProductSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      resetSelection: () => {
+        setSelectedProductId(null)
+        setSelectedDetailTab('info')
+      },
+      load: applyProductSearch,
     })
   }
 
@@ -701,14 +669,115 @@ export function CatalogPage({
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = lastSearch
-    ? `Tìm: ${lastSearch}`
-    : lastStatus === 'active' && lastProductKindFilter === 'all'
+  const activeFilterSummary = lastStatus === 'active' && lastProductKindFilter === 'all'
       ? 'Đang kinh doanh'
       : 'Bộ lọc hàng hóa'
   const visibleProducts = showFavoriteProductsOnly && state !== null
     ? state.products.filter((product) => favoriteProductIds.includes(product.id))
     : state?.products ?? []
+  const {
+    sortedItems: sortedProducts,
+    sortState: productSortState,
+    requestSort: requestProductSort,
+  } = useManagementTableSort<Product, ProductSortKey>(visibleProducts, {
+    code: { kind: 'text', value: (product) => product.code },
+    name: { kind: 'text', value: (product) => product.name },
+    latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
+    default_sale_price: { kind: 'number', value: (product) => product.default_sale_price },
+    operating_stock: { kind: 'number', value: (product) => product.operating_stock?.quantity },
+    unit_name: { kind: 'text', value: (product) => product.unit_name },
+    out_of_stock: { kind: 'text', value: () => null },
+  })
+  const productColumns: Array<ManagementDataTableColumn<Product>> = [
+    {
+      key: 'select',
+      className: 'finance-cashbook-select-column',
+      header: <ManagementTableCheckboxControl ariaLabel="Chọn tất cả dòng hàng hóa" />,
+      cell: (product) => (
+        <ManagementTableCheckboxControl
+          ariaLabel={`Chọn dòng ${product.code}`}
+          onClick={stopProductRowAction}
+        />
+      ),
+    },
+    {
+      key: 'favorite',
+      className: 'finance-cashbook-star-column',
+      header: (
+        <th aria-label="Đánh dấu" className="finance-cashbook-star-column">
+          <ManagementTableFavoriteButton
+            active={showFavoriteProductsOnly}
+            ariaLabel={showFavoriteProductsOnly ? 'Hiện tất cả hàng hóa' : 'Chỉ hiện hàng ưu tiên'}
+            onClick={() => setShowFavoriteProductsOnly(!showFavoriteProductsOnly)}
+          />
+        </th>
+      ),
+      headerIsCell: true,
+      cell: (product) => (
+        <ManagementTableFavoriteButton
+          active={favoriteProductIds.includes(product.id)}
+          ariaLabel={favoriteProductIds.includes(product.id) ? `Bỏ ưu tiên ${product.code}` : `Đánh dấu ưu tiên ${product.code}`}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleProductFavorite(product)
+          }}
+        />
+      ),
+    },
+    {
+      key: 'code',
+      header: <ManagementSortableHeader kind="text" sortKey="code" sortState={productSortState} onSort={requestProductSort}>Mã hàng</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => (
+        <button
+          className="management-link-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            void toggleProductDetail(product)
+          }}
+        >
+          <strong>{product.code}</strong>
+        </button>
+      ),
+    },
+    {
+      key: 'name',
+      header: <ManagementSortableHeader kind="text" sortKey="name" sortState={productSortState} onSort={requestProductSort}>Tên hàng</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => product.name,
+    },
+    {
+      key: 'cost',
+      header: <ManagementSortableHeader kind="number" sortKey="latest_purchase_cost" sortState={productSortState} onSort={requestProductSort}>Giá vốn</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => formatMoney(product.latest_purchase_cost ?? 0),
+    },
+    {
+      key: 'price',
+      header: <ManagementSortableHeader kind="number" sortKey="default_sale_price" sortState={productSortState} onSort={requestProductSort}>Giá bán</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price),
+    },
+    {
+      key: 'operating-stock',
+      header: <ManagementSortableHeader kind="number" sortKey="operating_stock" sortState={productSortState} onSort={requestProductSort}>Tồn QCVL</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => catalogProductInventoryText(product),
+    },
+    {
+      key: 'unit',
+      header: <ManagementSortableHeader kind="text" sortKey="unit_name" sortState={productSortState} onSort={requestProductSort}>Đơn vị</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (product) => product.unit_name,
+    },
+    {
+      key: 'out-of-stock',
+      header: <ManagementSortableHeader kind="text" sortKey="out_of_stock" sortState={productSortState} onSort={requestProductSort}>Dự kiến hết hàng</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: () => 'Chưa có',
+    },
+  ]
 
   return (
     <ManagementPage
@@ -723,24 +792,7 @@ export function CatalogPage({
               <ManagementCompactCreateAction ariaLabel="Tạo hàng hóa" onClick={() => setCreateOpen(true)} />
             }
             value={search}
-            suggestions={
-              productSearchSuggestionsOpen
-                ? productSearchSuggestions.map((product) => ({
-                    id: product.id,
-                    primary: `${product.code} ${product.name}`,
-                    secondary: product.product_group?.name ?? product.unit_name,
-                    meta: product.unit_name,
-                    ariaLabel: `${product.code} ${product.name}`,
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý hàng hóa"
-            emptySuggestion="Không có kết quả phù hợp"
-            onChange={(nextSearch) => void suggestProducts(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const product = productSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (product) void selectProductSuggestion(product)
-            }}
+            onChange={changeProductSearch}
           />
           <button className="button button-secondary" type="button" onClick={() => setProductImportOpen(true)}>
             <Upload aria-hidden="true" size={16} />
@@ -915,89 +967,13 @@ export function CatalogPage({
         {state ? (
           <>
             <ManagementTableViewport>
-              <table aria-label="Danh sách hàng hóa">
-                <thead>
-                  <tr>
-                    <th className="finance-cashbook-select-column">
-                      <span className="finance-cashbook-checkbox-control">
-                        <input aria-label="Chọn tất cả dòng hàng hóa" type="checkbox" />
-                      </span>
-                    </th>
-                    <th aria-label="Đánh dấu" className="finance-cashbook-star-column">
-                      <button
-                        aria-label={showFavoriteProductsOnly ? 'Hiện tất cả hàng hóa' : 'Chỉ hiện hàng ưu tiên'}
-                        aria-pressed={showFavoriteProductsOnly}
-                        className={`finance-cashbook-star-button${showFavoriteProductsOnly ? ' finance-cashbook-star-button-active' : ''}`}
-                        type="button"
-                        onClick={() => setShowFavoriteProductsOnly(!showFavoriteProductsOnly)}
-                      >
-                        ☆
-                      </button>
-                    </th>
-                    <th>Mã hàng</th>
-                    <th>Tên hàng</th>
-                    <th>Giá vốn</th>
-                    <th>Giá bán</th>
-                    <th>Tồn kho</th>
-                    <th>Đơn vị</th>
-                    <th>Dự kiến hết hàng</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleProducts.map((product) => (
-                    <Fragment key={product.id}>
-                      <tr
-                        aria-expanded={selectedProductId === product.id}
-                        className={`management-data-row${selectedProductId === product.id ? ' management-data-row-selected' : ''}`}
-                        tabIndex={0}
-                        onClick={() => void toggleProductDetail(product)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault()
-                            void toggleProductDetail(product)
-                          }
-                        }}
-                      >
-                        <td className="finance-cashbook-select-column">
-                          <span className="finance-cashbook-checkbox-control">
-                            <input aria-label={`Chọn dòng ${product.code}`} type="checkbox" onClick={stopProductRowAction} />
-                          </span>
-                        </td>
-                        <td className="finance-cashbook-star-column">
-                          <button
-                            aria-label={favoriteProductIds.includes(product.id) ? `Bỏ ưu tiên ${product.code}` : `Đánh dấu ưu tiên ${product.code}`}
-                            aria-pressed={favoriteProductIds.includes(product.id)}
-                            className={`finance-cashbook-star-button${favoriteProductIds.includes(product.id) ? ' finance-cashbook-star-button-active' : ''}`}
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              toggleProductFavorite(product)
-                            }}
-                          >
-                            ☆
-                          </button>
-                        </td>
-                        <td>
-                          <button
-                            className="management-link-button"
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              void toggleProductDetail(product)
-                            }}
-                          >
-                            <strong>{product.code}</strong>
-                          </button>
-                        </td>
-                        <td>{product.name}</td>
-                        <td>{formatMoney(product.latest_purchase_cost ?? 0)}</td>
-                        <td>{product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price)}</td>
-                        <td>{catalogProductInventoryText(product)}</td>
-                        <td>{product.unit_name}</td>
-                        <td>Chưa có</td>
-                      </tr>
-                      {selectedProductId === product.id ? (
-                        <ManagementDetailRow colSpan={9} label={`Chi tiết hàng hóa ${product.code}`}>
+              <ManagementDataTable
+                ariaLabel="Danh sách hàng hóa"
+                columns={productColumns}
+                getDetailLabel={(product) => `Chi tiết hàng hóa ${product.code}`}
+                getRowKey={(product) => product.id}
+                items={sortedProducts}
+                renderDetail={(product) => (
                           <div className="management-detail-panel">
                             <div className="inline-detail-tabbar">
                               <div aria-label={`Chi tiết hàng hóa ${product.code}`} className="inline-detail-tabs" role="tablist">
@@ -1051,7 +1027,7 @@ export function CatalogPage({
                                     <dd>{catalogInventoryShapeLabel(product.inventory_shape ?? 'normal')}</dd>
                                   </div>
                                   <div>
-                                    <dt>Tồn kho</dt>
+                                    <dt>Tồn KV tạm nhập</dt>
                                     <dd>{catalogProductInventoryText(product)}</dd>
                                   </div>
                                   <div>
@@ -1266,10 +1242,20 @@ export function CatalogPage({
                                   <h3>Tồn kho</h3>
                                   <span>{catalogInventoryShapeLabel(product.inventory_shape ?? 'normal')}</span>
                                 </header>
+                                <dl className="management-detail-meta-grid management-detail-meta-grid-four">
+                                  <div>
+                                    <dt>Tồn QCVL</dt>
+                                    <dd>{product.operating_stock ? `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}` : 'Chưa có'}</dd>
+                                  </div>
+                                  <div>
+                                    <dt>Nguồn</dt>
+                                    <dd>{product.operating_stock?.source_label ?? 'Chưa chốt mốc tồn đầu kỳ'}</dd>
+                                  </div>
+                                </dl>
                                 {product.kiotviet_provisional_stock ? (
                                   <dl className="management-detail-meta-grid management-detail-meta-grid-four">
                                     <div>
-                                      <dt>Tồn tạm KiotViet</dt>
+                                      <dt>Tồn KV tạm nhập</dt>
                                       <dd>{catalogQuantityText(product.kiotviet_provisional_stock.quantity)} {product.kiotviet_provisional_stock.unit_name}</dd>
                                     </div>
                                     <div>
@@ -1495,12 +1481,16 @@ export function CatalogPage({
                               </div>
                             </footer>
                           </div>
-                        </ManagementDetailRow>
-                      ) : null}
-                    </Fragment>
-                  ))}
-                </tbody>
-              </table>
+                )}
+                selectedRowKey={selectedProductId}
+                onRowClick={(product) => void toggleProductDetail(product)}
+                onRowKeyDown={(product, event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    void toggleProductDetail(product)
+                  }
+                }}
+              />
             </ManagementTableViewport>
             <ManagementTableFooter
               ariaLabel="Phân trang hàng hóa"

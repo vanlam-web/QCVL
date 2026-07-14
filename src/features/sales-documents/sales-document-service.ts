@@ -1,6 +1,6 @@
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
-import type { SalesDocumentDetail, SalesDocumentListResponse } from './types'
+import type { KiotVietImportDeleteResult, KiotVietInvoiceImportPreview, KiotVietInvoiceImportResult, SalesDocumentDetail, SalesDocumentListResponse } from './types'
 
 export type { SalesDocumentDetail, SalesDocumentListItem, SalesDocumentListResponse } from './types'
 
@@ -41,10 +41,44 @@ export function createSalesDocumentService(api: SalesDocumentApiRequester) {
       return api.request<SalesDocumentListResponse>(`/api/v1/sales-documents${query ? `?${query}` : ''}`)
     },
     getSalesDocument: (id: string) => api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`),
+    cancelSalesDocument: (id: string) =>
+      api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' }),
+      }),
+    previewKiotVietInvoiceImport: async (input: { file: File }) =>
+      api.request<KiotVietInvoiceImportPreview>('/api/v1/sales-documents/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietInvoiceImportPayload(input)),
+      }),
+    importKiotVietInvoices: async (input: { file: File }) =>
+      api.request<KiotVietInvoiceImportResult>('/api/v1/sales-documents/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietInvoiceImportPayload(input)),
+      }),
+    deleteImportedKiotVietInvoices: () =>
+      api.request<KiotVietImportDeleteResult>('/api/v1/sales-documents/import/kiotviet', {
+        method: 'DELETE',
+      }),
   }
 }
 
 export type SalesDocumentService = ReturnType<typeof createSalesDocumentService>
+
+async function buildKiotVietInvoiceImportPayload(input: { file: File }) {
+  const buffer = await input.file.arrayBuffer()
+  return {
+    file_name: input.file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
 
 export function createBrowserSalesDocumentService(getAccessToken: () => Promise<string | null>) {
   return createSalesDocumentService(

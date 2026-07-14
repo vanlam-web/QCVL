@@ -53,6 +53,8 @@ import {
   readPositiveMoney,
   readPositiveNumber,
   removeCompletedInvoiceTab,
+  saleUnitOptions,
+  selectedSaleUnitText,
   type DiscountMode,
   type PosInvoiceTab,
 } from './pos-core'
@@ -63,6 +65,36 @@ const sellMethodLabels: Record<SellMethod, string> = {
   linear_m: 'Theo mét dài',
   sheet: 'Theo tấm',
   combo: 'Combo',
+}
+
+const productSearchPageSize = 20
+
+function productMatchesSearch(product: Product, query: string) {
+  const normalizedText = normalizeSearch(`${product.code} ${product.name}`)
+  if (normalizedText.includes(query)) return true
+  return normalizedText.split(/\s+/).some((part) => part.includes(query))
+}
+
+function productSearchRank(product: Product, query: string) {
+  const code = normalizeSearch(product.code)
+  const name = normalizeSearch(product.name)
+  const combined = normalizeSearch(`${product.code} ${product.name}`)
+  if (code === query || name === query) return 0
+  if (code.startsWith(query) || name.startsWith(query)) return 1
+  if (name.split(/\s+/).some((part) => part.startsWith(query))) return 2
+  if (combined.split(/\s+/).some((part) => part.startsWith(query))) return 3
+  if (name.includes(query)) return 4
+  if (combined.includes(query)) return 5
+  return 6
+}
+
+function uniqueProductsById(products: Product[]) {
+  const seen = new Set<string>()
+  return products.filter((product) => {
+    if (seen.has(product.id)) return false
+    seen.add(product.id)
+    return true
+  })
 }
 
 export function PosShell({
@@ -95,6 +127,10 @@ export function PosShell({
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [productSearch, setProductSearch] = useState('')
+  const [catalogSearchResult, setCatalogSearchResult] = useState<{ search: string; products: Product[] }>({
+    search: '',
+    products: [],
+  })
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const checkoutDrawerRef = useRef<HTMLElement | null>(null)
   const [productCreateOpen, setProductCreateOpen] = useState(false)
@@ -156,16 +192,19 @@ export function PosShell({
     )
   }, [activeTabId])
   const productSearchResults = useMemo(() => {
+    const search = productSearch.trim()
     const query = normalizeSearch(productSearch)
     if (query.length === 0) return []
-    return products
-      .filter((product) =>
-        `${product.code} ${product.name}`.split(/\s+/).some((part) =>
-          normalizeSearch(part).includes(query),
-        ) || normalizeSearch(`${product.code} ${product.name}`).includes(query),
-      )
+    const searchProducts = catalogSearchResult.search === search ? catalogSearchResult.products : []
+    return uniqueProductsById([...searchProducts, ...products])
+      .filter((product) => productMatchesSearch(product, query))
+      .sort((left, right) => {
+        const rankDelta = productSearchRank(left, query) - productSearchRank(right, query)
+        if (rankDelta !== 0) return rankDelta
+        return left.name.localeCompare(right.name, 'vi')
+      })
       .slice(0, 7)
-  }, [productSearch, products])
+  }, [catalogSearchResult, productSearch, products])
 
   useEffect(() => {
     let active = true
@@ -195,6 +234,35 @@ export function PosShell({
       active = false
     }
   }, [catalogService])
+
+  useEffect(() => {
+    const search = productSearch.trim()
+    if (search.length === 0) return
+    let active = true
+
+    async function searchProducts() {
+      try {
+        const productResult = await catalogService.listProducts({
+          status: 'active',
+          page: 1,
+          page_size: productSearchPageSize,
+          search,
+        })
+        if (active) setCatalogSearchResult({ search, products: productResult.items })
+      } catch (cause) {
+        if (active) {
+          setCatalogSearchResult({ search, products: [] })
+          setError(formatApiError(cause, 'KhÃ´ng tÃ¬m Ä‘Æ°á»£c hÃ ng hÃ³a POS.'))
+        }
+      }
+    }
+
+    void searchProducts()
+
+    return () => {
+      active = false
+    }
+  }, [catalogService, productSearch])
 
   useEffect(() => {
     let active = true
@@ -238,6 +306,33 @@ export function PosShell({
       active = false
     }
   }, [catalogService, products, selectedCustomerId, updateActiveTab])
+
+  useEffect(() => {
+    const missingPriceProductIds = productSearchResults
+      .map((product) => product.id)
+      .filter((productId) => prices[productId] === undefined)
+    if (missingPriceProductIds.length === 0) return
+    let active = true
+
+    async function resolveSearchResultPrices() {
+      try {
+        const priceResult = await catalogService.resolvePrices(missingPriceProductIds, selectedCustomerId)
+        if (!active) return
+        setPrices((current) => ({
+          ...current,
+          ...Object.fromEntries(priceResult.items.map((price) => [price.product_id, price])),
+        }))
+      } catch (cause) {
+        if (active) setError(formatApiError(cause, 'KhÃ´ng táº£i Ä‘Æ°á»£c giÃ¡ bÃ¡n POS.'))
+      }
+    }
+
+    void resolveSearchResultPrices()
+
+    return () => {
+      active = false
+    }
+  }, [catalogService, prices, productSearchResults, selectedCustomerId])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -520,6 +615,20 @@ export function PosShell({
 
   function updateLineDiscountPercent(line: CheckoutCartLine, percent: number) {
     updateLineDiscount(line.id, cartLineDiscountAmountFromPercent(line, percent))
+  }
+
+  function updateLineSaleUnit(lineId: string, unitName: string) {
+    updateActiveTab((tab) => ({
+      ...tab,
+      cartLines: tab.cartLines.map((line) => {
+        if (line.id !== lineId) return line
+        const option = saleUnitOptions(line.product).find((candidate) => candidate.unitName === unitName)
+        if (option === undefined || option.stockQtyPerUnit === 1) {
+          return { ...line, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
+        }
+        return { ...line, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
+      }),
+    }))
   }
 
   function discountPercentValue(line: CheckoutCartLine) {
@@ -1075,7 +1184,20 @@ export function PosShell({
                         />
                       </div>
                       <span className="pos-cart-line-equals" aria-hidden="true" />
-                      <strong className="pos-cart-line-unit">{line.product.unit_name}</strong>
+                      {saleUnitOptions(line.product).length > 1 ? (
+                        <select
+                          aria-label={`Đơn vị ${line.product.name}`}
+                          className="pos-cart-line-unit-select"
+                          value={selectedSaleUnitText(line)}
+                          onChange={(event) => updateLineSaleUnit(line.id, event.target.value)}
+                        >
+                          {saleUnitOptions(line.product).map((option) => (
+                            <option key={option.unitName} value={option.unitName}>{option.unitName}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <strong className="pos-cart-line-unit">{line.product.unit_name}</strong>
+                      )}
                     </>
                   )}
                   <div className="pos-cart-line-price">

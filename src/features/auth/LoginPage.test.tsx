@@ -22,7 +22,7 @@ it('submits normalized login and password to the auth service', async () => {
   await userEvent.type(screen.getByLabelText('Mật khẩu'), '123456')
   await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 
-  expect(signIn).toHaveBeenCalledWith('admin@qc-oms.local', '123456')
+  expect(signIn).toHaveBeenCalledWith('admin', '123456')
 })
 
 it('validates missing credentials before submitting', async () => {
@@ -45,6 +45,29 @@ it('validates missing credentials before submitting', async () => {
   expect(signIn).not.toHaveBeenCalled()
 })
 
+it('toggles password visibility from the trailing eye button', async () => {
+  render(
+    <AuthProvider
+      service={{
+        signIn: vi.fn(async () => undefined),
+        signOut: async () => undefined,
+        getAccessToken: async () => null,
+      }}
+    >
+      <LoginPage />
+    </AuthProvider>,
+  )
+
+  const passwordInput = screen.getByLabelText('Mật khẩu')
+  expect(passwordInput).toHaveAttribute('type', 'password')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }))
+  expect(passwordInput).toHaveAttribute('type', 'text')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Ẩn mật khẩu' }))
+  expect(passwordInput).toHaveAttribute('type', 'password')
+})
+
 it('shows login failure instead of expired session when credentials are rejected', async () => {
   render(
     <AuthProvider
@@ -62,9 +85,9 @@ it('shows login failure instead of expired session when credentials are rejected
 
   await userEvent.type(screen.getAllByRole('textbox')[0], 'admin')
   await userEvent.type(document.querySelector('input[type="password"]') as HTMLInputElement, 'bad')
-  await userEvent.click(screen.getByRole('button'))
+  await userEvent.click(screen.getByRole('button', { name: 'Đăng nhập' }))
 
-  expect(await screen.findByRole('alert')).toHaveTextContent('Tài khoản hoặc mật khẩu không đúng.')
+  expect(await screen.findByRole('alert')).toHaveTextContent('Tên đăng nhập/SĐT hoặc mật khẩu không đúng.')
 })
 
 it('shows mapped API errors after authentication fails downstream', async () => {

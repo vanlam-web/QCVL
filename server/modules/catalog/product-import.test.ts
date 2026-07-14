@@ -141,7 +141,7 @@ describe('product import server flow', () => {
     expect(result.valid).toHaveLength(1)
     expect(result.valid[0]).toMatchObject({
       code: 'BT',
-      unit_conversions: [{ unit_name: 'Khổ 50', stock_qty_per_unit: 40 }],
+      unit_conversions: [{ source_code: 'B50', unit_name: 'Khổ 50', stock_qty_per_unit: 40 }],
     })
   })
 

@@ -454,7 +454,6 @@
 
 .management-layout {
   position: relative;
-  z-index: 0;
   display: grid;
   grid-template-columns: minmax(13rem, 16rem) minmax(0, 1fr);
   gap: var(--space-4);
@@ -652,10 +651,13 @@
 }
 
 .management-filter-options label,
-.management-filter-options .management-filter-choice {
+.management-filter-options .management-filter-choice,
+.management-filter-options .management-filter-account-trigger {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  max-width: 100%;
+  min-width: 0;
   min-height: 2.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -730,6 +732,9 @@
 }
 
 .management-filter-options .management-filter-choice {
+  min-height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
 }
@@ -781,7 +786,7 @@
   position: relative;
   display: grid;
   gap: var(--space-1);
-  padding-left: var(--space-4);
+  min-width: 0;
 }
 
 .management-filter-subheading {
@@ -803,29 +808,37 @@
 }
 
 .management-filter-account-trigger {
-  display: flex;
-  align-items: center;
   justify-content: space-between;
-  min-height: 2.25rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   color: var(--color-text);
-  padding: 0 var(--space-2);
   text-align: left;
 }
 
 .management-filter-account-trigger span {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.management-filter-account-trigger svg {
+  flex: 0 0 auto;
+}
+
+.management-filter-account-trigger:hover,
+.management-filter-account-trigger:focus-visible,
+.management-filter-account-trigger[aria-expanded='true'] {
+  border-color: var(--color-selected-border);
+  outline: 0;
 }
 
 .management-filter-account-menu {
   position: absolute;
   top: calc(100% + var(--space-1));
   right: 0;
-  left: var(--space-4);
+  left: 0;
   z-index: 8;
   display: grid;
   gap: var(--space-2);
@@ -845,15 +858,15 @@
 
 .management-filter-account-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-2);
-  min-height: 2.5rem;
+  min-height: 4.5rem;
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--color-text);
-  padding: 0 var(--space-2);
+  padding: var(--space-2);
   text-align: left;
   cursor: pointer;
 }
@@ -864,11 +877,43 @@
   background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
 }
 
+.management-filter-account-option-muted {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.management-filter-account-option-muted:hover {
+  background: transparent;
+}
+
 .management-filter-account-option-label {
+  display: grid;
+  gap: 0.125rem;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.management-filter-account-option-label strong,
+.management-filter-account-option-label span,
+.management-filter-account-option-label em {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.management-filter-account-option-label strong {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.management-filter-account-option-label span {
+  color: var(--color-text-muted);
+}
+
+.management-filter-account-option-label em {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .management-filter-account-actions {
@@ -902,6 +947,36 @@
   color: var(--color-text-muted);
   padding: var(--space-2);
   font-size: 0.875rem;
+}
+
+.management-filter-account-deleted {
+  display: grid;
+  gap: var(--space-1);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-2);
+}
+
+.management-filter-account-deleted-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: var(--space-2);
+  text-align: left;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.management-filter-account-deleted-toggle:hover,
+.management-filter-account-deleted-toggle:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+  color: var(--color-text);
 }
 
 .management-filter-options .management-filter-choice-active {
@@ -1286,7 +1361,7 @@
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
-  padding: 0 var(--space-8) 0 var(--space-2);
+  padding: 0 calc(var(--space-6) + var(--space-2)) 0 var(--space-2);
 }
 
 .management-table-footer-actions {
@@ -1456,6 +1531,10 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   box-shadow: inset 0 -1px 0 var(--color-selected-border);
 }
 
+.management-table-viewport > table tbody tr.management-detail-row-selected > td {
+  border-bottom: 1px solid var(--color-selected-border);
+}
+
 .management-inline-detail {
   display: grid;
   gap: var(--space-4);
@@ -1541,7 +1620,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 .management-modal-backdrop {
   position: fixed;
   inset: 0;
-  z-index: calc(var(--z-shell) + 10);
+  z-index: calc(var(--z-shell) + 30);
   display: grid;
   place-items: center;
   background: rgb(0 0 0 / 50%);
@@ -1567,8 +1646,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 
 .management-modal-header,
 .management-modal-footer,
-.management-field-heading,
-.management-modal-checkbox-row {
+.management-field-heading {
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -1711,13 +1789,27 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 }
 
 .management-modal-checkbox-row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--space-2);
   grid-template-columns: none;
   justify-content: flex-start;
   color: var(--color-text);
 }
 
+.management-modal-form .management-modal-checkbox-row {
+  display: flex;
+  flex-wrap: nowrap;
+}
+
 .management-modal-checkbox-row input {
+  flex: 0 0 auto;
   accent-color: var(--color-primary);
+}
+
+.management-modal-checkbox-row span {
+  white-space: nowrap;
 }
 
 .management-modal-checkbox-row svg {
@@ -1732,6 +1824,16 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 
 .management-modal-footer {
   justify-content: flex-end;
+}
+
+.management-modal-footer-split {
+  justify-content: space-between;
+}
+
+.management-modal-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .finance-section-header {
@@ -2087,16 +2189,22 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 
 .management-detail-note {
   grid-column: 1 / 6;
+  width: 100%;
   min-height: 5.5rem;
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-md);
   padding: var(--space-3);
+  background: transparent;
   color: var(--color-text-muted);
+  font: inherit;
+  resize: vertical;
 }
 
 .management-detail-inline-note {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+  line-height: 1.45;
+  margin: var(--space-3) 0;
 }
 
 .management-detail-summary-box {
@@ -2114,7 +2222,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 }
 
 .management-detail-lower-right {
-  grid-template-columns: minmax(18rem, 1fr) minmax(26rem, 34rem);
+  grid-template-columns: minmax(28rem, 1fr) minmax(18rem, 28rem);
   column-gap: var(--space-4);
 }
 

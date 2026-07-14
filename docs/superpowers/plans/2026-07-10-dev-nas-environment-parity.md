@@ -10,6 +10,20 @@
 
 ---
 
+## Standing Rule Added 2026-07-11
+
+Dev `3202` must not lose imported test data on every API restart.
+
+- If dev API `3100` has `DATABASE_URL`, it uses PostgreSQL.
+- If dev API `3100` has no `DATABASE_URL`, it must use dev-memory state file `logs/dev-memory-state.json`.
+- Restarting `3100` with a blank memory repository is not acceptable during product/import testing.
+- `logs/dev-memory-state.json` is local-only and must not be deployed to NAS.
+- NAS `3200` remains PostgreSQL-only; health must report `persistence: "postgres"`.
+
+Reason: Owner imports KiotViet files on `3202` to verify Hang hoa/Kiem kho. Losing that data after each code restart forces repeated import and hides real regressions.
+
+---
+
 ### Task 1: Catalog/Inventory Migration
 
 **Files:**

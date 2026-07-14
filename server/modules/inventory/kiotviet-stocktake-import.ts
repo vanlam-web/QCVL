@@ -9,6 +9,7 @@ export interface KiotVietStocktakeImportRow {
   rowNumber: number
   source_code: string
   source_created_at: string | null
+  source_creator_name?: string | null
   source_balanced_at: string | null
   status: KiotVietStocktakeStatus
   product_code: string
@@ -86,6 +87,7 @@ export function mapKiotVietStocktakeRows(rows: KiotVietRawStocktakeRow[]): KiotV
       rowNumber: row.rowNumber,
       source_code: validSourceCode,
       source_created_at: stocktakeDate(valueByHeader(row, 'Thời gian', 'Thoi gian')),
+      source_creator_name: text(valueByHeader(row, 'Người tạo', 'Nguoi tao')),
       source_balanced_at: stocktakeDate(valueByHeader(row, 'Ngày cân bằng', 'Ngay can bang')),
       status: mapKiotVietStocktakeStatus(text(valueByHeader(row, 'Trạng thái', 'Trang thai'))),
       product_code: validProductCode,

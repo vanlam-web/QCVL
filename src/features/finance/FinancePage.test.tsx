@@ -237,6 +237,8 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     listCustomerDebts: vi.fn(async () => ({ items: [debt], page: 1, page_size: 15, total: 1 })),
     getCustomerDebt: vi.fn(async () => debtDetail),
     collectCustomerDebt: vi.fn(async () => ({ payment_receipt_id: 'receipt-1', allocated_amount: 500000 })),
+    createFinanceAccount: vi.fn(async (input) => ({ ...input, id: 'created-bank-account' })),
+    updateFinanceAccount: vi.fn(async (accountId, input) => ({ ...accounts.find((account) => account.id === accountId) ?? accounts[1], ...input, id: accountId })),
     createCashbookVoucher: vi.fn(async () => ({
       id: 'voucher-2',
       code: 'PC000001',
@@ -265,6 +267,42 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
       total: 1,
     })),
     listCashbookVouchers: vi.fn(async () => ({ items: [voucher], total: 1 })),
+    previewKiotVietCashbookImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 2,
+        valid_rows: 2,
+        invalid_rows: 0,
+        account_count: 2,
+        cash_rows: 1,
+        bank_rows: 1,
+        posted_rows: 2,
+        cancelled_rows: 0,
+        cash_total_delta: 1000,
+        bank_total_delta: -3000,
+      },
+      invalid_rows: [],
+    })),
+    importKiotVietCashbook: vi.fn(async () => ({
+      summary: {
+        total_rows: 2,
+        valid_rows: 2,
+        invalid_rows: 0,
+        account_count: 2,
+        cash_rows: 1,
+        bank_rows: 1,
+        posted_rows: 2,
+        cancelled_rows: 0,
+        cash_total_delta: 1000,
+        bank_total_delta: -3000,
+        created_rows: 2,
+        updated_rows: 0,
+        skipped_rows: 0,
+        accounts_created: 2,
+        accounts_updated: 0,
+      },
+      invalid_rows: [],
+    })),
+    deleteImportedKiotVietCashbook: vi.fn(async () => ({ deleted_rows: 2, blocked_rows: 0 })),
     ...overrides,
   }
 }
@@ -322,6 +360,26 @@ describe('FinancePage', () => {
     expect(screen.queryByText('PT0016')).not.toBeInTheDocument()
   })
 
+  it('sorts cashbook rows from shared column headers', async () => {
+    render(<FinancePage service={makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: [entry, expenseEntry],
+        page: 1,
+        page_size: 15,
+        total: 2,
+      })),
+    })} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('PT0001')
+
+    await userEvent.click(within(table).getByRole('button', { name: 'Mã phiếu' }))
+
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('PCPN000679')
+    expect(within(table).getByRole('columnheader', { name: 'Mã phiếu' })).toHaveAttribute('aria-sort', 'ascending')
+  })
+
   it('filters cashbook entries from the header search', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)
@@ -331,9 +389,8 @@ describe('FinancePage', () => {
     expect(screen.getByLabelText('Tìm sổ quỹ').closest('.management-compact-search')).toContainElement(clearSearchButton)
     expect(clearSearchButton).toHaveClass('management-compact-create-action-clear')
     expect(clearSearchButton).toHaveTextContent('')
-    await userEvent.keyboard('{Enter}')
 
-    expect(service.listCashbookEntries).toHaveBeenLastCalledWith({
+    await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledWith({
       search: 'PT0001',
       search_scope: 'all',
       from: '2026-07-01',
@@ -345,7 +402,7 @@ describe('FinancePage', () => {
       is_business_accounted: undefined,
       page: 1,
       page_size: 15,
-    })
+    }))
 
     await userEvent.click(screen.getByRole('checkbox', { name: 'Phiếu thu' }))
     expect(screen.queryByRole('button', { name: 'Lọc sổ' })).not.toBeInTheDocument()
@@ -405,7 +462,7 @@ describe('FinancePage', () => {
     expect(within(sidebar).queryByRole('textbox', { name: 'Tìm kiếm tài khoản' })).not.toBeInTheDocument()
     expect(within(sidebar).getByRole('button', { name: /Sửa tài khoản MB01 - MB Bank/ })).toHaveClass('management-icon-button')
     expect(within(sidebar).getByRole('button', { name: /Ghim tài khoản MB01 - MB Bank/ })).toHaveClass('management-icon-button')
-    await userEvent.click(within(sidebar).getByRole('option', { name: /MB01 - MB Bank/ }))
+    await userEvent.click(within(sidebar).getByRole('option', { name: /MB01MB Bank/ }))
     await userEvent.click(within(sidebar).getByRole('checkbox', { name: 'Phiếu thu' }))
     await userEvent.click(within(sidebar).getByRole('checkbox', { name: 'Đã hủy' }))
     await userEvent.click(within(sidebar).getByRole('radio', { name: 'Không' }))
@@ -435,8 +492,18 @@ describe('FinancePage', () => {
       account_number: '0771000598653',
       account_holder: 'VAN VIET PHUONG LAM',
     }
+    const deletedBankAccount: FinanceAccount = {
+      id: 'bank-del',
+      code: '0947900909{DEL}',
+      name: 'MB',
+      account_type: 'bank',
+      is_default_cash: false,
+      is_active: true,
+      account_number: '0947900909{DEL}',
+      account_holder: 'VAN VIET PHUONG LAM',
+    }
     const service = makeService({
-      listAccounts: vi.fn(async () => ({ items: [...accounts, secondBankAccount] })),
+      listAccounts: vi.fn(async () => ({ items: [...accounts, secondBankAccount, deletedBankAccount] })),
     })
     render(<FinancePage service={service} />)
 
@@ -444,6 +511,10 @@ describe('FinancePage', () => {
     await userEvent.click(within(sidebar).getByRole('radio', { name: 'Ngân hàng' }))
     await userEvent.click(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' }))
 
+    expect(within(sidebar).getByText('0771000598653')).toBeInTheDocument()
+    expect(within(sidebar).getByText('Vietcombank')).toBeInTheDocument()
+    expect(within(sidebar).getByText('VAN VIET PHUONG LAM')).toBeInTheDocument()
+    expect(within(sidebar).queryByText('0947900909{DEL}')).not.toBeInTheDocument()
     const pinButton = within(sidebar).getByRole('button', { name: /Ghim tài khoản MB01 - MB Bank/ })
     expect(pinButton).toHaveClass('management-icon-button')
     expect(pinButton).toHaveAttribute('aria-pressed', 'false')
@@ -456,11 +527,67 @@ describe('FinancePage', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Sửa tài khoản ngân hàng' })
     expect(within(dialog).getByLabelText('Số tài khoản')).toHaveValue('')
     expect(within(dialog).getByLabelText('Chủ tài khoản')).toHaveValue('')
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Đóng popup sửa tài khoản ngân hàng' }))
+    await userEvent.type(within(dialog).getByLabelText('Số tài khoản'), '0947900909')
+    await userEvent.type(within(dialog).getByLabelText('Chủ tài khoản'), 'van viet phuong lam')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu thu chi' }))
     const voucherDialog = await screen.findByRole('dialog', { name: 'Tạo phiếu thu' })
     expect(within(voucherDialog).getByLabelText('Tài khoản nhận')).toHaveValue('bank-1')
+  })
+
+  it('soft deletes bank accounts while keeping historical cashbook rows visible', async () => {
+    const historyBankAccount: FinanceAccount = {
+      id: 'bank-history',
+      code: 'VCB',
+      name: 'Vietcombank',
+      account_type: 'bank',
+      is_default_cash: false,
+      is_active: true,
+      account_number: '0771000598653',
+      account_holder: 'VAN VIET PHUONG LAM',
+    }
+    const bankEntry: CashbookEntry = {
+      ...entry,
+      id: 'entry-bank-history',
+      finance_account: { id: historyBankAccount.id, code: historyBankAccount.account_number ?? '', name: historyBankAccount.name, account_type: 'bank' },
+    }
+    const service = makeService({
+      listAccounts: vi.fn(async () => ({ items: [accounts[0], historyBankAccount] })),
+      updateFinanceAccount: vi.fn(async (accountId, input) => ({ ...historyBankAccount, ...input, id: accountId })),
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 0, total_in: 500000, total_out: 0, ending_balance: 500000 },
+        items: [bankEntry],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+    })
+    render(<FinancePage service={service} />)
+
+    const sidebar = await screen.findByRole('complementary', { name: 'Bộ lọc tài chính' })
+    await userEvent.click(within(sidebar).getByRole('radio', { name: 'Ngân hàng' }))
+    await userEvent.click(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' }))
+    await userEvent.click(within(sidebar).getByRole('button', { name: /Sửa tài khoản 0771000598653/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Sửa tài khoản ngân hàng' })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
+
+    expect(service.updateFinanceAccount).toHaveBeenCalledWith('bank-history', { is_active: false })
+    expect(screen.queryByRole('dialog', { name: 'Sửa tài khoản ngân hàng' })).not.toBeInTheDocument()
+    expect(service.listCashbookEntries).toHaveBeenLastCalledWith(expect.objectContaining({
+      finance_account_id: undefined,
+      finance_account_type: 'bank',
+    }))
+    expect(screen.getByText('0771000598653')).toBeInTheDocument()
+
+    await userEvent.click(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' }))
+    expect(within(sidebar).queryByRole('option', { name: /0771000598653/ })).not.toBeInTheDocument()
+    await userEvent.click(within(sidebar).getByRole('button', { name: /Tài khoản đã xóa/ }))
+    expect(within(sidebar).getByText('0771000598653')).toBeInTheDocument()
+    expect(within(sidebar).getByText('Đã xóa')).toBeInTheDocument()
+    expect(within(sidebar).queryByText('0771000598653{DEL}')).not.toBeInTheDocument()
   })
 
   it('uses KV-style checkbox defaults for cashbook direction and status filters', async () => {
@@ -518,7 +645,7 @@ describe('FinancePage', () => {
       }))
     })
     expect(within(table).queryByRole('row', { name: /PT0001/ })).not.toBeInTheDocument()
-    expect(within(table).getByRole('row', { name: /PCPN000679/ })).toHaveTextContent('Ngân hàng')
+    expect(within(table).getByRole('row', { name: /PCPN000679/ })).toHaveTextContent('MB01')
     expect(within(table).queryByText('Tiền mặt')).not.toBeInTheDocument()
   })
 
@@ -532,6 +659,8 @@ describe('FinancePage', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Thêm tài khoản ngân hàng' })
     const form = within(dialog).getByRole('form', { name: 'Thêm tài khoản ngân hàng' })
+    expect(within(form).getByRole('option', { name: 'Vietcombank - Ngân hàng TMCP Ngoại thương Việt Nam' })).toHaveValue('Vietcombank')
+    expect(within(form).getByRole('option', { name: 'VIB - Ngân hàng TMCP Quốc tế Việt Nam' })).toHaveValue('VIB')
     await userEvent.selectOptions(within(form).getByLabelText('Ngân hàng'), 'Vietcombank')
     await userEvent.type(within(form).getByLabelText('Số tài khoản'), '0771000598653')
     await userEvent.type(within(form).getByLabelText('Chủ tài khoản'), 'van viet phuong lam')
@@ -540,8 +669,9 @@ describe('FinancePage', () => {
     await userEvent.click(within(form).getByRole('button', { name: 'Lưu' }))
 
     expect(screen.queryByRole('dialog', { name: 'Thêm tài khoản ngân hàng' })).not.toBeInTheDocument()
-    expect(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' })).toHaveTextContent('Vietcombank - 0771000598653 - VAN VIET PHUONG LAM')
-    expect(screen.getByRole('status')).toHaveTextContent('Đã thêm tài khoản ngân hàng.')
+    expect(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' })).toHaveTextContent('0771000598653')
+    expect(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' })).not.toHaveTextContent('Vietcombank')
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
   it('filters cashbook by date range', async () => {
@@ -613,6 +743,7 @@ describe('FinancePage', () => {
     expect(screen.getByRole('button', { name: 'Tạo phiếu thu chi' })).toBeInTheDocument()
     expect(within(voucherActions).queryByRole('button', { name: '+ Phiếu thu' })).not.toBeInTheDocument()
     expect(within(voucherActions).queryByRole('button', { name: '+ Phiếu chi' })).not.toBeInTheDocument()
+    expect(within(voucherActions).getByRole('button', { name: 'Import KV' })).toBeInTheDocument()
     expect(within(voucherActions).getByRole('button', { name: 'Xuất file' })).toBeInTheDocument()
 
     const selectAllCheckbox = within(table).getByRole('checkbox', { name: 'Chọn tất cả dòng sổ quỹ' })
@@ -621,13 +752,15 @@ describe('FinancePage', () => {
     expect(within(table).getByRole('columnheader', { name: 'Đánh dấu' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Mã phiếu' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Thời gian' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Người tạo' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Loại thu chi' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Số tài khoản' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Người nộp/nhận' })).toBeInTheDocument()
-    expect(within(table).getByRole('columnheader', { name: 'Loại sổ quỹ' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Giá trị' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Ghi chú' })).toBeInTheDocument()
 
     const row = within(table).getByRole('row', { name: /PT0001/ })
-    expect(within(row).getByText('Tiền mặt')).toBeInTheDocument()
+    expect(within(row).getByText('Phiếu thu')).toBeInTheDocument()
     expect(within(row).queryByText('CASH · Quỹ tiền mặt')).not.toBeInTheDocument()
   })
 
@@ -815,7 +948,7 @@ describe('FinancePage', () => {
     expect(within(detail).queryByText('Chi nhánh trung tâm')).not.toBeInTheDocument()
     expect(detail.querySelector('.finance-cashbook-detail')).toHaveClass('management-detail-panel')
     expect(detail.querySelector('.management-detail-header')).not.toBeNull()
-    expect(detail.querySelector('.management-detail-title-line')).not.toBeNull()
+    expect(detail.querySelector('.management-detail-title-line')).toBeNull()
     expect(detail.querySelector('.management-detail-meta-grid')).toHaveClass('management-detail-meta-grid-four')
     expect(detail.querySelector('.management-detail-meta-rows')).not.toBeNull()
     expect(detail.querySelector('.finance-cashbook-linked-documents-inner')).not.toBeNull()
@@ -826,7 +959,8 @@ describe('FinancePage', () => {
       ),
     ).toBe(Node.DOCUMENT_POSITION_PRECEDING)
     const detailText = detail.textContent ?? ''
-    expect(detailText).toContain('Người tạo: Văn Viết Phương Lâm')
+    expect(detailText).toContain('Người tạo:')
+    expect(detailText).toContain('Văn Viết Phương Lâm')
     expect(detailText).not.toContain('Người thu')
     expect(detailText).not.toContain('Người chi')
     expect(detailText).toContain('Thời gian:')
@@ -893,14 +1027,15 @@ describe('FinancePage', () => {
     const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PCPN000679' })
     expect(within(detail).getByRole('heading', { name: 'Phiếu chi PCPN000679' })).toBeInTheDocument()
     const detailText = detail.textContent ?? ''
-    expect(detailText).toContain('Người tạo: Văn Viết Phương Lâm')
+    expect(detailText).toContain('Người tạo:')
+    expect(detailText).toContain('Văn Viết Phương Lâm')
     expect(detailText).not.toContain('Người chi')
     expect(within(detail).getByText('Phiếu chi tự động được gắn với phiếu nhập hàng PN000679.')).toBeInTheDocument()
     expect(within(detail).getByText('Đã trả trước')).toBeInTheDocument()
     expect(within(detail).getByText('Giá trị chi')).toBeInTheDocument()
   })
 
-  it('keeps an empty linked document shell before the cashbook detail note', async () => {
+  it('hides linked document shell when the cashbook row has no linked document', async () => {
     const service = makeService({
       getCashbookEntry: vi.fn(async () => unallocatedExpenseDetail),
       listCashbookEntries: vi.fn(async () => ({
@@ -916,8 +1051,8 @@ describe('FinancePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết CTM001181' }))
 
     const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ CTM001181' })
-    expect(within(detail).getByRole('table', { name: 'Chứng từ liên kết' })).toBeInTheDocument()
-    expect(within(detail).getByText('Không có chứng từ liên kết.')).toBeInTheDocument()
+    expect(within(detail).queryByRole('table', { name: 'Chứng từ liên kết' })).not.toBeInTheDocument()
+    expect(within(detail).queryByText('Không có chứng từ liên kết.')).not.toBeInTheDocument()
     expect(within(detail).queryByText('Tiền chưa phân bổ:')).not.toBeInTheDocument()
     expect(within(detail).getByText('Ứng lần 2')).toBeInTheDocument()
   })

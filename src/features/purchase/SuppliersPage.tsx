@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Plus, Save, Search, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
@@ -8,7 +8,7 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
-  ManagementDetailRow,
+  ManagementDataTable,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -16,10 +16,12 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { supplierNumberFilterValue } from './supplier-filters'
 import { supplierListSummary, supplierMoneyText } from './supplier-presenter'
+import { SupplierImportDialog } from './SupplierImportDialog'
 
 const blankForm: SupplierInput = {
   code: '',
@@ -48,9 +50,8 @@ export function SuppliersPage({
   const [customersLoaded, setCustomersLoaded] = useState(false)
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
+  const [summary, setSummary] = useState<{ current_payable_amount: number; total_purchase_amount: number } | null>(null)
   const [search, setSearch] = useState('')
-  const [supplierSearchSuggestions, setSupplierSearchSuggestions] = useState<Supplier[]>([])
-  const [supplierSearchSuggestionsOpen, setSupplierSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<SupplierStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<SupplierStatus | 'all'>('active')
@@ -65,6 +66,7 @@ export function SuppliersPage({
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(supplierPageSize)
   const [showFilters, setShowFilters] = useState(true)
+  const [supplierImportOpen, setSupplierImportOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingSupplierId, setLoadingSupplierId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -78,10 +80,10 @@ export function SuppliersPage({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [paymentFinanceAccountId, setPaymentFinanceAccountId] = useState('')
   const [paymentNote, setPaymentNote] = useState('')
-  const supplierSearchRequestId = useRef(0)
-
   const bankAccounts = financeAccounts.filter((account) => account.is_active && account.account_type === 'bank')
-  const { payableTotal, purchaseTotal } = supplierListSummary(suppliers)
+  const fallbackSupplierSummary = supplierListSummary(suppliers)
+  const payableTotal = summary?.current_payable_amount ?? fallbackSupplierSummary.payableTotal
+  const purchaseTotal = summary?.total_purchase_amount ?? fallbackSupplierSummary.purchaseTotal
   const {
     sortedItems: sortedSuppliers,
     sortState: supplierSortState,
@@ -142,6 +144,7 @@ export function SuppliersPage({
       })
       setSuppliers(result.items)
       setTotal(result.total)
+      setSummary(result.summary ?? null)
       setLastSearch(nextSearch?.trim() ?? '')
       setLastStatus(nextStatus)
       setLastTotalPurchaseMin(nextTotalPurchaseMin)
@@ -165,6 +168,7 @@ export function SuppliersPage({
         if (!active) return
         setSuppliers(supplierResult.items)
         setTotal(supplierResult.total)
+        setSummary(supplierResult.summary ?? null)
         setPage(supplierResult.page)
         setPageSize(supplierResult.page_size)
       } catch (cause) {
@@ -194,11 +198,13 @@ export function SuppliersPage({
   }
 
   async function filterSuppliers(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setSupplierSearchSuggestionsOpen(false)
+    preventManagementSearchSubmit(event, () => applySupplierSearch(search))
+  }
+
+  function applySupplierSearch(nextSearch: string) {
     setPage(1)
-    await loadSuppliers({
-      search: search.trim(),
+    return loadSuppliers({
+      search: nextSearch,
       status,
       totalPurchaseMinValue: totalPurchaseMin,
       totalPurchaseMaxValue: totalPurchaseMax,
@@ -208,53 +214,10 @@ export function SuppliersPage({
     })
   }
 
-  async function suggestSuppliers(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = supplierSearchRequestId.current + 1
-    supplierSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setSupplierSearchSuggestions([])
-      setSupplierSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const totalPurchaseMinFilter = supplierNumberFilterValue(totalPurchaseMin)
-      const totalPurchaseMaxFilter = supplierNumberFilterValue(totalPurchaseMax)
-      const currentPayableMinFilter = supplierNumberFilterValue(currentPayableMin)
-      const currentPayableMaxFilter = supplierNumberFilterValue(currentPayableMax)
-      const result = await service.listSuppliers({
-        search: query,
-        status,
-        page: 1,
-        page_size: 8,
-        ...(totalPurchaseMinFilter === undefined ? {} : { total_purchase_min: totalPurchaseMinFilter }),
-        ...(totalPurchaseMaxFilter === undefined ? {} : { total_purchase_max: totalPurchaseMaxFilter }),
-        ...(currentPayableMinFilter === undefined ? {} : { current_payable_min: currentPayableMinFilter }),
-        ...(currentPayableMaxFilter === undefined ? {} : { current_payable_max: currentPayableMaxFilter }),
-      })
-      if (supplierSearchRequestId.current !== requestId) return
-      setSupplierSearchSuggestions(result.items)
-      setSupplierSearchSuggestionsOpen(true)
-    } catch {
-      if (supplierSearchRequestId.current !== requestId) return
-      setSupplierSearchSuggestions([])
-      setSupplierSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectSupplierSuggestion(supplier: Supplier) {
-    setSearch(supplier.code)
-    setSupplierSearchSuggestionsOpen(false)
-    setPage(1)
-    await loadSuppliers({
-      search: supplier.code,
-      status,
-      totalPurchaseMinValue: totalPurchaseMin,
-      totalPurchaseMaxValue: totalPurchaseMax,
-      currentPayableMinValue: currentPayableMin,
-      currentPayableMaxValue: currentPayableMax,
-      page: 1,
+  function changeSupplierSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      load: applySupplierSearch,
     })
   }
 
@@ -446,9 +409,7 @@ export function SuppliersPage({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = lastSearch
-    ? `Tìm: ${lastSearch}`
-    : lastStatus === 'active' &&
+  const activeFilterSummary = lastStatus === 'active' &&
         lastTotalPurchaseMin === '' &&
         lastTotalPurchaseMax === '' &&
         lastCurrentPayableMin === '' &&
@@ -458,8 +419,8 @@ export function SuppliersPage({
 
   const supplierKpis = (
     <MetricGrid ariaLabel="Tổng quan nhà cung cấp">
-        <MetricCard hint="Từ danh sách đang xem" label="Nợ cần trả" tone={payableTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={payableTotal} />} />
-        <MetricCard hint="Phiếu nhập posted" label="Tổng mua" tone="success" value={<MoneyText value={purchaseTotal} />} />
+        <MetricCard hint="Theo bộ lọc hiện tại" label="Nợ cần trả" tone={payableTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={payableTotal} />} />
+        <MetricCard hint="Theo bộ lọc hiện tại" label="Tổng mua" tone="success" value={<MoneyText value={purchaseTotal} />} />
       </MetricGrid>
   )
 
@@ -644,25 +605,11 @@ export function SuppliersPage({
               <ManagementCompactCreateAction ariaLabel="Tạo nhà cung cấp" onClick={() => void openCreateSupplier()} />
             }
             value={search}
-            suggestions={
-              supplierSearchSuggestionsOpen
-                ? supplierSearchSuggestions.map((supplier) => ({
-                    id: supplier.id,
-                    primary: `${supplier.code} ${supplier.name}`,
-                    secondary: supplier.phone ?? supplier.email ?? '',
-                    meta: <MoneyText value={supplier.current_payable_amount} />,
-                    ariaLabel: `${supplier.code} ${supplier.name} ${supplier.phone ?? ''}`.trim(),
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý nhà cung cấp"
-            emptySuggestion="Không có kết quả phù hợp"
-            onChange={(nextSearch) => void suggestSuppliers(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const supplier = supplierSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (supplier) void selectSupplierSuggestion(supplier)
-            }}
+            onChange={changeSupplierSearch}
           />
+          <button className="button button-secondary" type="button" onClick={() => setSupplierImportOpen(true)}>
+            Import KV
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={supplierKpis}
@@ -779,83 +726,96 @@ export function SuppliersPage({
           ) : (
             <>
               <ManagementTableViewport>
-                <table>
-                  <thead>
-                    <tr>
-                      <ManagementSortableHeader kind="text" sortKey="code" sortState={supplierSortState} onSort={requestSupplierSort}>Mã NCC</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="name" sortState={supplierSortState} onSort={requestSupplierSort}>Tên NCC</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="phone" sortState={supplierSortState} onSort={requestSupplierSort}>Điện thoại</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="email" sortState={supplierSortState} onSort={requestSupplierSort}>Email</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="current_payable_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Nợ hiện tại</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="total_purchase_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Tổng mua</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="linked_customer" sortState={supplierSortState} onSort={requestSupplierSort}>Khách hàng liên kết</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="status" sortState={supplierSortState} onSort={requestSupplierSort}>Trạng thái</ManagementSortableHeader>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedSuppliers.map((supplier) => {
-                      const detailForRow = editingId === supplier.id || paymentSupplier?.id === supplier.id
-                      const loadingForRow = loadingSupplierId === supplier.id
-                      return (
-                        <Fragment key={supplier.id}>
-                          <tr
-                            aria-expanded={detailForRow || loadingForRow}
-                            className={`management-data-row${detailForRow || loadingForRow ? ' management-data-row-selected' : ''}`}
-                            tabIndex={0}
-                            onClick={() => void openSupplier(supplier)}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault()
-                                void openSupplier(supplier)
-                              }
-                            }}
-                          >
-                            <td>
-                              <button
-                                className="management-link-button"
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  void openSupplier(supplier)
-                                }}
-                              >
-                                <strong>{supplier.code}</strong>
-                              </button>
-                            </td>
-                            <td>{supplier.name}</td>
-                            <td>{supplier.phone ?? '-'}</td>
-                            <td>{supplier.email ?? '-'}</td>
-                            <td><MoneyText value={supplier.current_payable_amount} /></td>
-                            <td><MoneyText value={supplier.total_purchase_amount} /></td>
-                            <td>
-                              {supplier.linked_customer
-                                ? `${supplier.linked_customer.code} - ${supplier.linked_customer.name}`
-                                : '-'}
-                            </td>
-                            <td>
-                              <StatusChip tone={supplier.status === 'active' ? 'success' : 'neutral'}>
-                                  {supplier.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'}
-                                </StatusChip>
-                              </td>
-                          </tr>
-                          {detailForRow || loadingForRow ? (
-                            <ManagementDetailRow
-                              colSpan={8}
-                              detailClassName="management-detail-panel"
-                              label="Hồ sơ và thanh toán nhà cung cấp"
-                            >
-                              {loadingForRow
-                                ? supplierDetailLoading(supplier)
-                                : paymentSupplier?.id === supplier.id
-                                  ? supplierPaymentForm()
-                                  : supplierForm()}
-                            </ManagementDetailRow>
-                          ) : null}
-                        </Fragment>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                <ManagementDataTable
+                  ariaLabel="Danh sách nhà cung cấp"
+                  columns={[
+                    {
+                      key: 'code',
+                      header: <ManagementSortableHeader kind="text" sortKey="code" sortState={supplierSortState} onSort={requestSupplierSort}>Mã NCC</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => (
+                        <button
+                          className="management-link-button"
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void openSupplier(supplier)
+                          }}
+                        >
+                          <strong>{supplier.code}</strong>
+                        </button>
+                      ),
+                    },
+                    {
+                      key: 'name',
+                      header: <ManagementSortableHeader kind="text" sortKey="name" sortState={supplierSortState} onSort={requestSupplierSort}>Tên NCC</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => supplier.name,
+                    },
+                    {
+                      key: 'phone',
+                      header: <ManagementSortableHeader kind="text" sortKey="phone" sortState={supplierSortState} onSort={requestSupplierSort}>Điện thoại</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => supplier.phone ?? '-',
+                    },
+                    {
+                      key: 'email',
+                      header: <ManagementSortableHeader kind="text" sortKey="email" sortState={supplierSortState} onSort={requestSupplierSort}>Email</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => supplier.email ?? '-',
+                    },
+                    {
+                      key: 'payable',
+                      header: <ManagementSortableHeader kind="number" sortKey="current_payable_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Nợ hiện tại</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => <MoneyText value={supplier.current_payable_amount} />,
+                    },
+                    {
+                      key: 'purchase',
+                      header: <ManagementSortableHeader kind="number" sortKey="total_purchase_amount" sortState={supplierSortState} onSort={requestSupplierSort}>Tổng mua</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => <MoneyText value={supplier.total_purchase_amount} />,
+                    },
+                    {
+                      key: 'linked_customer',
+                      header: <ManagementSortableHeader kind="text" sortKey="linked_customer" sortState={supplierSortState} onSort={requestSupplierSort}>Khách hàng liên kết</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => supplier.linked_customer ? `${supplier.linked_customer.code} - ${supplier.linked_customer.name}` : '-',
+                    },
+                    {
+                      key: 'status',
+                      header: <ManagementSortableHeader kind="text" sortKey="status" sortState={supplierSortState} onSort={requestSupplierSort}>Trạng thái</ManagementSortableHeader>,
+                      headerIsCell: true,
+                      cell: (supplier) => (
+                        <StatusChip tone={supplier.status === 'active' ? 'success' : 'neutral'}>
+                          {supplier.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'}
+                        </StatusChip>
+                      ),
+                    },
+                  ]}
+                  detailClassName="management-detail-panel"
+                  getDetailLabel={() => 'Hồ sơ và thanh toán nhà cung cấp'}
+                  getRowKey={(supplier) => supplier.id}
+                  items={sortedSuppliers}
+                  selectedRowKey={editingId ?? paymentSupplier?.id ?? loadingSupplierId}
+                  renderDetail={(supplier) => {
+                    const detailForRow = editingId === supplier.id || paymentSupplier?.id === supplier.id
+                    const loadingForRow = loadingSupplierId === supplier.id
+                    if (!detailForRow && !loadingForRow) return null
+                    return loadingForRow
+                      ? supplierDetailLoading(supplier)
+                      : paymentSupplier?.id === supplier.id
+                        ? supplierPaymentForm()
+                        : supplierForm()
+                  }}
+                  onRowClick={(supplier) => void openSupplier(supplier)}
+                  onRowKeyDown={(supplier, event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      void openSupplier(supplier)
+                    }
+                  }}
+                />
               </ManagementTableViewport>
               <ManagementTableFooter
                 ariaLabel="Phân trang nhà cung cấp"
@@ -875,6 +835,16 @@ export function SuppliersPage({
           )
         ) : null}
       </ManagementListSurface>
+      <SupplierImportDialog
+        open={supplierImportOpen}
+        service={service}
+        onClose={() => setSupplierImportOpen(false)}
+        onOldDataDeleted={() => void loadSuppliers({ page: 1 })}
+        onImported={() => {
+          setSupplierImportOpen(false)
+          void loadSuppliers({ page: 1 })
+        }}
+      />
     </ManagementPage>
   )
 }

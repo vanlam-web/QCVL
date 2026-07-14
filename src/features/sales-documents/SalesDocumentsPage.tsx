@@ -1,12 +1,14 @@
-import { Fragment, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { useEffect, useState, type MouseEvent } from 'react'
+import { CalendarDays, ChevronLeft, ChevronRight, Copy, FilePlus2, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementConfirmDialog,
+  ManagementDataTable,
+  type ManagementDataTableColumn,
   ManagementDateRangeInputs,
   ManagementDetailActionFooter,
-  ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -14,6 +16,7 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
@@ -53,11 +56,13 @@ import {
   paymentReceiptStatusLabel,
   paymentStatusFilterLabel,
   salesDocumentDateTimeText,
+  salesDocumentCreatedDateTimeText,
   salesDocumentLineSellPrice,
   salesDocumentListSummary,
   salesDocumentStatusLabel,
   salesDocumentStatusTone,
 } from './sales-document-presenter'
+import { SalesDocumentImportDialog } from './SalesDocumentImportDialog'
 
 type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
 
@@ -66,6 +71,10 @@ interface SalesDocumentsState {
   total: number
   page: number
   pageSize: number
+  summary?: {
+    total_amount: number
+    debt_amount: number
+  }
 }
 
 export function SalesDocumentsPage({
@@ -88,8 +97,6 @@ export function SalesDocumentsPage({
 }) {
   const [state, setState] = useState<SalesDocumentsState | null>(null)
   const [search, setSearch] = useState('')
-  const [documentSearchSuggestions, setDocumentSearchSuggestions] = useState<SalesDocumentListItem[]>([])
-  const [documentSearchSuggestionsOpen, setDocumentSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(allTypeFilters)
   const [statusFilter, setStatusFilter] = useState<SalesDocumentStatusFilter[]>(defaultStatusFilters)
@@ -110,8 +117,9 @@ export function SalesDocumentsPage({
   const [detailError, setDetailError] = useState<string | null>(null)
   const [detailErrorDocumentId, setDetailErrorDocumentId] = useState<string | null>(null)
   const [openingQuoteId, setOpeningQuoteId] = useState<string | null>(null)
-  const documentSearchRequestId = useRef(0)
-
+  const [importOpen, setImportOpen] = useState(false)
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [canceling, setCanceling] = useState(false)
   async function loadDocuments(input: {
     search?: string
     type?: SalesDocumentTypeFilter[]
@@ -154,7 +162,7 @@ export function SalesDocumentsPage({
         page: nextPage,
         page_size: nextPageSize,
       }))
-      setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size })
+      setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       if (result.items.length === 0) setSelected(null)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được chứng từ bán hàng.'))
@@ -199,7 +207,7 @@ export function SalesDocumentsPage({
           page_size: salesDocumentsPageSize,
         }))
         if (!active) return
-        setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size })
+        setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được chứng từ bán hàng.'))
       }
@@ -233,63 +241,31 @@ export function SalesDocumentsPage({
   }, [catalogService, userService])
 
   async function searchDocuments(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmed = search.trim()
-    setDocumentSearchSuggestionsOpen(false)
+    preventManagementSearchSubmit(event, () => applyDocumentSearch(search))
+  }
+
+  function applyDocumentSearch(nextSearch: string) {
+    const trimmed = nextSearch.trim()
     setSelected(null)
     setLoadingDocumentId(null)
     setDetailError(null)
     setDetailErrorDocumentId(null)
     setLastSearch(trimmed)
     setQuickTimeOpen(false)
-    await loadDocuments({ search: trimmed, page: 1 })
+    return loadDocuments({ search: trimmed, page: 1 })
   }
 
-  async function suggestDocuments(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = documentSearchRequestId.current + 1
-    documentSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setDocumentSearchSuggestions([])
-      setDocumentSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
-        search: query,
-        type: typeFilter,
-        status: statusFilter,
-        paymentStatus: paymentStatusFilter,
-        paymentMethod: paymentMethodFilter,
-        seller: sellerFilter,
-        priceList: priceListFilter,
-        time: timeFilter,
-        from: dateFrom,
-        to: dateTo,
-        page: 1,
-        page_size: 8,
-      }))
-      if (documentSearchRequestId.current !== requestId) return
-      setDocumentSearchSuggestions(result.items)
-      setDocumentSearchSuggestionsOpen(true)
-    } catch {
-      if (documentSearchRequestId.current !== requestId) return
-      setDocumentSearchSuggestions([])
-      setDocumentSearchSuggestionsOpen(false)
-    }
-  }
-
-  async function selectDocumentSuggestion(document: SalesDocumentListItem) {
-    setSearch(document.code)
-    setDocumentSearchSuggestionsOpen(false)
-    setSelected(null)
-    setLoadingDocumentId(null)
-    setDetailError(null)
-    setDetailErrorDocumentId(null)
-    setLastSearch(document.code)
-    setQuickTimeOpen(false)
-    await loadDocuments({ search: document.code, page: 1 })
+  function changeDocumentSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      resetSelection: () => {
+        setSelected(null)
+        setLoadingDocumentId(null)
+        setDetailError(null)
+        setDetailErrorDocumentId(null)
+      },
+      load: applyDocumentSearch,
+    })
   }
 
   async function applyTypeFilter(nextType: SalesDocumentTypeFilter[]) {
@@ -414,6 +390,33 @@ export function SalesDocumentsPage({
     }
   }
 
+  async function cancelSelectedDocument() {
+    if (!selected) return
+    setDetailError(null)
+    setDetailErrorDocumentId(null)
+    setCanceling(true)
+    try {
+      const saved = await service.cancelSalesDocument(selected.id)
+      setSelected(saved)
+      setState((current) => current
+        ? {
+            ...current,
+            items: current.items.map((item) => (
+              item.id === saved.id ? { ...item, status: saved.status, payment_status: saved.payment_status } : item
+            )),
+          }
+        : current)
+      setCancelOpen(false)
+      await loadDocuments({ page: state?.page ?? 1 })
+    } catch (cause) {
+      setDetailError(formatApiError(cause, 'Không hủy được hóa đơn.'))
+      setDetailErrorDocumentId(selected.id)
+      throw cause
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   const documents = state?.items ?? []
   const {
     sortedItems: sortedDocuments,
@@ -442,8 +445,62 @@ export function SalesDocumentsPage({
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
+  const salesDocumentColumns: Array<ManagementDataTableColumn<SalesDocumentListItem>> = [
+    {
+      key: 'code',
+      header: <ManagementSortableHeader kind="text" sortKey="code" sortState={documentSortState} onSort={requestDocumentSort}>Mã hóa đơn</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => (
+        <button
+          className="management-link-button"
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            void openDocument(document)
+          }}
+        >
+          <strong>{document.code}</strong>
+        </button>
+      ),
+    },
+    {
+      key: 'created-at',
+      header: <ManagementSortableHeader kind="date" sortKey="created_at" sortState={documentSortState} onSort={requestDocumentSort}>Thời gian</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => salesDocumentCreatedDateTimeText(document),
+    },
+    {
+      key: 'customer-name',
+      header: <ManagementSortableHeader kind="text" sortKey="customer_name" sortState={documentSortState} onSort={requestDocumentSort}>Khách hàng</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => document.customer.name,
+    },
+    {
+      key: 'subtotal',
+      header: <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng tiền hàng</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => <MoneyText value={document.subtotal_amount} />,
+    },
+    {
+      key: 'discount',
+      header: <ManagementSortableHeader kind="number" sortKey="discount_amount" sortState={documentSortState} onSort={requestDocumentSort}>Giảm giá</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => <MoneyText value={document.discount_amount} />,
+    },
+    {
+      key: 'total',
+      header: <ManagementSortableHeader kind="number" sortKey="total_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng sau giảm</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => <MoneyText value={document.total_amount} />,
+    },
+    {
+      key: 'paid',
+      header: <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={documentSortState} onSort={requestDocumentSort}>Khách đã trả</ManagementSortableHeader>,
+      headerIsCell: true,
+      cell: (document) => <MoneyText value={document.paid_amount} />,
+    },
+  ]
   const activeFilterSummary = [
-    ...(lastSearch ? [`Tìm: ${lastSearch}`] : []),
     ...(timeFilter === 'custom' ? [`Thời gian: ${dateFrom || '...'} - ${dateTo || '...'}`] : []),
     ...(timeFilter !== 'month' && timeFilter !== 'custom' ? [`Thời gian: ${quickTimeLabels[timeFilter]}`] : []),
     ...(!sameFilterValues(typeFilter, allTypeFilters) ? [`Loại: ${typeFilter.map(documentTypeFilterLabel).join(', ') || 'Không chọn'}`] : []),
@@ -453,15 +510,18 @@ export function SalesDocumentsPage({
     ...(sellerFilter !== 'all' ? [`Người bán: ${sellerOptions.find((seller) => seller.id === sellerFilter)?.name ?? sellerFilter}`] : []),
     ...(priceListFilter !== 'all' ? [`Bảng giá: ${priceListOptions.find((priceList) => priceList.id === priceListFilter)?.name ?? priceListFilter}`] : []),
   ].join(' • ')
-  const { totalAmount: documentTotalAmount, debtAmount: documentDebtAmount } = salesDocumentListSummary(documents)
+  const fallbackDocumentSummary = salesDocumentListSummary(documents)
+  const documentTotalAmount = state?.summary?.total_amount ?? fallbackDocumentSummary.totalAmount
+  const documentDebtAmount = state?.summary?.debt_amount ?? fallbackDocumentSummary.debtAmount
   const documentKpis = (
     <MetricGrid ariaLabel="Tổng quan chứng từ bán hàng">
-      <MetricCard hint="Từ danh sách đang xem" label="Tổng tiền" tone="success" value={<MoneyText value={documentTotalAmount} />} />
-      <MetricCard hint="Từ danh sách đang xem" label="Còn nợ" tone={documentDebtAmount > 0 ? 'warning' : 'neutral'} value={<MoneyText value={documentDebtAmount} />} />
+      <MetricCard hint="Theo bộ lọc hiện tại" label="Tổng tiền" tone="success" value={<MoneyText value={documentTotalAmount} />} />
+      <MetricCard hint="Theo bộ lọc hiện tại" label="Còn nợ" tone={documentDebtAmount > 0 ? 'warning' : 'neutral'} value={<MoneyText value={documentDebtAmount} />} />
     </MetricGrid>
   )
 
   return (
+    <>
     <ManagementPage
       title="Chứng từ bán hàng"
       actions={
@@ -476,25 +536,12 @@ export function SalesDocumentsPage({
               ) : undefined
             }
             value={search}
-            suggestions={
-              documentSearchSuggestionsOpen
-                ? documentSearchSuggestions.map((document) => ({
-                    id: document.id,
-                    primary: `${document.code} ${document.customer.name}`,
-                    secondary: `${document.customer.code ?? ''} ${document.note ?? ''}`.trim(),
-                    meta: <MoneyText value={document.total_amount} />,
-                    ariaLabel: `${document.code} ${document.customer.name} ${document.note ?? ''}`.trim(),
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý chứng từ"
-            emptySuggestion="Không có kết quả phù hợp"
-            onChange={(nextSearch) => void suggestDocuments(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const document = documentSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (document) void selectDocumentSuggestion(document)
-            }}
+            onChange={changeDocumentSearch}
           />
+          <button className="button button-secondary" type="button" onClick={() => setImportOpen(true)}>
+            <FilePlus2 aria-hidden="true" size={16} />
+            Import KV
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={documentKpis}
@@ -695,76 +742,40 @@ export function SalesDocumentsPage({
               </EmptyState>
             ) : (
               <ManagementTableViewport>
-                <table aria-label="Danh sách chứng từ bán hàng" className="sales-documents-management-table">
-                  <thead>
-                    <tr>
-                      <ManagementSortableHeader kind="text" sortKey="code" sortState={documentSortState} onSort={requestDocumentSort}>Mã hóa đơn</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="date" sortKey="created_at" sortState={documentSortState} onSort={requestDocumentSort}>Thời gian</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="text" sortKey="customer_name" sortState={documentSortState} onSort={requestDocumentSort}>Khách hàng</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng tiền hàng</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="discount_amount" sortState={documentSortState} onSort={requestDocumentSort}>Giảm giá</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="total_amount" sortState={documentSortState} onSort={requestDocumentSort}>Tổng sau giảm</ManagementSortableHeader>
-                      <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={documentSortState} onSort={requestDocumentSort}>Khách đã trả</ManagementSortableHeader>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedDocuments.map((document) => (
-                      <Fragment key={document.id}>
-                        <tr
-                          aria-expanded={selected?.id === document.id}
-                          className={`management-data-row${selected?.id === document.id ? ' management-data-row-selected' : ''}`}
-                          tabIndex={0}
-                          onClick={(event: MouseEvent<HTMLTableRowElement>) => {
-                            if (isDetailInteractionTarget(event.target)) return
-                            if (selected?.id === document.id && isOutsideRowClick(event)) return
-                            void openDocument(document)
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault()
-                              void openDocument(document)
-                            }
-                          }}
-                        >
-                          <td>
-                            <button
-                              className="management-link-button"
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation()
-                                void openDocument(document)
-                              }}
-                            >
-                              <strong>{document.code}</strong>
-                            </button>
-                          </td>
-                          <td>{salesDocumentDateTimeText(document.created_at)}</td>
-                          <td>{document.customer.name}</td>
-                          <td><MoneyText value={document.subtotal_amount} /></td>
-                          <td><MoneyText value={document.discount_amount} /></td>
-                          <td><MoneyText value={document.total_amount} /></td>
-                          <td><MoneyText value={document.paid_amount} /></td>
-                        </tr>
-                        {selected?.id === document.id || detailErrorDocumentId === document.id || loadingDocumentId === document.id ? (
-                          <ManagementDetailRow colSpan={7} label={`Chi tiết chứng từ ${document.code}`}>
-                            <SalesDocumentDetailView
-                              document={selected}
-                              editDisabled={openingQuoteId === document.id}
-                              error={detailError}
-                              loading={loadingDocumentId === document.id}
-                              onEdit={
-                                document.order_type === 'quote' && document.status === 'active' && orderService && onOpenQuoteInPos
-                                  ? () => void openQuoteInPos(document)
-                                  : undefined
-                              }
-                              onOpenQuotePrint={onOpenQuotePrint}
-                            />
-                          </ManagementDetailRow>
-                        ) : null}
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
+                <ManagementDataTable
+                  ariaLabel="Danh sách chứng từ bán hàng"
+                  columns={salesDocumentColumns}
+                  getDetailLabel={(document) => `Chi tiết chứng từ ${document.code}`}
+                  getRowKey={(document) => document.id}
+                  items={sortedDocuments}
+                  renderDetail={(document) => (
+                    <SalesDocumentDetailView
+                      document={selected}
+                      editDisabled={openingQuoteId === document.id}
+                      error={detailError}
+                      loading={loadingDocumentId === document.id}
+                      onEdit={
+                        document.order_type === 'quote' && document.status === 'active' && orderService && onOpenQuoteInPos
+                          ? () => void openQuoteInPos(document)
+                          : undefined
+                      }
+                      onCancel={() => setCancelOpen(true)}
+                      onOpenQuotePrint={onOpenQuotePrint}
+                    />
+                  )}
+                  selectedRowKey={selected?.id ?? detailErrorDocumentId ?? loadingDocumentId}
+                  onRowClick={(document, event) => {
+                    if (isDetailInteractionTarget(event.target)) return
+                    if (selected?.id === document.id && isOutsideRowClick(event)) return
+                    void openDocument(document)
+                  }}
+                  onRowKeyDown={(document, event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      void openDocument(document)
+                    }
+                  }}
+                />
               </ManagementTableViewport>
             )}
             <ManagementTableFooter
@@ -785,6 +796,26 @@ export function SalesDocumentsPage({
         ) : null}
       </ManagementListSurface>
     </ManagementPage>
+    <SalesDocumentImportDialog
+      open={importOpen}
+      service={service}
+      onClose={() => setImportOpen(false)}
+      onImported={() => void loadDocuments({ page: 1 })}
+      onOldDataDeleted={() => void loadDocuments({ page: 1 })}
+    />
+    <ManagementConfirmDialog
+      open={cancelOpen && Boolean(selected)}
+      title="Hủy hóa đơn"
+      message={(
+        <>
+          Bạn có chắc chắn muốn hủy hóa đơn <strong>{selected?.code}</strong> không?
+        </>
+      )}
+      loading={canceling}
+      onCancel={() => setCancelOpen(false)}
+      onConfirm={() => void cancelSelectedDocument()}
+    />
+    </>
   )
 }
 
@@ -793,6 +824,7 @@ function SalesDocumentDetailView({
   editDisabled,
   error,
   loading,
+  onCancel,
   onEdit,
   onOpenQuotePrint,
 }: {
@@ -800,6 +832,7 @@ function SalesDocumentDetailView({
   editDisabled?: boolean
   error: string | null
   loading: boolean
+  onCancel?: () => void
   onEdit?: () => void
   onOpenQuotePrint?: (documentId: string) => void
 }) {
@@ -872,7 +905,7 @@ function SalesDocumentDetailView({
             </div>
             <div>
               <dt>Ngày bán:</dt>
-              <dd>{salesDocumentDateTimeText(document.created_at)}</dd>
+              <dd>{salesDocumentCreatedDateTimeText(document)}</dd>
             </div>
             {document.price_list ? (
               <div>
@@ -976,7 +1009,7 @@ function SalesDocumentDetailView({
       )}
       <ManagementDetailActionFooter
         leftActions={[
-          { label: 'Hủy', danger: true, icon: <Trash2 aria-hidden="true" size={15} /> },
+          { label: 'H\u1ee7y', danger: true, disabled: document.status === 'cancelled', icon: <Trash2 aria-hidden="true" size={15} />, onClick: onCancel },
           { label: 'Sao chép', icon: <Copy aria-hidden="true" size={15} /> },
         ]}
         rightActions={[

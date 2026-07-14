@@ -16,7 +16,10 @@ import type {
   DebtCollectionResult,
   FinanceAccountListResponse,
   CashbookBalanceListResponse,
+  FinanceAccount,
   FinanceSalesDocumentSummary,
+  KiotVietCashbookDeleteResult,
+  KiotVietCashbookImportPreview,
 } from './types'
 
 export interface FinanceApiRequester {
@@ -31,6 +34,16 @@ export function createFinanceService(api: FinanceApiRequester) {
       const query = params.toString()
       return api.request<FinanceAccountListResponse>(`/api/v1/finance/accounts${query ? `?${query}` : ''}`)
     },
+    createFinanceAccount: (input: Omit<FinanceAccount, 'id'>) =>
+      api.request<FinanceAccount>('/api/v1/finance/accounts', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateFinanceAccount: (accountId: string, input: Partial<FinanceAccount>) =>
+      api.request<FinanceAccount>(`/api/v1/finance/accounts/${accountId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     listCustomerDebts: (input: { search?: string; page?: number; page_size?: number } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
@@ -101,31 +114,56 @@ export function createFinanceService(api: FinanceApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    previewKiotVietCashbookImport: async (input: { file: File }) =>
+      api.request<KiotVietCashbookImportPreview>('/api/v1/finance/cashbook/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await fileImportPayload(input.file)),
+      }),
+    importKiotVietCashbook: async (input: { file: File }) =>
+      api.request<KiotVietCashbookImportPreview>('/api/v1/finance/cashbook/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await fileImportPayload(input.file)),
+      }),
+    deleteImportedKiotVietCashbook: () =>
+      api.request<KiotVietCashbookDeleteResult>('/api/v1/finance/cashbook/import/kiotviet', { method: 'DELETE' }),
   }
 }
 
 export type FinanceService = ReturnType<typeof createFinanceService>
 
 export function buildCashbookCsv(items: CashbookEntry[]) {
-  const rows = [
-    ['Mã phiếu', 'Thời gian', 'Loại thu chi', 'Người nộp/nhận', 'Giá trị', 'Quỹ/Tài khoản', 'Trạng thái', 'Ghi chú', 'Hạch toán KQKD'],
+  const exportRows = [
+    ['Mã phiếu', 'Thời gian', 'Người tạo', 'Loại thu chi', 'Số tài khoản', 'Người nộp/nhận', 'Giá trị', 'Ghi chú'],
     ...items.map((entry) => [
       entry.code,
       entry.created_at,
-      '',
+      entry.source?.source_creator_name ?? entry.created_by?.name ?? '',
+      entry.source?.category_name ?? '',
+      entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '',
       entry.counterparty?.name ?? '',
       String(entry.amount_delta),
-      entry.finance_account.code,
-      entry.status,
-      entry.note ?? '',
-      String(entry.is_business_accounted),
+      entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note ?? '',
     ]),
   ]
-  return `\uFEFF${rows.map((row) => row.map(csvCell).join(',')).join('\n')}`
+  return `\uFEFF${exportRows.map((row) => row.map(csvCell).join(',')).join('\n')}`
 }
 
 function csvCell(value: string) {
   return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
+}
+
+async function fileImportPayload(file: File) {
+  const buffer = await file.arrayBuffer()
+  return {
+    file_name: file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = ''
+  for (const byte of new Uint8Array(buffer)) binary += String.fromCharCode(byte)
+  return btoa(binary)
 }
 
 export function createBrowserFinanceService(getAccessToken: () => Promise<string | null>) {

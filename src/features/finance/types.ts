@@ -1,7 +1,7 @@
 export type FinanceAccountType = 'cash' | 'bank'
 export type CashbookDirection = 'in' | 'out'
 export type CashbookStatus = 'posted' | 'cancelled'
-export type CashbookSourceType = 'payment_receipt_method' | 'cashbook_voucher'
+export type CashbookSourceType = 'payment_receipt_method' | 'cashbook_voucher' | 'kiotviet_cashbook'
 export type VoucherSourceType = 'payment_receipt' | 'manual_voucher'
 export type CashbookVoucherType =
   | 'other_income'
@@ -22,6 +22,7 @@ export type CashbookSearchScope = 'all' | 'code' | 'note' | 'transfer_content'
 export type CashbookColumnKey =
   | 'code'
   | 'created_at'
+  | 'created_by'
   | 'source_type'
   | 'counterparty'
   | 'finance_account'
@@ -125,6 +126,18 @@ export interface CashbookEntry {
   created_at: string
   note: string | null
   counterparty?: CashbookCounterparty
+  created_by?: { id: string; name: string } | null
+  source?: {
+    type: string
+    id: string
+    code: string
+    order_code: string | null
+    category_name?: string | null
+    source_creator_name?: string | null
+    source_note?: string | null
+    transfer_content?: string | null
+    counterparty_address?: string | null
+  }
 }
 
 export interface CashbookListResponse {
@@ -162,7 +175,7 @@ export interface CashbookEntryDetail extends CashbookEntry {
   created_by: { id: string; name: string }
   counterparty: CashbookCounterparty
   payment_method: 'cash' | 'bank_transfer' | 'manual'
-  source: { type: 'payment_receipt' | 'manual_voucher'; id: string; code: string; order_code: string | null }
+  source: NonNullable<CashbookEntry['source']>
   allocations: PaymentReceiptAllocation[]
 }
 
@@ -190,4 +203,31 @@ export interface CreateCashbookVoucherInput {
 export interface CashbookVoucherListResponse {
   items: CashbookVoucher[]
   total: number
+}
+
+export interface KiotVietCashbookImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    account_count: number
+    cash_rows: number
+    bank_rows: number
+    posted_rows: number
+    cancelled_rows: number
+    cash_total_delta: number
+    bank_total_delta: number
+    created_rows?: number
+    updated_rows?: number
+    skipped_rows?: number
+    accounts_created?: number
+    accounts_updated?: number
+  }
+  invalid_rows: unknown[]
+  accounts?: Array<{ account_type: FinanceAccountType; account_name: string; account_number: string | null }>
+}
+
+export interface KiotVietCashbookDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }

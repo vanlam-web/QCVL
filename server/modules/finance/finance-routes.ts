@@ -10,11 +10,16 @@ export interface FinanceRouteContext {
 
 export interface FinanceRouteHandlers {
   listAccounts(): RouteResult
+  createAccount(): RouteResult
+  updateAccount(): RouteResult
   listCustomerDebts(): RouteResult
   getCustomerDebt(): RouteResult
   collectCustomerDebt(): RouteResult
   cashbookBalances(): RouteResult
   cashbookVouchers(): RouteResult
+  previewKiotVietCashbookImport(): RouteResult
+  importKiotVietCashbook(): RouteResult
+  deleteImportedKiotVietCashbook(): RouteResult
   listCashbook(): RouteResult
   getCashbookEntry(): RouteResult
   createCashbookVoucher(): RouteResult
@@ -28,11 +33,16 @@ export function handleFinanceRoute(context: FinanceRouteContext, handlers: Finan
   const { pathname } = url
 
   if (method === 'GET' && pathname === '/api/v1/finance/accounts') return handlers.listAccounts()
+  if (method === 'POST' && pathname === '/api/v1/finance/accounts') return handlers.createAccount()
+  if (method === 'PATCH' && /^\/api\/v1\/finance\/accounts\/[^/]+$/.test(pathname)) return handlers.updateAccount()
   if (method === 'GET' && pathname === '/api/v1/finance/customer-debts') return handlers.listCustomerDebts()
   if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(pathname)) return handlers.getCustomerDebt()
   if (method === 'POST' && pathname === '/api/v1/finance/debt-collections') return handlers.collectCustomerDebt()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook/balances') return handlers.cashbookBalances()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook/vouchers') return handlers.cashbookVouchers()
+  if (method === 'POST' && pathname === '/api/v1/finance/cashbook/import/kiotviet/preview') return handlers.previewKiotVietCashbookImport()
+  if (method === 'POST' && pathname === '/api/v1/finance/cashbook/import/kiotviet') return handlers.importKiotVietCashbook()
+  if (method === 'DELETE' && pathname === '/api/v1/finance/cashbook/import/kiotviet') return handlers.deleteImportedKiotVietCashbook()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook') return handlers.listCashbook()
   if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(pathname)) return handlers.getCashbookEntry()
   if (method === 'POST' && pathname === '/api/v1/finance/cashbook-vouchers') return handlers.createCashbookVoucher()

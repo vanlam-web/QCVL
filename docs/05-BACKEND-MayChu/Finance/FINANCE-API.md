@@ -133,7 +133,7 @@ Danh sÃ¡ch khÃ¡ch hÃ ng Ä‘ang cÃ³ ná»£.
 
 **Query:** `search`, `include_retail_debt`, `page`, `page_size`.
 
-`search` phải tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất để phục vụ dropdown gợi ý ở header tài chính.
+`search` phải tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất để phục vụ lọc trực tiếp ở header tài chính.
 
 Response tá»•ng há»£p tá»« `customer_debt_entries`, khÃ´ng dÃ¹ng má»™t sá»‘ tá»•ng khÃ´ng truy váº¿t Ä‘Æ°á»£c.
 
@@ -152,7 +152,7 @@ Response pháº£i gá»“m:
 
 ### `GET /finance/retail-debts`
 
-Danh sÃ¡ch hÃ³a Ä‘Æ¡n cÃ²n ná»£ cá»§a khÃ¡ch máº·c Ä‘á»‹nh `KH000001 - KhÃ¡ch láº»`.
+Danh sÃ¡ch hÃ³a Ä‘Æ¡n cÃ²n ná»£ cá»§a khÃ¡ch máº·c Ä‘á»‹nh `khachle - KhÃ¡ch láº»`.
 
 **Permission:** `perm.manage_finance`
 
@@ -290,12 +290,14 @@ Response list pháº£i cÃ³ summary theo filter:
   "summary": {
     "opening_balance": 0,
     "total_in": 2730447402,
-    "total_out": -2704685832,
+    "total_out": 2704685832,
     "ending_balance": 25761570
   },
   "items": []
 }
 ```
+
+Quy uoc hien tai: summary tinh tren toan bo ket qua sau filter, khong tinh rieng page hien tai. Khi co `from`, `opening_balance` la tong so du cua cac dong cung bo loc truoc ngay `from`; neu khong co `from`, `opening_balance = 0`. `total_out` la so duong cua dong chi; `ending_balance = opening_balance + total_in - total_out`. Khong dung so hard-code.
 
 Ghi chÃº search:
 
@@ -501,6 +503,105 @@ Query: `search`, `status`, `from`, `to`, `page`, `page_size`.
 Chi tiáº¿t phiÃªn Ä‘á»‘i soÃ¡t vÃ  cÃ¡c dÃ²ng.
 
 **Permission:** `perm.view_shift_report` hoáº·c `perm.manage_finance`
+
+---
+
+## 9A. KiotViet cashbook import - local 3202 first
+
+This import is the next finance direction after product/customer/supplier/purchase/sales data has been promoted to NAS for test operation.
+
+Scope:
+
+- Work on local `127.0.0.1:3202` first.
+- Read KiotViet `SoQuy_KV*.xlsx` exports.
+- Create/update real `finance_accounts` from the import source before writing cashbook rows.
+- Do not deploy to NAS until the imported totals and filters have been compared with KiotViet.
+
+### `POST /finance/cashbook/import/kiotviet/preview`
+
+Preview a KiotViet cashbook export.
+
+Expected preview response:
+
+```json
+{
+  "summary": {
+    "source_file": "SoQuy_KV24062026-181948-016.xlsx",
+    "valid_rows": 205,
+    "cash_rows": 96,
+    "bank_rows": 109,
+    "posted_rows": 204,
+    "cancelled_rows": 1,
+    "accounts_to_upsert": 5,
+    "cash_total_delta": 3397970,
+    "bank_total_delta": -12874678
+  },
+  "accounts": [],
+  "warnings": []
+}
+```
+
+Preview must not write data.
+
+### `POST /finance/cashbook/import/kiotviet`
+
+Import the previewed file.
+
+Rules:
+
+- Use `Ma phieu` as source key.
+- Upsert bank accounts by normalized `(Ten tai khoan, So tai khoan)`.
+- Upsert one default cash account for `Loai so quy = Tien mat`.
+- Map `Gia tri` sign to `direction` and signed `amount_delta`.
+- Map `Trang thai` to `posted` / `cancelled`.
+- Preserve raw KiotViet category `Loai thu chi` and counterparty fields.
+- Imported rows must be traceable by `source_system = kiotviet`, source file, and source row/code.
+- KiotViet cashbook Excel does not include linked invoice/purchase receipt allocation, and that is normal: payment of invoice/purchase receipt creates the cashbook row. The allocation belongs to payment/source-document detail, not to the flat cashbook export.
+- Full KiotViet cashbook export columns currently seen: `Ma phieu`, `Thoi gian`, `Thoi gian tao`, `Nguoi tao`, `Nhan vien`, `Loai thu chi`, `Ten tai khoan`, `So tai khoan`, `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, `So dien thoai`, `Dia chi`, `Gia tri`, `Noi dung chuyen khoan`, `Ghi chu`, `Loai so quy`, `Trang thai`. Import must preserve `Thoi gian tao`, `Dia chi`, `Noi dung chuyen khoan`, and `Ghi chu`.
+- KiotViet sales/purchase exports contain `Khach da tra`, `Tien mat`, `Chuyen khoan`, and `Tien da tra NCC`, but those values are paid totals at export time and may already include later cashbook debt payments. When rebuilding cashbook/debt relations, imported KiotViet invoices and purchase receipts must be reset to original payable/debt first, then cashbook rows rebuild `paid_amount`, `debt_amount`, and `remaining_amount`. Never add the export paid totals again after cashbook allocations, because that double-counts payments.
+- Direct allocations are safe by code pattern: `TTHD...`/`TTHDO...` allocate to `HD...`; `PCPN...` allocates to `PN...`. Only hydrate full allocation amounts from QCVL sales/purchase data when that source document already exists. Do not infer links from amount, customer name, or time alone.
+- If cashbook for a day has been imported but sales/purchase documents for the same day have not, cashbook totals may be right while document relationships are incomplete. Do not delete those rows unless the delete scope is explicitly confirmed; prefer importing the missing source documents first.
+
+KiotViet cashbook source-code prefixes seen in the `2026-07-13` full exports, de-duplicated by `Ma phieu`: `TTHD`, `TT`, `CTM`, `PCPN`, `CNH`, `TTM`, `TTD_CTM`, `PC`, `TTD_CNH`, `CTD_TTM`, `TNH`, `TTMHD`, `CTD_TNH`, `TNHHD`, `CVDT`, `TTD_CVDT`, `TTHDO`, `CTD_TVDT`, `TVDT`.
+
+Source rules:
+
+- `TTHD...` and `TTHDO...`: invoice paid at sale time. Prefer generating from imported sales documents/payments; do not import again as independent business source.
+- `PCPN...`: supplier payment for a purchase receipt. Prefer generating from imported purchase receipts/payments; do not import again as independent business source.
+- `TT...`, `TTMHD...`, `TNHHD...`: later customer payment / debt collection. Must use payment allocation detail/source when invoice allocation is needed because one payment can cover multiple invoices.
+- `TTM...`, `TNH...`: direct cash/bank receipt. Interpret by `Loai thu chi`; can be other income or transfer/withdrawal.
+- `CTM...`, `CNH...`: direct cash/bank expense. Interpret by `Loai thu chi`; these are still cashbook source rows.
+- `PC...`: supplier payment without purchase-receipt code in the voucher prefix. Keep as supplier payment/cashbook row until a payment allocation source exists.
+- `TTD_*`, `CTD_*`, `TVDT`, `CVDT`: transfer/withdrawal rows between cash/bank accounts. Pair as fund transfers when possible; do not count as revenue/expense.
+
+Temporary allocation rule approved for local `3202`:
+
+- When a cashbook debt-payment voucher has no exact KiotViet allocation in the import source, allocate to the oldest open debt documents for the same counterparty until the voucher amount is exhausted.
+- Apply this to customer payments: `TT...`, `TTM...`, `TTMHD...`, `TNHHD...` when `Loai thu chi` means customer payment/debt collection.
+- Apply this to supplier payments: `PC...` when the voucher is supplier payment and no purchase receipt allocation is available.
+- Do not apply FIFO to `TTHD...`/`TTHDO...` or `PCPN...`; allocate them directly to the matching `HD...`/`PN...` document.
+- FIFO must only allocate to source documents created/received at or before the cashbook entry time. Do not let an old payment close a future invoice/receipt.
+- Do not apply FIFO to transfer/withdrawal rows (`TTD_*`, `CTD_*`, `TVDT`, `CVDT`) or other income/expense categories.
+- If exact KiotViet allocation is later imported from detail/API, exact allocation wins over FIFO and must replace the temporary allocation.
+
+Verified KiotViet examples on `2026-07-13`:
+
+- `TT001842`: customer `XD` paid `3,000,000`, detail links 11 invoices.
+- `TTM000001`: customer `RD` paid `6,000,000`, detail shows customer debt collection but no invoice table in the observed panel, so FIFO is acceptable.
+- `TNHHD000006`: customer `KH000384` paid `6,252,260` by bank, detail can link `HD007698.01`.
+- `PC000046`: supplier `NCC000011` paid `180,000`, detail links `PN000657` and `PN000664`.
+- `TTD_CTM001191`: transfer receipt linked to cash expense `CTM001191`; treat as fund transfer, not revenue/expense.
+
+### `DELETE /finance/cashbook/import/kiotviet`
+
+Delete old KiotViet-imported cashbook rows for re-import.
+
+Rules:
+
+- Delete only rows with `source_system = kiotviet`.
+- Do not delete manual QCVL cashbook vouchers.
+- Do not delete POS/debt-generated cashbook rows.
+- If rows are referenced by later finance operations, return `blocked_rows` instead of silently deleting.
 
 ---
 

@@ -105,6 +105,7 @@ describe('mapKiotVietProductRows', () => {
       sale_price: 20000,
       unit_conversions: [
         {
+          source_code: 'B50',
           unit_name: 'Khổ 50',
           stock_qty_per_unit: 40,
           is_default_purchase_unit: true,

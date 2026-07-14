@@ -39,7 +39,7 @@ Nhân viên bấm [BÁO GIÁ]
 ```
 
 - Báo giá vẫn lưu trong nhóm đơn hàng để dễ quản lý và tìm lại.
-- Có thể tạo báo giá khi chưa chọn khách; backend gán báo giá vào `KH000001 - Khách lẻ` để Customer Detail của khách lẻ có lịch sử báo giá.
+- Có thể tạo báo giá khi chưa chọn khách; backend gán báo giá vào `khachle - Khách lẻ` để Customer Detail của khách lẻ có lịch sử báo giá.
 - Báo giá không làm mất hóa đơn nháp hiện tại trừ khi người dùng chủ động đóng/xóa nháp.
 - Khi mở lại báo giá để sửa, hệ thống đưa báo giá trở lại POS như một hóa đơn nháp bình thường.
 - Khi khách đồng ý, nhân viên mở báo giá thành nháp, sửa nếu cần rồi bấm `[THANH TOÁN]`.
@@ -90,9 +90,9 @@ Nhân viên bấm [THANH TOÁN] (F9) trong khối K03 Panel
 - Có nút nhanh `[TRẢ ĐỦ]` để điền đủ tiền và `[NỢ TOÀN BỘ]` để đưa số tiền khách thanh toán về `0`.
 - Nếu khách thanh toán nhỏ hơn khách cần trả, phần thiếu được ghi nhận là còn nợ.
 - Nếu đã chọn khách, phần còn nợ gắn vào khách đó.
-- Nếu chưa chọn khách, phần còn nợ gắn vào `KH000001 - Khách lẻ`.
+- Nếu chưa chọn khách, phần còn nợ gắn vào `khachle - Khách lẻ`.
 - Ghi chú nợ khách lẻ nên có tên/gợi nhớ khách, SĐT nếu biết, lý do nợ và hẹn ngày lấy/trả nếu có.
-- Sau này khi xác định được khách, việc chuyển hóa đơn/khoản nợ từ `KH000001` sang khách cụ thể cần spec riêng vì đây là thay đổi chủ công nợ/chứng từ.
+- Sau này khi xác định được khách, việc chuyển hóa đơn/khoản nợ từ `khachle` sang khách cụ thể cần spec riêng vì đây là thay đổi chủ công nợ/chứng từ.
 - Nếu đã chọn khách, dialog hiển thị **Tổng nợ hiện tại** của khách.
 - Bên dưới Tổng nợ có ô **Thanh toán nợ cũ**, mặc định `0`.
 - Tiền thanh toán hóa đơn hiện tại và tiền thanh toán nợ cũ là hai khoản riêng, không cộng lẫn để tính còn nợ của hóa đơn mới.

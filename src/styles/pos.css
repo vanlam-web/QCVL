@@ -521,6 +521,19 @@
   white-space: nowrap;
 }
 
+.pos-cart-line-unit-select {
+  justify-self: stretch;
+  width: 100%;
+  min-height: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
 .pos-cart-line-equals {
   justify-self: stretch;
   width: 100%;
@@ -1479,12 +1492,12 @@
 }
 
 .admin-user-dialog {
-  width: min(52rem, calc(100vw - var(--space-4)));
+  width: min(48rem, calc(100vw - var(--space-4)));
 }
 
 .admin-user-form {
   display: grid;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .admin-user-form-fields {
@@ -1495,14 +1508,38 @@
 
 .admin-user-form-section {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-2);
   border-top: 1px solid var(--color-border-muted);
-  padding-top: var(--space-3);
+  padding-top: var(--space-2);
 }
 
 .admin-user-form-section h3 {
   margin: 0;
   font-size: 0.95rem;
+}
+
+.admin-user-section-toggle {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+  text-align: left;
+}
+
+.admin-user-section-toggle svg {
+  color: var(--color-text-muted);
+  transition: transform 140ms ease;
+}
+
+.admin-user-section-toggle-open {
+  transform: rotate(180deg);
 }
 
 .admin-role-form {
@@ -1535,6 +1572,60 @@
   color: var(--color-text);
   padding: 0 var(--space-2);
   font: inherit;
+}
+
+.admin-user-field-control {
+  position: relative;
+  display: grid;
+}
+
+.admin-user-field-control input,
+.admin-user-field-control select {
+  width: 100%;
+}
+
+.admin-user-field-control input[aria-invalid='true'],
+.admin-user-field-control select[aria-invalid='true'] {
+  border-color: var(--color-danger);
+  padding-right: calc(var(--space-6) + var(--space-2));
+}
+
+.admin-user-field-inline-error {
+  position: absolute;
+  top: 50%;
+  left: var(--space-2);
+  max-width: calc(100% - 3rem);
+  overflow: hidden;
+  color: var(--color-danger);
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.admin-user-field-error-icon {
+  position: absolute;
+  top: 50%;
+  right: var(--space-2);
+  display: grid;
+  width: 1rem;
+  height: 1rem;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-danger);
+  color: var(--color-on-primary);
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.admin-user-field-wide {
+  grid-column: 1 / -1;
 }
 
 .admin-user-note-field {
@@ -1572,7 +1663,7 @@
 
 .admin-user-input-with-leading-icon input {
   padding-right: var(--space-2);
-  padding-left: var(--space-7);
+  padding-left: calc(var(--space-6) + var(--space-2));
 }
 
 .admin-role-permissions-shell {

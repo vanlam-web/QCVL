@@ -18,6 +18,7 @@ import type {
   PosShortagePreviewInput,
   StockMovementListResponse,
   Stocktake,
+  StocktakeDetail,
   StocktakeListResponse,
 } from './types'
 
@@ -59,17 +60,30 @@ export function createInventoryService(api: InventoryApiRequester) {
       const query = params.toString()
       return api.request<StockMovementListResponse>(`/api/v1/inventory/stock-movements${query ? `?${query}` : ''}`)
     },
-    listStocktakes: (input: { search?: string; status?: Stocktake['status'] | string; from?: string; to?: string; page?: number; page_size?: number } = {}) => {
+    listStocktakes: (input: { search?: string; status?: Stocktake['status'] | string; from?: string; to?: string; created_by?: string; page?: number; page_size?: number } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
       if (input.status) params.set('status', input.status)
       if (input.from) params.set('from', input.from)
       if (input.to) params.set('to', input.to)
+      if (input.created_by) params.set('created_by', input.created_by)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
       const query = params.toString()
       return api.request<StocktakeListResponse>(`/api/v1/inventory/stocktakes${query ? `?${query}` : ''}`)
     },
+    getStocktake: (id: string) =>
+      api.request<StocktakeDetail>(`/api/v1/inventory/stocktakes/${encodeURIComponent(id)}`),
+    updateStocktakeNote: (id: string, input: { note: string | null }) =>
+      api.request<StocktakeDetail>(`/api/v1/inventory/stocktakes/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    cancelStocktake: (id: string) =>
+      api.request<StocktakeDetail>(`/api/v1/inventory/stocktakes/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: 'cancelled' }),
+      }),
     previewKiotVietStocktakeImport: async (input: { file: File; cleanup_demo?: boolean }) =>
       api.request<KiotVietStocktakeImportPreview>('/api/v1/inventory/stocktakes/import/kiotviet/preview', {
         method: 'POST',

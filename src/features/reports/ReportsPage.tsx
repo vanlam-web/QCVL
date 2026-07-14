@@ -10,12 +10,19 @@ import {
   ManagementPage,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CashbookEntry, CustomerDebtSummary } from '../finance/types'
 import type { InventoryProduct } from '../inventory/types'
 import type { SalesDocumentListItem } from '../sales-documents/types'
 import type { ReportService } from './report-service'
 import { reportDateText, reportNumberText, reportOverviewSummary } from './reports-presenter'
 
+
+type ReportCashbookSortKey = 'code' | 'created_at' | 'finance_account' | 'direction' | 'amount_delta'
+type ReportSaleSortKey = 'code' | 'created_at' | 'customer' | 'seller' | 'total_amount' | 'payment_status'
+type ReportDebtSortKey = 'customer_code' | 'customer_name' | 'open_invoice_count' | 'oldest_order_code' | 'total_debt'
+type ReportInventorySortKey = 'code' | 'name' | 'inventory_shape' | 'available_qty' | 'status'
 
 export function ReportsPage({ service }: { service: ReportService }) {
   const initialRange = useMemo(() => quickDateRange('today'), [])
@@ -33,6 +40,51 @@ export function ReportsPage({ service }: { service: ReportService }) {
     sales,
     debts,
     inventory,
+  })
+  const {
+    sortedItems: sortedCashbook,
+    sortState: reportCashbookSortState,
+    requestSort: requestReportCashbookSort,
+  } = useManagementTableSort<CashbookEntry, ReportCashbookSortKey>(cashbook ?? [], {
+    code: { kind: 'text', value: (entry) => entry.code },
+    created_at: { kind: 'date', value: (entry) => entry.created_at },
+    finance_account: { kind: 'text', value: (entry) => entry.finance_account.code },
+    direction: { kind: 'text', value: (entry) => entry.direction },
+    amount_delta: { kind: 'number', value: (entry) => Math.abs(entry.amount_delta) },
+  })
+  const {
+    sortedItems: sortedSales,
+    sortState: reportSaleSortState,
+    requestSort: requestReportSaleSort,
+  } = useManagementTableSort<SalesDocumentListItem, ReportSaleSortKey>(sales ?? [], {
+    code: { kind: 'text', value: (document) => document.code },
+    created_at: { kind: 'date', value: (document) => document.created_at },
+    customer: { kind: 'text', value: (document) => document.customer.name },
+    seller: { kind: 'text', value: (document) => document.seller.name },
+    total_amount: { kind: 'number', value: (document) => document.total_amount },
+    payment_status: { kind: 'text', value: (document) => document.payment_status },
+  })
+  const {
+    sortedItems: sortedDebts,
+    sortState: reportDebtSortState,
+    requestSort: requestReportDebtSort,
+  } = useManagementTableSort<CustomerDebtSummary, ReportDebtSortKey>(debts ?? [], {
+    customer_code: { kind: 'text', value: (debt) => debt.customer_code },
+    customer_name: { kind: 'text', value: (debt) => debt.customer_name },
+    open_invoice_count: { kind: 'number', value: (debt) => debt.open_invoice_count },
+    oldest_order_code: { kind: 'text', value: (debt) => debt.oldest_order_code },
+    total_debt: { kind: 'number', value: (debt) => debt.total_debt },
+  })
+  const {
+    sortedItems: sortedInventory,
+    sortState: reportInventorySortState,
+    requestSort: requestReportInventorySort,
+  } = useManagementTableSort<InventoryProduct, ReportInventorySortKey>(inventory ?? [], {
+    code: { kind: 'text', value: (product) => product.code },
+    name: { kind: 'text', value: (product) => product.name },
+    inventory_shape: { kind: 'text', value: (product) => product.inventory_shape },
+    available_qty: { kind: 'number', value: (product) => product.available_qty },
+    status: { kind: 'text', value: (product) => (product.is_negative ? 'negative' : 'ok') },
   })
 
   async function loadReports(input: { from: string; to: string }) {
@@ -143,15 +195,15 @@ export function ReportsPage({ service }: { service: ReportService }) {
             <table aria-label="Dòng sổ quỹ cuối ngày" className="management-table">
               <thead>
                 <tr>
-                  <th>Mã</th>
-                  <th>Ngày</th>
-                  <th>Tài khoản</th>
-                  <th>Hướng</th>
-                  <th>Số tiền</th>
+                  <ManagementSortableHeader kind="text" sortKey="code" sortState={reportCashbookSortState} onSort={requestReportCashbookSort}>Mã</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="date" sortKey="created_at" sortState={reportCashbookSortState} onSort={requestReportCashbookSort}>Ngày</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="finance_account" sortState={reportCashbookSortState} onSort={requestReportCashbookSort}>Tài khoản</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="direction" sortState={reportCashbookSortState} onSort={requestReportCashbookSort}>Hướng</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="number" sortKey="amount_delta" sortState={reportCashbookSortState} onSort={requestReportCashbookSort}>Số tiền</ManagementSortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {cashbook.slice(0, 8).map((entry) => (
+                {sortedCashbook.slice(0, 8).map((entry) => (
                   <tr key={entry.id}>
                     <td>{entry.code}</td>
                     <td>{reportDateText(entry.created_at)}</td>
@@ -180,16 +232,16 @@ export function ReportsPage({ service }: { service: ReportService }) {
             <table aria-label="Bán hàng" className="management-table">
               <thead>
                 <tr>
-                  <th>Mã hóa đơn</th>
-                  <th>Ngày</th>
-                  <th>Khách</th>
-                  <th>Người bán</th>
-                  <th>Tổng tiền</th>
-                  <th>Trạng thái thu</th>
+                  <ManagementSortableHeader kind="text" sortKey="code" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Mã hóa đơn</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="date" sortKey="created_at" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Ngày</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="customer" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Khách</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="seller" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Người bán</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="number" sortKey="total_amount" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Tổng tiền</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="payment_status" sortState={reportSaleSortState} onSort={requestReportSaleSort}>Trạng thái thu</ManagementSortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {sales.slice(0, 10).map((document) => (
+                {sortedSales.slice(0, 10).map((document) => (
                   <tr key={document.id}>
                     <td><strong>{document.code}</strong></td>
                     <td>{reportDateText(document.created_at)}</td>
@@ -218,15 +270,15 @@ export function ReportsPage({ service }: { service: ReportService }) {
             <table aria-label="Công nợ" className="management-table">
               <thead>
                 <tr>
-                  <th>Mã khách</th>
-                  <th>Tên khách</th>
-                  <th>Hóa đơn nợ</th>
-                  <th>Hóa đơn cũ nhất</th>
-                  <th>Tổng nợ</th>
+                  <ManagementSortableHeader kind="text" sortKey="customer_code" sortState={reportDebtSortState} onSort={requestReportDebtSort}>Mã khách</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="customer_name" sortState={reportDebtSortState} onSort={requestReportDebtSort}>Tên khách</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="number" sortKey="open_invoice_count" sortState={reportDebtSortState} onSort={requestReportDebtSort}>Hóa đơn nợ</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="oldest_order_code" sortState={reportDebtSortState} onSort={requestReportDebtSort}>Hóa đơn cũ nhất</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="number" sortKey="total_debt" sortState={reportDebtSortState} onSort={requestReportDebtSort}>Tổng nợ</ManagementSortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {debts.slice(0, 10).map((debt) => (
+                {sortedDebts.slice(0, 10).map((debt) => (
                   <tr key={debt.customer_id ?? debt.customer_name}>
                     <td>{debt.customer_code ?? 'Khách lẻ'}</td>
                     <td>{debt.customer_name}</td>
@@ -255,15 +307,15 @@ export function ReportsPage({ service }: { service: ReportService }) {
             <table aria-label="Hàng hóa" className="management-table">
               <thead>
                 <tr>
-                  <th>Mã hàng</th>
-                  <th>Tên hàng</th>
-                  <th>Loại hàng</th>
-                  <th>Tồn kho</th>
-                  <th>Trạng thái</th>
+                  <ManagementSortableHeader kind="text" sortKey="code" sortState={reportInventorySortState} onSort={requestReportInventorySort}>Mã hàng</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="name" sortState={reportInventorySortState} onSort={requestReportInventorySort}>Tên hàng</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="inventory_shape" sortState={reportInventorySortState} onSort={requestReportInventorySort}>Loại hàng</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="number" sortKey="available_qty" sortState={reportInventorySortState} onSort={requestReportInventorySort}>Tồn kho</ManagementSortableHeader>
+                  <ManagementSortableHeader kind="text" sortKey="status" sortState={reportInventorySortState} onSort={requestReportInventorySort}>Trạng thái</ManagementSortableHeader>
                 </tr>
               </thead>
               <tbody>
-                {inventory.slice(0, 10).map((product) => (
+                {sortedInventory.slice(0, 10).map((product) => (
                   <tr key={product.product_id}>
                     <td><strong>{product.code}</strong></td>
                     <td>{product.name}</td>

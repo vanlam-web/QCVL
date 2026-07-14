@@ -18,6 +18,10 @@ export interface InventoryProductListResponse {
   page: number
   page_size: number
   total: number
+  summary?: {
+    total_qty: number
+    negative_count: number
+  }
 }
 
 export interface StockMovement {
@@ -42,16 +46,48 @@ export interface Stocktake {
   source_type: 'manual' | 'product_edit' | 'kiotviet_import'
   created_at: string
   balanced_at: string | null
+  source_creator_name?: string | null
+  created_by: { id: string; name: string } | null
   total_actual_qty: number
   total_actual_value: number | null
   total_difference_value: number | null
   increased_qty: number
   decreased_qty: number
+  product_code?: string | null
+  product_name?: string | null
+  product_system_qty?: number | null
+  product_actual_qty?: number | null
+  product_difference_qty?: number | null
   note: string | null
+}
+
+export interface StocktakeDetailItem {
+  id: string
+  line_no: number
+  product_id: string | null
+  product_code: string
+  product_name: string
+  unit_name: string | null
+  system_qty: number | null
+  actual_qty: number | null
+  difference_qty: number | null
+  line_actual_value: number | null
+  line_difference_value: number | null
+  note: string | null
+}
+
+export interface StocktakeDetail extends Stocktake {
+  items: StocktakeDetailItem[]
+}
+
+export interface StocktakeCreatorOption {
+  id: string
+  name: string
 }
 
 export interface StocktakeListResponse {
   items: Stocktake[]
+  creator_options?: StocktakeCreatorOption[]
   page: number
   page_size: number
   total: number

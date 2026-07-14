@@ -9,7 +9,7 @@ Màn Công nợ giúp nhân viên xem nợ theo khách hàng và thu nợ ngoài
 
 QC-OMS quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo một số tổng.
 
-`KH000001 - Khách lẻ` là hồ sơ khách mặc định của tổ chức. Hóa đơn POS chưa chọn khách nhưng còn nợ vẫn được ghi vào `KH000001`; ghi chú khách lẻ nếu có dùng để nhận diện người nợ, không tạo bucket công nợ `customer_id = null`.
+`khachle - Khách lẻ` là hồ sơ khách mặc định của tổ chức. Hóa đơn POS chưa chọn khách nhưng còn nợ vẫn được ghi vào khách mã `khachle`; ghi chú khách lẻ nếu có dùng để nhận diện người nợ, không tạo bucket công nợ `customer_id = null`.
 
 ---
 
@@ -19,9 +19,9 @@ QC-OMS quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo
 
 - dùng shared compact search;
 - tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất;
-- khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm;
-- dòng gợi ý gồm mã + tên khách, dòng phụ là mã hóa đơn nợ cũ nhất, mép phải là tổng nợ;
-- bấm gợi ý lọc danh sách theo đúng mã khách.
+- khi nhập từ khóa, lọc trực tiếp danh sách công nợ theo mã khách, tên khách, mã hóa đơn nợ cũ nhất và tổng nợ nếu API/list có dữ liệu;
+- không hiển thị dropdown/listbox gợi ý dưới ô tìm;
+- nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ Phân bổ mặc định vào hóa đơn cũ nhất trước. MVP không cho thu
 
 ## 5. Khách lẻ nợ
 
-Khách lẻ nợ nằm dưới khách mặc định `KH000001 - Khách lẻ`. Có thể có bộ lọc nhanh để xem riêng các hóa đơn `KH000001` có ghi chú nhận diện khách lẻ.
+Khách lẻ nợ nằm dưới khách mặc định `khachle - Khách lẻ`. Có thể có bộ lọc nhanh để xem riêng các hóa đơn của khách mã `khachle` có ghi chú nhận diện khách lẻ.
 
 Mỗi dòng phải hiển thị:
 
@@ -94,7 +94,7 @@ Mỗi dòng phải hiển thị:
 - số còn nợ
 - ngày phát sinh
 
-Nếu sau này chuyển một khoản nợ từ `KH000001` sang hồ sơ khách cụ thể, cần spec riêng vì đây là thao tác đổi chủ công nợ/chứng từ.
+Nếu sau này chuyển một khoản nợ từ `khachle` sang hồ sơ khách cụ thể, cần spec riêng vì đây là thao tác đổi chủ công nợ/chứng từ.
 
 ---
 
@@ -104,7 +104,7 @@ Nếu sau này chuyển một khoản nợ từ `KH000001` sang hồ sơ khách 
 2. Người dùng mở được danh sách hóa đơn còn nợ của một khách.
 3. Thu nợ hiển thị preview phân bổ vào hóa đơn cũ nhất trước.
 4. Không cho nhập số tiền thu vượt tổng nợ trong MVP.
-5. Khách lẻ nợ thuộc `KH000001`, có ghi chú nhận diện khi cần và không bị rơi vào bucket không khách.
+5. Khách lẻ nợ thuộc `khachle`, có ghi chú nhận diện khi cần và không bị rơi vào bucket không khách.
 
 ---
 

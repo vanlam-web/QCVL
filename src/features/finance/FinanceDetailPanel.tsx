@@ -3,9 +3,13 @@ import { ManagementDetailActionFooter, ManagementTableViewport } from '../../com
 import { MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   cashbookDetailAccountLabel,
+  cashbookDetailAccountText,
   cashbookDetailAmountLabel,
+  cashbookDetailCategoryText,
   cashbookDetailCounterpartyLabel,
+  cashbookDetailCounterpartyText,
   cashbookDetailCounterpartyTypeLabel,
+  cashbookDetailCreatorText,
   cashbookDetailNoteText,
   cashbookDetailPrimaryStatusText,
   cashbookDetailPrimaryStatusTone,
@@ -14,7 +18,6 @@ import {
   cashbookLinkedDocumentRows,
   financeDateText,
   paymentMethodText,
-  sourceTypeText,
 } from './finance-presenter'
 import type { CashbookEntryDetail } from './types'
 
@@ -33,22 +36,17 @@ export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
         </div>
       </div>
       <header className="management-detail-header">
-        <div className="management-detail-heading">
-          <div className="management-detail-title-line">
-            <h3>{cashbookDetailTitle(detail)}</h3>
-            <StatusChip tone={cashbookDetailPrimaryStatusTone(detail)}>{cashbookDetailPrimaryStatusText(detail)}</StatusChip>
-            <StatusChip tone={detail.is_business_accounted ? 'info' : 'warning'}>
-              {detail.is_business_accounted ? 'Có hạch toán' : 'Không hạch toán'}
-            </StatusChip>
-          </div>
-        </div>
+        <h2>{cashbookDetailTitle(detail)}</h2>
+        <StatusChip tone={cashbookDetailPrimaryStatusTone(detail)}>{cashbookDetailPrimaryStatusText(detail)}</StatusChip>
+        <StatusChip tone={detail.is_business_accounted ? 'info' : 'warning'}>
+          {detail.is_business_accounted ? 'Có hạch toán' : 'Không hạch toán'}
+        </StatusChip>
       </header>
-      <p className="management-detail-log finance-cashbook-detail-log">
-        Người tạo: {detail.created_by.name} | Thời gian: {financeDateText(detail.created_at)}
-      </p>
       <dl className="management-detail-meta-grid management-detail-meta-grid-four">
+        <div><dt>Người tạo:</dt><dd>{cashbookDetailCreatorText(detail)}</dd></div>
+        <div><dt>Thời gian:</dt><dd>{financeDateText(detail.created_at)}</dd></div>
         <div><dt>Số tiền</dt><dd><MoneyText value={detail.amount_delta} /></dd></div>
-        <div><dt>{cashbookDetailAmountLabel(detail)}</dt><dd>{sourceTypeText(detail.source_type)}</dd></div>
+        <div><dt>{cashbookDetailAmountLabel(detail)}</dt><dd>{cashbookDetailCategoryText(detail)}</dd></div>
         <div><dt>{detail.direction === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'}</dt><dd>{cashbookDetailCounterpartyTypeLabel(detail)}</dd></div>
         <div><dt>Phương thức thanh toán</dt><dd>{paymentMethodText(detail.payment_method)}</dd></div>
       </dl>
@@ -57,11 +55,11 @@ export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
           <dt>{cashbookDetailCounterpartyLabel(detail)}</dt>
           <dd>
             <button aria-label={`${cashbookDetailCounterpartyLabel(detail)} ${detail.counterparty.name ?? '-'}`} className="finance-cashbook-detail-link" type="button">
-              {detail.counterparty.name ?? '-'}
+              {cashbookDetailCounterpartyText(detail)}
             </button>
           </dd>
         </div>
-        <div><dt>{cashbookDetailAccountLabel(detail)}</dt><dd>{detail.finance_account.name}</dd></div>
+        <div><dt>{cashbookDetailAccountLabel(detail)}</dt><dd>{cashbookDetailAccountText(detail)}</dd></div>
       </dl>
       <CashbookLinkedDocuments entry={detail} />
       <div className="management-detail-inline-note">
@@ -96,10 +94,12 @@ export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
 
 function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
   const linkedDocumentRows = cashbookLinkedDocumentRows(entry)
+  if (linkedDocumentRows.length === 0) return null
+
   return (
     <section aria-label="Chứng từ liên kết" className="finance-cashbook-linked-documents">
       <div className="finance-cashbook-linked-documents-inner">
-        <p>{linkedDocumentRows.length > 0 ? cashbookLinkedDocumentMessage(entry) : 'Không có chứng từ liên kết.'}</p>
+        <p>{cashbookLinkedDocumentMessage(entry)}</p>
         <ManagementTableViewport>
           <table aria-label="Chứng từ liên kết" className="management-table">
             <thead>
@@ -112,7 +112,7 @@ function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
               </tr>
             </thead>
             <tbody>
-              {linkedDocumentRows.length > 0 ? linkedDocumentRows.map((linkedDocument) => (
+              {linkedDocumentRows.map((linkedDocument) => (
                 <tr key={linkedDocument.id}>
                   <td>{linkedDocument.code}</td>
                   <td>{financeDateText(entry.created_at)}</td>
@@ -120,11 +120,7 @@ function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
                   <td><MoneyText value={entry.direction === 'in' ? linkedDocument.remainingAmount : linkedDocument.settledBefore} /></td>
                   <td><MoneyText value={linkedDocument.allocatedAmount} /></td>
                 </tr>
-              )) : (
-                <tr>
-                  <td colSpan={5}>Không có kết quả phù hợp</td>
-                </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </ManagementTableViewport>

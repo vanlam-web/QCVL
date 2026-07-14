@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import { CalendarDays, KeyRound, Lock, Search, Settings, Unlock, X } from 'lucide-react'
+import { ChevronDown, KeyRound, Lock, Search, Settings, SquarePen, Unlock, X } from 'lucide-react'
 import type { Permission, UserListItem } from '../users/types'
 import type { FoundationService } from '../users/foundation-service'
+import { ApiError } from '../../lib/api/client'
 import { formatApiError } from '../../lib/api/error-message'
 import {
   ManagementDetailRow,
@@ -14,6 +15,9 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { permissions } from '../users/permissions'
 import {
   adminNullableFormValue,
@@ -40,7 +44,10 @@ interface RoleListItem {
 }
 
 type UserStatusFilter = 'all' | 'active' | 'inactive'
-type UserFormErrors = Partial<Record<'displayName' | 'email' | 'username' | 'password' | 'passwordConfirmation' | 'roleId', string>>
+type UserFormErrors = Partial<Record<'displayName' | 'phone' | 'email' | 'username' | 'password' | 'passwordConfirmation' | 'roleId', string>>
+type UserDialogMode = 'create' | 'edit'
+type AdminUserSortKey = 'display_name' | 'username' | 'phone' | 'role' | 'status'
+type AdminRoleSortKey = 'name' | 'description' | 'userCount' | 'status'
 
 const internalStaffDefaultPermissions = [
   permissions.createOrder,
@@ -85,35 +92,25 @@ const roleDefinitions = [
 
 function validateUserForm(form: {
   displayName: string
+  phone: string
   email: string
   username: string
   password: string
   passwordConfirmation: string
   roleId: string
-}) {
+}, mode: UserDialogMode) {
   const errors: UserFormErrors = {}
   if (!form.displayName.trim()) errors.displayName = 'Tên hiển thị là bắt buộc.'
-  if (!form.email.trim()) errors.email = 'Email là bắt buộc.'
+  if (!form.phone.trim()) errors.phone = 'SĐT là bắt buộc.'
   if (!form.username.trim()) errors.username = 'Tên đăng nhập là bắt buộc.'
-  if (!form.password) errors.password = 'Mật khẩu là bắt buộc.'
-  if (!form.passwordConfirmation) errors.passwordConfirmation = 'Nhập lại mật khẩu là bắt buộc.'
+  if (mode === 'create' && !form.password) errors.password = 'Mật khẩu là bắt buộc.'
+  if (mode === 'create' && !form.passwordConfirmation) errors.passwordConfirmation = 'Nhập lại mật khẩu là bắt buộc.'
   if (!form.roleId.trim()) errors.roleId = 'Vai trò là bắt buộc.'
   return errors
 }
 
-function FieldError({ message }: { message?: string }) {
-  return message ? <small className="management-form-error">{message}</small> : null
-}
-
-export function FoundationAdminPage({
-  service,
-}: {
-  service: FoundationService
-  onOpenDashboard: () => void
-}) {
-  const [state, setState] = useState<AdminState | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [userForm, setUserForm] = useState({
+function emptyUserForm() {
+  return {
     displayName: '',
     phone: '',
     email: '',
@@ -126,10 +123,71 @@ export function FoundationAdminPage({
     region: '',
     ward: '',
     note: '',
-  })
+  }
+}
+
+function roleIdForUser(user: UserListItem, roles: RoleListItem[]) {
+  return roles.find((role) => role.name === userRoleLabel(user))?.id ?? 'cashier'
+}
+
+function FieldError({ message }: { message?: string }) {
+  return message ? <span aria-hidden="true" className="admin-user-field-inline-error">{message}</span> : null
+}
+
+function FieldErrorIcon({ label, show }: { label: string; show?: boolean }) {
+  return show ? (
+    <span aria-hidden="true" className="admin-user-field-error-icon" data-field-error-icon={label}>
+      !
+    </span>
+  ) : null
+}
+
+const createUserApiFieldMap: Record<string, { key: keyof UserFormErrors; label: string; requiredMessage: string }> = {
+  display_name: { key: 'displayName', label: 'Tên hiển thị', requiredMessage: 'Tên hiển thị là bắt buộc.' },
+  phone: { key: 'phone', label: 'SĐT', requiredMessage: 'SĐT là bắt buộc.' },
+  email: { key: 'email', label: 'Email', requiredMessage: 'Email là bắt buộc.' },
+  username: { key: 'username', label: 'Tên đăng nhập', requiredMessage: 'Tên đăng nhập là bắt buộc.' },
+  password: { key: 'password', label: 'Mật khẩu', requiredMessage: 'Mật khẩu là bắt buộc.' },
+}
+
+function getCreateUserApiValidation(cause: unknown) {
+  if (!(cause instanceof ApiError) || cause.code !== 'VALIDATION_ERROR') return null
+  const fields = cause.fields ?? parseRequiredFieldFromMessage(cause.message)
+  const errors: UserFormErrors = {}
+  const labels: string[] = []
+
+  for (const [apiField, messages] of Object.entries(fields)) {
+    const mapping = createUserApiFieldMap[apiField]
+    if (!mapping) continue
+    labels.push(mapping.label)
+    const firstMessage = messages[0] ?? ''
+    errors[mapping.key] = firstMessage.includes('is required') ? mapping.requiredMessage : `${mapping.label} chưa hợp lệ.`
+  }
+
+  return labels.length > 0 ? { errors, notice: `Vui lòng kiểm tra lại ${labels.join(', ')}.` } : null
+}
+
+function parseRequiredFieldFromMessage(message: string) {
+  const match = message.match(/^([a-z_]+) is required\.$/)
+  return match ? { [match[1]]: [message] } : {}
+}
+
+export function FoundationAdminPage({
+  service,
+}: {
+  service: FoundationService
+  onOpenDashboard: () => void
+}) {
+  const [state, setState] = useState<AdminState | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [userFormNotice, setUserFormNotice] = useState<string | null>(null)
+  const [userExtraOpen, setUserExtraOpen] = useState(false)
+  const [userForm, setUserForm] = useState(emptyUserForm)
   const [userFormErrors, setUserFormErrors] = useState<UserFormErrors>({})
   const [selectedUser, setSelectedUser] = useState<UserListItem | null>(null)
   const [userDialogOpen, setUserDialogOpen] = useState(false)
+  const [userDialogMode, setUserDialogMode] = useState<UserDialogMode>('create')
+  const [editingUser, setEditingUser] = useState<UserListItem | null>(null)
   const [customRoles, setCustomRoles] = useState<RoleListItem[]>([])
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
@@ -140,7 +198,7 @@ export function FoundationAdminPage({
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
   const [lastUserSearch, setLastUserSearch] = useState('')
   const [lastUserStatus, setLastUserStatus] = useState<UserStatusFilter>('all')
-  const createUserEmailRef = useRef<HTMLInputElement | null>(null)
+  const createUserDisplayNameRef = useRef<HTMLInputElement | null>(null)
 
   async function load(input: { search?: string; status?: UserStatusFilter } = {}) {
     const search = input.search ?? lastUserSearch
@@ -181,72 +239,141 @@ export function FoundationAdminPage({
   }, [service])
 
   useEffect(() => {
-    if (userDialogOpen) createUserEmailRef.current?.focus()
+    if (userDialogOpen) createUserDisplayNameRef.current?.focus()
   }, [userDialogOpen])
 
   function openUserDialog() {
+    setUserDialogMode('create')
+    setEditingUser(null)
+    setUserForm(emptyUserForm())
+    setUserFormErrors({})
+    setUserFormNotice(null)
+    setUserExtraOpen(false)
+    setUserDialogOpen(true)
+  }
+
+  function openEditUserDialog(user: UserListItem) {
+    setUserDialogMode('edit')
+    setEditingUser(user)
     setUserForm({
-      displayName: '',
-      phone: '',
-      email: '',
-      username: '',
+      displayName: user.display_name,
+      phone: user.phone ?? '',
+      email: user.email ?? '',
+      username: user.username ?? '',
       password: '',
       passwordConfirmation: '',
-      roleId: 'cashier',
-      birthday: '',
-      address: '',
-      region: '',
-      ward: '',
-      note: '',
+      roleId: roleIdForUser(user, roleRows),
+      birthday: user.birthday ?? '',
+      address: user.address ?? '',
+      region: user.region ?? '',
+      ward: user.ward ?? '',
+      note: user.note ?? '',
     })
     setUserFormErrors({})
+    setUserFormNotice(null)
+    setUserExtraOpen(Boolean(user.birthday || user.address || user.region || user.ward || user.note))
     setUserDialogOpen(true)
   }
 
   function closeUserDialog() {
+    setUserFormNotice(null)
     setUserDialogOpen(false)
+    setEditingUser(null)
+  }
+
+  function updateUserFormField<K extends keyof typeof userForm>(field: K, value: (typeof userForm)[K], errorKey?: keyof UserFormErrors) {
+    setUserForm((current) => ({ ...current, [field]: value }))
+    if (!errorKey || !userFormErrors[errorKey]) return
+    setUserFormErrors((current) => {
+      const next = { ...current }
+      delete next[errorKey]
+      if (Object.keys(next).length === 0) setUserFormNotice(null)
+      return next
+    })
   }
 
   async function filterUsers(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    await load({ search: userSearch, status: userStatus })
+    preventManagementSearchSubmit(event, () => load({ search: userSearch, status: userStatus }))
   }
 
-  async function createUser(event: React.FormEvent<HTMLFormElement>) {
+  function changeUserSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch: setUserSearch,
+      resetSelection: () => setSelectedUser(null),
+      load: (query) => load({ search: query, status: userStatus }),
+    })
+  }
+
+  function changeUserStatus(nextStatus: UserStatusFilter) {
+    setUserStatus(nextStatus)
+    setSelectedUser(null)
+    void load({ search: userSearch, status: nextStatus })
+  }
+
+  async function saveUser(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const validationErrors = validateUserForm(userForm)
+    const validationErrors = validateUserForm(userForm, userDialogMode)
     if (Object.keys(validationErrors).length > 0) {
       setUserFormErrors(validationErrors)
-      setError('Vui lòng nhập đủ các trường bắt buộc.')
+      setUserFormNotice('Vui lòng nhập đủ các trường bắt buộc.')
       return
     }
-    if (userForm.password !== userForm.passwordConfirmation) {
+    const shouldUpdatePassword = userDialogMode === 'create' || Boolean(userForm.password || userForm.passwordConfirmation)
+    if (shouldUpdatePassword && userForm.password !== userForm.passwordConfirmation) {
       setUserFormErrors({ passwordConfirmation: 'Mật khẩu nhập lại không khớp.' })
-      setError('Mật khẩu nhập lại không khớp.')
+      setUserFormNotice('Mật khẩu nhập lại không khớp.')
+      return
+    }
+    if (userDialogMode === 'edit' && !editingUser) {
+      setUserFormNotice('Không tìm thấy tài khoản cần sửa.')
       return
     }
     setSavingUser(true)
-    setError(null)
+    setUserFormNotice(null)
     setUserFormErrors({})
     try {
       const role = findAdminRoleById(userForm.roleId, [...roleDefinitions, ...customRoles])
-      await service.createUser({
-        email: userForm.email,
-        username: userForm.username,
-        phone: userForm.phone,
-        birthday: adminNullableFormValue(userForm.birthday),
-        address: adminNullableFormValue(userForm.address),
-        region: adminNullableFormValue(userForm.region),
-        ward: adminNullableFormValue(userForm.ward),
-        note: adminNullableFormValue(userForm.note),
-        password: userForm.password,
-        display_name: userForm.displayName,
-        permissions: role ? role.permissions : [...internalStaffDefaultPermissions],
-      })
+      const permissions = role ? role.permissions : [...internalStaffDefaultPermissions]
+      if (userDialogMode === 'create') {
+        await service.createUser({
+          email: adminNullableFormValue(userForm.email),
+          username: userForm.username,
+          phone: adminNullableFormValue(userForm.phone),
+          birthday: adminNullableFormValue(userForm.birthday),
+          address: adminNullableFormValue(userForm.address),
+          region: adminNullableFormValue(userForm.region),
+          ward: adminNullableFormValue(userForm.ward),
+          note: adminNullableFormValue(userForm.note),
+          password: userForm.password,
+          display_name: userForm.displayName,
+          permissions,
+        })
+      } else if (editingUser) {
+        await service.updateUser(editingUser.id, {
+          email: adminNullableFormValue(userForm.email),
+          username: userForm.username,
+          phone: adminNullableFormValue(userForm.phone),
+          birthday: adminNullableFormValue(userForm.birthday),
+          address: adminNullableFormValue(userForm.address),
+          region: adminNullableFormValue(userForm.region),
+          ward: adminNullableFormValue(userForm.ward),
+          note: adminNullableFormValue(userForm.note),
+          password: userForm.password || undefined,
+          display_name: userForm.displayName,
+        })
+        await service.replaceUserPermissions(editingUser.id, permissions)
+        setSelectedUser(null)
+      }
       await load()
       closeUserDialog()
     } catch (cause) {
-      setError(formatApiError(cause, 'Không lưu được người dùng.'))
+      const validation = getCreateUserApiValidation(cause)
+      if (validation) {
+        setUserFormErrors(validation.errors)
+        setUserFormNotice(validation.notice)
+      } else {
+        setUserFormNotice(formatApiError(cause, 'Không lưu được người dùng.'))
+      }
     } finally {
       setSavingUser(false)
     }
@@ -327,6 +454,27 @@ export function FoundationAdminPage({
     }))
     return [...builtInRoles, ...customRoles]
   }, [customRoles, state])
+  const {
+    sortedItems: sortedAdminUsers,
+    sortState: adminUserSortState,
+    requestSort: requestAdminUserSort,
+  } = useManagementTableSort<UserListItem, AdminUserSortKey>(state?.users ?? [], {
+    display_name: { kind: 'text', value: (user) => user.display_name },
+    username: { kind: 'text', value: (user) => user.username || user.email },
+    phone: { kind: 'text', value: (user) => user.phone },
+    role: { kind: 'text', value: (user) => userRoleLabel(user) },
+    status: { kind: 'text', value: (user) => userStatusLabel(user.status) },
+  })
+  const {
+    sortedItems: sortedRoleRows,
+    sortState: adminRoleSortState,
+    requestSort: requestAdminRoleSort,
+  } = useManagementTableSort<RoleListItem, AdminRoleSortKey>(roleRows, {
+    name: { kind: 'text', value: (role) => role.name },
+    description: { kind: 'text', value: (role) => role.description },
+    userCount: { kind: 'number', value: (role) => role.userCount },
+    status: { kind: 'text', value: (role) => userStatusLabel(role.status) },
+  })
   const selectedRole = roleRows.find((role) => role.id === selectedRoleId) ?? null
   const permissionsByModule = useMemo(() => groupAdminPermissionsByModule(state?.permissions ?? []), [state?.permissions])
 
@@ -359,7 +507,7 @@ export function FoundationAdminPage({
         <AdminSettingsMenu />
       }
     >
-      {error ? <p role="alert">{error}</p> : null}
+      {error && !userDialogOpen ? <p role="alert">{error}</p> : null}
       {state === null && error === null ? <p>Đang tải dữ liệu quản trị...</p> : null}
 
       {state ? (
@@ -374,36 +522,35 @@ export function FoundationAdminPage({
                   placeholder="Tìm tên, email, điện thoại"
                   trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo người dùng" onClick={openUserDialog} />}
                   value={userSearch}
-                  onChange={setUserSearch}
+                  onChange={changeUserSearch}
                 />
                 <label className="admin-status-filter">
                   Trạng thái
                   <select
                     value={userStatus}
-                    onChange={(event) => setUserStatus(event.target.value as UserStatusFilter)}
+                    onChange={(event) => changeUserStatus(event.target.value as UserStatusFilter)}
                   >
                     <option value="all">Tất cả</option>
                     <option value="active">Đang hoạt động</option>
                     <option value="inactive">Ngừng hoạt động</option>
                   </select>
                 </label>
-                <button className="button button-secondary" type="submit">Lọc</button>
               </ManagementCompactToolbar>
             </div>
             <ManagementTableViewport>
               <table>
                 <thead>
                   <tr>
-                    <th>Tên hiển thị</th>
-                    <th>Tên đăng nhập</th>
-                    <th>Điện thoại</th>
-                    <th>Vai trò</th>
-                    <th>Trạng thái</th>
+                    <ManagementSortableHeader kind="text" sortKey="display_name" sortState={adminUserSortState} onSort={requestAdminUserSort}>Tên hiển thị</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="username" sortState={adminUserSortState} onSort={requestAdminUserSort}>Tên đăng nhập</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="phone" sortState={adminUserSortState} onSort={requestAdminUserSort}>Điện thoại</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="role" sortState={adminUserSortState} onSort={requestAdminUserSort}>Vai trò</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="status" sortState={adminUserSortState} onSort={requestAdminUserSort}>Trạng thái</ManagementSortableHeader>
                     <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {state.users.map((user) => (
+                  {sortedAdminUsers.map((user) => (
                     <Fragment key={user.id}>
                       <tr className={selectedUser?.id === user.id ? 'management-data-row-selected' : undefined}>
                         <td>{user.display_name}</td>
@@ -412,6 +559,13 @@ export function FoundationAdminPage({
                         <td>{userRoleLabel(user)}</td>
                         <td>{userStatusLabel(user.status)}</td>
                         <td>
+                          <ManagementRowActionButton
+                            ariaLabel={`Sửa ${user.display_name}`}
+                            disabled={savingUser}
+                            onClick={() => openEditUserDialog(user)}
+                          >
+                            <SquarePen aria-hidden="true" size={15} />
+                          </ManagementRowActionButton>
                           <ManagementRowActionButton
                             ariaLabel={`${selectedUser?.id === user.id ? 'Đóng' : 'Mở'} quyền ${user.display_name}`}
                             onClick={() => setSelectedUser((current) => (current?.id === user.id ? null : user))}
@@ -474,83 +628,104 @@ export function FoundationAdminPage({
 
           {userDialogOpen ? (
             <div className="management-modal-backdrop">
-              <section aria-label="Tạo tài khoản" aria-modal="true" className="management-modal-dialog admin-user-dialog" role="dialog">
+              <section aria-label={userDialogMode === 'create' ? 'Tạo tài khoản' : 'Sửa tài khoản'} aria-modal="true" className="management-modal-dialog admin-user-dialog" role="dialog">
                 <header className="management-modal-header">
-                  <h2>Tạo tài khoản</h2>
+                  <h2>{userDialogMode === 'create' ? 'Tạo tài khoản' : 'Sửa tài khoản'}</h2>
                   <button aria-label="Đóng" className="management-icon-button" type="button" onClick={closeUserDialog}>
                     <X aria-hidden="true" size={18} />
                   </button>
                 </header>
-                <form aria-label="Tạo người dùng" className="admin-user-form" noValidate onSubmit={createUser}>
+                <form aria-label={userDialogMode === 'create' ? 'Tạo người dùng' : 'Sửa người dùng'} className="admin-user-form" noValidate onSubmit={saveUser}>
+                  {userFormNotice ? <p className="management-form-error" role="alert">{userFormNotice}</p> : null}
                   <div className="admin-user-form-fields">
                     <label>
                       Tên hiển thị
-                      <input
-                        aria-invalid={Boolean(userFormErrors.displayName)}
-                        required
-                        value={userForm.displayName}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, displayName: event.target.value }))
-                        }
-                      />
-                      <FieldError message={userFormErrors.displayName} />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.displayName)}
+                          ref={createUserDisplayNameRef}
+                          required
+                          value={userForm.displayName}
+                          onChange={(event) =>
+                            updateUserFormField('displayName', event.target.value, 'displayName')
+                          }
+                        />
+                        <FieldError message={userFormErrors.displayName} />
+                        <FieldErrorIcon label="Tên hiển thị" show={Boolean(userFormErrors.displayName)} />
+                      </span>
                     </label>
                     <label>
                       Điện thoại
-                      <input
-                        value={userForm.phone}
-                        onChange={(event) => setUserForm((current) => ({ ...current, phone: event.target.value }))}
-                      />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.phone)}
+                          required
+                          value={userForm.phone}
+                          onChange={(event) => updateUserFormField('phone', event.target.value, 'phone')}
+                        />
+                        <FieldError message={userFormErrors.phone} />
+                        <FieldErrorIcon label="SĐT" show={Boolean(userFormErrors.phone)} />
+                      </span>
                     </label>
                     <label>
                       Email
-                      <input
-                        aria-invalid={Boolean(userFormErrors.email)}
-                        ref={createUserEmailRef}
-                        required
-                        type="email"
-                        value={userForm.email}
-                        onChange={(event) => setUserForm((current) => ({ ...current, email: event.target.value }))}
-                      />
-                      <FieldError message={userFormErrors.email} />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.email)}
+                          type="email"
+                          value={userForm.email}
+                          onChange={(event) => updateUserFormField('email', event.target.value, 'email')}
+                        />
+                        <FieldError message={userFormErrors.email} />
+                        <FieldErrorIcon label="Email" show={Boolean(userFormErrors.email)} />
+                      </span>
                     </label>
                     <label>
                       Tên đăng nhập
-                      <input
-                        aria-invalid={Boolean(userFormErrors.username)}
-                        required
-                        value={userForm.username}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, username: event.target.value }))
-                        }
-                      />
-                      <FieldError message={userFormErrors.username} />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.username)}
+                          required
+                          value={userForm.username}
+                          onChange={(event) =>
+                            updateUserFormField('username', event.target.value, 'username')
+                          }
+                        />
+                        <FieldError message={userFormErrors.username} />
+                        <FieldErrorIcon label="Tên đăng nhập" show={Boolean(userFormErrors.username)} />
+                      </span>
                     </label>
                     <label>
                       Mật khẩu
-                      <input
-                        aria-invalid={Boolean(userFormErrors.password)}
-                        required
-                        type="password"
-                        value={userForm.password}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, password: event.target.value }))
-                        }
-                      />
-                      <FieldError message={userFormErrors.password} />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.password)}
+                          required={userDialogMode === 'create'}
+                          type="password"
+                          value={userForm.password}
+                          onChange={(event) =>
+                            updateUserFormField('password', event.target.value, 'password')
+                          }
+                        />
+                        <FieldError message={userFormErrors.password} />
+                        <FieldErrorIcon label="Mật khẩu" show={Boolean(userFormErrors.password)} />
+                      </span>
                     </label>
                     <label>
                       Nhập lại mật khẩu
-                      <input
-                        aria-invalid={Boolean(userFormErrors.passwordConfirmation)}
-                        required
-                        type="password"
-                        value={userForm.passwordConfirmation}
-                        onChange={(event) =>
-                          setUserForm((current) => ({ ...current, passwordConfirmation: event.target.value }))
-                        }
-                      />
-                      <FieldError message={userFormErrors.passwordConfirmation} />
+                      <span className="admin-user-field-control">
+                        <input
+                          aria-invalid={Boolean(userFormErrors.passwordConfirmation)}
+                          required={userDialogMode === 'create'}
+                          type="password"
+                          value={userForm.passwordConfirmation}
+                          onChange={(event) =>
+                            updateUserFormField('passwordConfirmation', event.target.value, 'passwordConfirmation')
+                          }
+                        />
+                        <FieldError message={userFormErrors.passwordConfirmation} />
+                        <FieldErrorIcon label="Nhập lại mật khẩu" show={Boolean(userFormErrors.passwordConfirmation)} />
+                      </span>
                     </label>
                     <label>
                       Vai trò
@@ -569,12 +744,20 @@ export function FoundationAdminPage({
                       <FieldError message={userFormErrors.roleId} />
                     </label>
                   </div>
-                  <section className="admin-user-form-section" aria-label="Thông tin khác">
-                    <h3>Thông tin khác</h3>
-                    <div className="admin-user-form-fields">
-                      <label>
-                        Sinh nhật
-                        <span className="admin-user-input-with-icon">
+                  <section className="admin-user-form-section admin-user-form-section-collapsible" aria-label="Thông tin khác">
+                    <button
+                      aria-expanded={userExtraOpen}
+                      className="admin-user-section-toggle"
+                      type="button"
+                      onClick={() => setUserExtraOpen((current) => !current)}
+                    >
+                      <span>Thông tin khác</span>
+                      <ChevronDown aria-hidden="true" className={userExtraOpen ? 'admin-user-section-toggle-open' : undefined} size={16} />
+                    </button>
+                    {userExtraOpen ? (
+                      <div className="admin-user-form-fields">
+                        <label>
+                          Sinh nhật
                           <input
                             placeholder="--/--/----"
                             type="date"
@@ -583,56 +766,52 @@ export function FoundationAdminPage({
                               setUserForm((current) => ({ ...current, birthday: event.target.value }))
                             }
                           />
-                          <CalendarDays aria-hidden="true" size={15} />
-                        </span>
-                      </label>
-                      <label>
-                        Địa chỉ
-                        <input
-                          placeholder="Nhập địa chỉ"
-                          value={userForm.address}
-                          onChange={(event) =>
-                            setUserForm((current) => ({ ...current, address: event.target.value }))
-                          }
-                        />
-                      </label>
-                      <label>
-                        Khu vực
-                        <span className="admin-user-input-with-icon admin-user-input-with-leading-icon">
-                          <Search aria-hidden="true" size={15} />
+                        </label>
+                        <label>
+                          Địa chỉ
                           <input
-                            placeholder="Chọn Tỉnh/Thành phố"
-                            value={userForm.region}
+                            placeholder="Nhập địa chỉ"
+                            value={userForm.address}
                             onChange={(event) =>
-                              setUserForm((current) => ({ ...current, region: event.target.value }))
+                              setUserForm((current) => ({ ...current, address: event.target.value }))
                             }
                           />
-                        </span>
-                      </label>
-                      <label>
-                        Phường/Xã
-                        <span className="admin-user-input-with-icon admin-user-input-with-leading-icon">
-                          <Search aria-hidden="true" size={15} />
-                          <input
-                            placeholder="Chọn Phường/Xã"
-                            value={userForm.ward}
-                            onChange={(event) => setUserForm((current) => ({ ...current, ward: event.target.value }))}
+                        </label>
+                        <label>
+                          Khu vực
+                          <span className="admin-user-input-with-icon admin-user-input-with-leading-icon">
+                            <Search aria-hidden="true" size={15} />
+                            <input
+                              placeholder="Chọn Tỉnh/Thành phố"
+                              value={userForm.region}
+                              onChange={(event) =>
+                                setUserForm((current) => ({ ...current, region: event.target.value }))
+                              }
+                            />
+                          </span>
+                        </label>
+                        <label>
+                          Phường/Xã
+                          <span className="admin-user-input-with-icon admin-user-input-with-leading-icon">
+                            <Search aria-hidden="true" size={15} />
+                            <input
+                              placeholder="Chọn Phường/Xã"
+                              value={userForm.ward}
+                              onChange={(event) => setUserForm((current) => ({ ...current, ward: event.target.value }))}
+                            />
+                          </span>
+                        </label>
+                        <label className="admin-user-note-field admin-user-field-wide">
+                          Ghi chú
+                          <textarea
+                            aria-label="Ghi chú"
+                            placeholder="Nhập ghi chú"
+                            value={userForm.note}
+                            onChange={(event) => setUserForm((current) => ({ ...current, note: event.target.value }))}
                           />
-                        </span>
-                      </label>
-                    </div>
-                  </section>
-                  <section className="admin-user-form-section" aria-label="Ghi chú">
-                    <h3>Ghi chú</h3>
-                    <label className="admin-user-note-field">
-                      <span className="sr-only">Ghi chú</span>
-                      <textarea
-                        aria-label="Ghi chú"
-                        placeholder="Nhập ghi chú"
-                        value={userForm.note}
-                        onChange={(event) => setUserForm((current) => ({ ...current, note: event.target.value }))}
-                      />
-                    </label>
+                        </label>
+                      </div>
+                    ) : null}
                   </section>
                   <footer className="management-modal-footer">
                     <button className="button button-secondary" type="button" onClick={closeUserDialog}>Bỏ qua</button>
@@ -652,15 +831,15 @@ export function FoundationAdminPage({
               <table>
                 <thead>
                   <tr>
-                    <th>Tên vai trò</th>
-                    <th>Mô tả</th>
-                    <th>Số tài khoản</th>
-                    <th>Trạng thái</th>
+                    <ManagementSortableHeader kind="text" sortKey="name" sortState={adminRoleSortState} onSort={requestAdminRoleSort}>Tên vai trò</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="description" sortState={adminRoleSortState} onSort={requestAdminRoleSort}>Mô tả</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="number" sortKey="userCount" sortState={adminRoleSortState} onSort={requestAdminRoleSort}>Số tài khoản</ManagementSortableHeader>
+                    <ManagementSortableHeader kind="text" sortKey="status" sortState={adminRoleSortState} onSort={requestAdminRoleSort}>Trạng thái</ManagementSortableHeader>
                     <th>Thao tác</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {roleRows.map((role) => (
+                  {sortedRoleRows.map((role) => (
                     <Fragment key={role.id}>
                       <tr className={selectedRoleId === role.id ? 'management-data-row-selected' : undefined}>
                         <td>{role.name}</td>

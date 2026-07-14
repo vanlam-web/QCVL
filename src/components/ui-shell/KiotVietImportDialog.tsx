@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 export interface KiotVietImportSummaryItem {
@@ -18,6 +19,7 @@ export function KiotVietImportDialog({
   preview,
   error,
   deleteOldDataLabel = 'Xóa dữ liệu cũ',
+  deleteOldDataConfirmMessage,
   deleteOldDataNotice,
   summaryItems,
   notes,
@@ -38,6 +40,7 @@ export function KiotVietImportDialog({
   preview: boolean
   error: string | null
   deleteOldDataLabel?: string
+  deleteOldDataConfirmMessage?: ReactNode
   deleteOldDataNotice?: ReactNode
   summaryItems: KiotVietImportSummaryItem[]
   notes?: ReactNode
@@ -47,6 +50,7 @@ export function KiotVietImportDialog({
   onImport: () => void
   onClose: () => void
 }) {
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   if (!open) return null
 
   return (
@@ -72,7 +76,18 @@ export function KiotVietImportDialog({
                 />
               </label>
               {onDeleteOldData ? (
-                <button className="button button-secondary" disabled={loading} type="button" onClick={onDeleteOldData}>
+                <button
+                  className="button button-secondary"
+                  disabled={loading}
+                  type="button"
+                  onClick={() => {
+                    if (deleteOldDataConfirmMessage) {
+                      setConfirmDeleteOpen(true)
+                      return
+                    }
+                    onDeleteOldData()
+                  }}
+                >
                   {deleteOldDataLabel}
                 </button>
               ) : null}
@@ -80,7 +95,28 @@ export function KiotVietImportDialog({
           </section>
 
           {error ? <p role="alert">{error}</p> : null}
-          {deleteOldDataNotice ? <p role="status">{deleteOldDataNotice}</p> : null}
+          {confirmDeleteOpen ? (
+            <section aria-label="Xác nhận xóa dữ liệu cũ" className="catalog-create-section" role="alertdialog">
+              <p>{deleteOldDataConfirmMessage}</p>
+              <div className="management-modal-footer">
+                <button className="button button-secondary" type="button" onClick={() => setConfirmDeleteOpen(false)}>
+                  Hủy
+                </button>
+                <button
+                  className="button button-primary"
+                  disabled={loading}
+                  type="button"
+                  onClick={() => {
+                    setConfirmDeleteOpen(false)
+                    onDeleteOldData?.()
+                  }}
+                >
+                  Xóa
+                </button>
+              </div>
+            </section>
+          ) : null}
+          {deleteOldDataNotice ? <div role="status">{deleteOldDataNotice}</div> : null}
 
           {preview ? (
             <section aria-label={previewSectionLabel} className="catalog-create-section">

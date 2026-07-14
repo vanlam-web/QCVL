@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "vite --host 0.0.0.0 --port 3000",
-    "api:dev": "tsx server/index.ts",
+    "api:dev": "tsx watch server/index.ts",
     "api:build": "tsc -p tsconfig.server.json",
     "api:start": "node dist-server/index.js",
     "build": "tsc -b && vite build",
@@ -15,6 +15,7 @@
     "verify:nas-bundle": "node scripts/verify-nas-bundle.mjs",
     "health:nas": "node scripts/health-nas.mjs",
     "deploy:nas": "node scripts/deploy-nas.mjs",
+    "import:dev-memory-to-postgres": "tsx scripts/import-dev-memory-state-to-postgres.ts",
     "verify:sales-finance-persistence": "node scripts/verify-sales-finance-persistence.mjs",
     "smoke:nas": "node scripts/smoke-nas-ui.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",

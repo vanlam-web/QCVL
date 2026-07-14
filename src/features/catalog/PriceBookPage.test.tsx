@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PriceBookPage } from './PriceBookPage'
 import type { CatalogService } from './catalog-service'
@@ -35,6 +35,9 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     adjustNormalProductStock: vi.fn(),
     listCustomers: vi.fn(async () => ({ items: [], page: 1, page_size: 20, total: 0 })),
     listCustomerGroups: vi.fn(async () => ({ items: [] })),
+    previewKiotVietCustomerImport: vi.fn(),
+    importKiotVietCustomers: vi.fn(),
+    deleteImportedKiotVietCustomers: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     createCustomer: vi.fn(),
     resolvePrices: vi.fn(async () => ({ items: [] })),
     listPriceLists: vi.fn(async () => ({
@@ -96,8 +99,16 @@ it('renders the price book as a separate grid-first workspace', async () => {
   expect(filterForm).toHaveClass('management-filter-sidebar-form')
   expect(within(filterSidebar).getByRole('button', { name: 'Áp dụng bộ lọc' }).closest('.management-filter-actions')).not.toBeNull()
   expect(screen.getByRole('navigation', { name: 'Phân trang bảng giá' })).toHaveTextContent('1 - 1 trong 1 hàng hóa')
+  await userEvent.type(within(searchForm).getByLabelText('Tìm bảng giá'), 'MICA')
+  await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({
+    page: 1,
+    page_size: 20,
+    search: 'MICA',
+    status: 'active',
+  }))
 
   const grid = await screen.findByRole('table', { name: 'Lưới bảng giá' })
+  expect(grid).toHaveClass('management-table')
   expect(grid.closest('.management-table-viewport')).not.toBeNull()
   const header = within(grid).getByRole('row', {
     name: 'Mã hàng Tên hàng Giá nhập cuối Chi phí Lợi nhuận Bảng giá chung 25 Cách bán Trạng thái Thao tác',
@@ -107,6 +118,47 @@ it('renders the price book as a separate grid-first workspace', async () => {
   expect(within(grid).getAllByRole('cell', { name: 'Chưa xem' })).toHaveLength(2)
   expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 15 })
   expect(service.listPriceLists).toHaveBeenCalled()
+})
+
+it('sorts price book rows from shared column headers', async () => {
+  const service = makeService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-2',
+          code: 'KEO',
+          name: 'Keo dÃ¡n',
+          status: 'active' as const,
+          unit_name: 'chai',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 20000,
+        },
+        {
+          id: 'p-1',
+          code: 'MICA-3MM',
+          name: 'Mica 3mm',
+          status: 'active' as const,
+          unit_name: 'm',
+          sell_method: 'linear_m' as const,
+          latest_purchase_cost: 100000,
+        },
+      ],
+      page: 1,
+      page_size: 20,
+      total: 2,
+    })),
+  })
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const grid = await screen.findByRole('table', { name: 'Lưới bảng giá' })
+  const rowsBeforeSort = within(grid).getAllByRole('row')
+  expect(rowsBeforeSort[1]).toHaveTextContent('KEO')
+
+  await userEvent.click(within(grid).getByRole('button', { name: 'Giá nhập cuối' }))
+
+  const rowsAfterCostSort = within(grid).getAllByRole('row')
+  expect(rowsAfterCostSort[1]).toHaveTextContent('MICA-3MM')
+  expect(within(grid).getByRole('columnheader', { name: 'Giá nhập cuối' })).toHaveAttribute('aria-sort', 'descending')
 })
 
 it('previews and applies formula results in the price book grid', async () => {

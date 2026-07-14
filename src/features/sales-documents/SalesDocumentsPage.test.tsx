@@ -167,6 +167,41 @@ function makeService(overrides: Partial<SalesDocumentService> = {}): SalesDocume
       total: 1,
     })),
     getSalesDocument: vi.fn(async () => detail),
+    previewKiotVietInvoiceImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 1,
+        valid_rows: 1,
+        invalid_rows: 0,
+        invoice_count: 1,
+        create_rows: 1,
+        update_rows: 0,
+        item_rows: 1,
+        missing_customer_count: 0,
+        missing_product_count: 0,
+        total_amount: 150000,
+        paid_total: 150000,
+        cash_total: 150000,
+        bank_total: 0,
+      },
+      invalid_rows: [],
+      missing_customer_codes: [],
+      missing_product_codes: [],
+    })),
+    importKiotVietInvoices: vi.fn(async () => ({
+      summary: {
+        total_rows: 1,
+        valid_rows: 1,
+        invalid_rows: 0,
+        created_rows: 1,
+        updated_rows: 0,
+        skipped_rows: 0,
+        items_created: 1,
+        items_updated: 0,
+      },
+      invalid_rows: [],
+    })),
+    deleteImportedKiotVietInvoices: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
+    cancelSalesDocument: vi.fn(async () => ({ ...detail, status: 'cancelled' as const })),
     ...overrides,
   }
 }
@@ -285,6 +320,8 @@ it('lists invoices with money, seller and customer snapshots', async () => {
   expect(screen.queryByRole('columnheader', { name: 'Mở' })).not.toBeInTheDocument()
   expect(screen.getByText('Công ty Phong Cảnh')).toBeInTheDocument()
   const table = screen.getByRole('table', { name: 'Danh sách chứng từ bán hàng' })
+  expect(table).toHaveClass('management-table')
+  expect(table).not.toHaveClass('sales-documents-management-table')
   expect(within(table).queryByText('Hóa đơn', { selector: 'tbody .status-chip-info' })).not.toBeInTheDocument()
   expect(within(table).queryByText('Admin')).not.toBeInTheDocument()
   expect(within(table).queryByText('Nợ')).not.toBeInTheDocument()
@@ -328,23 +365,23 @@ it('searches by document code and keeps filtered empty state clear', async () =>
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await screen.findByText('Chưa có chứng từ phù hợp bộ lọc.')
-  await userEvent.type(screen.getByLabelText('Tìm chứng từ'), 'HD010985{Enter}')
+  await userEvent.type(screen.getByLabelText('Tìm chứng từ'), 'HD010985')
 
-  expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
+  await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
     from: expect.stringMatching(/^\d{4}-\d{2}-01$/),
     page: 1,
     page_size: 15,
     search: 'HD010985',
     status: 'active,completed',
     to: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
-  }))
+  })))
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc chứng từ bán hàng' })
   expect(within(sidebar).queryByText('Tìm: HD010985')).not.toBeInTheDocument()
   expect(screen.getByText('Không thấy chứng từ theo bộ lọc hiện tại.')).toBeInTheDocument()
   expect(screen.getByText('Hãy thử mở rộng thời gian hoặc bỏ bớt bộ lọc.')).toBeInTheDocument()
 })
 
-it('shows matching sales documents below search while typing without accents', async () => {
+it('filters matching sales documents while typing without accents and without suggestions', async () => {
   const service = makeService({
     listSalesDocuments: vi.fn(async (input = {}) => ({
       items: input.search === 'HD010985' || input.search === 'phong' ? [listItem] : [secondListItem],
@@ -358,17 +395,39 @@ it('shows matching sales documents below search while typing without accents', a
   await screen.findByText('HD010986')
   await userEvent.type(screen.getByRole('textbox', { name: /Tìm chứng từ/ }), 'phong')
 
-  const suggestions = await screen.findByRole('listbox')
-  expect(within(suggestions).getByRole('option', { name: /HD010985/ })).toBeInTheDocument()
-  await userEvent.click(within(suggestions).getByRole('option', { name: /HD010985/ }))
+  await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
+    search: 'phong',
+    page: 1,
+    page_size: 15,
+  })))
 
-  await waitFor(() => {
-    expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
-      search: 'HD010985',
-      page: 1,
-      page_size: 15,
-    }))
-  })
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(screen.getByText('HD010985')).toBeInTheDocument()
+})
+
+it('cancels an invoice after confirmation', async () => {
+  const cancelSalesDocument = vi.fn(async () => ({ ...detail, status: 'cancelled' as const }))
+  const listSalesDocuments = vi.fn(async () => ({
+    items: [listItem],
+    page: 1,
+    page_size: 15,
+    total: 1,
+  }))
+  const service = makeService({ cancelSalesDocument, listSalesDocuments })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await clickDocumentRow('HD010985')
+  const detailRegion = await screen.findByRole('region', { name: /HD010985/ })
+  await userEvent.click(within(detailRegion).getByRole('button', { name: /H.y/ }))
+
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByText('HD010985')).toBeInTheDocument()
+  await userEvent.click(within(dialog).getAllByRole('button').at(-1) as HTMLElement)
+
+  await waitFor(() => expect(cancelSalesDocument).toHaveBeenCalledWith('order-1'))
+  expect(listSalesDocuments).toHaveBeenCalledTimes(2)
+  expect(detailRegion.querySelector('.status-chip')).toHaveTextContent(/h.y/i)
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
 it('uses 15-row pagination range and navigates pages through the list footer', async () => {
@@ -407,6 +466,25 @@ it('uses 15-row pagination range and navigates pages through the list footer', a
   expect(await screen.findByText('HD010999')).toBeInTheDocument()
 })
 
+it('shows KPI totals from the whole filtered result instead of the current page', async () => {
+  const service = makeService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [{ ...listItem, total_amount: 150000, debt_amount: 150000 }],
+      page: 1,
+      page_size: 15,
+      total: 40,
+      summary: { total_amount: 11351090, debt_amount: 9526090 },
+    })),
+  })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const summary = await screen.findByRole('region', { name: 'Tổng quan chứng từ bán hàng' })
+
+  expect(within(summary).getByText('11 351 090')).toBeInTheDocument()
+  expect(within(summary).getByText('9 526 090')).toBeInTheDocument()
+  expect(within(summary).queryByText('150 000')).not.toBeInTheDocument()
+})
+
 it('filters sales documents by KiotViet-style custom time range', async () => {
   const service = makeService()
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
@@ -431,6 +509,20 @@ it('filters sales documents by KiotViet-style custom time range', async () => {
     status: 'active,completed',
     to: '2026-07-31',
   })
+})
+
+it('opens KiotViet invoice import and deletes old import data from the shared dialog', async () => {
+  const service = makeService()
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+  await screen.findByText('HD010985')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  const dialog = screen.getByRole('dialog', { name: 'Import hóa đơn KiotViet' })
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa dữ liệu cũ' }))
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
+
+  await waitFor(() => expect(service.deleteImportedKiotVietInvoices).toHaveBeenCalled())
+  expect(service.listSalesDocuments).toHaveBeenCalledTimes(2)
 })
 
 it('opens KiotViet-style quick time menu and can select all time without date params', async () => {

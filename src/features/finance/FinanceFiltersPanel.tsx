@@ -1,37 +1,27 @@
-import type { FormEvent, ReactNode } from 'react'
-import { Download, Search } from 'lucide-react'
+import type { FormEvent } from 'react'
+import { Download, Search, Upload } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
 } from '../../components/ui-shell/management-layout'
 
-export interface FinanceSearchSuggestion {
-  id: string
-  primary: string
-  secondary?: string | null
-  meta?: ReactNode
-  ariaLabel: string
-}
-
 interface FinanceFiltersPanelProps {
   search: string
-  suggestions?: FinanceSearchSuggestion[]
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onSearchChange: (value: string) => void
-  onSuggestionSelect: (suggestion: FinanceSearchSuggestion) => void
   onCreateVoucher: () => void
   onExportCashbook: () => void
+  onOpenImport: () => void
 }
 
 export function FinanceFiltersPanel({
   search,
-  suggestions,
   onSubmit,
   onSearchChange,
-  onSuggestionSelect,
   onCreateVoucher,
   onExportCashbook,
+  onOpenImport,
 }: FinanceFiltersPanelProps) {
   return (
     <div className="finance-page-actions">
@@ -44,14 +34,14 @@ export function FinanceFiltersPanel({
           trailingAction={
             <ManagementCompactCreateAction ariaLabel="Tạo phiếu thu chi" onClick={onCreateVoucher} />
           }
-          suggestions={suggestions}
-          suggestionsLabel="Gợi ý sổ quỹ"
-          emptySuggestion="Không có kết quả phù hợp"
           onChange={onSearchChange}
-          onSuggestionSelect={(suggestion) => onSuggestionSelect(suggestion as FinanceSearchSuggestion)}
         />
       </ManagementCompactToolbar>
       <div className="finance-voucher-actions" aria-label="Tác vụ sổ quỹ">
+        <button className="button button-secondary" type="button" onClick={onOpenImport}>
+          <Upload aria-hidden="true" size={16} />
+          Import KV
+        </button>
         <button className="button button-secondary" type="button" onClick={onExportCashbook}>
           <Download aria-hidden="true" size={16} />
           Xuất file

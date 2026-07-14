@@ -20,3 +20,36 @@ it('serializes supported sales document filter params', async () => {
     '/api/v1/sales-documents?status=completed&payment_status=paid&payment_method=bank_transfer&created_by=seller-1&price_list_id=pl-1&page=1&page_size=15',
   )
 })
+
+it('calls KiotViet invoice import endpoints', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: SalesDocumentApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createSalesDocumentService({ request })
+  const file = new File([new Uint8Array([1, 2, 3])], 'DanhSachChiTietHoaDon.xlsx')
+
+  await service.previewKiotVietInvoiceImport({ file })
+  await service.importKiotVietInvoices({ file })
+  await service.deleteImportedKiotVietInvoices()
+
+  expect(calls.map(([path, init]) => [path, init?.method])).toEqual([
+    ['/api/v1/sales-documents/import/kiotviet/preview', 'POST'],
+    ['/api/v1/sales-documents/import/kiotviet', 'POST'],
+    ['/api/v1/sales-documents/import/kiotviet', 'DELETE'],
+  ])
+})
+
+it('cancels a sales document with status cancelled', async () => {
+  const request = vi.fn(async () => ({ id: 'order-1', status: 'cancelled' }))
+  const api = { request: request as unknown as SalesDocumentApiRequester['request'] }
+  const service = createSalesDocumentService(api)
+
+  await service.cancelSalesDocument('order-1')
+
+  expect(request).toHaveBeenCalledWith('/api/v1/sales-documents/order-1', {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'cancelled' }),
+  })
+})

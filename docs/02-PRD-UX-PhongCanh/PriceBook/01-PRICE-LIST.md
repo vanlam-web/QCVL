@@ -34,9 +34,19 @@ KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QC-
 Ô tìm trong header dùng shared compact search:
 
 - tìm bỏ dấu theo mã hàng/tên hàng trong lưới bảng giá;
-- khi nhập từ khóa, xổ tối đa 8 gợi ý dưới ô tìm;
-- dòng gợi ý gồm mã + tên hàng, phương thức bán/đơn vị ở phần phụ;
-- bấm gợi ý lọc lưới theo đúng mã hàng đã chọn.
+- khi nhập từ khóa, lọc trực tiếp lưới bảng giá theo mã hàng/tên hàng, phương thức bán và đơn vị;
+- không hiển thị dropdown/listbox gợi ý dưới ô tìm;
+- nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung.
+
+## Shared Management Layout Rule
+
+PriceBook dùng chung khung quản trị với Customers/Suppliers:
+
+- dùng `ManagementPage`, `ManagementCompactToolbar`, `ManagementCompactSearch`, `ManagementFilterSidebar`, `ManagementTableViewport`, `ManagementDataTable`;
+- bảng giá không tự render `<table>` riêng trong page;
+- dữ liệu riêng của PriceBook chỉ nằm ở cấu hình cột, cell giá động theo `priceLists`, công thức preview/apply và API load;
+- không đưa lại dropdown/listbox gợi ý dưới ô tìm;
+- POS không áp dụng rule này.
 
 | Loại | Quy tắc |
 |---|---|

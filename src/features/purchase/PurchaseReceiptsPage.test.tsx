@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PurchaseReceiptsPage } from './PurchaseReceiptsPage'
 import type { PurchaseReceiptService } from './purchase-receipt-service'
@@ -71,7 +71,7 @@ const receipt = {
   paid_amount: 50000,
   remaining_amount: 130000,
   notes: 'Nhập hàng thường',
-  created_by: 'user-1',
+  created_by: { id: 'user-1', name: 'Nguyễn Thị Mai Phương' },
   created_at: '2026-07-01T03:00:00 000Z',
   updated_at: '2026-07-01T03:00:00 000Z',
   items: [
@@ -129,6 +129,38 @@ function makeService(overrides: Partial<PurchaseReceiptService> = {}): PurchaseR
       amount: 80000,
       cashbook_voucher_id: 'voucher-2',
     })),
+    previewKiotVietPurchaseReceiptImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 2,
+        valid_rows: 2,
+        invalid_rows: 0,
+        receipt_count: 1,
+        create_rows: 1,
+        update_rows: 0,
+        item_rows: 2,
+        missing_supplier_count: 0,
+        missing_product_count: 0,
+        payable_total: 2880000,
+        paid_total: 2880000,
+      },
+      invalid_rows: [],
+      missing_supplier_codes: [],
+      missing_product_codes: [],
+    })),
+    importKiotVietPurchaseReceipts: vi.fn(async () => ({
+      summary: {
+        total_rows: 2,
+        valid_rows: 2,
+        invalid_rows: 0,
+        created_rows: 1,
+        updated_rows: 0,
+        skipped_rows: 0,
+        items_created: 2,
+        items_updated: 0,
+      },
+      invalid_rows: [],
+    })),
+    deleteImportedKiotVietPurchaseReceipts: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
     listSuppliers: vi.fn(async () => ({ items: suppliers, page: 1, page_size: 20, total: 1 })),
     listProducts: vi.fn(async () => ({ items: products, page: 1, page_size: 20, total: 2 })),
     listFinanceAccounts: vi.fn(async () => ({
@@ -159,16 +191,29 @@ it('lists draft purchase receipts with totals and opens post action for draft de
   expect(screen.getByText('Đang tải phiếu nhập...')).toBeInTheDocument()
   expect(await screen.findByText('PN000673')).toBeInTheDocument()
   const table = screen.getByRole('table')
-  expect(within(table).getByText('NCC000031 - Nguyễn Phong')).toBeInTheDocument()
+  const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
+  expect(headers).toEqual(['', '☆', 'Mã nhập hàng', 'Nhà cung cấp', 'Tổng số lượng', 'Tổng tiền hàng', 'Cần trả NCC', 'Tiền đã trả NCC'])
+  expect(within(table).getByRole('checkbox', { name: 'Chọn tất cả phiếu nhập' })).toBeInTheDocument()
+  expect(within(table).getByRole('checkbox', { name: 'Chọn phiếu nhập PN000673' })).toBeInTheDocument()
+  expect(within(table).getByRole('button', { name: 'Chỉ hiện phiếu nhập ưu tiên' })).toHaveClass('finance-cashbook-star-button')
+  expect(within(table).queryByRole('button', { name: /Tên NCC/i })).not.toBeInTheDocument()
+  expect(within(table).queryByText('Mã NCC')).not.toBeInTheDocument()
+  expect(within(table).queryByText('Thời gian')).not.toBeInTheDocument()
+  expect(within(table).queryByText('Còn phải trả')).not.toBeInTheDocument()
+  expect(within(table).queryByText('Trạng thái')).not.toBeInTheDocument()
+  expect(within(table).queryByText('NCC000031')).not.toBeInTheDocument()
+  expect(within(table).getByText('Nguyễn Phong')).toBeInTheDocument()
+  expect(within(table).queryByText('NCC000031 - Nguyễn Phong')).not.toBeInTheDocument()
+  expect(within(table).getByText('2.00')).toBeInTheDocument()
+  expect(within(table).getByText('190 000')).toBeInTheDocument()
   expect(within(table).getByText('180 000')).toBeInTheDocument()
-  expect(within(table).getByText('130 000')).toBeInTheDocument()
+  expect(within(table).getByText('50 000')).toBeInTheDocument()
   expect(screen.queryByRole('form', { name: 'Thông tin phiếu nhập' })).not.toBeInTheDocument()
   expect(screen.queryByRole('complementary', { name: 'Chi tiết và thao tác phiếu nhập' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Tạo phiếu nhập' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Trang chủ' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Hoàn thành nhập hàng' })).not.toBeInTheDocument()
-  const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
   expect(headers).not.toContain('Mở')
   expect(service.listSuppliers).not.toHaveBeenCalled()
   expect(service.listProducts).not.toHaveBeenCalled()
@@ -183,6 +228,19 @@ it('lists draft purchase receipts with totals and opens post action for draft de
   expect(detail.closest('section[aria-label="Phiếu nhập"]')).toHaveClass('management-layout')
   expect(detail).toHaveClass('management-detail-panel')
   expect(screen.getByRole('button', { name: 'Hoàn thành nhập hàng' })).toBeInTheDocument()
+})
+
+it('renders purchase receipts through the shared management data table', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const table = await screen.findByRole('table', { name: 'Danh sách phiếu nhập' })
+  expect(table).toHaveClass('management-table')
+
+  await openReceiptDetail()
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000673' })
+  expect(detail.closest('tr')).toHaveClass('management-detail-row')
 })
 
 it('summarizes purchase receipt validation state with scan-friendly KPI cards and panels', async () => {
@@ -227,7 +285,7 @@ it('filters purchase receipts by search status and dates', async () => {
   })
 })
 
-it('shows matching purchase receipts below the search box while typing', async () => {
+it('filters matching purchase receipts while typing without opening a suggestion dropdown', async () => {
   const suggestedReceipt = {
     ...receipt,
     id: 'receipt-suggested',
@@ -237,9 +295,6 @@ it('shows matching purchase receipts below the search box while typing', async (
   }
   const service = makeService({
     listReceipts: vi.fn(async (input = {}) => {
-      if (input.search === 'PN000674' && input.page_size === 8) {
-        return { items: [suggestedReceipt], page: 1, page_size: 8, total: 1 }
-      }
       if (input.search === 'PN000674') {
         return { items: [suggestedReceipt], page: 1, page_size: 15, total: 1 }
       }
@@ -254,19 +309,17 @@ it('shows matching purchase receipts below the search box while typing', async (
   const searchInput = within(filterForm).getByLabelText('Tìm phiếu/NCC')
   await userEvent.type(searchInput, 'PN000674')
 
-  const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý phiếu nhập' })
-  expect(within(suggestions).getByRole('option', { name: /PN000674/i })).toBeInTheDocument()
-  expect(within(suggestions).getByText(/NCC000031/)).toBeInTheDocument()
-  expect(within(suggestions).getByText('240 000')).toBeInTheDocument()
-
-  await userEvent.click(within(suggestions).getByRole('option', { name: /PN000674/i }))
-
-  expect(service.listReceipts).toHaveBeenLastCalledWith({
+  await waitFor(() => expect(service.listReceipts).toHaveBeenLastCalledWith({
     search: 'PN000674',
     status: 'posted',
+    date_from: undefined,
+    date_to: undefined,
+    created_by: undefined,
     page: 1,
     page_size: 15,
-  })
+  }))
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(screen.getByText('PN000674')).toBeInTheDocument()
 })
 
 it('reactively filters purchase receipts by supplier invoice and creator fields that exist in the project', async () => {
@@ -292,6 +345,7 @@ it('reactively filters purchase receipts by supplier invoice and creator fields 
   })
 
   await userEvent.selectOptions(within(filterSidebar).getByRole('combobox', { name: 'Người tạo' }), 'user-1')
+  expect(within(filterSidebar).getByRole('option', { name: 'Nguyễn Thị Mai Phương' })).toHaveValue('user-1')
   expect(service.listReceipts).toHaveBeenLastCalledWith({
     search: 'HD-NCC-001',
     status: 'posted',
@@ -319,6 +373,14 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
     }),
   )
 
+  await userEvent.type(within(filterForm).getByLabelText('Tìm phiếu/NCC'), 'NCC')
+  await waitFor(() => expect(service.listReceipts).toHaveBeenCalledWith(expect.objectContaining({
+    search: 'NCC',
+    status: 'posted',
+    page: 1,
+    page_size: 15,
+  })))
+  await userEvent.clear(within(filterForm).getByLabelText('Tìm phiếu/NCC'))
   await userEvent.type(within(filterForm).getByLabelText('Tìm phiếu/NCC'), 'PN000673{Enter}')
 
   expect(service.listReceipts).toHaveBeenLastCalledWith({ search: 'PN000673', status: 'all', page: 1, page_size: 15 })
@@ -550,4 +612,57 @@ it('warns on low purchase cost and posts with a selected bank account', async ()
     payment_method: 'bank_transfer',
     finance_account_id: 'bank-1',
   })
+})
+
+it('opens KiotViet purchase receipt import and deletes old import data from the shared dialog', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  const dialog = screen.getByRole('dialog', { name: 'Import nhập hàng KiotViet' })
+
+  expect(dialog).toBeInTheDocument()
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa dữ liệu cũ' }))
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
+
+  expect(service.deleteImportedKiotVietPurchaseReceipts).toHaveBeenCalled()
+  expect(await within(dialog).findByRole('status')).toHaveTextContent('Đã xóa 1 dòng dữ liệu cũ.')
+})
+
+it('explains why purchase receipt import is disabled when supplier or product codes are missing', async () => {
+  const service = makeService({
+    previewKiotVietPurchaseReceiptImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 2,
+        valid_rows: 2,
+        invalid_rows: 0,
+        receipt_count: 1,
+        create_rows: 1,
+        update_rows: 0,
+        item_rows: 2,
+        missing_supplier_count: 1,
+        missing_product_count: 2,
+        payable_total: 2880000,
+        paid_total: 2880000,
+      },
+      invalid_rows: [],
+      missing_supplier_codes: ['NCC lẻ'],
+      missing_product_codes: ['NGD', 'PP127'],
+    })),
+  })
+  const file = new File([new Uint8Array([1, 2, 3])], 'DanhSachChiTietNhapHang.xlsx')
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  const dialog = screen.getByRole('dialog', { name: 'Import nhập hàng KiotViet' })
+  const input = within(dialog).getByLabelText('File KiotViet')
+  await userEvent.upload(input, file)
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xem trước' }))
+
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chưa thể import vì còn thiếu 1 mã NCC và 2 mã hàng.')
+  expect(within(dialog).getByRole('button', { name: 'Import' })).toBeDisabled()
 })

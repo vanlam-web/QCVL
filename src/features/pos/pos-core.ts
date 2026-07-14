@@ -252,6 +252,20 @@ export function makeCartLine({
   }
 }
 
+export function saleUnitOptions(product: Product) {
+  const options = [{ unitName: product.unit_name, stockQtyPerUnit: 1 }]
+  for (const conversion of product.unit_conversions ?? []) {
+    if (!Number.isFinite(conversion.stock_qty_per_unit) || conversion.stock_qty_per_unit <= 0) continue
+    if (options.some((option) => option.unitName === conversion.unit_name)) continue
+    options.push({ unitName: conversion.unit_name, stockQtyPerUnit: conversion.stock_qty_per_unit })
+  }
+  return options
+}
+
+export function selectedSaleUnitText(line: CheckoutCartLine) {
+  return line.saleUnitName ?? line.product.unit_name
+}
+
 export function isAreaLine(line: CheckoutCartLine) {
   return isAreaProduct(line.product)
 }
@@ -392,6 +406,8 @@ export function lineToCheckoutItem(line: CheckoutCartLine, discountAmount = line
     height_m: line.height_m,
     linear_m: line.linear_m,
     unit_price: line.unitPrice,
+    sale_unit_name: line.saleUnitName,
+    stock_qty_per_sale_unit: line.stockQtyPerSaleUnit,
     discount_amount: Math.min(Math.max(discountAmount, 0), lineSubtotal(line)),
     price_source: line.priceSource,
     note: line.note,

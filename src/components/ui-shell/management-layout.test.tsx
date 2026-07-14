@@ -9,13 +9,21 @@ import {
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDetailActionFooter,
+  ManagementDetailInfoList,
+  ManagementDetailInlineNote,
   ManagementDetailRow,
+  ManagementDataTable,
   ManagementFilterGroup,
+  ManagementFilterNumberRange,
   ManagementFilterSidebar,
+  ManagementFilterSelectField,
+  ManagementInlineDetailTabs,
   ManagementListSurface,
   ManagementPagination,
   ManagementPage,
   ManagementRowActionButton,
+  ManagementTableCheckboxControl,
+  ManagementTableFavoriteButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from './management-layout'
@@ -300,6 +308,68 @@ it('standardizes filter groups without rendering detail content by default', () 
   expect(screen.queryByRole('region', { name: /Chi tiết/ })).not.toBeInTheDocument()
 })
 
+it('renders shared filter select and number range fields', async () => {
+  const onStatusChange = vi.fn()
+  const onFromChange = vi.fn()
+  const onToChange = vi.fn()
+
+  function FilterExample() {
+    const [status, setStatus] = useState('active')
+    const [from, setFrom] = useState('')
+    const [to, setTo] = useState('')
+
+    function changeStatus(value: string) {
+      setStatus(value)
+      onStatusChange(value)
+    }
+
+    function changeFrom(value: string) {
+      setFrom(value)
+      onFromChange(value)
+    }
+
+    function changeTo(value: string) {
+      setTo(value)
+      onToChange(value)
+    }
+
+    return (
+      <ManagementFilterSidebar ariaLabel="Bộ lọc khách hàng">
+        <ManagementFilterGroup title="Trạng thái">
+          <ManagementFilterSelectField label="Trạng thái" value={status} onChange={changeStatus}>
+            <option value="active">Đang hoạt động</option>
+            <option value="inactive">Ngưng hoạt động</option>
+          </ManagementFilterSelectField>
+        </ManagementFilterGroup>
+        <ManagementFilterGroup title="Tổng bán">
+          <ManagementFilterNumberRange
+            fromLabel="Tổng bán từ"
+            fromValue={from}
+            toLabel="Tổng bán tới"
+            toValue={to}
+            onFromChange={changeFrom}
+            onToChange={changeTo}
+          />
+        </ManagementFilterGroup>
+      </ManagementFilterSidebar>
+    )
+  }
+
+  render(
+    <FilterExample />,
+  )
+
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Trạng thái' }), 'inactive')
+  await userEvent.type(screen.getByRole('spinbutton', { name: 'Tổng bán từ' }), '1000')
+  await userEvent.type(screen.getByRole('spinbutton', { name: 'Tổng bán tới' }), '2000')
+
+  expect(screen.getByRole('combobox', { name: 'Trạng thái' })).toHaveClass('management-filter-select')
+  expect(screen.getByRole('spinbutton', { name: 'Tổng bán từ' })).toHaveClass('management-filter-number-input')
+  expect(onStatusChange).toHaveBeenCalledWith('inactive')
+  expect(onFromChange).toHaveBeenLastCalledWith('1000')
+  expect(onToChange).toHaveBeenLastCalledWith('2000')
+})
+
 it('renders filter sidebar content without a duplicated header summary', () => {
   render(
     <ManagementFilterSidebar
@@ -447,4 +517,133 @@ it('renders shared detail action footer with left and right action groups', () =
   expect(within(footer as HTMLElement).getByRole('button', { name: 'Lưu' })).toHaveClass('button-primary')
   expect(footer?.querySelector('.management-detail-footer-actions-left')).toContainElement(screen.getByTestId('cancel-icon'))
   expect(footer?.querySelector('.management-detail-footer-actions-right')).toContainElement(screen.getByRole('button', { name: 'In' }))
+})
+
+it('renders reusable data table rows with inline detail content', async () => {
+  const onSelect = vi.fn()
+
+  render(
+    <ManagementDataTable
+      ariaLabel="Danh sách khách hàng"
+      columns={[
+        { key: 'code', header: 'Mã KH', cell: (row) => <strong>{row.code}</strong> },
+        { key: 'name', header: 'Tên khách hàng', cell: (row) => row.name },
+      ]}
+      getDetailLabel={(row) => `Chi tiết ${row.code}`}
+      getRowKey={(row) => row.id}
+      items={[
+        { id: 'customer-1', code: 'KH000001', name: 'Khách lẻ' },
+        { id: 'customer-2', code: 'KH000002', name: 'Khách công ty' },
+      ]}
+      selectedRowKey="customer-2"
+      renderDetail={(row) => row.id === 'customer-2' ? <p>Chi tiết {row.code}</p> : null}
+      onRowClick={onSelect}
+    />,
+  )
+
+  const table = screen.getByRole('table', { name: 'Danh sách khách hàng' })
+  expect(within(table).getByRole('columnheader', { name: 'Mã KH' })).toBeInTheDocument()
+  expect(within(table).getByRole('row', { name: 'KH000001 Khách lẻ' })).toBeInTheDocument()
+  expect(within(table).getByRole('row', { name: 'KH000002 Khách công ty' })).toHaveClass('management-data-row-selected')
+  expect(screen.getByRole('region', { name: 'Chi tiết KH000002' })).toHaveTextContent('Chi tiết KH000002')
+
+  await userEvent.click(within(table).getByRole('row', { name: 'KH000001 Khách lẻ' }))
+
+  expect(onSelect).toHaveBeenCalledWith({ id: 'customer-1', code: 'KH000001', name: 'Khách lẻ' }, expect.any(Object))
+})
+
+it('renders shared checkbox and favorite table controls with legacy-compatible classes', () => {
+  const onToggleFavorite = vi.fn()
+
+  render(
+    <ManagementDataTable
+      ariaLabel="Danh sách hàng hóa"
+      columns={[
+        {
+          key: 'select',
+          className: 'finance-cashbook-select-column',
+          header: <ManagementTableCheckboxControl ariaLabel="Chọn tất cả dòng hàng hóa" />,
+          cell: (row) => <ManagementTableCheckboxControl ariaLabel={`Chọn dòng ${row.code}`} />,
+        },
+        {
+          key: 'favorite',
+          className: 'finance-cashbook-star-column',
+          header: (
+            <ManagementTableFavoriteButton
+              active={false}
+              ariaLabel="Chỉ hiện hàng ưu tiên"
+              onClick={onToggleFavorite}
+            />
+          ),
+          cell: (row) => (
+            <ManagementTableFavoriteButton
+              active={row.favorite}
+              ariaLabel={`Đánh dấu ưu tiên ${row.code}`}
+              onClick={onToggleFavorite}
+            />
+          ),
+        },
+      ]}
+      getRowKey={(row) => row.code}
+      items={[{ code: 'MICA-3MM', favorite: true }]}
+    />,
+  )
+
+  expect(screen.getByRole('checkbox', { name: 'Chọn tất cả dòng hàng hóa' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
+  expect(screen.getByRole('button', { name: 'Chỉ hiện hàng ưu tiên' })).toHaveClass('finance-cashbook-star-button')
+  expect(screen.getByRole('button', { name: 'Đánh dấu ưu tiên MICA-3MM' })).toHaveClass('finance-cashbook-star-button-active')
+})
+
+it('renders shared inline detail tabs with an end action', async () => {
+  const onSelect = vi.fn()
+  const onAnalyze = vi.fn()
+
+  render(
+    <ManagementInlineDetailTabs
+      activeKey="info"
+      ariaLabel="Chi tiết khách hàng"
+      endAction={(
+        <button aria-label="Xem phân tích" className="management-icon-button" type="button" onClick={onAnalyze}>
+          Biểu đồ
+        </button>
+      )}
+      tabs={[
+        { key: 'info', label: 'Thông tin' },
+        { key: 'debt', label: 'Nợ cần thu' },
+      ]}
+      onSelect={onSelect}
+    />,
+  )
+
+  const tablist = screen.getByRole('tablist', { name: 'Chi tiết khách hàng' })
+  expect(tablist.closest('.inline-detail-tabbar')).toContainElement(screen.getByRole('button', { name: 'Xem phân tích' }))
+  expect(within(tablist).getByRole('tab', { name: 'Thông tin' })).toHaveAttribute('aria-selected', 'true')
+
+  await userEvent.click(within(tablist).getByRole('tab', { name: 'Nợ cần thu' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Xem phân tích' }))
+
+  expect(onSelect).toHaveBeenCalledWith('debt')
+  expect(onAnalyze).toHaveBeenCalledTimes(1)
+})
+
+it('renders shared detail info list and inline note', () => {
+  render(
+    <section aria-label="Thông tin khách hàng">
+      <ManagementDetailInfoList
+        items={[
+          { label: 'MST', value: '0312345678' },
+          { label: 'Người tạo', value: 'Chưa khớp tài khoản' },
+        ]}
+      />
+      <ManagementDetailInlineNote icon={<span data-testid="note-icon" />}>Ghi chú khách KV</ManagementDetailInlineNote>
+    </section>,
+  )
+
+  const panel = screen.getByRole('region', { name: 'Thông tin khách hàng' })
+  expect(within(panel).getByText('MST')).toBeInTheDocument()
+  expect(within(panel).getByText('0312345678')).toBeInTheDocument()
+  expect(within(panel).getByText('Người tạo')).toBeInTheDocument()
+  expect(within(panel).getByText('Chưa khớp tài khoản')).toBeInTheDocument()
+  expect(within(panel).getByText('Ghi chú khách KV')).toHaveClass('management-detail-inline-note')
+  expect(screen.getByTestId('note-icon')).toBeInTheDocument()
 })

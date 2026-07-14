@@ -26,6 +26,13 @@ export interface Product {
     status?: string
     updated_at?: string | null
   } | null
+  operating_stock?: {
+    quantity: number
+    unit_name: string
+    source_type: 'stock_movements'
+    source_label: string | null
+    updated_at?: string | null
+  } | null
   latest_kiotviet_stocktake?: {
     code: string
     source_created_at: string | null
@@ -46,6 +53,7 @@ export interface Product {
 
 export interface ProductUnitConversion {
   unit_id: string
+  source_code?: string | null
   unit_name: string
   stock_qty_per_unit: number
   is_default_purchase_unit: boolean
@@ -92,6 +100,10 @@ export interface ProductListResponse {
   page_size: number
   total: number
   total_all?: number
+  summary?: {
+    total_qty: number
+    negative_count: number
+  }
 }
 
 export interface ProductStockMovement {
@@ -189,6 +201,43 @@ export interface KiotVietImportDeleteResult {
   blocked_rows: number
 }
 
+export interface KiotVietCustomerInvalidRow {
+  rowNumber: number
+  code: string | null
+  name: string | null
+  errors: string[]
+}
+
+export interface KiotVietCustomerImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    create_rows: number
+    update_rows: number
+    group_rows: number
+    kiotviet_debt_total: number
+    kiotviet_total_sales: number
+    ignored_columns: string[]
+  }
+  invalid_rows: KiotVietCustomerInvalidRow[]
+}
+
+export interface KiotVietCustomerImportResult {
+  summary: {
+    total_rows?: number
+    valid_rows?: number
+    invalid_rows?: number
+    created_rows: number
+    updated_rows: number
+    skipped_rows?: number
+    group_rows?: number
+    kiotviet_debt_total?: number
+    kiotviet_total_sales?: number
+  }
+  invalid_rows: KiotVietCustomerInvalidRow[]
+}
+
 export interface CustomerGroup {
   id: string
   code: string
@@ -206,8 +255,13 @@ export interface Customer {
   address: string | null
   customer_group_id: string | null
   customer_group: { id: string; code: string; name: string } | null
+  customer_type?: 'individual' | 'company' | 'other' | string | null
+  company_name?: string | null
   created_by?: { id: string; name: string } | null
+  source_creator_name?: string | null
   created_at?: string
+  note?: string | null
+  status?: string | null
   total_sales_amount?: number
   total_debt_amount?: number
 }
@@ -217,6 +271,10 @@ export interface CustomerListResponse {
   page: number
   page_size: number
   total: number
+  summary?: {
+    total_debt_amount: number
+    total_sales_amount: number
+  }
 }
 
 export interface ResolvedPrice {

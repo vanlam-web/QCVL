@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -6,6 +6,8 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementDataTable,
+  type ManagementDataTableColumn,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -13,6 +15,9 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CatalogService } from './catalog-service'
 import type {
   PriceFormulaInput,
@@ -59,8 +64,6 @@ export function PriceBookPage({
   const [formulaPreview, setFormulaPreview] = useState<PriceFormulaPreview | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState('')
-  const [productSearchSuggestions, setProductSearchSuggestions] = useState<Product[]>([])
-  const [productSearchSuggestionsOpen, setProductSearchSuggestionsOpen] = useState(false)
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
@@ -81,8 +84,6 @@ export function PriceBookPage({
     tierAmount: '',
     adjustments: {} as Record<string, { mode: AdjustmentMode; value: string }>,
   })
-  const productSearchRequestId = useRef(0)
-
   async function load(filters: { search?: string; status?: ProductStatus | 'all'; page?: number; page_size?: number } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextStatus = filters.status ?? lastStatus
@@ -145,44 +146,19 @@ export function PriceBookPage({
   }, [service])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setProductSearchSuggestionsOpen(false)
-    setPage(1)
-    await load({ search: search.trim(), status, page: 1 })
+    preventManagementSearchSubmit(event, () => applyProductSearch(search))
   }
 
-  async function suggestProducts(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = productSearchRequestId.current + 1
-    productSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setProductSearchSuggestions([])
-      setProductSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listProducts({
-        search: query,
-        status,
-        page: 1,
-        page_size: 8,
-      })
-      if (productSearchRequestId.current !== requestId) return
-      setProductSearchSuggestions(result.items)
-      setProductSearchSuggestionsOpen(true)
-    } catch {
-      if (productSearchRequestId.current !== requestId) return
-      setProductSearchSuggestions([])
-      setProductSearchSuggestionsOpen(false)
-    }
+  function applyProductSearch(nextSearch: string) {
+    setPage(1)
+    return load({ search: nextSearch, status, page: 1 })
   }
 
-  async function selectProductSuggestion(product: Product) {
-    setSearch(product.code)
-    setProductSearchSuggestionsOpen(false)
-    setPage(1)
-    await load({ search: product.code, status, page: 1 })
+  function changeProductSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch,
+      load: applyProductSearch,
+    })
   }
 
   async function goToPage(nextPage: number) {
@@ -288,16 +264,85 @@ export function PriceBookPage({
     return `Hiện tại ${current} → ${computed}`
   }
 
+  function buildPriceBookColumns(priceLists: PriceList[]): Array<ManagementDataTableColumn<Product>> {
+    return [
+      {
+        key: 'code',
+        header: <ManagementSortableHeader kind="text" sortKey="code" sortState={priceBookSortState} onSort={requestPriceBookSort}>Mã hàng</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product) => product.code,
+      },
+      {
+        key: 'name',
+        header: <ManagementSortableHeader kind="text" sortKey="name" sortState={priceBookSortState} onSort={requestPriceBookSort}>Tên hàng</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product) => product.name,
+      },
+      {
+        key: 'latest-purchase-cost',
+        header: <ManagementSortableHeader kind="number" sortKey="latest_purchase_cost" sortState={priceBookSortState} onSort={requestPriceBookSort}>Giá nhập cuối</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product) => formatMoney(product.latest_purchase_cost ?? 0),
+      },
+      {
+        key: 'cost',
+        header: <ManagementSortableHeader kind="text" sortKey="cost" sortState={priceBookSortState} onSort={requestPriceBookSort}>Chi phí</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: () => 'Chưa cấu hình',
+      },
+      {
+        key: 'profit',
+        header: <ManagementSortableHeader kind="text" sortKey="profit" sortState={priceBookSortState} onSort={requestPriceBookSort}>Lợi nhuận</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: () => 'Chưa cấu hình',
+      },
+      ...priceLists.map((priceList) => ({
+        key: `price-list-${priceList.id}`,
+        header: <ManagementSortableHeader kind="text" sortKey={`price-list-${priceList.id}`} sortState={priceBookSortState} onSort={requestPriceBookSort}>{priceList.name}</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product: Product) => renderPriceListCell(product, priceList),
+      })),
+      {
+        key: 'sell-method',
+        header: <ManagementSortableHeader kind="text" sortKey="sell_method" sortState={priceBookSortState} onSort={requestPriceBookSort}>Cách bán</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product) => sellMethodLabels[product.sell_method],
+      },
+      {
+        key: 'status',
+        header: <ManagementSortableHeader kind="text" sortKey="status" sortState={priceBookSortState} onSort={requestPriceBookSort}>Trạng thái</ManagementSortableHeader>,
+        headerIsCell: true,
+        cell: (product) => (product.status === 'active' ? 'Đang bán' : 'Ngưng bán'),
+      },
+      { key: 'actions', header: 'Thao tác', cell: () => '-' },
+    ]
+  }
+
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = lastSearch
-    ? `Tìm: ${lastSearch}`
-    : lastStatus === 'active'
+  const activeFilterSummary = lastStatus === 'active'
       ? 'Đang bán'
       : lastStatus === 'inactive'
         ? 'Trạng thái: Ngưng bán'
         : 'Trạng thái: Tất cả'
+  const {
+    sortedItems: sortedPriceBookProducts,
+    sortState: priceBookSortState,
+    requestSort: requestPriceBookSort,
+  } = useManagementTableSort<Product, string>(state?.products ?? [], {
+    code: { kind: 'text', value: (product) => product.code },
+    name: { kind: 'text', value: (product) => product.name },
+    latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
+    cost: { kind: 'text', value: () => null },
+    profit: { kind: 'text', value: () => null },
+    ...(state?.priceLists ?? []).reduce<Record<string, { kind: 'text'; value: (product: Product) => string }>>((columns, priceList) => {
+      columns[`price-list-${priceList.id}`] = { kind: 'text', value: (product) => renderPriceListCell(product, priceList) }
+      return columns
+    }, {}),
+    sell_method: { kind: 'text', value: (product) => sellMethodLabels[product.sell_method] },
+    status: { kind: 'text', value: (product) => product.status },
+  })
 
   return (
     <ManagementPage
@@ -315,24 +360,7 @@ export function PriceBookPage({
               />
             }
             value={search}
-            suggestions={
-              productSearchSuggestionsOpen
-                ? productSearchSuggestions.map((product) => ({
-                    id: product.id,
-                    primary: `${product.code} ${product.name}`,
-                    secondary: sellMethodLabels[product.sell_method],
-                    meta: product.unit_name,
-                    ariaLabel: `${product.code} ${product.name}`,
-                  }))
-                : undefined
-            }
-            suggestionsLabel="Gợi ý hàng hóa"
-            emptySuggestion="Không có kết quả phù hợp"
-            onChange={(nextSearch) => void suggestProducts(nextSearch)}
-            onSuggestionSelect={(suggestion) => {
-              const product = productSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-              if (product) void selectProductSuggestion(product)
-            }}
+            onChange={changeProductSearch}
           />
         </ManagementCompactToolbar>
       }
@@ -612,40 +640,12 @@ export function PriceBookPage({
         {state ? (
           <>
             <ManagementTableViewport>
-              <table aria-label="Lưới bảng giá">
-                <thead>
-                  <tr>
-                    <th>Mã hàng</th>
-                    <th>Tên hàng</th>
-                    <th>Giá nhập cuối</th>
-                    <th>Chi phí</th>
-                    <th>Lợi nhuận</th>
-                    {state.priceLists.map((priceList) => (
-                      <th key={priceList.id}>{priceList.name}</th>
-                    ))}
-                    <th>Cách bán</th>
-                    <th>Trạng thái</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.products.map((product) => (
-                    <tr key={product.id}>
-                      <td>{product.code}</td>
-                      <td>{product.name}</td>
-                      <td>{formatMoney(product.latest_purchase_cost ?? 0)}</td>
-                      <td>Chưa cấu hình</td>
-                      <td>Chưa cấu hình</td>
-                      {state.priceLists.map((priceList) => (
-                        <td key={priceList.id}>{renderPriceListCell(product, priceList)}</td>
-                      ))}
-                      <td>{sellMethodLabels[product.sell_method]}</td>
-                      <td>{product.status === 'active' ? 'Đang bán' : 'Ngưng bán'}</td>
-                      <td>-</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <ManagementDataTable
+                ariaLabel="Lưới bảng giá"
+                columns={buildPriceBookColumns(state.priceLists)}
+                getRowKey={(product) => product.id}
+                items={sortedPriceBookProducts}
+              />
             </ManagementTableViewport>
             <ManagementTableFooter
               ariaLabel="Phân trang bảng giá"

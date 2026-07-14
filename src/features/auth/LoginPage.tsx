@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useAuthService } from './auth-context'
 import { formatApiError } from '../../lib/api/error-message'
 import { normalizeLogin } from './auth-presenter'
@@ -7,6 +8,7 @@ export function LoginPage() {
   const auth = useAuthService()
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -37,15 +39,25 @@ export function LoginPage() {
         </h1>
         <label>
           Tài khoản
-          <input value={login} onChange={(event) => setLogin(event.target.value)} />
+          <input placeholder="Tên đăng nhập hoặc SĐT" value={login} onChange={(event) => setLogin(event.target.value)} />
         </label>
         <label>
           Mật khẩu
-          <input
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            type="password"
-          />
+          <span className="auth-password-field">
+            <input
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              type={showPassword ? 'text' : 'password'}
+            />
+            <button
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              className="auth-password-toggle"
+              onClick={() => setShowPassword((current) => !current)}
+              type="button"
+            >
+              {showPassword ? <EyeOff aria-hidden="true" size={18} /> : <Eye aria-hidden="true" size={18} />}
+            </button>
+          </span>
         </label>
         {error ? <p role="alert">{error}</p> : null}
         <button disabled={submitting} type="submit">

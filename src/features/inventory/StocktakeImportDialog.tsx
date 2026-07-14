@@ -74,7 +74,6 @@ export function StocktakeImportDialog({
   }
 
   async function deleteOldData() {
-    if (!window.confirm('Xóa toàn bộ dữ liệu cũ của lần import KiotViet trên trang này?')) return
     setLoading(true)
     setError(null)
     setDeleteNotice(null)
@@ -105,6 +104,7 @@ export function StocktakeImportDialog({
       title="Import kiểm kho KiotViet"
       warning="File kiểm kho KiotViet chỉ nhập lịch sử đối soát. Không ghi tồn vận hành và không tạo thẻ kho QCVL."
       canImport={Boolean(file && preview && preview.invalid_rows.length === 0)}
+      deleteOldDataConfirmMessage="Xóa toàn bộ dữ liệu cũ của lần import KiotViet trên trang Kiểm kho?"
       onClose={onClose}
       onDeleteOldData={() => void deleteOldData()}
       onFileChange={(nextFile) => {

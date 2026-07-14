@@ -37,7 +37,7 @@ export function createFoundationService(api: ApiRequester) {
       return api.request<UserListResponse>(`/api/v1/users${query ? `?${query}` : ''}`)
     },
     createUser: (input: {
-      email: string
+      email: string | null
       username?: string | null
       phone?: string | null
       birthday?: string | null
@@ -53,7 +53,19 @@ export function createFoundationService(api: ApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    updateUser: (id: string, input: { display_name?: string; status?: 'active' | 'inactive' }) =>
+    updateUser: (id: string, input: {
+      email?: string | null
+      username?: string | null
+      phone?: string | null
+      birthday?: string | null
+      region?: string | null
+      ward?: string | null
+      address?: string | null
+      note?: string | null
+      password?: string
+      display_name?: string
+      status?: 'active' | 'inactive'
+    }) =>
       api.request<UserListResponse['items'][number]>(`/api/v1/users/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(input),

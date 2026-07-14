@@ -25,3 +25,23 @@ it('builds purchase receipt list filters from existing purchase fields', async (
     ],
   ])
 })
+
+it('calls KiotViet purchase receipt import endpoints', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+  const file = new File([new Uint8Array([1, 2, 3])], 'DanhSachChiTietNhapHang.xlsx')
+
+  await service.previewKiotVietPurchaseReceiptImport({ file })
+  await service.importKiotVietPurchaseReceipts({ file })
+  await service.deleteImportedKiotVietPurchaseReceipts()
+
+  expect(calls.map(([path, init]) => [path, init?.method])).toEqual([
+    ['/api/v1/purchase/receipts/import/kiotviet/preview', 'POST'],
+    ['/api/v1/purchase/receipts/import/kiotviet', 'POST'],
+    ['/api/v1/purchase/receipts/import/kiotviet', 'DELETE'],
+  ])
+})

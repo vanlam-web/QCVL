@@ -10,10 +10,16 @@
 | Method | Path | Mục đích |
 |---|---|---|
 | `GET` | `/v1/suppliers` | Danh sách NCC, search/filter |
+| `POST` | `/v1/suppliers/import/kiotviet/preview` | Xem trước import NCC từ Excel KiotViet |
+| `POST` | `/v1/suppliers/import/kiotviet` | Import/upsert NCC từ Excel KiotViet |
+| `DELETE` | `/v1/suppliers/import/kiotviet` | Xóa dữ liệu NCC cũ từ import KiotViet |
 | `POST` | `/v1/suppliers` | Tạo NCC |
 | `GET` | `/v1/suppliers/{id}` | Chi tiết NCC |
 | `PATCH` | `/v1/suppliers/{id}` | Sửa hồ sơ NCC |
 | `GET` | `/v1/purchase/receipts` | Danh sách phiếu nhập |
+| `POST` | `/v1/purchase/receipts/import/kiotviet/preview` | Xem trước import chi tiết nhập hàng KiotViet |
+| `POST` | `/v1/purchase/receipts/import/kiotviet` | Import/upsert chi tiết nhập hàng KiotViet |
+| `DELETE` | `/v1/purchase/receipts/import/kiotviet` | Xóa dữ liệu phiếu nhập import cũ |
 | `POST` | `/v1/purchase/receipts` | Tạo phiếu nhập draft |
 | `GET` | `/v1/purchase/receipts/{id}` | Chi tiết phiếu nhập |
 | `PATCH` | `/v1/purchase/receipts/{id}` | Sửa draft |
@@ -106,9 +112,61 @@ Cho phép sửa các trường hồ sơ và `status`.
 
 Không xóa vật lý NCC đã có chứng từ.
 
+### Import KiotViet suppliers
+
+Endpoint nội bộ hiện dùng prefix `/api/v1`:
+
+- `POST /api/v1/suppliers/import/kiotviet/preview`
+- `POST /api/v1/suppliers/import/kiotviet`
+- `DELETE /api/v1/suppliers/import/kiotviet`
+
+Payload preview/import nhận `file_base64` hoặc `rows`. Import dùng mã NCC làm khóa upsert.
+
+Các cột dùng:
+
+- `Mã nhà cung cấp`, `Tên nhà cung cấp`
+- `Email`, `Điện thoại`
+- `Địa chỉ`, `Phường/Xã`, `Khu vực`
+- `Tổng mua`, `Nợ cần trả hiện tại`, `Tổng mua trừ trả hàng`
+- `Mã số thuế`, `Ghi chú`, `Trạng thái`, `Công ty`
+- `Người tạo`, `Ngày tạo`
+
+Cột bỏ qua: `Số CMND/CCCD`, `Nhóm nhà cung cấp`.
+
+Dev-memory repository phải persist import NCC vào state file; không chỉ lưu vào dữ liệu demo runtime.
+
 ---
 
 ## 4. Purchase receipt API contract
+
+### Import KiotViet purchase receipts
+
+Endpoint nội bộ hiện dùng prefix `/api/v1`:
+
+- `POST /api/v1/purchase/receipts/import/kiotviet/preview`
+- `POST /api/v1/purchase/receipts/import/kiotviet`
+- `DELETE /api/v1/purchase/receipts/import/kiotviet`
+
+Payload preview/import nhận `file_base64` hoặc `rows`. File đúng là `DanhSachChiTietNhapHang_KV...xlsx`.
+
+Cột dùng:
+
+- `Mã nhập hàng`, `Thời gian`, `Thời gian tạo`, `Ngày cập nhật`, `Trạng thái`.
+- `Mã nhà cung cấp`, `Tên nhà cung cấp`, `Điện thoại`, `Địa chỉ`.
+- `Người nhập`, `Người tạo`, `Số hóa đơn đầu vào`, `Ghi chú`.
+- `Tổng tiền hàng`, `Giảm giá phiếu nhập`, `Cần trả NCC`, `Tiền đã trả NCC`, `Tổng số lượng`, `Tổng số mặt hàng`.
+- `Mã hàng`, `Tên hàng`, `ĐVT`, `Đơn giá`, `Giá nhập`, `Giảm giá %`, `Giảm giá`, `Thành tiền`, `Số lượng`.
+
+Rules:
+
+- Import gom dòng theo `Mã nhập hàng`; trùng mã thì cập nhật.
+- `Mã nhà cung cấp` phải khớp NCC đã import/tạo trong QCVL.
+- Nếu file KiotViet không có `Mã nhà cung cấp`, backend map dòng đó về `NCC lẻ` / `Nhà cung cấp lẻ`. Preview không xem đây là thiếu tham chiếu; import tự tạo/upsert NCC lẻ trước khi ghi phiếu.
+- `Mã hàng` phải khớp Hàng hóa đã import/tạo trong QCVL, hoặc khớp `product_unit_conversions.source_code` nếu đó là mã đơn vị quy đổi KiotViet.
+- Mã KiotViet có hậu tố `{DEL}`, `{DEL1}`, `{DEL2}` được đối chiếu bằng mã gốc nếu mã gốc đang tồn tại.
+- Không import partial khi thiếu NCC/Hàng hóa; preview trả `missing_supplier_codes` và `missing_product_codes`, import trả skipped để tránh tạo tồn sai.
+- `Đã nhập hàng` từ KV map thành receipt `posted`.
+- `Xóa dữ liệu cũ` chỉ xóa phiếu nhập có nguồn import KiotViet, không xóa phiếu nhập tạo tay.
 
 ### `POST /v1/purchase/receipts`
 

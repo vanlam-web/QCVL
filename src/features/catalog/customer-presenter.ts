@@ -25,7 +25,3 @@ export function customerVisibleSummary(customers: Array<Pick<Customer, 'total_de
     visibleSalesTotal: customers.reduce((sum, customer) => sum + (customer.total_sales_amount ?? 0), 0),
   }
 }
-
-export function customerPriceRuleLabel(customer: Pick<Customer, 'customer_group'>) {
-  return customer.customer_group === null ? 'Bảng giá chung' : `Theo nhóm: ${customer.customer_group.name}`
-}

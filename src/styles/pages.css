@@ -327,6 +327,28 @@ td:has(.money-text) {
   color: var(--color-text);
 }
 
+.auth-password-field {
+  position: relative;
+  display: grid;
+}
+
+.auth-password-field input {
+  padding-right: 2.75rem;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.35rem;
+  display: inline-flex;
+  width: 2rem;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
 .auth-shell button {
   min-height: 2.75rem;
   border: 1px solid var(--color-primary);
@@ -334,6 +356,19 @@ td:has(.money-text) {
   background: var(--color-primary);
   color: var(--color-on-primary);
   font-weight: 700;
+}
+
+.auth-shell .auth-password-toggle {
+  min-height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.auth-shell .auth-password-toggle:hover,
+.auth-shell .auth-password-toggle:focus-visible {
+  color: var(--color-primary);
 }
 
 .auth-shell button:disabled {

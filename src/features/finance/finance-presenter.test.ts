@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   accountTypeText,
+  bankAccountDisplayParts,
   bankAccountDisplayText,
+  bankAccountTriggerText,
   cashbookDetailPrimaryStatusText,
   cashbookDetailPrimaryStatusTone,
   cashbookLinkedDocumentCode,
@@ -9,6 +11,7 @@ import {
   cashbookLinkedDocumentRows,
   financeDateText,
   financeAccountChoiceLabel,
+  isDeletedFinanceAccount,
   paymentMethodText,
   sourceTypeText,
   statusText,
@@ -58,7 +61,21 @@ describe('finance presenter', () => {
     expect(accountTypeText('cash')).toBe('Tiền mặt')
     expect(accountTypeText('bank')).toBe('Ngân hàng')
     expect(financeAccountChoiceLabel(bankAccount)).toBe('VCB · Vietcombank')
-    expect(bankAccountDisplayText(bankAccount)).toBe('VCB - 123456 - CONG TY QC')
+    expect(bankAccountDisplayText(bankAccount)).toBe('123456 - Vietcombank - CONG TY QC')
+    expect(bankAccountTriggerText(bankAccount)).toBe('123456')
+    expect(bankAccountDisplayParts(bankAccount)).toEqual({
+      primary: '123456',
+      secondary: 'Vietcombank',
+      tertiary: 'CONG TY QC',
+    })
+    expect(bankAccountDisplayText({
+      ...bankAccount,
+      code: '0947900909',
+      name: 'van viet phuong lam',
+      account_number: '0947900909',
+      account_holder: 'van viet phuong lam',
+    })).toBe('0947900909 - van viet phuong lam')
+    expect(isDeletedFinanceAccount({ ...bankAccount, account_number: '123456{DEL}' })).toBe(true)
   })
 
   it('maps cashbook status and source labels', () => {
@@ -66,6 +83,7 @@ describe('finance presenter', () => {
     expect(statusText('cancelled')).toBe('Đã hủy')
     expect(paymentMethodText('bank_transfer')).toBe('Ngân hàng')
     expect(sourceTypeText('payment_receipt_method')).toBe('Phiếu thu')
+    expect(sourceTypeText('kiotviet_cashbook')).toBe('Sổ quỹ KV')
     expect(financeDateText('bad-date')).toBe('Chưa có')
     expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
   })
@@ -86,5 +104,33 @@ describe('finance presenter', () => {
         status: 'Thanh toán 1 phần',
       },
     ])
+  })
+
+  it('infers linked KiotViet invoice and purchase receipt codes from cashbook voucher codes', () => {
+    const importedInvoiceReceipt = {
+      ...receiptEntry,
+      id: 'entry-kv-tthd',
+      code: 'TTHD011149',
+      source_type: 'kiotviet_cashbook',
+      note: 'Phiếu thu Tiền khách trả',
+      source: { type: 'payment_receipt', id: 'TTHD011149', code: 'TTHD011149', order_code: null },
+      allocations: [],
+    } satisfies CashbookEntryDetail
+    const importedSupplierPayment = {
+      ...receiptEntry,
+      id: 'entry-kv-pcpn',
+      code: 'PCPN000679',
+      direction: 'out',
+      amount_delta: -6899000,
+      source_type: 'kiotviet_cashbook',
+      note: 'Phiếu chi Tiền trả nhà cung cấp',
+      source: { type: 'manual_voucher', id: 'PCPN000679', code: 'PCPN000679', order_code: null },
+      allocations: [],
+    } satisfies CashbookEntryDetail
+
+    expect(cashbookLinkedDocumentCode(importedInvoiceReceipt)).toBe('HD011149')
+    expect(cashbookLinkedDocumentRows(importedInvoiceReceipt)[0]?.code).toBe('HD011149')
+    expect(cashbookLinkedDocumentCode(importedSupplierPayment)).toBe('PN000679')
+    expect(cashbookLinkedDocumentRows(importedSupplierPayment)[0]?.code).toBe('PN000679')
   })
 })

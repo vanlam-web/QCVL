@@ -19,13 +19,13 @@ describe('createAuthService', () => {
     })
     const service = createAuthService({ baseUrl: 'http://nas:3100', fetch: fetcher })
 
-    await service.signIn('ADMIN@QC-OMS.LOCAL ', 'password-1')
+    await service.signIn('ADMIN ', 'password-1')
 
     expect(fetcher).toHaveBeenCalledWith(
       'http://nas:3100/api/v1/auth/login',
       expect.objectContaining({
         method: 'POST',
-        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'password-1' }),
+        body: JSON.stringify({ login: 'admin', password: 'password-1' }),
       }),
     )
     await expect(service.getAccessToken()).resolves.toBe('token-1')

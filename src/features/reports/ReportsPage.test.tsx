@@ -92,6 +92,31 @@ describe('ReportsPage', () => {
     expect(screen.getAllByText('Âm kho').length).toBeGreaterThan(0)
   })
 
+  it('sorts report tables from shared column headers', async () => {
+    const secondSale: SalesDocumentListItem = {
+      ...sale,
+      id: 'sale-2',
+      code: 'HD0002',
+      total_amount: 900000,
+      paid_amount: 900000,
+      debt_amount: 0,
+      customer: { id: 'customer-2', code: 'KH002', name: 'Chi Hoa', phone: null },
+    }
+    const service = {
+      ...makeService(),
+      listSalesDocuments: vi.fn(async () => ({ items: [sale, secondSale], page: 1, page_size: 100, total: 2 })),
+    }
+    render(<ReportsPage service={service} />)
+
+    const table = await screen.findByRole('table', { name: 'Bán hàng' })
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('HD0001')
+
+    await userEvent.click(within(table).getByRole('button', { name: 'Tổng tiền' }))
+
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent('HD0002')
+    expect(within(table).getByRole('columnheader', { name: 'Tổng tiền' })).toHaveAttribute('aria-sort', 'descending')
+  })
+
   it('filters reports by date range', async () => {
     const service = makeService()
     render(<ReportsPage service={service} />)

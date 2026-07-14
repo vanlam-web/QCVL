@@ -80,4 +80,56 @@ export interface SalesDocumentListResponse {
   page: number
   page_size: number
   total: number
+  summary?: {
+    total_amount: number
+    debt_amount: number
+  }
+}
+
+export interface KiotVietInvoiceInvalidRow {
+  rowNumber: number
+  source_code: string | null
+  customer_code: string | null
+  product_code: string | null
+  errors: string[]
+}
+
+export interface KiotVietInvoiceImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    invoice_count: number
+    create_rows: number
+    update_rows: number
+    item_rows: number
+    missing_customer_count: number
+    missing_product_count: number
+    total_amount: number
+    paid_total: number
+    cash_total: number
+    bank_total: number
+  }
+  invalid_rows: KiotVietInvoiceInvalidRow[]
+  missing_customer_codes: string[]
+  missing_product_codes: string[]
+}
+
+export interface KiotVietInvoiceImportResult {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    created_rows: number
+    updated_rows: number
+    skipped_rows: number
+    items_created: number
+    items_updated: number
+  }
+  invalid_rows: KiotVietInvoiceInvalidRow[]
+}
+
+export interface KiotVietImportDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }

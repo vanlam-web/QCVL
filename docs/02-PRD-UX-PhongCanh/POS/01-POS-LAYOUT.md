@@ -66,7 +66,7 @@ K03 gồm:
 
 Quy định:
 
-- Không chọn khách thì mặc định backend dùng `KH000001 - Khách lẻ`.
+- Không chọn khách thì mặc định backend dùng `khachle - Khách lẻ`.
 - Không ghi nợ vào customer null.
 - `Báo giá` và `Tạo hóa đơn`/`Thanh toán` giữ vai trò riêng theo K03-D.
 - Tìm khách phải truy vấn được khách demo và khách thật.
@@ -80,7 +80,7 @@ Chi tiết:
 ## 5. Luồng bán
 
 1. Thu ngân tìm/chọn hàng bằng F3 hoặc lưới sản phẩm.
-2. Thu ngân chọn khách nếu có. Nếu bỏ trống, đơn gắn `KH000001 - Khách lẻ`.
+2. Thu ngân chọn khách nếu có. Nếu bỏ trống, đơn gắn `khachle - Khách lẻ`.
 3. Hàng đợi máy có thể đưa file vào hóa đơn nháp.
 4. `Báo giá` tạo chứng từ báo giá.
 5. `Thanh toán` mở drawer thanh toán, chọn tiền mặt/chuyển khoản/kết hợp.

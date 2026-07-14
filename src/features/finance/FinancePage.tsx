@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
-import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, WalletCards, X } from 'lucide-react'
+import { Fragment, useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
@@ -13,6 +13,9 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
+import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type {
   CashbookBusinessAccountedFilter,
   CashbookColumnKey,
@@ -32,16 +35,20 @@ import type {
 import type { FinanceService } from './finance-service'
 import { buildCashbookCsv } from './finance-service'
 import { currentMonthRange } from '../../lib/date-ranges'
+import { vietnamBankOptionLabel, vietnamBankOptions } from './vietnam-bank-catalog'
 import {
   accountTypeText,
   bankAccountDisplayText,
+  bankAccountDisplayParts,
   businessAccountedText,
+  bankAccountTriggerText,
   cashbookCounterpartyDisplayName,
   cashbookCounterpartyLabel,
   cashbookEntryNeedsCounterpartyHydration,
   cashFirstAccountSort,
   cashbookLinkedDocumentCode,
   financeAccountChoiceLabel,
+  isDeletedFinanceAccount,
   financeDateText as dateText,
   sourceTypeText,
   statusText,
@@ -70,18 +77,21 @@ import {
   writeCashbookFavoriteIds,
   writePinnedBankAccountIds,
 } from './finance-storage'
-import { FinanceFiltersPanel, type FinanceSearchSuggestion } from './FinanceFiltersPanel'
+import { FinanceFiltersPanel } from './FinanceFiltersPanel'
 import { FinanceDetailPanel } from './FinanceDetailPanel'
+import { CashbookImportDialog } from './CashbookImportDialog'
 
 const pageSizeDefault = 15
 const showAuxiliaryFinanceSections = false
 const defaultCashbookColumns: CashbookColumnKey[] = [
   'code',
   'created_at',
+  'created_by',
   'source_type',
-  'counterparty',
   'finance_account',
+  'counterparty',
   'amount_delta',
+  'note',
 ]
 const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }> = [
   { key: 'code', label: 'Mã phiếu' },
@@ -95,6 +105,11 @@ const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }
   { key: 'is_business_accounted', label: 'Hạch toán KQKD' },
 ]
 
+function cashbookColumnLabel(column: CashbookColumnKey) {
+  if (column === 'created_by') return 'Người tạo'
+  if (column === 'finance_account') return 'Số tài khoản'
+  return cashbookColumnDefinitions.find((definition) => definition.key === column)?.label ?? column
+}
 
 export function FinancePage({ service }: { service: FinanceService }) {
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -111,8 +126,6 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookPage, setCashbookPage] = useState(1)
   const [cashbookPageSize, setCashbookPageSize] = useState(pageSizeDefault)
   const [cashbookSearch, setCashbookSearch] = useState('')
-  const [cashbookSearchSuggestions, setCashbookSearchSuggestions] = useState<CashbookEntry[]>([])
-  const [cashbookSearchSuggestionsOpen, setCashbookSearchSuggestionsOpen] = useState(false)
   const [lastCashbookSearch, setLastCashbookSearch] = useState('')
   const [cashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [lastCashbookSearchScope, setLastCashbookSearchScope] = useState<CashbookSearchScope>('all')
@@ -126,6 +139,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookAccountId, setCashbookAccountId] = useState('')
   const [lastCashbookAccountId, setLastCashbookAccountId] = useState('')
   const [bankAccountMenuOpen, setBankAccountMenuOpen] = useState(false)
+  const [deletedBankAccountsOpen, setDeletedBankAccountsOpen] = useState(false)
   const [bankAccountModalOpen, setBankAccountModalOpen] = useState(false)
   const [editingBankAccountId, setEditingBankAccountId] = useState<string | null>(null)
   const [pinnedBankAccountIds, setPinnedBankAccountIds] = useState<string[]>(() => readPinnedBankAccountIds())
@@ -148,6 +162,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookDetail, setCashbookDetail] = useState<CashbookEntryDetail | null>(null)
   const [cashbookFavoriteIds, setCashbookFavoriteIds] = useState<string[]>(() => readCashbookFavoriteIds())
   const [showCashbookFavoritesOnly, setShowCashbookFavoritesOnly] = useState(false)
+  const [cashbookImportOpen, setCashbookImportOpen] = useState(false)
   const visibleCashbookColumns = defaultCashbookColumns
   const [vouchers, setVouchers] = useState<CashbookVoucher[]>([])
   const [voucherMode, setVoucherMode] = useState<CashbookDirection | null>(null)
@@ -173,15 +188,13 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [collecting, setCollecting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const cashbookSearchRequestId = useRef(0)
-
   const activeAccounts = accounts.filter((account) => account.is_active)
   const sortedActiveAccounts = [...activeAccounts].sort(cashFirstAccountSort)
   const defaultCashAccountId = sortedActiveAccounts.find((account) => account.account_type === 'cash' && account.is_default_cash)?.id
     ?? sortedActiveAccounts.find((account) => account.account_type === 'cash')?.id
     ?? ''
   const sortedBankAccounts = sortedActiveAccounts
-    .filter((account) => account.account_type === 'bank')
+    .filter((account) => account.account_type === 'bank' && !isDeletedFinanceAccount(account))
     .sort((left, right) => {
       const leftPinned = pinnedBankAccountIds.includes(left.id)
       const rightPinned = pinnedBankAccountIds.includes(right.id)
@@ -190,6 +203,9 @@ export function FinancePage({ service }: { service: FinanceService }) {
     })
   const pinnedBankAccount = sortedBankAccounts.find((account) => pinnedBankAccountIds.includes(account.id))
   const activeBankAccounts = sortedBankAccounts
+  const deletedBankAccounts = accounts
+    .filter((account) => account.account_type === 'bank' && isDeletedFinanceAccount(account))
+    .sort((left, right) => bankAccountDisplayText(left).localeCompare(bankAccountDisplayText(right), 'vi'))
   const selectedBankAccount = sortedBankAccounts.find((account) => account.id === cashbookAccountId)
   const fundFilteredCashbookEntries = (cashbookEntries ?? []).filter((entry) => (
     cashbookEntryMatchesFundMode(entry, cashbookFundMode, cashbookAccountId)
@@ -198,9 +214,25 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const visibleCashbookEntries = showCashbookFavoritesOnly
     ? fundFilteredCashbookEntries.filter((entry) => cashbookFavoriteIds.includes(entry.id))
     : fundFilteredCashbookEntries
-  const pagedVisibleCashbookEntries = visibleCashbookEntries.length > cashbookPageSize
-    ? visibleCashbookEntries.slice((cashbookPage - 1) * cashbookPageSize, cashbookPage * cashbookPageSize)
-    : visibleCashbookEntries
+  const {
+    sortedItems: sortedVisibleCashbookEntries,
+    sortState: cashbookSortState,
+    requestSort: requestCashbookSort,
+  } = useManagementTableSort<CashbookEntry, CashbookColumnKey>(visibleCashbookEntries, {
+    code: { kind: 'text', value: (entry) => entry.code },
+    created_at: { kind: 'date', value: (entry) => entry.created_at },
+    created_by: { kind: 'text', value: (entry) => entry.source?.source_creator_name ?? entry.created_by?.name },
+    source_type: { kind: 'text', value: (entry) => entry.source?.category_name ?? sourceTypeText(entry.source_type) },
+    counterparty: { kind: 'text', value: (entry) => entry.counterparty?.name },
+    finance_account: { kind: 'text', value: (entry) => entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '' },
+    amount_delta: { kind: 'number', value: (entry) => entry.amount_delta },
+    status: { kind: 'text', value: (entry) => statusText(entry.status) },
+    note: { kind: 'text', value: (entry) => entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note },
+    is_business_accounted: { kind: 'text', value: (entry) => (entry.is_business_accounted ? 'Có' : 'Không') },
+  })
+  const pagedVisibleCashbookEntries = sortedVisibleCashbookEntries.length > cashbookPageSize
+    ? sortedVisibleCashbookEntries.slice((cashbookPage - 1) * cashbookPageSize, cashbookPage * cashbookPageSize)
+    : sortedVisibleCashbookEntries
 
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
@@ -452,60 +484,17 @@ export function FinancePage({ service }: { service: FinanceService }) {
   }, [hydrateCashbookCounterparties, service])
 
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setCashbookSearchSuggestionsOpen(false)
-    await applyCashbookFilters()
+    preventManagementSearchSubmit(event, () => applyCashbookSearch(cashbookSearch))
   }
 
-  async function suggestCashbook(nextSearch: string) {
-    setCashbookSearch(nextSearch)
-    const query = nextSearch.trim()
-    const requestId = cashbookSearchRequestId.current + 1
-    cashbookSearchRequestId.current = requestId
-    if (query.length === 0) {
-      setCashbookSearchSuggestions([])
-      setCashbookSearchSuggestionsOpen(false)
-      return
-    }
-    try {
-      const result = await service.listCashbookEntries({
-        search: query,
-        search_scope: cashbookSearchScope,
-        from: cashbookFrom.trim() || undefined,
-        to: cashbookTo.trim() || undefined,
-        finance_account_id: cashbookAccountId === 'all' || cashbookAccountId === '' ? undefined : cashbookAccountId,
-        finance_account_type: cashbookFundMode === 'bank' && cashbookAccountId === '' ? 'bank' : undefined,
-        direction: cashbookDirection,
-        status: cashbookStatus,
-        is_business_accounted: cashbookBusinessAccounted === 'all' ? undefined : cashbookBusinessAccounted === 'true',
-        page: 1,
-        page_size: 8,
-      })
-      if (cashbookSearchRequestId.current !== requestId) return
-      setCashbookSearchSuggestions(result.items.filter((entry) => cashbookEntryMatchesSearch(entry, query)))
-      setCashbookSearchSuggestionsOpen(true)
-    } catch {
-      if (cashbookSearchRequestId.current !== requestId) return
-      setCashbookSearchSuggestions([])
-      setCashbookSearchSuggestionsOpen(false)
-    }
+  function applyCashbookSearch(nextSearch: string) {
+    return applyCashbookFilters({ search: nextSearch })
   }
 
-  async function selectCashbookSuggestion(entry: CashbookEntry) {
-    setCashbookSearch(entry.code)
-    setCashbookSearchSuggestionsOpen(false)
-    setCashbookPage(1)
-    await loadCashbook({
-      search: entry.code,
-      search_scope: cashbookSearchScope,
-      from: cashbookFrom,
-      to: cashbookTo,
-      finance_account_id: cashbookAccountId,
-      finance_account_type: cashbookFundMode === 'bank' && cashbookAccountId === '' ? 'bank' : undefined,
-      direction: cashbookDirection,
-      status: cashbookStatus,
-      business_accounted_filter: cashbookBusinessAccounted,
-      page: 1,
+  function changeCashbookSearch(nextSearch: string) {
+    runManagementLiveSearch(nextSearch, {
+      setSearch: setCashbookSearch,
+      load: applyCashbookSearch,
     })
   }
 
@@ -602,17 +591,53 @@ export function FinancePage({ service }: { service: FinanceService }) {
       notify_on_transaction: newBankNotify,
     }
     if (editingBankAccountId !== null) {
-      setAccounts((current) => current.map((account) => account.id === editingBankAccountId ? { ...account, ...nextAccount, id: account.id } : account))
-      setBankAccountModalOpen(false)
-      setMessage('Đã cập nhật tài khoản ngân hàng.')
+      try {
+        const { id: _unusedId, ...patch } = nextAccount
+        const updated = await service.updateFinanceAccount(editingBankAccountId, patch)
+        setAccounts((current) => current.map((account) => account.id === editingBankAccountId ? updated : account))
+        setBankAccountModalOpen(false)
+      } catch (err) {
+        setError(formatApiError(err, 'Không thể cập nhật tài khoản ngân hàng.'))
+      }
       return
     }
-    setAccounts((current) => [...current, nextAccount])
-    setCashbookFundMode('bank')
-    setCashbookAccountId(nextAccount.id)
-    setBankAccountModalOpen(false)
-    setMessage('Đã thêm tài khoản ngân hàng.')
-    await applyCashbookFilters({ finance_account_id: nextAccount.id })
+    try {
+      const { id: _unusedId, ...payload } = nextAccount
+      const created = await service.createFinanceAccount(payload)
+      setAccounts((current) => [...current, created])
+      setCashbookFundMode('bank')
+      setCashbookAccountId(created.id)
+      setBankAccountModalOpen(false)
+      await applyCashbookFilters({ finance_account_id: created.id })
+    } catch (err) {
+      setError(formatApiError(err, 'Không thể tạo tài khoản ngân hàng.'))
+    }
+  }
+
+  async function softDeleteBankAccount() {
+    if (editingBankAccountId === null) return
+    const deletedAccountId = editingBankAccountId
+    try {
+      const updated = await service.updateFinanceAccount(deletedAccountId, { is_active: false })
+      setAccounts((current) => current.map((account) => (
+        account.id === deletedAccountId ? updated : account
+      )))
+      setPinnedBankAccountIds((current) => {
+        const nextIds = current.filter((id) => id !== deletedAccountId)
+        writePinnedBankAccountIds(nextIds)
+        return nextIds
+      })
+      setBankAccountModalOpen(false)
+      setBankAccountMenuOpen(false)
+      setDeletedBankAccountsOpen(false)
+      if (cashbookAccountId === deletedAccountId) {
+        setCashbookAccountId('')
+        setCashbookFundMode('bank')
+        await applyCashbookFilters({ finance_account_id: '', finance_account_type: 'bank' })
+      }
+    } catch (err) {
+      setError(formatApiError(err, 'Không thể xóa tài khoản ngân hàng.'))
+    }
   }
 
   function togglePinnedBankAccount(accountId: string) {
@@ -722,8 +747,9 @@ export function FinancePage({ service }: { service: FinanceService }) {
       )
     }
     if (column === 'created_at') return dateText(entry.created_at)
-    if (column === 'finance_account') return accountTypeText(entry.finance_account.account_type)
-    if (column === 'source_type') return sourceTypeText(entry.source_type)
+    if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? '-'
+    if (column === 'finance_account') return entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '-'
+    if (column === 'source_type') return entry.source?.category_name ?? sourceTypeText(entry.source_type)
     if (column === 'counterparty') {
       if (entry.counterparty?.name == null) return '-'
       const label = cashbookCounterpartyLabel(entry)
@@ -744,7 +770,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
     if (column === 'amount_delta') return <MoneyText value={entry.amount_delta} />
     if (column === 'status') return <StatusChip tone={entry.status === 'posted' ? 'success' : 'neutral'}>{statusText(entry.status)}</StatusChip>
-    if (column === 'note') return entry.note ?? '-'
+    if (column === 'note') return entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note ?? '-'
     return entry.is_business_accounted ? 'Có' : 'Không'
   }
 
@@ -880,31 +906,17 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const voucherCounterpartyTypeLabel = voucherMode === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'
   const voucherCounterpartyNameLabel = voucherMode === 'in' ? 'Tên người nộp' : 'Tên người nhận'
   const bankAccountModalTitle = editingBankAccountId === null ? 'Thêm tài khoản ngân hàng' : 'Sửa tài khoản ngân hàng'
-  const cashbookSuggestionItems: FinanceSearchSuggestion[] | undefined = cashbookSearchSuggestionsOpen
-    ? cashbookSearchSuggestions.map((entry) => ({
-        id: entry.id,
-        primary: `${entry.code} ${cashbookCounterpartyLabel(entry)}`.trim(),
-        secondary: entry.note,
-        meta: <MoneyText value={entry.amount_delta} />,
-        ariaLabel: `${entry.code} ${cashbookCounterpartyLabel(entry)} ${entry.note ?? ''}`.trim(),
-      }))
-    : undefined
-
   return (
     <ManagementPage
       title="Sổ quỹ"
       actions={
         <FinanceFiltersPanel
           search={cashbookSearch}
-          suggestions={cashbookSuggestionItems}
           onCreateVoucher={() => openVoucherForm('in')}
           onExportCashbook={exportCashbook}
-          onSearchChange={(nextSearch) => void suggestCashbook(nextSearch)}
+          onOpenImport={() => setCashbookImportOpen(true)}
+          onSearchChange={changeCashbookSearch}
           onSubmit={filterCashbook}
-          onSuggestionSelect={(suggestion) => {
-            const entry = cashbookSearchSuggestions.find((candidate) => candidate.id === suggestion.id)
-            if (entry) void selectCashbookSuggestion(entry)
-          }}
         />
       }
       kpis={
@@ -1028,55 +1040,93 @@ export function FinancePage({ service }: { service: FinanceService }) {
                     type="button"
                     onClick={() => setBankAccountMenuOpen((current) => !current)}
                   >
-                    <span>{selectedBankAccount ? bankAccountDisplayText(selectedBankAccount) : 'Chọn tài khoản'}</span>
+                    <span>{selectedBankAccount ? bankAccountTriggerText(selectedBankAccount) : 'Chọn tài khoản'}</span>
                     <ChevronDown aria-hidden="true" size={16} />
                   </button>
                   {bankAccountMenuOpen ? (
                     <div className="management-filter-account-menu" role="listbox" aria-label="Danh sách tài khoản ngân hàng">
                       <div className="management-filter-account-list">
-                        {sortedBankAccounts.length > 0 ? sortedBankAccounts.map((account) => (
-                          <div
-                            aria-selected={cashbookAccountId === account.id}
-                            className="management-filter-account-option"
-                            key={account.id}
-                            role="option"
-                            tabIndex={0}
-                            onClick={() => void chooseCashbookBankAccount(account.id)}
-                            onKeyDown={(event) => {
-                              if (event.key !== 'Enter' && event.key !== ' ') return
-                              event.preventDefault()
-                              void chooseCashbookBankAccount(account.id)
-                            }}
-                          >
-                            <span className="management-filter-account-option-label">{bankAccountDisplayText(account)}</span>
-                            <span className="management-filter-account-actions">
-                              <button
-                                aria-label={`Sửa tài khoản ${bankAccountDisplayText(account)}`}
-                                className="management-icon-button"
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  openEditBankAccountModal(account)
-                                }}
-                              >
-                                <Edit3 aria-hidden="true" size={15} />
-                              </button>
-                              <button
-                                aria-label={`Ghim tài khoản ${bankAccountDisplayText(account)}`}
-                                aria-pressed={pinnedBankAccountIds.includes(account.id)}
-                                className={pinnedBankAccountIds.includes(account.id) ? 'management-icon-button management-filter-account-action-pinned' : 'management-icon-button'}
-                                type="button"
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  togglePinnedBankAccount(account.id)
-                                }}
-                              >
-                                <Pin aria-hidden="true" size={15} />
-                              </button>
-                            </span>
-                          </div>
-                        )) : <span className="management-filter-account-empty">Không có tài khoản phù hợp</span>}
+                        {sortedBankAccounts.length > 0 ? sortedBankAccounts.map((account) => {
+                          const accountLabel = bankAccountDisplayText(account)
+                          const accountParts = bankAccountDisplayParts(account)
+                          return (
+                            <div
+                              aria-selected={cashbookAccountId === account.id}
+                              className="management-filter-account-option"
+                              key={account.id}
+                              role="option"
+                              tabIndex={0}
+                              onClick={() => void chooseCashbookBankAccount(account.id)}
+                              onKeyDown={(event) => {
+                                if (event.key !== 'Enter' && event.key !== ' ') return
+                                event.preventDefault()
+                                void chooseCashbookBankAccount(account.id)
+                              }}
+                            >
+                              <span className="management-filter-account-option-label">
+                                <strong>{accountParts.primary}</strong>
+                                {accountParts.secondary ? <span>{accountParts.secondary}</span> : null}
+                                {accountParts.tertiary ? <em>{accountParts.tertiary}</em> : null}
+                              </span>
+                              <span className="management-filter-account-actions">
+                                <button
+                                  aria-label={`Sửa tài khoản ${accountLabel}`}
+                                  className="management-icon-button"
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    openEditBankAccountModal(account)
+                                  }}
+                                >
+                                  <Edit3 aria-hidden="true" size={15} />
+                                </button>
+                                <button
+                                  aria-label={`Ghim tài khoản ${accountLabel}`}
+                                  aria-pressed={pinnedBankAccountIds.includes(account.id)}
+                                  className={pinnedBankAccountIds.includes(account.id) ? 'management-icon-button management-filter-account-action-pinned' : 'management-icon-button'}
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    togglePinnedBankAccount(account.id)
+                                  }}
+                                >
+                                  <Pin aria-hidden="true" size={15} />
+                                </button>
+                              </span>
+                            </div>
+                          )
+                        }) : <span className="management-filter-account-empty">Không có tài khoản phù hợp</span>}
                       </div>
+                      {deletedBankAccounts.length > 0 ? (
+                        <div className="management-filter-account-deleted">
+                          <button
+                            aria-expanded={deletedBankAccountsOpen}
+                            className="management-filter-account-deleted-toggle"
+                            type="button"
+                            onClick={() => setDeletedBankAccountsOpen((current) => !current)}
+                          >
+                            <span>Tài khoản đã xóa</span>
+                            <ChevronDown aria-hidden="true" size={14} />
+                          </button>
+                          {deletedBankAccountsOpen ? (
+                            <div className="management-filter-account-list">
+                              {deletedBankAccounts.map((account) => {
+                                const accountParts = bankAccountDisplayParts(account)
+                                return (
+                                  <div className="management-filter-account-option management-filter-account-option-muted" key={account.id}>
+                                    <span className="management-filter-account-option-label">
+                                      <strong>{accountParts.primary}</strong>
+                                      {accountParts.secondary ? <span>{accountParts.secondary}</span> : null}
+                                      {accountParts.tertiary ? <em>{accountParts.tertiary}</em> : null}
+                                    </span>
+                                    <span className="status-chip status-chip-neutral">Đã xóa</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>
@@ -1282,6 +1332,18 @@ export function FinancePage({ service }: { service: FinanceService }) {
         </div>
       ) : null}
 
+      <CashbookImportDialog
+        open={cashbookImportOpen}
+        service={service}
+        onClose={() => setCashbookImportOpen(false)}
+        onImported={() => {
+          void Promise.all([loadCashbook({ page: 1 }), loadReferenceData()])
+        }}
+        onOldDataDeleted={() => {
+          void loadCashbook({ page: 1 })
+        }}
+      />
+
       {bankAccountModalOpen ? (
         <div className="management-modal-backdrop">
           <section aria-label={bankAccountModalTitle} aria-modal="true" className="management-modal-dialog management-modal-dialog-compact" role="dialog">
@@ -1305,12 +1367,9 @@ export function FinancePage({ service }: { service: FinanceService }) {
                 <label>
                   Ngân hàng
                   <select value={newBankCode} onChange={(event) => setNewBankCode(event.target.value)}>
-                    <option value="Vietcombank">Vietcombank</option>
-                    <option value="Techcombank">Techcombank</option>
-                    <option value="MB">MB</option>
-                    <option value="ACB">ACB</option>
-                    <option value="BIDV">BIDV</option>
-                    <option value="VietinBank">VietinBank</option>
+                    {vietnamBankOptions.map((bank) => (
+                      <option key={bank.bin} value={bank.shortName}>{vietnamBankOptionLabel(bank)}</option>
+                    ))}
                   </select>
                 </label>
                 <label>
@@ -1340,9 +1399,19 @@ export function FinancePage({ service }: { service: FinanceService }) {
                 </label>
                 <p className="management-modal-helper-text">Xác nhận nhanh giao dịch, giảm thiểu thất thoát.</p>
               </div>
-              <footer className="management-modal-footer">
-                <button className="button button-secondary" type="button" onClick={() => setBankAccountModalOpen(false)}>Bỏ qua</button>
-                <button className="button button-primary" type="submit">Lưu</button>
+              <footer className="management-modal-footer management-modal-footer-split">
+                <div>
+                  {editingBankAccountId !== null ? (
+                    <button className="button button-danger" type="button" onClick={() => void softDeleteBankAccount()}>
+                      <Trash2 aria-hidden="true" size={15} />
+                      <span>Xóa</span>
+                    </button>
+                  ) : null}
+                </div>
+                <div className="management-modal-footer-actions">
+                  <button className="button button-secondary" type="button" onClick={() => setBankAccountModalOpen(false)}>Bỏ qua</button>
+                  <button className="button button-primary" type="submit">Lưu</button>
+                </div>
               </footer>
             </form>
           </section>
@@ -1541,7 +1610,15 @@ export function FinancePage({ service }: { service: FinanceService }) {
                       </button>
                     </th>
                     {visibleCashbookColumns.map((column) => (
-                      <th key={column}>{cashbookColumnDefinitions.find((definition) => definition.key === column)?.label}</th>
+                      <ManagementSortableHeader
+                        key={column}
+                        kind={column === 'amount_delta' ? 'number' : column === 'created_at' ? 'date' : 'text'}
+                        sortKey={column}
+                        sortState={cashbookSortState}
+                        onSort={requestCashbookSort}
+                      >
+                        {cashbookColumnLabel(column)}
+                      </ManagementSortableHeader>
                     ))}
                   </tr>
                 </thead>

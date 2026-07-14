@@ -68,15 +68,13 @@ Quy chuẩn:
 - Ô `.management-compact-search` dùng chung được dịch ngang `3px` sang phải để cân thị giác với bảng/list bên dưới; không sửa lệch riêng từng trang.
 - Placeholder ngắn, trực tiếp: ví dụ `Tìm hàng (F3)`, `Tìm khách`, `Tìm chứng từ`.
 - Nếu action cuối ô là icon-only thì phải có `aria-label`.
-- Khi trang cần gợi ý nhanh, shared search được phép xổ danh sách ngay dưới ô nhập theo `role="listbox"`/`role="option"`.
-- Dòng gợi ý dùng bố cục gọn 3 vùng: nội dung chính, mô tả phụ, số tiền/trạng thái ở mép phải nếu có.
-- Dòng gợi ý không chừa khoảng trống theo icon tìm kiếm của ô input; padding trái/phải dùng đều `var(--space-2)` để chữ bắt đầu gọn sát nội dung dropdown.
-- Dropdown gợi ý chỉ chứa dữ liệu do trang truyền vào; shell không tự quyết định API, filter, hay nghiệp vụ chọn.
-- Tìm kiếm chính phải hỗ trợ bỏ dấu tiếng Việt ở client/API nơi có search text: gõ `khach le`, `nha cung cap`, `don demo` vẫn trả kết quả có dấu tương ứng nếu dữ liệu có.
-- Dropdown gợi ý dùng z-index chung của shell, phải nổi trên bảng, inline detail, filter/sidebar và không bị cắt bởi vùng list.
-- Nếu không có kết quả sau khi đã gọi tìm, hiển thị dòng trống ngắn như `Không có kết quả phù hợp`.
+- Với các trang quản lý back-office, ô tìm chính phải lọc danh sách ngay khi gõ. Enter chỉ chạy lại bộ lọc hiện tại; không tạo nút `Lọc` riêng trong toolbar.
+- Khi ô tìm có nội dung, action `+` trong ô chuyển thành `Xóa tìm kiếm` để xóa chữ và reload danh sách theo bộ lọc còn lại.
+- Với các trang quản lý back-office, không hiển thị dropdown gợi ý dưới ô tìm. Ô tìm chỉ lọc bảng/list chính để tránh bị che nội dung.
+- Tìm kiếm chính phải hỗ trợ bỏ dấu tiếng Việt ở client/API/DB nơi có search text: gõ `khach le`, `nha cung cap`, `don demo` vẫn trả kết quả có dấu tương ứng nếu dữ liệu có. PostgreSQL không được phụ thuộc extension ngoài như `unaccent`; nếu cần, dùng chuẩn hóa nội bộ.
+- Nếu không có kết quả sau khi đã gọi tìm, bảng/list chính hiển thị empty state của trang.
 
-POS được phép dùng shared search nhưng vẫn giữ hành vi riêng của F3 và dropdown kết quả.
+POS được phép dùng shared search nhưng vẫn giữ hành vi riêng của F3 và dropdown kết quả; không ép POS theo quy tắc live-search back-office.
 
 ## 5. Button và icon
 

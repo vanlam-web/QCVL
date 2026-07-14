@@ -1,5 +1,6 @@
 import { quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatKvDateTime } from '../../lib/date-format'
+import { normalizeManagementSearchText } from '../../components/ui-shell/management-search'
 import type { CashbookDirection, CashbookEntry, CashbookStatus } from './types'
 
 export type CashbookTimeFilter = QuickDateRangePreset | 'custom'
@@ -31,13 +32,7 @@ export const cashbookQuickTimeLabels: Record<CashbookTimeFilter, string> = {
 }
 
 export function normalizeFinanceSearch(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase()
-    .trim()
+  return normalizeManagementSearchText(value)
 }
 
 export function cashbookEntryMatchesSearch(entry: CashbookEntry, search: string) {

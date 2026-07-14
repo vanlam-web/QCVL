@@ -85,6 +85,13 @@ export function salesDocumentDateTimeText(value: string | null | undefined, fall
   return formatKvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '-')
 }
 
+export function salesDocumentCreatedDateTimeText(document: Pick<SalesDocumentDetail, 'code' | 'created_at'>): string {
+  if (document.code.startsWith('HD-POS') || document.code.startsWith('BG-POS')) {
+    return formatKvDateTime(new Date(document.created_at), '-')
+  }
+  return salesDocumentDateTimeText(document.created_at)
+}
+
 export function salesDocumentMoneyText(value: number) {
   return formatMoney(value)
 }

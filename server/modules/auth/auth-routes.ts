@@ -13,9 +13,9 @@ export async function handleAuthRoute(context: AuthRouteContext) {
 
   if (context.request.method === 'POST' && url.pathname === '/api/v1/auth/login') {
     const body = await readJson(context.request)
-    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const login = (typeof body.login === 'string' ? body.login : typeof body.email === 'string' ? body.email : '').trim().toLowerCase()
     const password = typeof body.password === 'string' ? body.password : ''
-    const user = await context.repository.findUserByEmail(email)
+    const user = await context.repository.findUserByLogin?.(login) ?? await context.repository.findUserByEmail(login)
 
     if (!user || user.status !== 'active' || !(await verifyPassword(password, user.password_hash))) {
       throw new HttpError(401, 'AUTH_REQUIRED', 'Invalid email or password.')

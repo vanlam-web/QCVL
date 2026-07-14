@@ -27,6 +27,10 @@ export interface SupplierListResponse {
   page: number
   page_size: number
   total: number
+  summary?: {
+    current_payable_amount: number
+    total_purchase_amount: number
+  }
 }
 
 export interface SupplierCustomerOption {
@@ -85,4 +89,44 @@ export interface SupplierPaymentResult {
   code: string
   amount: number
   cashbook_voucher_id: string
+}
+
+export interface KiotVietSupplierInvalidRow {
+  rowNumber: number
+  code: string | null
+  name: string | null
+  errors: string[]
+}
+
+export interface KiotVietSupplierImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    create_rows: number
+    update_rows: number
+    kiotviet_payable_total: number
+    kiotviet_total_purchase: number
+    ignored_columns: string[]
+  }
+  invalid_rows: KiotVietSupplierInvalidRow[]
+}
+
+export interface KiotVietSupplierImportResult {
+  summary: {
+    total_rows?: number
+    valid_rows?: number
+    invalid_rows?: number
+    created_rows: number
+    updated_rows: number
+    skipped_rows?: number
+    kiotviet_payable_total?: number
+    kiotviet_total_purchase?: number
+  }
+  invalid_rows: KiotVietSupplierInvalidRow[]
+}
+
+export interface KiotVietImportDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }

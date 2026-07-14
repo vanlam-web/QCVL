@@ -27,7 +27,7 @@
 | **Chiết khấu** | Hiển thị riêng phần trăm chiết khấu nếu chính sách giá đang áp dụng có chiết khấu. | — |
 | **Công nợ và doanh thu** | Hiển thị tóm tắt dư nợ hiện tại và tổng doanh thu của khách đã chọn. | — |
 | **Chi tiết KH đã chọn** | Nhấp vào khách hàng đã chọn để mở bảng chi tiết hồ sơ, lịch sử bán hàng và dư nợ. | — |
-| **Bỏ chọn KH** | Reset UI về trạng thái Khách lẻ và áp Bảng giá chung; khi lưu chứng từ backend vẫn gán vào `KH000001 - Khách lẻ` | — |
+| **Bỏ chọn KH** | Reset UI về trạng thái Khách lẻ và áp Bảng giá chung; khi lưu chứng từ backend vẫn gán vào `khachle - Khách lẻ` | — |
 
 ---
 
@@ -35,7 +35,7 @@
 
 | Trạng thái | Hiển thị |
 |---|---|
-| **Chưa chọn** | Input placeholder: `Tìm khách hàng (F4)...`; UI chưa chọn khách cụ thể, nhưng khi lưu báo giá/hóa đơn backend dùng `KH000001 - Khách lẻ` |
+| **Chưa chọn** | Input placeholder: `Tìm khách hàng (F4)...`; UI chưa chọn khách cụ thể, nhưng khi lưu báo giá/hóa đơn backend dùng `khachle - Khách lẻ` |
 | **Đã chọn** | Hiển thị tên KH, mã KH, dư nợ, tổng doanh thu, tên bảng giá, chiết khấu nếu có và nút `[× Bỏ chọn KH]` |
 | **Thiếu SĐT** | Khi người dùng chọn khách đã tồn tại, kích hoạt `K03-B` nếu khách còn thiếu SĐT |
 
@@ -57,7 +57,7 @@
 - Khi bỏ chọn khách, các dòng đang dùng giá tự động được tính lại theo Bảng giá chung; dòng đã sửa giá thủ công được giữ nguyên.
 - Nếu khách hàng không được gán bảng giá thì áp dụng Bảng giá chung.
 - Tab hóa đơn có thể ở trạng thái chưa chọn khách; khách có thể được chọn sau khi đã có hàng trong giỏ.
-- Khi tab hóa đơn ở trạng thái chưa chọn khách và người dùng lưu báo giá/thanh toán, payload/backend phải tạo chứng từ với `customer_id` của `KH000001 - Khách lẻ`, không để `customer_id = null`.
+- Khi tab hóa đơn ở trạng thái chưa chọn khách và người dùng lưu báo giá/thanh toán, payload/backend phải tạo chứng từ với `customer_id` của khách mã `khachle`, không để `customer_id = null`.
 - Nút `[+]` cạnh ô tìm khách dùng để thêm nhanh khách mới trong POS.
 - Form thêm khách sử dụng cùng modal, bố cục, các tab và trường dữ liệu với bảng chi tiết khách hàng. Chế độ thêm mới để trống dữ liệu; chế độ chỉnh sửa nạp dữ liệu của khách đã chọn.
 - Thông tin bắt buộc:

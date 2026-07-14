@@ -1,6 +1,10 @@
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
+import { parseKiotVietProductWorkbook } from '../catalog/kiotviet-product-import'
 import type {
+  KiotVietImportDeleteResult,
+  KiotVietPurchaseReceiptImportPreview,
+  KiotVietPurchaseReceiptImportResult,
   PurchaseReceipt,
   PurchaseReceiptFinanceAccountListResponse,
   PurchaseReceiptInput,
@@ -63,6 +67,20 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    previewKiotVietPurchaseReceiptImport: async (input: { file: File }) =>
+      api.request<KiotVietPurchaseReceiptImportPreview>('/api/v1/purchase/receipts/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietPurchaseReceiptImportPayload(input)),
+      }),
+    importKiotVietPurchaseReceipts: async (input: { file: File }) =>
+      api.request<KiotVietPurchaseReceiptImportResult>('/api/v1/purchase/receipts/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietPurchaseReceiptImportPayload(input)),
+      }),
+    deleteImportedKiotVietPurchaseReceipts: async () =>
+      api.request<KiotVietImportDeleteResult>('/api/v1/purchase/receipts/import/kiotviet', {
+        method: 'DELETE',
+      }),
     listSuppliers: () => api.request<PurchaseReceiptSupplierListResponse>('/api/v1/suppliers?status=active'),
     listProducts: () => api.request<PurchaseReceiptProductListResponse>('/api/v1/products?status=active'),
     listFinanceAccounts: () =>
@@ -71,6 +89,35 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
 }
 
 export type PurchaseReceiptService = ReturnType<typeof createPurchaseReceiptService>
+
+async function buildKiotVietPurchaseReceiptImportPayload(input: { file: File }) {
+  const buffer = await input.file.arrayBuffer()
+  if (canParseCompressedXlsxInBrowser()) {
+    return {
+      file_name: input.file.name,
+      rows: await parseKiotVietProductWorkbook(buffer),
+    }
+  }
+  return {
+    file_name: input.file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+function canParseCompressedXlsxInBrowser() {
+  try {
+    return typeof DecompressionStream === 'function' && Boolean(new DecompressionStream('deflate-raw'))
+  } catch {
+    return false
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
 
 export function createBrowserPurchaseReceiptService(getAccessToken: () => Promise<string | null>) {
   return createPurchaseReceiptService(

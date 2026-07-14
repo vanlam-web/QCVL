@@ -1,5 +1,5 @@
-import { isValidElement, useEffect, useRef, type FormEvent, type ReactNode, type SyntheticEvent } from 'react'
-import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus } from 'lucide-react'
+import { Fragment, cloneElement, isValidElement, useEffect, useRef, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type SyntheticEvent } from 'react'
+import { ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
 
 export interface ManagementSearchSuggestion {
@@ -100,6 +100,83 @@ export function ManagementFilterGroup({ title, children }: { title: string; chil
       <h2>{title}</h2>
       <div className="management-filter-options">{children}</div>
     </section>
+  )
+}
+
+export function ManagementFilterSelectField({
+  label,
+  value,
+  children,
+  onChange,
+}: {
+  label: string
+  value: string
+  children: ReactNode
+  onChange: (value: string) => void
+}) {
+  return (
+    <label>
+      <span className="sr-only">{label}</span>
+      <select
+        aria-label={label}
+        className="management-filter-select"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {children}
+      </select>
+    </label>
+  )
+}
+
+export function ManagementFilterNumberField({
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  label: string
+  placeholder: string
+  value: string
+  onChange: (value: string) => void
+}) {
+  return (
+    <label>
+      <span className="sr-only">{label}</span>
+      <input
+        aria-label={label}
+        className="management-filter-number-input"
+        inputMode="numeric"
+        min="0"
+        placeholder={placeholder}
+        type="number"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </label>
+  )
+}
+
+export function ManagementFilterNumberRange({
+  fromLabel,
+  fromValue,
+  toLabel,
+  toValue,
+  onFromChange,
+  onToChange,
+}: {
+  fromLabel: string
+  fromValue: string
+  toLabel: string
+  toValue: string
+  onFromChange: (value: string) => void
+  onToChange: (value: string) => void
+}) {
+  return (
+    <>
+      <ManagementFilterNumberField label={fromLabel} placeholder="Từ" value={fromValue} onChange={onFromChange} />
+      <ManagementFilterNumberField label={toLabel} placeholder="Tới" value={toValue} onChange={onToChange} />
+    </>
   )
 }
 
@@ -426,6 +503,204 @@ export function ManagementRowActionButton({
   )
 }
 
+export function ManagementTableCheckboxControl({
+  ariaLabel,
+  checked,
+  onChange,
+  onClick,
+}: {
+  ariaLabel: string
+  checked?: boolean
+  onChange?: (checked: boolean) => void
+  onClick?: (event: MouseEvent<HTMLInputElement>) => void
+}) {
+  return (
+    <span className="finance-cashbook-checkbox-control">
+      <input
+        aria-label={ariaLabel}
+        checked={checked}
+        type="checkbox"
+        onChange={(event) => onChange?.(event.target.checked)}
+        onClick={onClick}
+      />
+    </span>
+  )
+}
+
+export function ManagementTableFavoriteButton({
+  active,
+  ariaLabel,
+  onClick,
+}: {
+  active: boolean
+  ariaLabel: string
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void
+}) {
+  return (
+    <button
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      className={`finance-cashbook-star-button${active ? ' finance-cashbook-star-button-active' : ''}`}
+      type="button"
+      onClick={onClick}
+    >
+      ☆
+    </button>
+  )
+}
+
+export interface ManagementDataTableColumn<TItem> {
+  key: string
+  header: ReactNode
+  headerIsCell?: boolean
+  cell: (item: TItem) => ReactNode
+  className?: string
+}
+
+export function ManagementDataTable<TItem>({
+  ariaLabel,
+  columns,
+  items,
+  getRowKey,
+  selectedRowKey,
+  getDetailLabel,
+  renderDetail,
+  detailClassName,
+  onRowClick,
+  onRowKeyDown,
+}: {
+  ariaLabel: string
+  columns: Array<ManagementDataTableColumn<TItem>>
+  items: TItem[]
+  getRowKey: (item: TItem) => string
+  selectedRowKey?: string | null
+  getDetailLabel?: (item: TItem) => string
+  renderDetail?: (item: TItem) => ReactNode
+  detailClassName?: string
+  onRowClick?: (item: TItem, event: MouseEvent<HTMLTableRowElement>) => void
+  onRowKeyDown?: (item: TItem, event: KeyboardEvent<HTMLTableRowElement>) => void
+}) {
+  return (
+    <table aria-label={ariaLabel} className="management-table">
+      <thead>
+        <tr>
+          {columns.map((column) => (
+            column.headerIsCell && isValidElement(column.header)
+              ? cloneElement(column.header, { key: column.key })
+              : <th key={column.key} className={column.className}>{column.header}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((item) => {
+          const rowKey = getRowKey(item)
+          const selected = selectedRowKey === rowKey
+          const detail = selected ? renderDetail?.(item) : null
+          return (
+            <Fragment key={rowKey}>
+              <tr
+                aria-expanded={selected}
+                className={`management-data-row${selected ? ' management-data-row-selected' : ''}`}
+                tabIndex={onRowKeyDown ? 0 : undefined}
+                onClick={onRowClick ? (event) => onRowClick(item, event) : undefined}
+                onKeyDown={onRowKeyDown ? (event) => onRowKeyDown(item, event) : undefined}
+              >
+                {columns.map((column) => (
+                  <td key={column.key} className={column.className}>{column.cell(item)}</td>
+                ))}
+              </tr>
+              {detail ? (
+                <ManagementDetailRow
+                  colSpan={columns.length}
+                  detailClassName={detailClassName}
+                  label={getDetailLabel?.(item) ?? `Chi tiết ${rowKey}`}
+                  rowClassName="management-detail-row-selected"
+                >
+                  {detail}
+                </ManagementDetailRow>
+              ) : null}
+            </Fragment>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+export interface ManagementInlineDetailTab {
+  key: string
+  label: ReactNode
+  onSelect?: () => void
+}
+
+export function ManagementInlineDetailTabs({
+  ariaLabel,
+  activeKey,
+  tabs,
+  endAction,
+  onSelect,
+}: {
+  ariaLabel: string
+  activeKey: string
+  tabs: ManagementInlineDetailTab[]
+  endAction?: ReactNode
+  onSelect?: (key: string) => void
+}) {
+  return (
+    <div className="inline-detail-tabbar">
+      <div aria-label={ariaLabel} className="inline-detail-tabs" role="tablist">
+        {tabs.map((tab) => (
+          <button
+            key={tab.key}
+            aria-selected={activeKey === tab.key}
+            role="tab"
+            type="button"
+            onClick={() => {
+              tab.onSelect?.()
+              onSelect?.(tab.key)
+            }}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {endAction}
+    </div>
+  )
+}
+
+export function ManagementDetailInfoList({
+  items,
+}: {
+  items: Array<{ label: ReactNode; value: ReactNode }>
+}) {
+  return (
+    <dl>
+      {items.map((item, index) => (
+        <div key={`${String(item.label)}-${index}`}>
+          <dt>{item.label}</dt>
+          <dd>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+
+export function ManagementDetailInlineNote({
+  icon,
+  children,
+}: {
+  icon?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <p className="management-detail-inline-note">
+      {icon}
+      {children}
+    </p>
+  )
+}
+
 export interface ManagementDetailAction {
   label: string
   icon?: ReactNode
@@ -471,6 +746,50 @@ export function ManagementDetailActionFooter({
         ))}
       </div>
     </footer>
+  )
+}
+
+export function ManagementConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Đồng ý',
+  cancelLabel = 'Bỏ qua',
+  loading = false,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  title: string
+  message: ReactNode
+  confirmLabel?: string
+  cancelLabel?: string
+  loading?: boolean
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  if (!open) return null
+
+  return (
+    <div className="management-modal-backdrop">
+      <section aria-label={title} aria-modal="true" className="management-modal-dialog management-modal-dialog-compact" role="dialog">
+        <header className="management-modal-header">
+          <h2>{title}</h2>
+          <button aria-label={`Đóng ${title}`} className="management-icon-button" disabled={loading} type="button" onClick={onCancel}>
+            <X aria-hidden="true" size={18} />
+          </button>
+        </header>
+        <p>{message}</p>
+        <footer className="management-modal-footer">
+          <button className="button button-secondary" disabled={loading} type="button" onClick={onCancel}>
+            {cancelLabel}
+          </button>
+          <button className="button button-primary" disabled={loading} type="button" onClick={onConfirm}>
+            {loading ? 'Đang xử lý' : confirmLabel}
+          </button>
+        </footer>
+      </section>
+    </div>
   )
 }
 

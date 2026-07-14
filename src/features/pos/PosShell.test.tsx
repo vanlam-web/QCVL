@@ -55,6 +55,9 @@ function makeCatalogService(overrides: Partial<CatalogService> = {}): CatalogSer
       total: 1,
     })),
     listCustomerGroups: vi.fn(async () => ({ items: [] })),
+    previewKiotVietCustomerImport: vi.fn(),
+    importKiotVietCustomers: vi.fn(),
+    deleteImportedKiotVietCustomers: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     createCustomer: vi.fn(),
     resolvePrices: vi.fn(async () => ({
       items: [
@@ -300,6 +303,204 @@ it('uses the K01 F3 product search as an enabled product picker', async () => {
   const cart = screen.getByLabelText('K02 giỏ hàng')
   expect(within(cart).getByText('Mica 3mm')).toBeInTheDocument()
   expect(within(cart).getAllByText('120 000').length).toBeGreaterThan(0)
+})
+
+it('searches the product catalog beyond the quick POS cache and prioritizes exact combo names', async () => {
+  const quickProduct = {
+    id: 'p-quick',
+    code: 'LKMIB',
+    name: 'Linh kiện máy in bạt',
+    status: 'active' as const,
+    unit_name: 'cái',
+    sell_method: 'quantity' as const,
+  }
+  const comboProduct = {
+    id: 'p-combo',
+    code: 'IB',
+    name: 'In bạt',
+    status: 'active' as const,
+    unit_name: 'm2',
+    sell_method: 'combo' as const,
+  }
+  const service = makeCatalogService({
+    listProducts: vi.fn(async (input = {}) => ({
+      items: input.search === 'In bạt' ? [quickProduct, comboProduct] : [quickProduct],
+      page: 1,
+      page_size: input.search === 'In bạt' ? 20 : 120,
+      total: input.search === 'In bạt' ? 2 : 1,
+    })),
+    resolvePrices: vi.fn(async (productIds: string[]) => ({
+      items: productIds.map((productId) => ({
+        product_id: productId,
+        unit_price: productId === 'p-combo' ? 600000 : 100000,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      })),
+    })),
+  })
+
+  renderPosShell({ catalogService: service })
+
+  await screen.findByRole('button', { name: /Linh kiện máy in bạt/ })
+  await userEvent.type(screen.getByRole('textbox', { name: 'Tìm hàng (F3)' }), 'In bạt')
+
+  await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({
+    status: 'active',
+    page: 1,
+    page_size: 20,
+    search: 'In bạt',
+  }))
+  const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
+  const options = within(results).getAllByRole('option')
+  expect(options[0]).toHaveTextContent('IB In bạt')
+  expect(options[0]).toHaveTextContent('600 000')
+})
+
+it('checks out the selected remote POS search product instead of the quick-cache product', async () => {
+  const quickProduct = {
+    id: 'p-mica',
+    code: 'MICA-3MM',
+    name: 'Mica trong 3mm',
+    status: 'active' as const,
+    unit_name: 'tam',
+    sell_method: 'quantity' as const,
+  }
+  const comboProduct = {
+    id: 'p-combo',
+    code: 'IB',
+    name: 'In bạt',
+    status: 'active' as const,
+    unit_name: 'm2',
+    sell_method: 'combo' as const,
+  }
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async (input = {}) => ({
+      items: input.search === 'In bạt' ? [comboProduct] : [quickProduct],
+      page: 1,
+      page_size: input.search === 'In bạt' ? 20 : 120,
+      total: 1,
+    })),
+    resolvePrices: vi.fn(async (productIds: string[]) => ({
+      items: productIds.map((productId) => ({
+        product_id: productId,
+        unit_price: productId === 'p-combo' ? 600000 : 860000,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      })),
+    })),
+  })
+  const orderService = makeOrderService({
+    checkout: vi.fn(async () => ({
+      order: {
+        id: 'order-remote',
+        code: 'HD-POS-REMOTE',
+        order_type: 'invoice' as const,
+        status: 'completed' as const,
+        total_amount: 600000,
+        paid_amount: 600000,
+        debt_amount: 0,
+        payment_status: 'paid' as const,
+      },
+      payment_receipt: null,
+      inventory_warnings: [],
+    })),
+  })
+
+  renderPosShell({ catalogService, orderService })
+
+  await screen.findByRole('button', { name: /Mica trong 3mm/ })
+  await userEvent.type(screen.getByRole('textbox', { name: 'Tìm hàng (F3)' }), 'In bạt')
+  const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
+  await userEvent.click(within(results).getByRole('option', { name: /IB In bạt/ }))
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  await waitFor(() => expect(orderService.checkout).toHaveBeenCalledTimes(1))
+  expect(orderService.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          product_id: 'p-combo',
+          unit_price: 600000,
+        }),
+      ],
+    }),
+  )
+})
+
+it('checks out POS line with selected KiotViet unit conversion', async () => {
+  const fomexProduct = {
+    id: 'p-f5',
+    code: 'F5',
+    name: 'Fomex 5mm',
+    status: 'active' as const,
+    unit_name: 'Tấm',
+    sell_method: 'quantity' as const,
+    unit_conversions: [
+      {
+        unit_id: 'unit-tac',
+        unit_name: 'Tấc',
+        stock_qty_per_unit: 0.05,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+      {
+        unit_id: 'unit-tam-cnc',
+        unit_name: 'Tấm CNC',
+        stock_qty_per_unit: 1,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+    ],
+  }
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({ items: [fomexProduct], page: 1, page_size: 120, total: 1 })),
+    resolvePrices: vi.fn(async () => ({
+      items: [{
+        product_id: 'p-f5',
+        unit_price: 30000,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      }],
+    })),
+  })
+  const orderService = makeOrderService({
+    checkout: vi.fn(async () => ({
+      order: {
+        id: 'order-unit',
+        code: 'HD-POS-UNIT',
+        order_type: 'invoice' as const,
+        status: 'completed' as const,
+        total_amount: 30000,
+        paid_amount: 30000,
+        debt_amount: 0,
+        payment_status: 'paid' as const,
+      },
+      payment_receipt: null,
+      inventory_warnings: [],
+    })),
+  })
+
+  renderPosShell({ catalogService, orderService })
+
+  await userEvent.click(await screen.findByRole('button', { name: /Fomex 5mm/ }))
+  await userEvent.selectOptions(screen.getByLabelText('Đơn vị Fomex 5mm'), 'Tấc')
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  await waitFor(() => expect(orderService.checkout).toHaveBeenCalledTimes(1))
+  expect(orderService.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          product_id: 'p-f5',
+          quantity: 1,
+          sale_unit_name: 'Tấc',
+          stock_qty_per_sale_unit: 0.05,
+        }),
+      ],
+    }),
+  )
 })
 
 it('does not show quick material opening when preview has no supported shortage', async () => {

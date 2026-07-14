@@ -44,6 +44,7 @@ describe('createPgRepository product units', () => {
         latest_purchase_cost: 20000,
         source_created_at: '2026-07-01T10:07:10.253Z',
         unit_conversions: [{
+          source_code: 'B50',
           unit_name: 'Khổ 50',
           stock_qty_per_unit: 40,
           is_default_purchase_unit: true,
@@ -56,9 +57,11 @@ describe('createPgRepository product units', () => {
     const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
     expect(sqlCalls.some((sql) => sql.includes('create table if not exists inventory_units'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('create table if not exists product_unit_conversions'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('alter table product_unit_conversions add column if not exists source_code'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('insert into inventory_units'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('insert into product_inventory_settings'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('insert into product_unit_conversions'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('source_code'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('update product_unit_conversions'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('created_at = coalesce(excluded.created_at, products.created_at)'))).toBe(true)
   })
@@ -82,6 +85,7 @@ describe('createPgRepository product units', () => {
         inventory_shape: 'roll',
         track_inventory: true,
         unit_conversions: [{
+          source_code: 'B50',
           unit_name: 'Khổ 50',
           stock_qty_per_unit: 40,
           is_default_purchase_unit: true,
@@ -102,17 +106,35 @@ describe('createPgRepository product units', () => {
       String(sql).includes('from products p'),
     )?.[0])
     expect(listSql).toContain('product_unit_conversions')
+    expect(listSql).toContain('source_code')
     expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('create table if not exists products'))).toBe(false)
     expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists product_group_id'))).toBe(false)
     expect(listSql).toContain('p.created_at >= $')
     expect(listSql).toContain(`p.created_at < ($`)
     expect(listSql).not.toContain(`'[]'::jsonb as unit_conversions`)
     expect(products?.[0].unit_conversions).toEqual([{
+      source_code: 'B50',
       unit_name: 'Khổ 50',
       stock_qty_per_unit: 40,
       is_default_purchase_unit: true,
       is_default_sale_unit: false,
     }])
+  })
+
+  test('matches product lookup codes against KiotViet unit conversion source codes', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [{ code: 'B260' }], rowCount: 1 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const codes = await repository.findProductsByCodes?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      codes: ['B260'],
+    })
+
+    const lookupSql = String(pgMock.query.mock.calls[0]?.[0])
+    expect(lookupSql).toContain('product_unit_conversions')
+    expect(lookupSql).toContain('source_code')
+    expect(codes).toEqual(new Set(['B260']))
   })
 
   test('deletes imported KiotViet products even when optional price tables are missing', async () => {
@@ -293,6 +315,7 @@ describe('createPgRepository product units', () => {
         if (code === 'HDA5') return { rows: [{ id: 'product-hda5' }], rowCount: 1 }
         return { rows: [], rowCount: 0 }
       }
+      if (sql.includes('from users')) return { rows: [{ id: '22222222-2222-2222-2222-222222222222' }], rowCount: 1 }
       if (sql.includes('insert into stocktakes')) return { rows: [{ id: `stocktake-${values?.[3]}`, inserted: true }], rowCount: 1 }
       if (sql.includes('insert into stocktake_items')) return { rows: [{ inserted: true }], rowCount: 1 }
       return { rows: [], rowCount: 0 }
@@ -301,11 +324,13 @@ describe('createPgRepository product units', () => {
     const repository = createPgRepository('postgres://unit-test')
     const result = await repository.upsertImportedKiotVietStocktakes?.({
       organizationId: '11111111-1111-1111-1111-111111111111',
+      createdBy: { id: '22222222-2222-2222-2222-222222222222', name: 'Nguyễn Thị Mai Phương' },
       rows: [
         {
           rowNumber: 2,
           source_code: 'KK000333',
           source_created_at: '2026-07-10T09:30:00.000Z',
+          source_creator_name: 'maiphuong',
           source_balanced_at: '2026-07-10T09:45:00.000Z',
           status: 'balanced',
           product_code: 'HDA5',
@@ -365,6 +390,8 @@ describe('createPgRepository product units', () => {
       'kiotviet',
       'KK000333',
       'Đối soát KV',
+      'maiphuong',
+      '22222222-2222-2222-2222-222222222222',
     ]))
     expect(itemInsertCalls[0]?.[1]).toEqual(expect.arrayContaining(['product-hda5', 'HDA5']))
     expect(itemInsertCalls[1]?.[1]).toEqual(expect.arrayContaining([null, 'OLD{DEL}']))
@@ -381,6 +408,7 @@ describe('createPgRepository product units', () => {
             code: 'KK-JUNE',
             status: 'balanced',
             source_type: 'kiotviet_import',
+            source_creator_name: 'maiphuong',
             created_at: new Date('2026-06-15T09:30:00.000Z'),
             balanced_at: new Date('2026-06-15T09:45:00.000Z'),
             total_actual_qty: 58,
@@ -388,6 +416,13 @@ describe('createPgRepository product units', () => {
             total_difference_value: -20000,
             increased_qty: 0,
             decreased_qty: 2,
+            created_by_id: '22222222-2222-2222-2222-222222222222',
+            created_by_name: 'Nguyễn Thị Mai Phương',
+            product_code: 'HDA5',
+            product_name: 'Hộp đèn alu 5mm',
+            product_system_qty: 60,
+            product_actual_qty: 58,
+            product_difference_qty: -2,
             note: 'KiotViet import',
           }],
           rowCount: 1,
@@ -399,28 +434,159 @@ describe('createPgRepository product units', () => {
     const repository = createPgRepository('postgres://unit-test')
     const stocktakes = await repository.listStocktakes?.({
       organizationId: '11111111-1111-1111-1111-111111111111',
-      url: new URL('http://api.local/api/v1/inventory/stocktakes?status=balanced&search=KK-JUNE&from=2026-06-01&to=2026-06-30'),
+      url: new URL('http://api.local/api/v1/inventory/stocktakes?status=balanced&search=KK-JUNE&from=2026-06-01&to=2026-06-30&created_by=22222222-2222-2222-2222-222222222222'),
     })
 
     const listCall = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('from stocktakes st'))
     const listSql = String(listCall?.[0])
     expect(listSql).toContain('st.status = any')
-    expect(listSql).toContain('st.code ilike')
+    expect(listSql).toContain('translate(lower(st.code)')
+    expect(listSql).toContain('translate(lower(coalesce(st.note')
+    expect(listSql).toContain('exists (')
+    expect(listSql).toContain('from stocktake_items search_sti')
+    expect(listSql).toContain('left join products search_product')
+    expect(listSql).toContain('source_product_code')
+    expect(listSql).toContain('source_product_name')
     expect(listSql).toContain('coalesce(st.source_created_at, st.created_at) >=')
     expect(listSql).toContain('coalesce(st.source_created_at, st.created_at) <')
+    expect(listSql).toContain('left join users created_by_user')
+    expect(listSql).toContain('list_sti.source_product_code')
+    expect(listSql).toContain('list_sti.source_product_name')
+    expect(listSql).toContain('list_sti.system_qty')
+    expect(listSql).toContain('list_sti.actual_qty')
+    expect(listSql).toContain('list_sti.difference_qty')
+    expect(listSql).toContain('st.created_by = $')
     expect(listCall?.[1]).toEqual([
       '11111111-1111-1111-1111-111111111111',
       ['balanced'],
       '2026-06-01',
       '2026-06-30',
-      '%KK-JUNE%',
+      '%kk-june%',
+      '22222222-2222-2222-2222-222222222222',
     ])
     expect(stocktakes).toEqual([
       expect.objectContaining({
         code: 'KK-JUNE',
         source_type: 'kiotviet_import',
+        source_creator_name: 'maiphuong',
+        created_by: { id: '22222222-2222-2222-2222-222222222222', name: 'Nguyễn Thị Mai Phương' },
+        product_code: 'HDA5',
+        product_name: 'Hộp đèn alu 5mm',
+        product_system_qty: 60,
+        product_actual_qty: 58,
+        product_difference_qty: -2,
         total_actual_qty: 58,
       }),
     ])
+  })
+
+  test('lists finance accounts from PostgreSQL storage', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from finance_accounts')) {
+        return {
+          rows: [{
+            id: 'bank-0771000598653',
+            code: '0771000598653',
+            name: '0771000598653',
+            account_type: 'bank',
+            is_default_cash: false,
+            is_active: true,
+            account_number: '0771000598653',
+            account_holder: 'Van Lam',
+            opening_balance: 0,
+            note: null,
+            notify_on_transaction: true,
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const accounts = await repository.listFinanceAccounts?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/finance/accounts?is_active=true'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists finance_accounts'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('from finance_accounts'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('is_active = $'))).toBe(true)
+    expect(accounts).toEqual([{
+      id: 'bank-0771000598653',
+      code: '0771000598653',
+      name: '0771000598653',
+      account_type: 'bank',
+      is_default_cash: false,
+      is_active: true,
+      account_number: '0771000598653',
+      account_holder: 'Van Lam',
+      opening_balance: 0,
+      note: null,
+      notify_on_transaction: true,
+    }])
+  })
+
+  test('excludes replaced deleted bank accounts from broad PostgreSQL bank cashbook filters', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from finance_accounts')) {
+        return {
+          rows: [
+            { id: 'bank-new', code: '0771000598653', name: '0771000598653', account_type: 'bank', is_default_cash: false, is_active: true, account_number: '0771000598653', account_holder: 'Van Lam', opening_balance: 0, note: null, notify_on_transaction: true },
+            { id: 'bank-old', code: '0771000598653{DEL}', name: '0771000598653{DEL}', account_type: 'bank', is_default_cash: false, is_active: false, account_number: '0771000598653{DEL}', account_holder: 'Van Lam', opening_balance: 0, note: null, notify_on_transaction: true },
+          ],
+          rowCount: 2,
+        }
+      }
+      if (sql.includes('from cashbook_entries')) {
+        return {
+          rows: [
+            {
+              id: 'cashbook-new',
+              code: 'TNH001',
+              status: 'posted',
+              direction: 'in',
+              amount_delta: 1000,
+              finance_account: { id: 'bank-new', code: '0771000598653', name: '0771000598653', account_type: 'bank' },
+              counterparty: { type: 'other', name: 'A', phone: null },
+              note: '',
+              source_type: 'kiotviet_cashbook',
+              source: {},
+              allocations: [],
+              is_business_accounted: true,
+              created_at: new Date('2026-07-13T00:00:00.000Z'),
+            },
+            {
+              id: 'cashbook-old',
+              code: 'TNH002',
+              status: 'posted',
+              direction: 'in',
+              amount_delta: 2000,
+              finance_account: { id: 'bank-old', code: '0771000598653{DEL}', name: '0771000598653{DEL}', account_type: 'bank' },
+              counterparty: { type: 'other', name: 'B', phone: null },
+              note: '',
+              source_type: 'kiotviet_cashbook',
+              source: {},
+              allocations: [],
+              is_business_accounted: true,
+              created_at: new Date('2026-07-13T00:00:00.000Z'),
+            },
+          ],
+          rowCount: 2,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const entries = await repository.listCashbookEntries?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/finance/cashbook?finance_account_type=bank&exclude_replaced_deleted_accounts=true'),
+    })
+
+    expect(entries?.map((entry) => entry.code)).toEqual(['TNH001'])
   })
 })

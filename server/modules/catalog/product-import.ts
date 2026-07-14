@@ -24,6 +24,7 @@ export interface KiotVietImportProductRow {
   latest_purchase_cost: number | null
   status: ProductStatus
   unit_conversions: Array<{
+    source_code: string | null
     unit_name: string
     stock_qty_per_unit: number
     is_default_purchase_unit: boolean
@@ -126,11 +127,13 @@ function unitConversionsByProductCode(rows: KiotVietRawProductRow[]) {
   for (const row of rows) {
     if (!isUnitConversionRow(row)) continue
     const productCode = text(valueByHeader(row, 'Mã ĐVT Cơ bản'))
+    const sourceCode = text(valueByHeader(row, 'Mã hàng', 'Mã sản phẩm', 'SKU'))
     const unitName = text(valueByHeader(row, 'ĐVT', 'Đơn vị tính'))
     const conversionFactor = number(valueByHeader(row, 'Quy đổi'))
     if (!productCode || !unitName || conversionFactor === null || conversionFactor <= 0) continue
     const current = conversions.get(productCode) ?? []
     current.push({
+      source_code: sourceCode,
       unit_name: unitName,
       stock_qty_per_unit: conversionFactor,
       is_default_purchase_unit: true,

@@ -37,8 +37,8 @@ Hiện tại đã triển khai:
 
 - danh sách hóa đơn `HD...` và báo giá `BG...`
 - tìm kiếm/lọc cơ bản
-- ô tìm `Mã chứng từ, khách hàng, ghi chú` có gợi ý xổ xuống khi nhập; search bỏ dấu tiếng Việt, tìm theo mã chứng từ, mã/tên khách và ghi chú chứng từ
-- gợi ý tối đa 8 dòng, hiển thị mã chứng từ + tên khách, dòng phụ là mã khách/ghi chú, mép phải là tổng tiền; bấm gợi ý lọc danh sách theo đúng mã chứng từ
+- ô tìm `Mã chứng từ, khách hàng, ghi chú` lọc trực tiếp danh sách; search bỏ dấu tiếng Việt, tìm theo mã chứng từ, mã/tên khách và ghi chú chứng từ
+- không hiển thị dropdown/listbox gợi ý dưới ô tìm; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
 - bộ lọc thời gian dạng chọn nhanh/tùy chỉnh theo layout filter dùng chung
 - bộ lọc trạng thái thanh toán, phương thức thanh toán, người bán/người tạo và bảng giá nếu dữ liệu/API hiện có hỗ trợ
 - bộ lọc nhiều chọn `Loại hóa đơn`, `Trạng thái hóa đơn`, `Thanh toán` đã chạy trên NAS ngày 2026-07-09; frontend và backend phải cùng hỗ trợ query comma, không được đổi UI sang nhiều chọn khi backend còn chỉ nhận một giá trị
@@ -46,6 +46,15 @@ Hiện tại đã triển khai:
 - bấm dòng chứng từ để mở chi tiết readonly inline
 - mở lại báo giá active vào POS draft local
 - giữ giá snapshot của báo giá khi mở lại; cảnh báo nếu giá hiện tại khác hoặc sản phẩm không còn khả dụng
+
+Shared management layout:
+
+- dùng `ManagementPage`, `ManagementCompactToolbar`, `ManagementCompactSearch`, `ManagementFilterSidebar`, `ManagementTableViewport`, `ManagementDataTable`;
+- table chính không tự render `<table>` riêng trong page;
+- dữ liệu riêng của SalesDocuments chỉ nằm ở cấu hình cột/cell, sort header, detail inline và API load;
+- row click/Enter/Space mở chi tiết; click trong detail không làm đóng detail;
+- không đưa lại dropdown/listbox gợi ý dưới ô tìm;
+- POS không áp dụng rule này.
 
 Ngoài phạm vi hiện tại:
 
@@ -117,7 +126,7 @@ Nếu filter tồn tại ở KiotViet nhưng QC-OMS chưa có schema/dữ liệu
 | Mã chứng từ | `BG...`, `HD...`, `HD....01`; bấm để mở chi tiết |
 | Thời gian | Thời điểm lưu báo giá hoặc checkout hóa đơn |
 | Loại | Báo giá hoặc Hóa đơn |
-| Mã khách | Mã khách tại thời điểm lưu; khách lẻ mặc định là `KH000001` |
+| Mã khách | Mã khách tại thời điểm lưu; khách lẻ mặc định là `khachle` |
 | Khách hàng | Tên khách snapshot tại thời điểm lưu |
 | Tổng tiền hàng | Tổng trước giảm/điều chỉnh |
 | Giảm giá | Nếu có |
@@ -130,7 +139,7 @@ Nếu filter tồn tại ở KiotViet nhưng QC-OMS chưa có schema/dữ liệu
 
 Các cột có thể ẩn/hiện, nhưng bộ cột mặc định phải gọn để nhìn nhanh trên màn hình bán hàng. Cột tiền canh phải. Tiêu đề cột tiền cũng canh phải theo giá trị.
 
-Nếu POS/báo giá/hóa đơn không chọn khách, backend phải gán chứng từ vào `KH000001 - Khách lẻ` của tổ chức. Danh sách chứng từ vẫn có thể hiển thị snapshot `Khách lẻ`, nhưng filter/lịch sử theo khách phải dựa trên `customer_id = KH000001`, không để chứng từ bán lẻ ở `customer_id = null`.
+Nếu POS/báo giá/hóa đơn không chọn khách, backend phải gán chứng từ vào `khachle - Khách lẻ` của tổ chức. Danh sách chứng từ vẫn có thể hiển thị snapshot `Khách lẻ`, nhưng filter/lịch sử theo khách phải dựa trên customer record có mã `khachle`, không để chứng từ bán lẻ ở `customer_id = null`.
 
 ---
 

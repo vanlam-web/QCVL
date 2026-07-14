@@ -23,6 +23,25 @@ Ghi nhận từ KiotViet:
 - Form nhập hàng có tìm hàng theo mã/tên, chọn/tạo nhanh NCC, mã phiếu tự động, số hóa đơn/chứng từ đầu vào dạng text, dòng hàng gồm số lượng, đơn giá, giảm giá, thành tiền.
 - QC-OMS giữ các phần này, nhưng bỏ đặt hàng nhập, trả hàng nhập, VAT/HĐĐT và hiệu lực phức tạp trong lát cắt đầu.
 
+Các danh sách quản trị trong module Purchase phải dùng chung layout `management-*` giống Customers:
+
+- `ManagementPage` cho khung trang.
+- `ManagementCompactToolbar` và `ManagementCompactSearch` cho tìm kiếm.
+- `ManagementFilterSidebar` cho bộ lọc.
+- `ManagementTableViewport` và `ManagementDataTable` cho bảng, row chọn, detail row.
+- Trang chỉ truyền cấu hình cột/cell/detail/action riêng.
+- Không tạo CSS table riêng nếu `management-table` đã đủ.
+
+Vai trò trong tồn vận hành:
+
+- `Nhà cung cấp` phải ổn trước khi hoàn thiện phiếu nhập, vì phiếu nhập cần NCC để ghi lịch sử mua và công nợ NCC.
+- Phiếu nhập `posted` là nguồn `stock-in` chính thức cho `stock_movements`.
+- Trạng thái 2026-07-12: import KiotViet phiếu nhập `posted` đã sinh/read `stock_movements.purchase_receipt` trong dev-memory. Dòng dùng mã đơn vị quy đổi như `B260` phải map về sản phẩm gốc như `BT` và quy đổi `quantity * stock_qty_per_unit` về đơn vị tồn chính.
+- Phiếu nhập `draft` không làm tăng tồn, không ghi công nợ thật, không ghi sổ quỹ.
+- Lịch sử phiếu nhập là nguồn đúng để suy ra nhà cung cấp của từng hàng; không lấy NCC từ file hàng hóa KiotViet.
+- Sau khi stock-in ổn, `/products` mới dùng dữ liệu này để tính tồn QCVL và so sánh với `Tồn KV tạm nhập`.
+- Lưu ý mục tiêu Hàng hóa: chỉ có phiếu nhập thì mới đúng chiều `+ tồn`. Tồn vận hành vẫn chưa đủ đúng cho đến khi hóa đơn/POS posted ghi stock-out chính thức.
+
 ---
 
 ## 2. Danh sách nhà cung cấp
@@ -30,8 +49,8 @@ Ghi nhận từ KiotViet:
 ### Bộ lọc
 
 - tìm theo mã, tên, số điện thoại
-- ô tìm NCC dùng shared compact search, hỗ trợ nhập không dấu và xổ tối đa 8 gợi ý dưới ô nhập; dòng gợi ý gồm mã + tên NCC, SĐT/email ở dòng phụ, mép phải là nợ cần trả hiện tại
-- bấm gợi ý NCC sẽ lọc danh sách theo đúng mã NCC đã chọn
+- ô tìm NCC dùng shared compact search, hỗ trợ nhập không dấu và lọc trực tiếp danh sách theo mã, tên, SĐT/email và nợ cần trả hiện tại nếu API trả về
+- không hiển thị dropdown/listbox gợi ý; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
 - trạng thái: tất cả/đang hoạt động/ngừng hoạt động
 - nợ hiện tại: khoảng từ/tới
 - tổng mua: khoảng từ/tới và khoảng thời gian nếu cần
@@ -81,29 +100,26 @@ Nếu NCC cũng là khách hàng, tab Thông tin hiển thị liên kết tới 
 
 Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm kiếm phải ưu tiên tìm chính xác và không bị mất do bộ lọc tháng hiện tại.
 
-Ô tìm `Tìm phiếu/NCC` phải có gợi ý xổ xuống khi nhập từ khóa, giống kiểu tìm sản phẩm ở POS:
+Ô tìm `Tìm phiếu/NCC` dùng shared compact search và lọc trực tiếp danh sách:
 
 - gọi API tìm theo mã phiếu nhập, tên/mã NCC, số chứng từ NCC với bộ lọc trạng thái/ngày/người tạo đang chọn
-- tối đa 8 dòng gợi ý dưới ô nhập
-- dòng gợi ý hiển thị: mã phiếu + tên NCC, dòng phụ mã NCC - tên NCC, mép phải là `Cần trả NCC`
-- bấm vào gợi ý sẽ lọc danh sách theo đúng mã phiếu nhập đã chọn
-- bấm Enter hoặc nút lọc vẫn lọc bình thường theo nội dung đang nhập
+- không hiển thị dropdown/listbox gợi ý dưới ô tìm
+- nhập tới đâu lọc danh sách chính tới đó; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
+- bấm Enter lọc lại theo nội dung đang nhập
 - không có kết quả thì hiện `Không có kết quả phù hợp`
 
 ### Cột mặc định
 
 | Cột | Ghi chú |
 |---|---|
-| Mã phiếu nhập | Dạng `PN...`, click mở chi tiết |
-| Thời gian nhập | Thời điểm dự kiến/đã nhập |
-| Nhà cung cấp | Mã + tên |
-| Tổng số lượng | Tổng số lượng theo dòng, không thay thế tồn vật lý |
-| Số mặt hàng | Số dòng hàng |
+| Chọn dòng | Checkbox chọn phiếu, không mở chi tiết khi bấm |
+| Đánh dấu | Sao ưu tiên, dùng UI chung của bảng quản trị |
+| Mã nhập hàng | Dạng `PN...`, click mở chi tiết |
+| Nhà cung cấp | Tên NCC; không ghép mã NCC trong danh sách chính |
+| Tổng số lượng | Tổng `quantity` các dòng, hiển thị 2 số lẻ |
 | Tổng tiền hàng | Trước thanh toán |
 | Cần trả NCC | Sau giảm giá/chi phí liên quan nếu có |
-| Đã trả NCC | Tiền đã chi |
-| Còn phải trả | Công nợ phát sinh |
-| Trạng thái | Draft/posted/cancelled |
+| Tiền đã trả NCC | Tiền đã chi |
 
 ---
 
@@ -229,6 +245,64 @@ Acceptance UI:
 - SĐT trống vẫn lưu được
 - gắn khách hàng liên kết và mở link qua hồ sơ khách
 - NCC inactive không xuất hiện trong chọn NCC mặc định khi tạo phiếu nhập sau này
+
+### 9.1.1. Import nhà cung cấp KiotViet
+
+Import NCC dùng lại flow `KiotVietImportDialog` chung, giống Khách hàng/Hàng hóa; không tạo CSS hoặc bảng import riêng.
+
+File `DanhSachNhaCungCap_KV12072026-131429-622.xlsx` có 44 dòng. Các cột import vào QCVL:
+
+- Mã nhà cung cấp: khóa upsert chính.
+- Tên nhà cung cấp.
+- Email.
+- Điện thoại.
+- Địa chỉ, Phường/Xã, Khu vực: gom thành một dòng địa chỉ nếu thiếu/chưa đủ.
+- Tổng mua: lưu làm số tham chiếu KV cho tới khi phiếu nhập QCVL đủ dữ liệu.
+- Nợ cần trả hiện tại: lưu làm số tham chiếu KV cho tới khi công nợ NCC QCVL đủ dữ liệu.
+- Mã số thuế.
+- Ghi chú.
+- Trạng thái.
+- Tổng mua trừ trả hàng.
+- Công ty.
+- Người tạo, Ngày tạo.
+
+Cột bỏ qua trong lát cắt hiện tại:
+
+- Số CMND/CCCD.
+- Nhóm nhà cung cấp.
+
+Quy tắc:
+
+- Import dùng mã NCC làm khóa; trùng mã thì cập nhật.
+- Xóa dữ liệu import cũ dùng confirm inline trong dialog, không dùng `window.confirm`.
+- Dev-memory phải lưu supplier import vào `logs/dev-memory-state.json`, không chỉ giữ trong mảng demo, để API restart không mất dữ liệu.
+- Các số KV trên NCC chỉ là tham chiếu ban đầu; mục tiêu đúng tồn vẫn là nhập hàng/phiếu nhập posted tạo `stock-in`.
+
+### 9.1.2. Supplier checkpoint for product-stock goal
+
+Current decision 2026-07-12:
+
+- Supplier/NCC is deep enough for the current Hang hoa completion goal.
+- Required now: imported real KV suppliers, shared list/search/filter/sort/detail shell, safe `Xoa du lieu cu`, and re-import without losing the working dataset.
+- Do not block the runnable stock path on deep supplier payable, supplier purchase history tab, supplier payment review, supplier reports, or supplier grouping.
+- KV `Tong mua` and `No can tra hien tai` on supplier remain reference numbers only until QCVL purchase receipts and payable entries are complete.
+- Continue next in `Nhap hang`: import/review/post purchase receipts so posted receipts create trusted `stock-in` movements for product stock.
+
+### 9.1.3. Nhap hang import checkpoint
+
+Current decision 2026-07-12:
+
+- Trang `Nhap hang` dung chung shell da co: toolbar search, `Import KV`, shared list/detail/table, inline confirm `Xoa du lieu cu`.
+- File import dung cho slice nay la `DanhSachChiTietNhapHang_KV...xlsx`, khong phai file `DanhSachNhaCungCap_KV...xlsx`.
+- Import gom dong theo `Ma nhap hang`; moi dong chi tiet map `Ma nha cung cap` sang NCC va `Ma hang` sang Hang hoa.
+- Ma co hau to `{DEL}`, `{DEL1}`, `{DEL2}` la hau to KV trong chung tu lich su, khong mac dinh la phieu cu da xoa; QCVL doi chieu bang ma goc neu ma goc dang co trong QCVL.
+- Neu file KV khong co `Ma nha cung cap`, backend map ve `NCC le` / `Nha cung cap le`; preview khong coi day la loi thieu NCC va import tu upsert NCC le neu chua co.
+- Hang da xoa trong KV nhung van xuat hien o chung tu lich su duoc tao lai trong QCVL voi `status = inactive` va `track_inventory = false`. Muc dich la giu lich su phieu nhap khop ma, khong dua cac ma da xoa vao ton van hanh hien tai.
+- `Da nhap hang` tu KV se duoc luu la receipt `posted` de lam nguon stock-in QCVL sau khi du du lieu tham chieu.
+- Backend khong import partial khi thieu NCC/Hang hoa. Preview phai bao danh sach ma thieu; import tra skipped de khong tao ton sai.
+- UI import phai hien canh bao tong hop khi con thieu NCC/Hang hoa, vi luc do nut `Import` bi khoa co chu dich.
+- `Xoa du lieu cu` chi xoa purchase receipts import tu KiotViet, khong xoa phieu nhap tao tay.
+- Kiem tra file `DanhSachChiTietNhapHang_KV12072026-135400-901.xlsx`: da import duoc 1,737 dong chi tiet / 684 phieu. Cac ma don vi quy doi nhu `B260` khop qua `product_unit_conversions.source_code`. `NCC le` da duoc tao lam NCC fallback. 13 ma hang lich su da xoa duoc tao inactive/khong track ton de phieu nhap khop tham chieu.
 
 ### 9.2. Purchase draft P2
 

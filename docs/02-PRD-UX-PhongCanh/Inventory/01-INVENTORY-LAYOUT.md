@@ -79,7 +79,7 @@ QC-OMS không cần hoàn tất toàn bộ cuộn/tấm trước khi làm danh s
 | Giai đoạn | Phạm vi | Lý do |
 |---|---|---|
 | Phase 1 | Danh sách hàng hóa, tạo/sửa hàng thường/dịch vụ/combo, nhóm hàng, đơn vị quy đổi, thẻ kho, kiểm kho hàng thường | Cho nhập/import dữ liệu và vận hành danh mục trước |
-| Phase 2 | Cuộn/tấm object-level, tồn tạm KiotViet, khui vật tư, kiểm kho theo object | Bắt buộc trước khi bán thật vật tư cuộn/tấm để không sai tồn |
+| Phase 2 | Cuộn/tấm object-level, `Tồn KV tạm nhập`, khui vật tư, kiểm kho theo object | Bắt buộc trước khi bán thật vật tư cuộn/tấm để không sai tồn |
 | Phase 3 | POS trừ kho theo BOM, đơn vị quy đổi, combo, cuộn/tấm và khui nhanh khi thiếu vật tư | POS chỉ chốt chứng từ khi dữ liệu tồn có đủ nền truy vết |
 | Phase 4 | Tối ưu hao hụt, tự hiệu chỉnh định mức từ kiểm kho/khui/sản xuất, báo cáo nâng cao | Cần dữ liệu lịch sử đủ sạch trước khi tính tự động |
 
@@ -133,7 +133,7 @@ Tab chi tiết gồm:
 | Thông tin | Thông tin chính của hàng hóa: mã, tên, loại hàng, đơn vị, cách tính bán, giá vốn, giá bán, loại tồn, trạng thái |
 | Đơn vị & quy đổi | Đơn vị hiện tại, cách tính bán, loại tồn, danh sách đơn vị quy đổi, đơn vị mặc định khi mua và đơn vị mặc định khi bán. Nếu chưa có dữ liệu quy đổi thì hiển thị `Chưa có` |
 | BOM/Vật tư cấu thành | Nhập/sửa định mức vật tư cho combo hoặc sản phẩm có BOM; combo có thể hiển thị tóm tắt vật tư ở tab `Thông tin`, nhưng nguồn sửa chính vẫn là tab này để tránh làm tab Thông tin quá nặng. Nếu có BOM nháp import từ KiotViet, tab này hiện `BOM nháp KiotViet`, số vật tư và cảnh báo cần rà soát trước khi kích hoạt |
-| Tồn kho | Hiển thị dữ liệu tồn theo loại hàng. Nếu có tồn tạm import từ KiotViet, tab này hiện `Tồn tạm KiotViet` để đối soát, không xem là tồn kho vận hành và không thay thế stock movement |
+| Tồn kho | Hiển thị dữ liệu tồn theo loại hàng. Nếu có tồn tạm import từ KiotViet, tab này hiện `Tồn KV tạm nhập` để đối soát, không xem là tồn kho vận hành và không thay thế stock movement |
 | Thẻ kho | Bảng lịch sử biến động kho theo sản phẩm, dùng API stock movements hiện có |
 | Ghi chú | Ghi chú nội bộ đơn giản; không ảnh hưởng POS, tồn kho, giá hoặc BOM |
 

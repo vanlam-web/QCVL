@@ -2,6 +2,11 @@ import type { Supplier } from './types'
 
 export type PurchaseReceiptStatus = 'draft' | 'posted' | 'cancelled'
 
+export interface PurchaseReceiptCreator {
+  id: string
+  name: string
+}
+
 export interface PurchaseReceiptProduct {
   id: string
   code: string
@@ -69,7 +74,7 @@ export interface PurchaseReceipt {
   paid_amount: number
   remaining_amount: number
   notes: string | null
-  created_by: string
+  created_by: PurchaseReceiptCreator
   created_at: string
   updated_at: string
   items: PurchaseReceiptItem[]
@@ -81,6 +86,10 @@ export interface PurchaseReceiptListResponse {
   page: number
   page_size: number
   total: number
+  summary?: {
+    payable_amount: number
+    remaining_amount: number
+  }
 }
 
 export interface PurchaseReceiptSupplierListResponse {
@@ -134,6 +143,52 @@ export interface PurchaseReceiptSupplierPaymentResult {
   code: string
   amount: number
   cashbook_voucher_id: string
+}
+
+export interface KiotVietPurchaseReceiptInvalidRow {
+  rowNumber: number
+  source_code: string | null
+  supplier_code: string | null
+  product_code: string | null
+  errors: string[]
+}
+
+export interface KiotVietPurchaseReceiptImportPreview {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    receipt_count: number
+    create_rows: number
+    update_rows: number
+    item_rows: number
+    missing_supplier_count: number
+    missing_product_count: number
+    payable_total: number
+    paid_total: number
+  }
+  invalid_rows: KiotVietPurchaseReceiptInvalidRow[]
+  missing_supplier_codes: string[]
+  missing_product_codes: string[]
+}
+
+export interface KiotVietPurchaseReceiptImportResult {
+  summary: {
+    total_rows: number
+    valid_rows: number
+    invalid_rows: number
+    created_rows: number
+    updated_rows: number
+    skipped_rows: number
+    items_created: number
+    items_updated: number
+  }
+  invalid_rows: KiotVietPurchaseReceiptInvalidRow[]
+}
+
+export interface KiotVietImportDeleteResult {
+  deleted_rows: number
+  blocked_rows: number
 }
 
 export interface PurchaseReceiptInputItem {

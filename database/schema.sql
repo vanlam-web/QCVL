@@ -174,6 +174,27 @@ create index if not exists customer_debt_entries_customer_idx
 create index if not exists customer_debt_entries_customer_updated_idx
   on customer_debt_entries (organization_id, customer_id, status, updated_at desc, created_at desc);
 
+create table if not exists finance_accounts (
+  id text not null,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  code text not null,
+  name text not null,
+  account_type text not null check (account_type in ('cash', 'bank')),
+  is_default_cash boolean not null default false,
+  is_active boolean not null default true,
+  account_number text,
+  account_holder text,
+  opening_balance numeric(14,2) not null default 0,
+  note text,
+  notify_on_transaction boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (organization_id, id)
+);
+
+create index if not exists finance_accounts_org_type_idx
+  on finance_accounts (organization_id, account_type, is_active, name);
+
 create table if not exists cashbook_entries (
   id text primary key default gen_random_uuid()::text,
   organization_id uuid not null references organizations(id) on delete cascade,
@@ -194,6 +215,48 @@ create table if not exists cashbook_entries (
 
 create index if not exists cashbook_entries_org_created_idx
   on cashbook_entries (organization_id, created_at desc);
+
+create table if not exists customer_snapshots (
+  id text primary key,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  code text not null,
+  data jsonb not null,
+  source_type text not null default 'kiotviet_import',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, code)
+);
+
+create index if not exists customer_snapshots_org_updated_idx
+  on customer_snapshots (organization_id, updated_at desc);
+
+create table if not exists supplier_snapshots (
+  id text primary key,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  code text not null,
+  data jsonb not null,
+  source_type text not null default 'kiotviet_import',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, code)
+);
+
+create index if not exists supplier_snapshots_org_updated_idx
+  on supplier_snapshots (organization_id, updated_at desc);
+
+create table if not exists purchase_receipt_snapshots (
+  id text primary key,
+  organization_id uuid not null references organizations(id) on delete cascade,
+  code text not null,
+  data jsonb not null,
+  source_type text not null default 'kiotviet_import',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (organization_id, code)
+);
+
+create index if not exists purchase_receipt_snapshots_org_updated_idx
+  on purchase_receipt_snapshots (organization_id, updated_at desc);
 
 insert into permissions (code, module, description)
 values

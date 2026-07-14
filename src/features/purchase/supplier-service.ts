@@ -5,6 +5,9 @@ import type {
   SupplierCustomerListResponse,
   SupplierFinanceAccountListResponse,
   SupplierListResponse,
+  KiotVietImportDeleteResult,
+  KiotVietSupplierImportPreview,
+  KiotVietSupplierImportResult,
   SupplierPayableReceiptListResponse,
   SupplierPaymentInput,
   SupplierPaymentResult,
@@ -54,6 +57,20 @@ export function createSupplierService(api: SupplierApiRequester) {
       return api.request<SupplierListResponse>(`/api/v1/suppliers${query ? `?${query}` : ''}`)
     },
     getSupplier: (id: string) => api.request<Supplier>(`/api/v1/suppliers/${id}`),
+    previewKiotVietSupplierImport: async (input: { file: File }) =>
+      api.request<KiotVietSupplierImportPreview>('/api/v1/suppliers/import/kiotviet/preview', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietSupplierImportPayload(input)),
+      }),
+    importKiotVietSuppliers: async (input: { file: File }) =>
+      api.request<KiotVietSupplierImportResult>('/api/v1/suppliers/import/kiotviet', {
+        method: 'POST',
+        body: JSON.stringify(await buildKiotVietSupplierImportPayload(input)),
+      }),
+    deleteImportedKiotVietSuppliers: () =>
+      api.request<KiotVietImportDeleteResult>('/api/v1/suppliers/import/kiotviet', {
+        method: 'DELETE',
+      }),
     createSupplier: (input: SupplierInput) =>
       api.request<Supplier>('/api/v1/suppliers', {
         method: 'POST',
@@ -82,6 +99,21 @@ export function createSupplierService(api: SupplierApiRequester) {
 }
 
 export type SupplierService = ReturnType<typeof createSupplierService>
+
+async function buildKiotVietSupplierImportPayload(input: { file: File }) {
+  const buffer = await input.file.arrayBuffer()
+  return {
+    file_name: input.file.name,
+    file_base64: arrayBufferToBase64(buffer),
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (const byte of bytes) binary += String.fromCharCode(byte)
+  return btoa(binary)
+}
 
 export function createBrowserSupplierService(getAccessToken: () => Promise<string | null>) {
   return createSupplierService(

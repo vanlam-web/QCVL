@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { planMigrations } from './db-migrate.mjs'
+import { adminUsernameFromEmail, planMigrations } from './db-migrate.mjs'
 
 describe('planMigrations', () => {
   test('returns migrations not yet applied in lexical order', () => {
@@ -17,5 +17,9 @@ describe('planMigrations', () => {
   test('ignores files that are not migration sql files', () => {
     const files = ['README.md', 'draft.sql', '0002_sales_finance.sql', '0001_foundation.sql']
     expect(planMigrations(files, new Set())).toEqual(['0001_foundation.sql', '0002_sales_finance.sql'])
+  })
+
+  test('uses admin as username for default admin email', () => {
+    expect(adminUsernameFromEmail('admin@qc-oms.local')).toBe('admin')
   })
 })

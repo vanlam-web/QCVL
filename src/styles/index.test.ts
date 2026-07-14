@@ -68,6 +68,12 @@ it('keeps shell account controls inside the topbar quick actions', () => {
   expect(cssRule('.management-page-header')).not.toContain('padding-right')
 })
 
+it('keeps shared management inline notes evenly spaced inside detail panels', () => {
+  const noteRule = cssRuleLast('.management-detail-inline-note')
+
+  expect(noteRule).toContain('margin: var(--space-3) 0')
+})
+
 it('keeps selected shell and inline tabs on the same active treatment', () => {
   const sharedTabBaseSelector =
     '.shell-nav-link,\n.inline-detail-tabs button,\n.dashboard-chart-tabs button'
@@ -184,6 +190,8 @@ it('places finance voucher actions at the right edge of the finance action row',
 it('shares modal layout for management forms', () => {
   expect(css).toContain('--color-on-primary: #ffffff')
   expect(cssRule('.management-modal-backdrop')).toContain('position: fixed')
+  expect(cssRule('.management-modal-backdrop')).toContain('z-index: calc(var(--z-shell) + 30)')
+  expect(cssRule('.management-layout')).not.toContain('z-index')
   expect(cssRule('.management-modal-backdrop')).toContain('place-items: center')
   expect(cssRule('.management-modal-backdrop')).toContain('background: rgb(0 0 0 / 50%)')
   expect(cssRule('.management-modal-dialog')).toContain('width: min(56rem, calc(100vw - var(--space-4)))')
@@ -197,6 +205,12 @@ it('shares modal layout for management forms', () => {
   expect(cssRule('.button-primary')).toContain('background: transparent')
   expect(cssRule('.button-primary')).toContain('color: var(--color-primary)')
   expect(cssRule('.management-modal-field-wide')).toContain('grid-column: 1 / -1')
+  expect(cssRule('.management-modal-checkbox-row')).toContain('display: flex')
+  expect(cssRule('.management-modal-checkbox-row')).toContain('flex-wrap: nowrap')
+  expect(cssRule('.management-modal-checkbox-row')).toContain('grid-template-columns: none')
+  expect(cssRule('.management-modal-form .management-modal-checkbox-row')).toContain('display: flex')
+  expect(cssRule('.management-modal-form .management-modal-checkbox-row')).toContain('flex-wrap: nowrap')
+  expect(cssRule('.management-modal-checkbox-row input')).toContain('flex: 0 0 auto')
   expect(cssRule('.management-modal-footer')).toContain('justify-content: flex-end')
 })
 
@@ -383,10 +397,17 @@ it('keeps shared filter choices compact with borders only on active state', () =
 
 it('keeps shared filter account picker compact and layered', () => {
   expect(cssRule('.management-filter-account-picker')).toContain('position: relative')
+  expect(cssRule('.management-filter-account-picker')).toContain('min-width: 0')
+  expect(cssRule('.management-filter-options .management-filter-account-trigger')).toContain('border: 1px solid var(--color-border)')
+  expect(cssRule('.management-filter-options .management-filter-account-trigger')).toContain('border-radius: var(--radius-sm)')
+  expect(cssRule('.management-filter-account-trigger')).toContain('max-width: 100%')
+  expect(cssRule('.management-filter-account-trigger')).toContain('min-width: 0')
+  expect(cssRule(".management-filter-account-trigger:hover,\n.management-filter-account-trigger:focus-visible,\n.management-filter-account-trigger[aria-expanded='true']")).toContain('border-color: var(--color-selected-border)')
   expect(cssRule('.management-filter-account-menu')).toContain('position: absolute')
+  expect(cssRule('.management-filter-account-menu')).toContain('left: 0')
   expect(cssRule('.management-filter-account-menu')).toContain('max-height: 18rem')
   expect(cssRule('.management-filter-account-menu')).toContain('box-shadow: var(--shadow-md)')
-  expect(cssRule('.management-filter-account-option')).toContain('min-height: 2.5rem')
+  expect(cssRule('.management-filter-account-option')).toContain('min-height: 4.5rem')
   expect(cssRule(".management-filter-account-option:hover,\n.management-filter-account-option:focus-visible,\n.management-filter-account-option[aria-selected='true']")).toContain('background: color-mix')
   expect(cssRule('.management-filter-account-actions')).toContain('opacity: 0')
   expect(cssRule('.management-filter-account-actions:has(.management-filter-account-action-pinned)')).toContain('opacity: 1')
@@ -660,6 +681,7 @@ it('keeps inline detail surfaces unframed and summary rows single-line', () => {
   expect(cssRule('.management-detail-row-selected > td')).toContain('border-left: 1px solid var(--color-selected-border)')
   expect(cssRule('.management-detail-row-selected > td')).toContain('background: transparent')
   expect(cssRule('.management-detail-row-selected > td')).toContain('box-shadow: inset 0 -1px 0 var(--color-selected-border)')
+  expect(cssRule('.management-table-viewport > table tbody tr.management-detail-row-selected > td')).toContain('border-bottom: 1px solid var(--color-selected-border)')
   expect(cssRule('.management-inline-detail')).toContain('border: 0')
   expect(cssRule('.management-inline-detail')).toContain('background: transparent')
   expect(cssRule('.management-inline-detail')).toContain('padding: 0')
@@ -675,9 +697,10 @@ it('keeps inline detail surfaces unframed and summary rows single-line', () => {
   expect(cssRule('.management-detail-table th,\n.management-detail-table td')).toContain('padding: var(--space-2)')
   expect(cssRule('.management-detail-lower')).toContain('display: grid')
   expect(cssRule('.management-detail-note')).toContain('border: 1px solid var(--color-border-muted)')
+  expect(cssRule('.management-detail-note')).toContain('width: 100%')
   expect(cssRule('.management-detail-summary-box')).toContain('display: grid')
   expect(cssRule('.management-detail-summary-box-right')).toContain('grid-column: 1 / -1')
-  expect(cssRule('.management-detail-lower-right')).toContain('grid-template-columns: minmax(18rem, 1fr) minmax(26rem, 34rem)')
+  expect(cssRule('.management-detail-lower-right')).toContain('grid-template-columns: minmax(28rem, 1fr) minmax(18rem, 28rem)')
   expect(cssRule('.management-detail-lower-right .management-detail-note')).toContain('grid-column: 1')
   expect(cssRule('.management-detail-lower-right .management-detail-summary-box-right')).toContain('grid-column: 2')
   expect(cssRule('.sales-document-lines-table')).toContain('table-layout: auto')

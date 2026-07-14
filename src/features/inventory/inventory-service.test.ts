@@ -141,6 +141,42 @@ describe('inventory-service', () => {
     ])
   })
 
+  it('loads stocktake detail by id', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'stocktake-1', items: [] } as T
+    }
+    const service = createInventoryService({ request })
+
+    await service.getStocktake('stocktake-1')
+
+    expect(calls).toEqual([
+      ['/api/v1/inventory/stocktakes/stocktake-1', undefined],
+    ])
+  })
+
+  it('cancels stocktake detail by id', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'stocktake-1', status: 'cancelled', items: [] } as T
+    }
+    const service = createInventoryService({ request })
+
+    await service.cancelStocktake('stocktake-1')
+
+    expect(calls).toEqual([
+      [
+        '/api/v1/inventory/stocktakes/stocktake-1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status: 'cancelled' }),
+        },
+      ],
+    ])
+  })
+
   it('builds roll and sheet object inventory list filters', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

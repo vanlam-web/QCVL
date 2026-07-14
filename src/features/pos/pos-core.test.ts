@@ -85,6 +85,36 @@ describe('pos-core', () => {
     expect(items.map((item) => item.discount_amount)).toEqual([600000, 200000])
   })
 
+  it('carries selected sale unit conversion into checkout items', () => {
+    const sheetProduct: Product = {
+      id: 'p-f5',
+      code: 'F5',
+      name: 'Fomex 5mm',
+      status: 'active',
+      unit_name: 'Tấm',
+      sell_method: 'quantity',
+      unit_conversions: [
+        {
+          unit_id: 'unit-tac',
+          unit_name: 'Tấc',
+          stock_qty_per_unit: 0.05,
+          is_default_purchase_unit: false,
+          is_default_sale_unit: false,
+        },
+      ],
+    }
+    const line = makeCartLine({ id: 'line-f5', product: sheetProduct, unitPrice: 30000, priceSource: 'manual' })
+
+    const [item] = linesToCheckoutItems([{ ...line, saleUnitName: 'Tấc', stockQtyPerSaleUnit: 0.05 }], 0)
+
+    expect(item).toEqual(expect.objectContaining({
+      product_id: 'p-f5',
+      quantity: 1,
+      sale_unit_name: 'Tấc',
+      stock_qty_per_sale_unit: 0.05,
+    }))
+  })
+
   it('keeps discount percent conversion in core logic', () => {
     const line = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
 

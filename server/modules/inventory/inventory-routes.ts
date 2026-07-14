@@ -14,6 +14,8 @@ export interface InventoryRouteHandlers {
   adjustStock(): RouteResult
   stockMovements(): RouteResult
   stocktakes(): RouteResult
+  getStocktake(): RouteResult
+  updateStocktake(): RouteResult
   rolls(): RouteResult
   sheets(): RouteResult
   shortagePreview(): RouteResult
@@ -33,6 +35,8 @@ export function handleInventoryRoute(context: InventoryRouteContext, handlers: I
   if (method === 'PATCH' && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(pathname)) return handlers.adjustStock()
   if (method === 'GET' && pathname === '/api/v1/inventory/stock-movements') return handlers.stockMovements()
   if (method === 'GET' && pathname === '/api/v1/inventory/stocktakes') return handlers.stocktakes()
+  if (method === 'GET' && /^\/api\/v1\/inventory\/stocktakes\/[^/]+$/.test(pathname)) return handlers.getStocktake()
+  if (method === 'PATCH' && /^\/api\/v1\/inventory\/stocktakes\/[^/]+$/.test(pathname)) return handlers.updateStocktake()
   if (method === 'GET' && pathname === '/api/v1/inventory/rolls') return handlers.rolls()
   if (method === 'GET' && pathname === '/api/v1/inventory/sheets') return handlers.sheets()
   if (method === 'POST' && pathname === '/api/v1/inventory/pos-shortage-preview') return handlers.shortagePreview()

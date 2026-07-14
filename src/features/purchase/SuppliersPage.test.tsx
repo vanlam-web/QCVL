@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SuppliersPage } from './SuppliersPage'
 import type { SupplierService } from './supplier-service'
@@ -73,6 +73,9 @@ function makeService(overrides: Partial<SupplierService> = {}): SupplierService 
       amount: 250000,
       cashbook_voucher_id: 'voucher-1',
     })),
+    previewKiotVietSupplierImport: vi.fn(),
+    importKiotVietSuppliers: vi.fn(),
+    deleteImportedKiotVietSuppliers: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     ...overrides,
   }
 }
@@ -148,14 +151,13 @@ it('filters suppliers by search and status', async () => {
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
   await userEvent.type(searchInput, 'Nguyen')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái' }), 'all')
-  await userEvent.type(searchInput, '{Enter}')
 
-  expect(service.listSuppliers).toHaveBeenLastCalledWith({
+  await waitFor(() => expect(service.listSuppliers).toHaveBeenLastCalledWith({
     page: 1,
     page_size: 15,
     search: 'Nguyen',
     status: 'all',
-  })
+  }))
   expect(screen.queryByText('Tìm: Nguyen')).not.toBeInTheDocument()
 })
 
@@ -170,14 +172,13 @@ it('uses supplier sidebar filters without a reset action', async () => {
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
   await userEvent.type(searchInput, 'NCC000031')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái' }), 'inactive')
-  await userEvent.type(searchInput, '{Enter}')
 
-  expect(service.listSuppliers).toHaveBeenLastCalledWith({
+  await waitFor(() => expect(service.listSuppliers).toHaveBeenLastCalledWith({
     page: 1,
     page_size: 15,
     search: 'NCC000031',
     status: 'inactive',
-  })
+  }))
   expect(screen.queryByText('Tìm: NCC000031')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
 })

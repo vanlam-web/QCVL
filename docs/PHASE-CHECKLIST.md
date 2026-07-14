@@ -26,6 +26,28 @@ Quy trÃ¬nh phá»‘i há»£p:
 | Docs cleanup | ÄÃ£ chuáº©n hoÃ¡ index/metadata; checklist nÃ y lÃ  nguá»“n xem tráº¡ng thÃ¡i sá»‘ng |
 | Current product/inventory/POS direction | Äang hoÃ n táº¥t HÃ ng hÃ³a â†’ Kiá»ƒm kho hÃ ng thÆ°á»ng â†’ Cuá»™n/táº¥m/khui object-level â†’ POS trá»« kho tháº­t; normal/combo checkout Ä‘Ã£ cÃ³ `sale_deduction`, roll/sheet POS object-level deduction cÃ²n pending |
 
+Local status 2026-07-12:
+
+- Current parent goal remains `Hoan thien Hang hoa` by making product stock trustworthy.
+- Product import, stocktake import, customer import, supplier import, and purchase receipt KV import are usable for current local data.
+- Purchase receipt KV file `DanhSachChiTietNhapHang_KV12072026-135400-901.xlsx` imported 684 posted receipts / 1,737 detail rows locally.
+- Purchase receipt main list now follows the Owner-selected compact columns: checkbox, favorite star, `Ma nhap hang`, `Nha cung cap`, `Tong so luong`, `Tong tien hang`, `Can tra NCC`, `Tien da tra NCC`.
+- Blank KiotViet supplier code maps to `NCC le` / `NCC lẻ`; historical KV-deleted products used by receipts are kept as inactive, non-inventory-tracked products.
+- Imported posted purchase receipts now read as trusted `purchase_receipt` stock-in movements in dev-memory. Unit-conversion item codes such as `B260` map to the parent product and convert quantity into the parent stock unit.
+- KiotViet sales invoice import now exists on `/sales-documents`: preview/import/delete endpoints, shared `Import KV` dialog, grouping by `Ma hoa don`, `khachle` fallback, auto placeholder rows for KV-deleted customer/product codes ending `{DEL...}`, seller/creator collapsed to one QCVL account, and completed invoices writing `sale_deduction` stock-out movements in dev-memory.
+- Next work for product stock: finish formula/opening-checkpoint/display on Products and close live POS stock-out gaps. Product stock must still show incomplete/needs checkpoint if opening balance is not selected.
+
+Current status 2026-07-13:
+
+- Product/customer/supplier/purchase receipt/sales invoice data imported and reviewed enough to promote the current 3202 state to NAS PostgreSQL for test operation.
+- NAS `3200` now runs PostgreSQL-backed data. Imported snapshot groups include products, customer snapshots, supplier snapshots, purchase receipt snapshots, and sales orders from current 3202 state.
+- Sales document cancel on NAS is fixed: cancelling a POS invoice must mark `orders.status = cancelled` and close related customer debt rows instead of relying on memory-only behavior.
+- Product stock parity work is considered runnable for now. Deep upgrades for unit conversion selling, roll/sheet/object-level edge cases, and BOM history can be reopened later.
+- New active direction: Finance foundation on local `3202` first. Cong no depends on So quy; So quy depends on real cash/bank finance accounts. Do not keep account data as hard-coded JSON blobs.
+- KiotViet cashbook export has been inspected from Downloads. Next implementation should create/import `finance_accounts`, then import KV So Quy rows into cashbook data with traceable source metadata.
+- Do not deploy the new finance/cashbook import to NAS until it is verified on local `3202`.
+- Local `3202` implementation started: `/finance` has `Import KV` for So Quy, backend has preview/import/delete endpoints, parser tests, dev-memory persistence for imported cashbook rows, and dev-memory finance account list now includes imported KV bank accounts. PostgreSQL migration/repository for long-term NAS finance accounts is still a follow-up before NAS promotion.
+
 ---
 
 ## ÄÃ£ Merge VÃ o `main`

@@ -501,7 +501,7 @@ Quy táº¯c:
 
 #### Input cho `roll`
 
-**Tráº¡ng thÃ¡i triá»ƒn khai hiá»‡n táº¡i:** payload roll Ä‘ang xá»­ lÃ½ pháº§n cuá»™n cÅ© Ä‘Ã£ chuáº©n hÃ³a. Backend cáº­p nháº­t `inventory_rolls.remaining_length_m`, Ä‘á»•i tráº¡ng thÃ¡i `empty` náº¿u cÃ²n láº¡i `0`, ghi `inventory_material_openings` vÃ  `stock_movements.material_opening` cho pháº§n chÃªnh lá»‡ch diá»‡n tÃ­ch. Luá»“ng táº¡o/khui cuá»™n má»›i tá»« tá»“n táº¡m KiotViet hoáº·c chá»n cuá»™n `available` tá»± Ä‘á»™ng váº«n lÃ  phase sau.
+**Trạng thái triển khai hiện tại:** payload roll đang xử lý phần cuộn cũ đã chuẩn hóa. Backend cập nhật `inventory_rolls.remaining_length_m`, đổi trạng thái `empty` nếu còn lại `0`, ghi `inventory_material_openings` và `stock_movements.material_opening` cho phần chênh lệch diện tích. Luồng tạo/khui cuộn mới phải đi từ chứng từ vận hành QCVL hoặc thao tác kho có truy vết; tồn tạm KiotViet chỉ là dữ liệu đối chiếu, không phải nguồn sinh tồn chính thức.
 
 ```json
 {
@@ -528,7 +528,7 @@ Quy táº¯c:
 
 #### Input cho `sheet`
 
-**Tráº¡ng thÃ¡i triá»ƒn khai hiá»‡n táº¡i:** payload sheet Ä‘ang xá»­ lÃ½ pháº§n táº¥m cÅ© Ä‘Ã£ chuáº©n hÃ³a. Backend cáº­p nháº­t `inventory_sheets`: náº¿u bá» thÃ¬ chuyá»ƒn `discarded`, náº¿u giá»¯ thÃ¬ cáº­p nháº­t rá»™ng/dÃ i/diá»‡n tÃ­ch cÃ²n láº¡i. Backend ghi `inventory_material_openings` vÃ  `stock_movements.material_opening` cho pháº§n chÃªnh lá»‡ch diá»‡n tÃ­ch. Luá»“ng táº¡o táº¥m má»›i tá»« tá»“n táº¡m KiotViet váº«n lÃ  phase sau.
+**Trạng thái triển khai hiện tại:** payload sheet đang xử lý phần tấm cũ đã chuẩn hóa. Backend cập nhật `inventory_sheets`: nếu bỏ thì chuyển `discarded`, nếu giữ thì cập nhật rộng/dài/diện tích còn lại. Backend ghi `inventory_material_openings` và `stock_movements.material_opening` cho phần chênh lệch diện tích. Luồng tạo tấm mới phải đi từ chứng từ vận hành QCVL hoặc thao tác kho có truy vết; tồn tạm KiotViet chỉ là dữ liệu đối chiếu, không phải nguồn sinh tồn chính thức.
 
 ```json
 {
@@ -744,15 +744,21 @@ Workflow:
 4. Cáº­p nháº­t tá»“n/tá»«ng cuá»™n/tá»«ng táº¥m theo sá»‘ thá»±c táº¿.
 5. Äá»•i phiáº¿u sang `balanced`, set `balanced_at`.
 
-### `POST /inventory/stocktakes/{id}/cancel`
+### Hủy phiếu kiểm kho
 
-Há»§y phiáº¿u kiá»ƒm kho.
+Hủy phiếu kiểm kho hiện dùng `PATCH /inventory/stocktakes/{id}` với body:
+
+```json
+{
+  "status": "cancelled"
+}
+```
 
 **Permission:** `perm.manage_inventory`
 
-**Tráº¡ng thÃ¡i triá»ƒn khai hiá»‡n táº¡i:** route Ä‘Ã£ má»Ÿ nhÆ°ng tráº£ `VALIDATION_ERROR`; chÆ°a há»§y phiáº¿u thá»§ cÃ´ng.
+**Trạng thái triển khai hiện tại:** đã hoạt động.
 
-Chá»‰ cho há»§y phiáº¿u `draft`. Phiáº¿u Ä‘Ã£ `balanced` khÃ´ng há»§y báº±ng endpoint nÃ y; náº¿u cáº§n Ä‘áº£o tá»“n sau nÃ y pháº£i cÃ³ spec riÃªng.
+API đổi `stocktakes.status` sang `cancelled`, giữ nguyên dòng kiểm kho, không ghi hoặc đảo `stock_movements`. Nếu sau này cần đảo tồn của phiếu đã cân bằng, phải có spec riêng.
 
 ### `GET /inventory/stocktakes`
 
@@ -761,6 +767,12 @@ Danh sÃ¡ch phiáº¿u kiá»ƒm kho.
 **Permission:** `perm.manage_inventory`
 
 Query: `search`, `status`, `created_by`, `from`, `to`, `page`, `page_size`.
+
+`search` tìm theo mã phiếu kiểm kho, ghi chú phiếu, mã hàng và tên hàng trong dòng kiểm kho. Với dòng import KV, backend ưu tiên `stocktake_items.source_product_code/source_product_name`; nếu dòng đã khớp hàng hóa QCVL thì cũng tìm được theo `products.code/products.name`.
+
+Mỗi item list trả thêm `product_code`, `product_name`, `product_system_qty`, `product_actual_qty`, `product_difference_qty` đại diện cho dòng kiểm kho đầu tiên của phiếu, ưu tiên dữ liệu nguồn KiotViet rồi fallback sang hàng hóa QCVL đã khớp. UI dùng các trường này làm cột `Mã hàng`, `Tên hàng`, `Tồn trước`, `Kiểm được`, `Lệch` trên bảng chính; không dùng `Người tạo`, `SL lệch tăng`, `SL lệch giảm`, `Ghi chú`, `Tổng thực tế`, `Tổng chênh lệch` làm cột chính nữa.
+
+Response list có thêm `creator_options`: danh sách tài khoản QCVL đã tạo phiếu trong tập kết quả theo `search/status/from/to`, nhưng không bị thu hẹp bởi `created_by` hiện tại. UI dùng danh sách này cho bộ lọc `Người tạo` để không bị mất option khi đang lọc hoặc phân trang.
 
 **Response data:**
 
@@ -774,12 +786,22 @@ Query: `search`, `status`, `created_by`, `from`, `to`, `page`, `page_size`.
       "source_type": "product_edit",
       "created_at": "2026-07-07T08:00:00Z",
       "balanced_at": "2026-07-07T08:00:00Z",
+      "product_code": "F8",
+      "product_name": "Fomex 8mm",
+      "product_system_qty": 0.005,
+      "product_actual_qty": 1.5,
+      "product_difference_qty": 1.495,
       "total_actual_qty": 10,
       "total_actual_value": 100000,
       "total_difference_value": -5000,
       "increased_qty": 2,
       "decreased_qty": 3,
-      "note": "Phiáº¿u kiá»ƒm kho Ä‘Æ°á»£c táº¡o tá»± Ä‘á»™ng khi cáº­p nháº­t HÃ ng hÃ³a..."
+      "note": "Phiáº¿u kiá»ƒm kho Ä‘Æ°á»£c táº¡o tá»± Ä‘á»™ng khi cáº­p nháº­t HÃ ng hÃ³a...",
+      "source_creator_name": "0947900909",
+      "created_by": {
+        "id": "user-uuid",
+        "name": "Văn Lâm"
+      }
     }
   ],
   "page": 1,
@@ -789,6 +811,13 @@ Query: `search`, `status`, `created_by`, `from`, `to`, `page`, `page_size`.
 ```
 
 CÃ¡c trÆ°á»ng giÃ¡ trá»‹ tá»•ng há»£p Ä‘Æ°á»£c hydrate tá»« `stocktake_items` vÃ  `products.latest_purchase_cost`. Náº¿u thiáº¿u giÃ¡ vá»‘n Ä‘á»ƒ tÃ­nh tiá»n, Backend tráº£ `null` cho `total_actual_value` hoáº·c `total_difference_value`; UI hiá»ƒn thá»‹ `ChÆ°a cÃ³`.
+
+Creator fields:
+
+- `source_creator_name` lưu raw `Người tạo` từ file KiotViet nếu file có cột này. Đây là dữ liệu audit/mapping, không phải nguồn người tạo thứ hai trong UI.
+- `created_by` là tài khoản QCVL đã map. Backend chỉ map `source_creator_name` sang QCVL user khi giá trị đó khớp `users.username` sau khi bỏ hậu tố `{DEL}`.
+- Không map theo `display_name`, `phone`, hoặc email. Danh sách hydrate `created_by.name` từ tài khoản hiện tại để đổi tên hiển thị/SĐT trong `/admin` được phản ánh lại.
+- Nếu có `source_creator_name` nhưng không map được tài khoản, UI hiển thị `Chưa khớp tài khoản`. Nếu file không có creator, UI hiển thị `Chưa có dữ liệu`.
 
 ### `POST /inventory/stocktakes/import/kiotviet/preview`
 
@@ -833,9 +862,10 @@ Import lịch sử kiểm kho KiotViet vào `stocktakes` và `stocktake_items`.
 - Upsert phiếu theo `(organization_id, source_system = 'kiotviet', source_code)`.
 - Upsert dòng theo dòng nguồn/line number.
 - Dòng mã hàng không khớp vẫn được lưu lịch sử với `product_id = null`.
+- Nếu file có `Người tạo`, lưu raw vào `stocktakes.source_creator_name` và map `stocktakes.created_by` chỉ theo QCVL `users.username` sau khi bỏ `{DEL}`.
 - Không insert `stock_movements`.
 - Không update `inventory_provisional_balances`.
-- Không thay tồn chính thức; muốn đổi tồn phải dùng flow cân bằng kho QCVL riêng.
+- Không thay tồn chính thức; muốn đổi tồn phải dùng chứng từ vận hành QCVL hoặc flow cân bằng kho QCVL riêng. Tồn KV chỉ dùng để đối chiếu với tồn tính từ `stock_movements`.
 
 ### `DELETE /inventory/stocktakes/import/kiotviet`
 
@@ -865,7 +895,31 @@ Chi tiáº¿t phiáº¿u kiá»ƒm kho vÃ  cÃ¡c dÃ²ng.
 
 **Permission:** `perm.manage_inventory`
 
-**Tráº¡ng thÃ¡i triá»ƒn khai hiá»‡n táº¡i:** tráº£ Ä‘áº§u phiáº¿u + cÃ¡c trÆ°á»ng tá»•ng há»£p giá»‘ng list. DÃ²ng chi tiáº¿t `stocktake_items` sáº½ bá»• sung khi lÃ m form táº¡o/sá»­a phiáº¿u thá»§ cÃ´ng.
+**Tráº¡ng thÃ¡i triá»ƒn khai hiá»‡n táº¡i:** tráº£ Ä‘áº§u phiáº¿u + cÃ¡c trÆ°á»ng tá»•ng há»£p giá»‘ng list + mảng `items` từ `stocktake_items`.
+
+`items` dùng cho ô chi tiết `/inventory`: mã hàng, tên hàng, đơn vị, tồn kho nguồn, thực tế, SL lệch, giá trị thực tế nếu có, giá trị lệch, ghi chú, và `product_id` để biết dòng đã khớp hàng hóa QCVL hay chưa. UI hiện tại chỉ hiển thị compact 5 cột `Mã hàng`, `Tên hàng`, `Tồn kho`, `Thực tế`, `SL lệch`; các trường còn lại giữ cho audit hoặc menu chọn cột sau này. UI chỉ hiển thị `Người tạo`/`Ngày tạo`; không hiển thị `Ngày cân bằng` hoặc `Người cân bằng`; không có hàng tìm/lọc trong bảng chi tiết.
+
+### `PATCH /inventory/stocktakes/{id}`
+
+Lưu ghi chú đầu phiếu kiểm kho hoặc hủy phiếu.
+
+Body:
+
+```json
+{
+  "note": "Ghi chú mới"
+}
+```
+
+Hoặc:
+
+```json
+{
+  "status": "cancelled"
+}
+```
+
+Response trả lại detail giống `GET /inventory/stocktakes/{id}`. Nếu `note` rỗng thì lưu `null`. Khi hủy, API đổi `stocktakes.status` sang `cancelled`, xóa thời điểm cân bằng phụ nếu có, không xóa `stocktake_items`, không ghi hoặc đảo `stock_movements`.
 
 ---
 

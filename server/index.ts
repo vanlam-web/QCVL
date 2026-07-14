@@ -3,15 +3,21 @@ import { resolve } from 'node:path'
 import { createPgRepository } from './db.js'
 import { createDevMemoryRepository } from './dev-memory-repository.js'
 import { createHttpHandler } from './http.js'
+import { databaseUrlFromEnv } from './runtime-config.js'
 import { getStaticResponse } from './static.js'
 
 const port = Number(process.env.PORT ?? '3100')
-const databaseUrl = process.env.DATABASE_URL
+const databaseUrl = databaseUrlFromEnv(process.env)
+const devMemoryStateFile = process.env.QCVL_DEV_MEMORY_STATE_FILE ?? resolve('logs/dev-memory-state.json')
 
 const repository = databaseUrl
   ? createPgRepository(databaseUrl)
-  : await createDevMemoryRepository()
-const handler = createHttpHandler({ repository, version: process.env.npm_package_version ?? 'dev' })
+  : await createDevMemoryRepository({ stateFile: devMemoryStateFile })
+const handler = createHttpHandler({
+  repository,
+  persistence: databaseUrl ? 'postgres' : 'memory',
+  version: process.env.npm_package_version ?? 'dev',
+})
 const staticRoot = resolve(process.env.STATIC_ROOT ?? 'dist')
 
 const server = createServer(async (request, response) => {

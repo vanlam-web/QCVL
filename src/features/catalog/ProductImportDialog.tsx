@@ -76,7 +76,6 @@ export function ProductImportDialog({
   }
 
   async function deleteOldData() {
-    if (!window.confirm('Xóa toàn bộ dữ liệu cũ của lần import KiotViet trên trang này?')) return
     setLoading(true)
     setError(null)
     setDeleteNotice(null)
@@ -104,6 +103,7 @@ export function ProductImportDialog({
       summaryItems={summaryItems}
       title="Import hàng hóa KiotViet"
       canImport={Boolean(file && preview && preview.invalid_rows.length === 0)}
+      deleteOldDataConfirmMessage="Xóa toàn bộ dữ liệu cũ của lần import KiotViet trên trang Hàng hóa?"
       onClose={onClose}
       onDeleteOldData={() => void deleteOldData()}
       onFileChange={(nextFile) => {
