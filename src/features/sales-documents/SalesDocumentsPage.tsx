@@ -223,7 +223,7 @@ export function SalesDocumentsPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [defaultPageSize, service])
 
   useEffect(() => {
     let active = true
@@ -757,6 +757,7 @@ export function SalesDocumentsPage({
                   items={sortedDocuments}
                   renderDetail={(document) => (
                     <SalesDocumentDetailView
+                      key={selected ? selected.id : `loading-${detailErrorDocumentId ?? loadingDocumentId ?? document.id}`}
                       document={selected}
                       editDisabled={openingQuoteId === document.id}
                       error={detailError}
@@ -855,10 +856,6 @@ function SalesDocumentDetailView({
   const paymentPanelId = `sales-document-${document?.id ?? 'loading'}-payment-panel`
   const hasPaymentHistory = Array.isArray(document?.payment_receipts) && document.payment_receipts.length > 0
   const selectedTab = hasPaymentHistory ? activeTab : 'info'
-
-  useEffect(() => {
-    setNote(document?.note ?? '')
-  }, [document?.id, document?.note])
 
   async function saveNote() {
     if (!document || !onSaveNote) return

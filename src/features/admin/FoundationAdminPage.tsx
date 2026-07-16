@@ -445,15 +445,16 @@ export function FoundationAdminPage({
     closeRoleDialog()
   }
 
-  const roleRows = useMemo<RoleListItem[]>(() => {
-    if (!state) return []
-    const builtInRoles = roleDefinitions.map((role) => ({
-      ...role,
-      status: 'active' as const,
-      userCount: state.users.filter((user) => userRoleLabel(user) === role.name).length,
-    }))
-    return [...builtInRoles, ...customRoles]
-  }, [customRoles, state])
+  const roleRows: RoleListItem[] = state
+    ? [
+        ...roleDefinitions.map((role) => ({
+          ...role,
+          status: 'active' as const,
+          userCount: state.users.filter((user) => userRoleLabel(user) === role.name).length,
+        })),
+        ...customRoles,
+      ]
+    : []
   const {
     sortedItems: sortedAdminUsers,
     sortState: adminUserSortState,

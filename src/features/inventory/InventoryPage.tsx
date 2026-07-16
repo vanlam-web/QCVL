@@ -828,6 +828,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                         {stocktakeDetailLoading ? <p>Đang tải chi tiết phiếu kiểm kho...</p> : null}
                         {!stocktakeDetailLoading && stocktakeDetail ? (
                           <StocktakeInlineDetail
+                            key={stocktakeDetail.id}
                             detail={stocktakeDetail}
                             onCancel={() => setStocktakeCancelOpen(true)}
                             onSaveNote={saveStocktakeDetailNote}
@@ -1239,10 +1240,6 @@ function StocktakeInlineDetail({
 }) {
   const [note, setNote] = useState(detail.note ?? '')
   const [saving, setSaving] = useState(false)
-
-  useEffect(() => {
-    setNote(detail.note ?? '')
-  }, [detail.id, detail.note])
 
   async function saveNote() {
     setSaving(true)

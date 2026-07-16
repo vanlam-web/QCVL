@@ -6,6 +6,8 @@ dist/
 dist-server/
 logs/
 .codex-logs/
+.tmp-*.log
+backups/
 
 deno.lock
 

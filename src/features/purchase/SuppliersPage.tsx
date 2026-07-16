@@ -316,11 +316,27 @@ export function SuppliersPage({
     await loadSuppliers({ page: nextPage })
   }
 
+  function closeSupplierDetail() {
+    setDetailOpen(false)
+    setViewingSupplier(null)
+    setSupplierDetailTab('info')
+    setPaymentSupplier(null)
+    setSupplierReceipts([])
+    setPayableReceipts([])
+    setPaymentAmounts({})
+    setEditingId(null)
+    setForm(blankForm)
+  }
+
   async function openSupplier(supplier: Supplier) {
     const isCurrentSupplierOpen =
       detailOpen &&
       (viewingSupplier?.id === supplier.id || editingId === supplier.id || paymentSupplier?.id === supplier.id)
-    if (isCurrentSupplierOpen || loadingSupplierId === supplier.id) return
+    if (loadingSupplierId === supplier.id) return
+    if (isCurrentSupplierOpen) {
+      closeSupplierDetail()
+      return
+    }
 
     setError(null)
     setDetailOpen(false)
@@ -842,7 +858,7 @@ export function SuppliersPage({
     )
   }
 
-  function supplierDetailLoading(_supplier: Supplier) {
+  function supplierDetailLoading() {
     return (
       <ManagementDetailPanel>
         <ManagementDetailInlineNote>Đang tải chi tiết nhà cung cấp...</ManagementDetailInlineNote>
@@ -1048,7 +1064,7 @@ export function SuppliersPage({
                     const loadingForRow = loadingSupplierId === supplier.id
                     if (!detailForRow && !loadingForRow) return null
                     return loadingForRow
-                      ? supplierDetailLoading(supplier)
+                      ? supplierDetailLoading()
                       : paymentSupplier?.id === supplier.id
                         ? supplierPaymentForm()
                         : supplierForm()

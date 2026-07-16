@@ -22,6 +22,7 @@ jobs:
       - run: npm test
       - run: npm run test:e2e:list
       - run: npm run build:all
+      - run: npm run verify:nas-build
       - name: Secret scan
         shell: bash
         run: |

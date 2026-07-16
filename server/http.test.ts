@@ -380,7 +380,7 @@ describe('createHttpHandler', () => {
             ...createdUsers,
           ]
         },
-        async createUser(input: unknown) {
+        async createUser() {
           createdUsers.push({
             id: 'user-cashier',
             email: 'cashier@example.test',

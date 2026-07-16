@@ -936,24 +936,37 @@
   display: grid;
   min-width: 0;
   min-height: 0;
-  align-content: space-between;
+  grid-template-rows: auto auto auto;
+  row-gap: 0.15rem;
+  align-content: start;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
   color: var(--color-text);
   max-width: 100%;
-  padding: 0.625rem 0.75rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
 }
 
+.product-grid button small,
 .product-grid button strong {
   min-width: 0;
   overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
   text-overflow: ellipsis;
-  white-space: normal;
+  line-height: 1.15;
+}
+
+.product-grid button small {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.product-grid button strong {
+  display: block;
+  white-space: nowrap;
 }
 
 .product-grid button span {
@@ -964,6 +977,7 @@
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.15;
 }
 
 .product-grid-footer {

@@ -171,9 +171,12 @@ export function PosShell({
   const valueInputMouseUpSelectRefs = useRef<Set<HTMLInputElement>>(new Set())
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? makeInvoiceTab(1)
   const cartLines = activeTab.cartLines
+  const resolveCartLineProduct = useCallback((line: CheckoutCartLine) => {
+    return products.find((product) => product.id === line.product.id || product.code === line.product.code) ?? line.product
+  }, [products])
   const layoutCartLines = useMemo(
     () => cartLines.map((line) => ({ ...line, product: resolveCartLineProduct(line) })),
-    [cartLines, products],
+    [cartLines, resolveCartLineProduct],
   )
   const selectedCustomer = activeTab.selectedCustomer
   const selectedCustomerId = selectedCustomer?.id
@@ -950,10 +953,6 @@ export function PosShell({
       )
     }
     return <strong className="pos-cart-line-unit">{product.unit_name}</strong>
-  }
-
-  function resolveCartLineProduct(line: CheckoutCartLine) {
-    return products.find((product) => product.id === line.product.id || product.code === line.product.code) ?? line.product
   }
 
   return (

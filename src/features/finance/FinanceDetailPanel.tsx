@@ -28,9 +28,10 @@ import type { CashbookEntryDetail } from './types'
 
 interface FinanceDetailPanelProps {
   detail: CashbookEntryDetail | null
+  onDeleteRequest?: (detail: CashbookEntryDetail) => void
 }
 
-export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
+export function FinanceDetailPanel({ detail, onDeleteRequest }: FinanceDetailPanelProps) {
   if (detail === null) return <p>Đang tải chi tiết...</p>
   const counterpartyLabel = cashbookDetailCounterpartyLabel(detail)
   const counterpartyText = cashbookDetailCounterpartyText(detail)
@@ -70,6 +71,7 @@ export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
             ariaLabel: `Xóa phiếu ${detail.code}`,
             danger: true,
             icon: <Trash2 aria-hidden="true" size={16} />,
+            onClick: () => onDeleteRequest?.(detail),
           },
         ]}
         rightActions={[

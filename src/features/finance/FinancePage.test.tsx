@@ -1124,6 +1124,46 @@ describe('FinancePage', () => {
     expect(within(detail).getByText('Giá trị chi')).toBeInTheDocument()
   })
 
+  it('opens shared delete confirmation from cashbook detail and cancels manual vouchers', async () => {
+    const service = makeService({
+      getCashbookEntry: vi.fn(async () => expenseCashbookDetail),
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 0, total_out: 6899000, ending_balance: -6799000 },
+        items: [expenseEntry],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+    })
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PCPN000679' }))
+    const detail = await screen.findByRole('region', { name: /PCPN000679/ })
+    await userEvent.click(within(detail).getByRole('button', { name: /Xóa phiếu PCPN000679/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Xóa phiếu PCPN000679/ })
+    expect(within(dialog).getByText(/hủy mềm/)).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
+
+    expect(service.cancelCashbookVoucher).toHaveBeenCalledWith('voucher-out-1')
+    expect(await screen.findByText(/Đã hủy phiếu PC000001/)).toBeInTheDocument()
+  })
+
+  it('does not cancel automatic cashbook entries from detail delete dialog', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PT0001' }))
+    const detail = await screen.findByRole('region', { name: /PT0001/ })
+    await userEvent.click(within(detail).getByRole('button', { name: /Xóa phiếu PT0001/ }))
+
+    const dialog = await screen.findByRole('dialog', { name: /Xóa phiếu PT0001/ })
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Đã hiểu' }))
+
+    expect(service.cancelCashbookVoucher).not.toHaveBeenCalled()
+    expect(await screen.findByText(/Chỉ xóa\/hủy được phiếu thu\/chi thủ công/)).toBeInTheDocument()
+  })
+
   it('hides linked document shell when the cashbook row has no linked document', async () => {
     const service = makeService({
       getCashbookEntry: vi.fn(async () => unallocatedExpenseDetail),

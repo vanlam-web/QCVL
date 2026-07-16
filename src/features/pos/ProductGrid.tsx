@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Product, ResolvedPrice } from '../catalog/types'
 import { formatMoney } from '../../lib/number-format'
 
@@ -76,10 +76,6 @@ export function ProductGrid({
     }
   }, [loading, products.length])
 
-  useEffect(() => {
-    setPage((current) => Math.min(current, totalPages))
-  }, [totalPages])
-
   if (loading) return <p>Đang tải sản phẩm...</p>
   if (products.length === 0) return <p>Chưa có sản phẩm đang bán.</p>
 
@@ -92,9 +88,10 @@ export function ProductGrid({
             <button
               key={product.id}
               type="button"
-              aria-label={`${product.name} ${formatMoney(price)}/${product.unit_name}`}
+              aria-label={`${product.code} ${product.name} ${formatMoney(price)}/${product.unit_name}`}
               onClick={() => onSelectProduct(product)}
             >
+              <small>{product.code}</small>
               <strong>{product.name}</strong>
               <span>{formatMoney(price)}/{product.unit_name}</span>
             </button>

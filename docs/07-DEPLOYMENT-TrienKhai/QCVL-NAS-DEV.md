@@ -11,6 +11,7 @@ Da build/copy batch POS/purchase/supplier/catalog UI tu local `3202` len NAS `32
 - `db:migrate` pass, khong co migration moi (`migrated: []`, `baseline_stamped: []`).
 - `health:nas` pass sau deploy: `persistence: "postgres"`, trace `a2fec157-a21e-4f75-b143-56ae45969c55`.
 - POS `Sản phẩm nhanh` da co gian theo man hinh/noi dung: panel hep 2 cot, panel rong 3 cot, so the moi trang tinh theo chieu cao thuc cua luoi.
+- POS `Sản phẩm nhanh` cap nhat local: moi the co 3 hang co dinh (ma hang, ten hang, gia/ĐVT), dong dai cat bang `...`. Chua deploy NAS trong project health hardening; chi verify NAS bundle build.
 - Khong restart `qcvl-app` vi chua co `QCVL_NAS_SSH_TARGET`; frontend build va source da copy, backend runtime chi chac chan nap server code moi sau restart.
 
 ## Latest NAS Deploy - 2026-07-15 Shared Detail UI Copy

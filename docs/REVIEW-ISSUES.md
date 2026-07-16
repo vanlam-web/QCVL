@@ -74,6 +74,14 @@ Issue khÃ´ng thay tháº¿ PR comments, implementation plan, hoáº·c Source 
 
 ---
 
+## Closed - 2026-07-16 Project Health Hardening
+
+- Lint debt da duoc xu ly de `npm run lint` pass.
+- Finance cashbook delete co regression test cho manual voucher va blocked automatic/imported entries.
+- POS product quick card accessible name da gom ma hang.
+- Local gate da thong nhat qua `verify:local`.
+- NAS bundle gate da thong nhat qua `verify:nas-build`.
+
 ## Format Report Back
 
 Luá»“ng phá»¥ trÃ¡ch report tháº³ng vá» Review khi Ä‘Ã£ xá»­ lÃ½, bá»‹ cháº·n, hoáº·c quyáº¿t Ä‘á»‹nh defer:

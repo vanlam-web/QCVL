@@ -5,6 +5,7 @@ import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementDateRangeInputs,
+  ManagementConfirmDialog,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
@@ -112,6 +113,21 @@ function cashbookColumnLabel(column: CashbookColumnKey) {
   return cashbookColumnDefinitions.find((definition) => definition.key === column)?.label ?? column
 }
 
+function financeAccountPayload(account: FinanceAccount): Omit<FinanceAccount, 'id'> {
+  return {
+    code: account.code,
+    name: account.name,
+    account_type: account.account_type,
+    is_default_cash: account.is_default_cash,
+    is_active: account.is_active,
+    account_number: account.account_number,
+    account_holder: account.account_holder,
+    opening_balance: account.opening_balance,
+    note: account.note,
+    notify_on_transaction: account.notify_on_transaction,
+  }
+}
+
 export function FinancePage({ service }: { service: FinanceService }) {
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -162,6 +178,8 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookSummary, setCashbookSummary] = useState({ opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 })
   const [selectedCashbookEntry, setSelectedCashbookEntry] = useState<CashbookEntry | null>(null)
   const [cashbookDetail, setCashbookDetail] = useState<CashbookEntryDetail | null>(null)
+  const [cashbookDeleteTarget, setCashbookDeleteTarget] = useState<CashbookEntryDetail | null>(null)
+  const [deletingCashbookEntry, setDeletingCashbookEntry] = useState(false)
   const [cashbookFavoriteIds, setCashbookFavoriteIds] = useState<string[]>(() => readCashbookFavoriteIds())
   const [showCashbookFavoritesOnly, setShowCashbookFavoritesOnly] = useState(false)
   const [cashbookImportOpen, setCashbookImportOpen] = useState(false)
@@ -331,6 +349,42 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
   }
 
+  const hydrateCashbookDetail = useCallback(async (detail: CashbookEntryDetail): Promise<CashbookEntryDetail> => {
+    if (detail.direction !== 'in') return detail
+    const documentCode = cashbookLinkedDocumentCode(detail)
+    if (documentCode === null || !documentCode.startsWith('HD')) return detail
+    const needsAllocationHydration = detail.allocations.length === 0
+    const needsCounterpartyHydration = !cashbookCounterpartyHasName(detail.counterparty)
+    if (!needsAllocationHydration && !needsCounterpartyHydration) return detail
+    const salesDocument = await service.getSalesDocumentByCode(documentCode)
+    if (salesDocument === null) return detail
+    const allocatedAmount = Math.abs(detail.amount_delta)
+    const salesDocumentCustomer = salesDocument.customer?.name.trim()
+      ? {
+          type: 'customer' as const,
+          name: salesDocument.customer.name,
+          phone: salesDocument.customer.phone,
+        }
+      : null
+    return {
+      ...detail,
+      counterparty: needsCounterpartyHydration && salesDocumentCustomer !== null
+        ? salesDocumentCustomer
+        : detail.counterparty,
+      source: { ...detail.source, order_code: salesDocument.code },
+      allocations: needsAllocationHydration
+        ? [{
+            order_id: salesDocument.id,
+            order_code: salesDocument.code,
+            order_total_amount: salesDocument.total_amount,
+            collected_before: Math.max(salesDocument.paid_amount - allocatedAmount, 0),
+            allocated_amount: allocatedAmount,
+            remaining_after: Math.max(salesDocument.debt_amount, 0),
+          }]
+        : detail.allocations,
+    }
+  }, [service])
+
   const hydrateCashbookCounterparties = useCallback(async (entries: CashbookEntry[]) => {
     const targets = entries.filter(cashbookEntryNeedsCounterpartyHydration)
     if (targets.length === 0) return
@@ -350,7 +404,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
       if (detail === undefined || cashbookCounterpartyHasName(item.counterparty)) return item
       return { ...item, counterparty: detail.counterparty }
     }) ?? current)
-  }, [service])
+  }, [hydrateCashbookDetail, service])
 
   async function loadCashbook(input: {
     search?: string
@@ -489,7 +543,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     return () => {
       active = false
     }
-  }, [hydrateCashbookCounterparties, service])
+  }, [defaultPageSize, hydrateCashbookCounterparties, service])
 
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyCashbookSearch(cashbookSearch))
@@ -600,7 +654,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
     if (editingBankAccountId !== null) {
       try {
-        const { id: _unusedId, ...patch } = nextAccount
+        const patch = financeAccountPayload(nextAccount)
         const updated = await service.updateFinanceAccount(editingBankAccountId, patch)
         setAccounts((current) => current.map((account) => account.id === editingBankAccountId ? updated : account))
         setBankAccountModalOpen(false)
@@ -610,7 +664,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
       return
     }
     try {
-      const { id: _unusedId, ...payload } = nextAccount
+      const payload = financeAccountPayload(nextAccount)
       const created = await service.createFinanceAccount(payload)
       setAccounts((current) => [...current, created])
       setCashbookFundMode('bank')
@@ -690,42 +744,6 @@ export function FinancePage({ service }: { service: FinanceService }) {
       setCashbookEntries((current) => current?.map((item) => (item.id === detail.id ? { ...item, ...detail } : item)) ?? current)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được chi tiết sổ quỹ.'))
-    }
-  }
-
-  async function hydrateCashbookDetail(detail: CashbookEntryDetail): Promise<CashbookEntryDetail> {
-    if (detail.direction !== 'in') return detail
-    const documentCode = cashbookLinkedDocumentCode(detail)
-    if (documentCode === null || !documentCode.startsWith('HD')) return detail
-    const needsAllocationHydration = detail.allocations.length === 0
-    const needsCounterpartyHydration = !cashbookCounterpartyHasName(detail.counterparty)
-    if (!needsAllocationHydration && !needsCounterpartyHydration) return detail
-    const salesDocument = await service.getSalesDocumentByCode(documentCode)
-    if (salesDocument === null) return detail
-    const allocatedAmount = Math.abs(detail.amount_delta)
-    const salesDocumentCustomer = salesDocument.customer?.name.trim()
-      ? {
-          type: 'customer' as const,
-          name: salesDocument.customer.name,
-          phone: salesDocument.customer.phone,
-        }
-      : null
-    return {
-      ...detail,
-      counterparty: needsCounterpartyHydration && salesDocumentCustomer !== null
-        ? salesDocumentCustomer
-        : detail.counterparty,
-      source: { ...detail.source, order_code: salesDocument.code },
-      allocations: needsAllocationHydration
-        ? [{
-            order_id: salesDocument.id,
-            order_code: salesDocument.code,
-            order_total_amount: salesDocument.total_amount,
-            collected_before: Math.max(salesDocument.paid_amount - allocatedAmount, 0),
-            allocated_amount: allocatedAmount,
-            remaining_after: Math.max(salesDocument.debt_amount, 0),
-          }]
-        : detail.allocations,
     }
   }
 
@@ -908,6 +926,35 @@ export function FinancePage({ service }: { service: FinanceService }) {
       await Promise.all([loadCashbook({ page: 1 }), loadReferenceData()])
     } catch (cause) {
       setError(formatApiError(cause, 'Không hủy được phiếu thu chi.'))
+    }
+  }
+
+  function canDeleteCashbookDetail(detail: CashbookEntryDetail) {
+    return detail.source.type === 'manual_voucher' && detail.status === 'posted'
+  }
+
+  async function confirmCashbookDelete() {
+    if (cashbookDeleteTarget === null) return
+    if (!canDeleteCashbookDetail(cashbookDeleteTarget)) {
+      setCashbookDeleteTarget(null)
+      setError('Chỉ xóa/hủy được phiếu thu/chi thủ công. Dữ liệu KiotViet hoặc phiếu tự động cần xử lý qua luồng import/chứng từ gốc.')
+      return
+    }
+
+    setDeletingCashbookEntry(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const result = await service.cancelCashbookVoucher(cashbookDeleteTarget.source.id)
+      setMessage(`Đã hủy phiếu ${result.code}.`)
+      setCashbookDeleteTarget(null)
+      setSelectedCashbookEntry(null)
+      setCashbookDetail(null)
+      await Promise.all([loadCashbook({ page: 1 }), loadReferenceData()])
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không hủy được phiếu thu chi.'))
+    } finally {
+      setDeletingCashbookEntry(false)
     }
   }
 
@@ -1667,7 +1714,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                       </tr>
                       {selectedCashbookEntry?.id === entry.id ? (
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>
-                          <FinanceDetailPanel detail={cashbookDetail} />
+                          <FinanceDetailPanel detail={cashbookDetail} onDeleteRequest={setCashbookDeleteTarget} />
                         </ManagementDetailRow>
                       ) : null}
                     </Fragment>
@@ -1741,6 +1788,20 @@ export function FinancePage({ service }: { service: FinanceService }) {
         )}
       </ManagementListSurface>
       ) : null}
+      <ManagementConfirmDialog
+        cancelLabel="Bỏ qua"
+        confirmLabel={cashbookDeleteTarget && canDeleteCashbookDetail(cashbookDeleteTarget) ? 'Xóa' : 'Đã hiểu'}
+        loading={deletingCashbookEntry}
+        message={
+          cashbookDeleteTarget && canDeleteCashbookDetail(cashbookDeleteTarget)
+            ? `Phiếu ${cashbookDeleteTarget.code} sẽ được hủy mềm, không xóa vật lý khỏi sổ quỹ.`
+            : 'Chỉ xóa/hủy được phiếu thu/chi thủ công. Dữ liệu KiotViet hoặc phiếu tự động cần xử lý qua luồng import/chứng từ gốc.'
+        }
+        open={cashbookDeleteTarget !== null}
+        title={cashbookDeleteTarget ? `Xóa phiếu ${cashbookDeleteTarget.code}` : 'Xóa phiếu'}
+        onCancel={() => setCashbookDeleteTarget(null)}
+        onConfirm={() => void confirmCashbookDelete()}
+      />
     </ManagementPage>
   )
 }

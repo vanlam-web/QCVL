@@ -404,7 +404,7 @@ it('opens supplier detail in view mode before editing and saves inactive status'
   expect(service.updateSupplier).toHaveBeenCalledWith('supplier-1', expect.objectContaining({ status: 'inactive' }))
 })
 
-it('keeps supplier detail open when clicking the selected supplier row again', async () => {
+it('closes supplier detail when clicking the selected supplier row again', async () => {
   const service = makeService()
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
@@ -414,9 +414,23 @@ it('keeps supplier detail open when clicking the selected supplier row again', a
 
   await openSupplierDetail()
 
-  expect(screen.getByText('NCC cũng là khách hàng')).toBeInTheDocument()
+  expect(screen.queryByText('NCC cũng là khách hàng')).not.toBeInTheDocument()
   expect(service.getSupplier).toHaveBeenCalledTimes(1)
-  expect(screen.getByRole('button', { name: 'NCC000031' }).closest('tr')).toHaveClass('management-data-row-selected')
+  expect(screen.getByRole('button', { name: 'NCC000031' }).closest('tr')).not.toHaveClass('management-data-row-selected')
+})
+
+it('clears supplier payment draft when closing the selected row', async () => {
+  const service = makeService()
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openSupplierPaymentFromDetail()
+  expect(await screen.findByRole('button', { name: 'Lưu thanh toán NCC' })).toBeInTheDocument()
+
+  await openSupplierDetail()
+
+  expect(screen.queryByRole('button', { name: 'Lưu thanh toán NCC' })).not.toBeInTheDocument()
+  expect(screen.getByText('NCC cũng là khách hàng')).toBeInTheDocument()
 })
 
 it('shows history and debt only for the current supplier', async () => {

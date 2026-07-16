@@ -13,6 +13,8 @@
     "build:all": "npm run build && npm run api:build",
     "build:nas": "node scripts/build-nas.mjs",
     "verify:nas-bundle": "node scripts/verify-nas-bundle.mjs",
+    "verify:nas-build": "npm run build:nas && npm run verify:nas-bundle",
+    "verify:local": "npm run lint && npm run typecheck && npm test && npm run build:all",
     "health:nas": "node scripts/health-nas.mjs",
     "deploy:nas": "node scripts/deploy-nas.mjs",
     "import:dev-memory-to-postgres": "tsx scripts/import-dev-memory-state-to-postgres.ts",

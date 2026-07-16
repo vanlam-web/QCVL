@@ -146,7 +146,7 @@ describe('finance-service', () => {
     }
     const service = createFinanceService({ request })
 
-    await (service as any).createFinanceAccount({
+    await service.createFinanceAccount({
       code: 'VCB',
       name: 'Vietcombank',
       account_type: 'bank',
@@ -157,7 +157,7 @@ describe('finance-service', () => {
       opening_balance: 0,
       notify_on_transaction: true,
     })
-    await (service as any).updateFinanceAccount('bank-1', { is_active: false })
+    await service.updateFinanceAccount('bank-1', { is_active: false })
 
     expect(calls).toEqual([
       [

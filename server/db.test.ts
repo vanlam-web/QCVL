@@ -13,6 +13,27 @@ vi.mock('pg', () => ({
   default: { Pool: pgMock.Pool },
 }))
 
+type InventoryAdjustmentRepository = {
+  adjustNormalProductStock?: (input: {
+    organizationId: string
+    productId: string
+    actualQty: number
+    reason: string
+    createdBy: { id: string; name: string }
+  }) => Promise<unknown>
+  createMaterialOpening?: (input: {
+    organizationId: string
+    input: {
+      product_id: string
+      inventory_shape: 'normal' | 'roll' | 'sheet'
+      opened_unit_id?: string
+      opened_qty?: number
+      old_remaining_qty?: number
+      note?: string
+    }
+  }) => Promise<unknown>
+}
+
 describe('createPgRepository product units', () => {
   beforeEach(() => {
     pgMock.Pool.mockClear()
@@ -451,7 +472,7 @@ describe('createPgRepository product units', () => {
 
   test('writes PostgreSQL stock movements from imported KiotViet purchase receipts', async () => {
     const { createPgRepository } = await import('./db')
-    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from supplier_snapshots')) return { rows: [{ data: { id: 'supplier-1', code: 'NCC001', name: 'NCC test' } }], rowCount: 1 }
       if (sql.includes('from products p') && sql.includes('product_unit_conversions puc')) {
         return {
@@ -542,7 +563,7 @@ describe('createPgRepository product units', () => {
 
   test('writes PostgreSQL stock movements from imported KiotViet invoices', async () => {
     const { createPgRepository } = await import('./db')
-    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from customer_snapshots')) return { rows: [{ data: { id: 'customer-1', code: 'KH001', name: 'Khach test', phone: null } }], rowCount: 1 }
       if (sql.includes('from products p') && sql.includes('product_unit_conversions puc')) {
         return {
@@ -750,8 +771,8 @@ describe('createPgRepository product units', () => {
       return { rows: [], rowCount: 0 }
     })
 
-    const repository = createPgRepository('postgres://unit-test')
-    const result = await (repository as any).adjustNormalProductStock?.({
+    const repository = createPgRepository('postgres://unit-test') as InventoryAdjustmentRepository
+    const result = await repository.adjustNormalProductStock?.({
       organizationId: '11111111-1111-1111-1111-111111111111',
       productId: 'product-adjust',
       actualQty: 10,
@@ -800,8 +821,8 @@ describe('createPgRepository product units', () => {
       return { rows: [], rowCount: 0 }
     })
 
-    const repository = createPgRepository('postgres://unit-test')
-    const result = await (repository as any).createMaterialOpening?.({
+    const repository = createPgRepository('postgres://unit-test') as InventoryAdjustmentRepository
+    const result = await repository.createMaterialOpening?.({
       organizationId: '11111111-1111-1111-1111-111111111111',
       input: {
         product_id: 'product-normal',

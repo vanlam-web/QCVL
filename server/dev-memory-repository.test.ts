@@ -3,6 +3,14 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { createDevMemoryRepository } from './dev-memory-repository'
+import type { ServerRepository } from './http'
+
+type DevMemoryRepository = Awaited<ReturnType<typeof createDevMemoryRepository>>
+type DevMemoryRepositoryWithHelpers = DevMemoryRepository & {
+  createFinanceAccount: NonNullable<ServerRepository['createFinanceAccount']>
+  updateFinanceAccount: NonNullable<ServerRepository['updateFinanceAccount']>
+  listCustomers: NonNullable<ServerRepository['listCustomers']>
+}
 
 describe('createDevMemoryRepository persistence', () => {
   it('filters sales documents by the displayed source date instead of shifting UTC into local date', async () => {
@@ -119,7 +127,7 @@ describe('createDevMemoryRepository persistence', () => {
   it('hydrates cashbook finance account from the current bank account record', async () => {
     const repository = await createDevMemoryRepository()
 
-    await (repository as any).createFinanceAccount({
+    await (repository as DevMemoryRepositoryWithHelpers).createFinanceAccount({
       organizationId: 'org-dev-memory',
       account: {
         id: 'bank-kv-0947900909',
@@ -196,7 +204,7 @@ describe('createDevMemoryRepository persistence', () => {
   it('excludes replaced deleted bank accounts from broad bank cashbook filters', async () => {
     const repository = await createDevMemoryRepository()
 
-    await (repository as any).createFinanceAccount({
+    await (repository as DevMemoryRepositoryWithHelpers).createFinanceAccount({
       organizationId: 'org-dev-memory',
       account: {
         id: 'bank-active-successor',
@@ -212,7 +220,7 @@ describe('createDevMemoryRepository persistence', () => {
         notify_on_transaction: true,
       },
     })
-    const deletedAccount = await (repository as any).createFinanceAccount({
+    const deletedAccount = await (repository as DevMemoryRepositoryWithHelpers).createFinanceAccount({
       organizationId: 'org-dev-memory',
       account: {
         id: 'bank-deleted',
@@ -359,7 +367,7 @@ describe('createDevMemoryRepository persistence', () => {
   it('soft deletes finance accounts without removing them from the repository', async () => {
     const repository = await createDevMemoryRepository()
 
-    const created = await (repository as any).createFinanceAccount({
+    const created = await (repository as DevMemoryRepositoryWithHelpers).createFinanceAccount({
       organizationId: 'org-dev-memory',
       account: {
         code: 'VCB',
@@ -374,7 +382,7 @@ describe('createDevMemoryRepository persistence', () => {
         notify_on_transaction: true,
       },
     })
-    const updated = await (repository as any).updateFinanceAccount({
+    const updated = await (repository as DevMemoryRepositoryWithHelpers).updateFinanceAccount({
       organizationId: 'org-dev-memory',
       id: created.id,
       patch: { is_active: false },
@@ -2058,7 +2066,7 @@ describe('createDevMemoryRepository persistence', () => {
       await first.close()
 
       const restarted = await createDevMemoryRepository({ stateFile })
-      const customers = await (restarted as any).listCustomers({
+      const customers = await (restarted as DevMemoryRepositoryWithHelpers).listCustomers({
         organizationId: 'org-dev-memory',
         url: new URL('http://api.local/api/v1/customers?search=KH-PERSIST'),
       })
@@ -2135,7 +2143,7 @@ describe('createDevMemoryRepository persistence', () => {
       })
 
       const result = await repository.deleteImportedKiotVietCustomers?.({ organizationId: 'org-dev-memory' })
-      const customers = await (repository as any).listCustomers({
+      const customers = await (repository as DevMemoryRepositoryWithHelpers).listCustomers({
         organizationId: 'org-dev-memory',
         url: new URL('http://api.local/api/v1/customers?page=1&page_size=100'),
       })

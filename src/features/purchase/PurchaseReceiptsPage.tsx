@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
@@ -409,7 +409,6 @@ export function PurchaseReceiptsPage({
 
     const search = receiptProductSearch.trim()
     if (search.length === 0) {
-      setReceiptProductCatalogSearchResult({ search: '', products: [] })
       return undefined
     }
 
@@ -505,7 +504,7 @@ export function PurchaseReceiptsPage({
     }
   }, [defaultPageSize, service])
 
-  async function ensureReceiptLookupsLoaded() {
+  const ensureReceiptLookupsLoaded = useCallback(async () => {
     const requests: Promise<void>[] = []
     let nextSuppliers = suppliers
     let nextProducts = products
@@ -525,7 +524,7 @@ export function PurchaseReceiptsPage({
     }
     await Promise.all(requests)
     return { suppliers: nextSuppliers, products: nextProducts }
-  }
+  }, [products, productsLoaded, service, suppliers, suppliersLoaded])
 
   useEffect(() => {
     if (receiptCreateDraftRestoredRef.current) return
@@ -562,7 +561,7 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [])
+  }, [ensureReceiptLookupsLoaded])
 
   useEffect(() => {
     if (!isCreatingReceipt) return
