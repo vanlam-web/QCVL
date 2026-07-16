@@ -112,7 +112,7 @@ export function cashbookDetailAccountLabel(entry: CashbookEntryDetail) {
 }
 
 export function cashbookDetailCreatorText(entry: CashbookEntryDetail) {
-  return entry.source.source_creator_name ?? entry.created_by.name
+  return entry.source.source_creator_name ?? entry.created_by?.name ?? '-'
 }
 
 export function cashbookDetailCategoryText(entry: CashbookEntryDetail) {
@@ -121,8 +121,8 @@ export function cashbookDetailCategoryText(entry: CashbookEntryDetail) {
 
 export function cashbookDetailCounterpartyText(entry: CashbookEntryDetail) {
   return [
-    entry.counterparty.name,
-    entry.counterparty.phone,
+    entry.counterparty?.name,
+    entry.counterparty?.phone,
     entry.source.counterparty_address,
   ].filter((value) => value != null && value.trim().length > 0).join(', ') || '-'
 }

@@ -7,6 +7,8 @@ import {
   cashbookDetailPrimaryStatusText,
   cashbookDetailPrimaryStatusTone,
   cashbookDetailPaymentMethodText,
+  cashbookDetailCreatorText,
+  cashbookDetailCounterpartyText,
   cashbookLinkedDocumentCode,
   cashbookLinkedDocumentMessage,
   cashbookLinkedDocumentRows,
@@ -92,6 +94,26 @@ describe('finance presenter', () => {
   it('shows the concrete bank and account number for bank cashbook payment method', () => {
     expect(cashbookDetailPaymentMethodText(receiptEntry)).toBe('MBBank: 0947900909')
     expect(cashbookDetailPaymentMethodText({ ...receiptEntry, payment_method: 'cash', finance_account: { ...receiptEntry.finance_account, account_type: 'cash' } })).toBe('Tiền mặt')
+  })
+
+  it('shows a dash when imported cashbook detail has no counterparty payload', () => {
+    const importedDetail = {
+      ...receiptEntry,
+      counterparty: null,
+      source: { ...receiptEntry.source, counterparty_address: null },
+    } as unknown as CashbookEntryDetail
+
+    expect(cashbookDetailCounterpartyText(importedDetail)).toBe('-')
+  })
+
+  it('shows a dash when imported cashbook detail has no creator payload', () => {
+    const importedDetail = {
+      ...receiptEntry,
+      created_by: null,
+      source: { ...receiptEntry.source, source_creator_name: null },
+    } as unknown as CashbookEntryDetail
+
+    expect(cashbookDetailCreatorText(importedDetail)).toBe('-')
   })
 
   it('builds linked document display rows from allocations', () => {
