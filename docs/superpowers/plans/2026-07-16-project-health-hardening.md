@@ -8,7 +8,7 @@
 
 **Tech Stack:** React 19, Vite 8, TypeScript 6, ESLint 10, react-hooks compiler lint, Vitest, Playwright, GitHub Actions, Node 22.
 
-**Execution Status - 2026-07-16:** Implemented. `npm run verify:local` passed with 79 test files and 551 tests. `npm run verify:nas-build` passed and only built/verified NAS bundle. No NAS deploy. No commit unless user asks.
+**Execution Status - 2026-07-16:** Implemented and committed as `ca05a84`. `npm run verify:local` passed with 79 test files and 551 tests. `npm run verify:nas-build` passed and only built/verified NAS bundle. Follow-up deploy-copy to NAS happened after plan completion with `QCVL_NAS_RESTART=false`; health trace `03587c69-ef05-450d-b74f-46a1553d45c2`.
 
 ---
 
