@@ -1,4 +1,4 @@
-# 01-K03A-DOI-TAC.md — K03-A: HỒ SƠ ĐỐI TÁC & BỘ LỌC GIÁ
+﻿# 01-K03A-DOI-TAC.md — K03-A: HỒ SƠ ĐỐI TÁC & BỘ LỌC GIÁ
 
 > **Phần:** 2.1
 > **Trở về:** [01-POS-LAYOUT.md](../01-POS-LAYOUT.md)
@@ -23,11 +23,11 @@
 |---|---|---|
 | **Tìm/Chọn KH** | Tìm kiếm và chọn khách hàng đã có trong hệ thống theo SĐT, tên khách hàng hoặc mã khách hàng. Hỗ trợ tìm không dấu. | `F4` |
 | **[+] Thêm nhanh KH** | Mở form thêm nhanh khách mới ngay trong POS. Thông tin tối thiểu: mã khách hàng và tên khách hàng; SĐT không bắt buộc. Sau khi tạo xong, tự gán khách vào tab hóa đơn đang active. | — |
-| **Bảng giá** | Dropdown chọn bảng giá theo tên cho khách hàng đã chọn. Nếu khách không được gán bảng giá thì dùng Bảng giá chung. Tự động tính lại Thành tiền trong K02-A khi đổi bảng giá. | — |
+| **Bảng giá** | Dropdown chọn bảng giá theo tên cho khách hàng đã chọn. Nếu khách không được gán bảng giá thì dùng Giá chung. Tự động tính lại Thành tiền trong K02-A khi đổi bảng giá. | — |
 | **Chiết khấu** | Hiển thị riêng phần trăm chiết khấu nếu chính sách giá đang áp dụng có chiết khấu. | — |
 | **Công nợ và doanh thu** | Hiển thị tóm tắt dư nợ hiện tại và tổng doanh thu của khách đã chọn. | — |
 | **Chi tiết KH đã chọn** | Nhấp vào khách hàng đã chọn để mở bảng chi tiết hồ sơ, lịch sử bán hàng và dư nợ. | — |
-| **Bỏ chọn KH** | Reset UI về trạng thái Khách lẻ và áp Bảng giá chung; khi lưu chứng từ backend vẫn gán vào `khachle - Khách lẻ` | — |
+| **Bỏ chọn KH** | Reset UI về trạng thái Khách lẻ và áp Giá chung; khi lưu chứng từ backend vẫn gán vào `khachle - Khách lẻ` | — |
 
 ---
 
@@ -54,8 +54,8 @@
 - Khi chọn khách, hệ thống gắn khách vào tab hóa đơn đang active.
 - Cảnh báo bổ sung thông tin khách hàng chỉ được kiểm tra khi người dùng chọn khách hàng đã tồn tại; không tự bật khi người dùng chỉ đứng yên ở màn hình POS.
 - Nếu tab đang active đã có hàng, khi chọn hoặc đổi khách thì hệ thống tự cập nhật lại giá và chiết khấu theo dữ liệu của khách vừa chọn, đồng thời hiện thông báo ngắn. Chỉ các dòng đang dùng giá tự động được tính lại; dòng đã sửa giá thủ công được giữ nguyên và có dấu hiệu nhận biết. Số lượng, kích thước và ghi chú của các dòng hàng được giữ nguyên.
-- Khi bỏ chọn khách, các dòng đang dùng giá tự động được tính lại theo Bảng giá chung; dòng đã sửa giá thủ công được giữ nguyên.
-- Nếu khách hàng không được gán bảng giá thì áp dụng Bảng giá chung.
+- Khi bỏ chọn khách, các dòng đang dùng giá tự động được tính lại theo Giá chung; dòng đã sửa giá thủ công được giữ nguyên.
+- Nếu khách hàng không được gán bảng giá thì áp dụng Giá chung.
 - Tab hóa đơn có thể ở trạng thái chưa chọn khách; khách có thể được chọn sau khi đã có hàng trong giỏ.
 - Khi tab hóa đơn ở trạng thái chưa chọn khách và người dùng lưu báo giá/thanh toán, payload/backend phải tạo chứng từ với `customer_id` của khách mã `khachle`, không để `customer_id = null`.
 - Nút `[+]` cạnh ô tìm khách dùng để thêm nhanh khách mới trong POS.

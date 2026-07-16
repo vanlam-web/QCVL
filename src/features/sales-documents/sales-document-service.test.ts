@@ -53,3 +53,16 @@ it('cancels a sales document with status cancelled', async () => {
     body: JSON.stringify({ status: 'cancelled' }),
   })
 })
+
+it('updates a sales document note', async () => {
+  const request = vi.fn(async () => ({ id: 'order-1', note: 'Ghi chú mới' }))
+  const api = { request: request as unknown as SalesDocumentApiRequester['request'] }
+  const service = createSalesDocumentService(api)
+
+  await service.updateSalesDocumentNote('order-1', { note: 'Ghi chú mới' })
+
+  expect(request).toHaveBeenCalledWith('/api/v1/sales-documents/order-1', {
+    method: 'PATCH',
+    body: JSON.stringify({ note: 'Ghi chú mới' }),
+  })
+})

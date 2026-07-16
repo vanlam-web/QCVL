@@ -31,6 +31,7 @@ export interface KiotVietImportProductRow {
     is_default_sale_unit: boolean
   }>
   sale_price: number | null
+  price_list_prices: Array<{ price_list_name: string; unit_price: number }>
   provisional_stock: number | null
   bom_text: string | null
   expected_out_of_stock_text: string | null
@@ -90,6 +91,9 @@ export function mapKiotVietProductRows(rows: KiotVietRawProductRow[]) {
     const shapeAndMethod = shapeAndMethodForKind(productKind)
     const validUnitName = unitName ?? 'Cần cập nhật'
 
+    const priceListPrices = priceListPricesFromRow(row)
+    const defaultPriceListPrice = priceListPrices.find((price) => isDefaultPriceListName(price.price_list_name))?.unit_price ?? null
+
     valid.push({
       rowNumber: row.rowNumber,
       code: code as string,
@@ -104,7 +108,8 @@ export function mapKiotVietProductRows(rows: KiotVietRawProductRow[]) {
       latest_purchase_cost: number(valueByHeader(row, 'Giá vốn')),
       status: number(valueByHeader(row, 'Đang kinh doanh')) === 0 ? 'inactive' : 'active',
       unit_conversions: conversionsByProductCode.get(code as string) ?? [],
-      sale_price: number(valueByHeader(row, 'Giá bán')),
+      sale_price: number(valueByHeader(row, 'Giá bán')) ?? defaultPriceListPrice,
+      price_list_prices: priceListPrices,
       provisional_stock: number(valueByHeader(row, 'Tồn kho')),
       bom_text: bomText,
       expected_out_of_stock_text: text(valueByHeader(row, 'Dự kiến hết hàng')),
@@ -184,6 +189,11 @@ export interface ProductImportRepository {
     organizationId: string
     priceListId: string
     rows: Array<{ product_code: string; unit_price: number }>
+  }): Promise<{ created: number; updated: number; skipped: number }>
+  upsertPriceListItemsByName?(input: {
+    organizationId: string
+    defaultPriceListId: string | null
+    rows: Array<{ product_code: string; price_list_name: string; unit_price: number }>
   }): Promise<{ created: number; updated: number; skipped: number }>
   upsertProvisionalStockBalances?(input: {
     organizationId: string
@@ -283,7 +293,14 @@ export async function applyKiotVietProductImport(input: ProductImportInput) {
   }
   const defaultPriceList = await input.repository.findDefaultPriceList?.({ organizationId: input.organizationId }) ?? null
   const priceRows = priceImportRows(input.rows)
-  const priceUpsert = defaultPriceList && input.repository.upsertDefaultPriceListItems
+  const namedPriceRows = namedPriceImportRows(input.rows)
+  const priceUpsert = input.repository.upsertPriceListItemsByName
+    ? await input.repository.upsertPriceListItemsByName({
+        organizationId: input.organizationId,
+        defaultPriceListId: defaultPriceList?.id ?? null,
+        rows: namedPriceRows,
+      })
+    : defaultPriceList && input.repository.upsertDefaultPriceListItems
     ? await input.repository.upsertDefaultPriceListItems({
         organizationId: input.organizationId,
         priceListId: defaultPriceList.id,
@@ -335,6 +352,79 @@ function priceImportRows(rows: KiotVietImportProductRow[]) {
   return rows
     .filter((row) => row.sale_price !== null && row.sale_price > 0)
     .map((row) => ({ product_code: row.code, unit_price: row.sale_price as number }))
+}
+
+function namedPriceImportRows(rows: KiotVietImportProductRow[]) {
+  return rows.flatMap((row) => {
+    const prices = row.price_list_prices ?? []
+    if (prices.length > 0) {
+      return prices.map((price) => ({ product_code: row.code, ...price }))
+    }
+    return row.sale_price !== null && row.sale_price > 0
+      ? [{ product_code: row.code, price_list_name: 'Bảng giá chung', unit_price: row.sale_price }]
+      : []
+  })
+}
+
+function priceListPricesFromRow(row: KiotVietRawProductRow) {
+  const prices: Array<{ price_list_name: string; unit_price: number }> = []
+  for (const key of Object.keys(row)) {
+    if (key === 'rowNumber' || !isPriceListColumn(key)) continue
+    const unitPrice = number(row[key])
+    if (unitPrice === null || unitPrice <= 0) continue
+    prices.push({ price_list_name: normalizePriceListName(key), unit_price: unitPrice })
+  }
+  return prices.sort(comparePriceListNames)
+}
+
+const nonPriceListHeaders = new Set([
+  'ma hang',
+  'ma san pham',
+  'sku',
+  'ten hang',
+  'ten san pham',
+  'dvt',
+  'don vi tinh',
+  'ma dvt co ban',
+  'nhom hang',
+  'ton kho',
+  'gia von',
+  'gia nhap cuoi',
+  'dang kinh doanh',
+  'loai hang',
+  'hang thanh phan',
+  'vat tu cau thanh',
+  'du kien het hang',
+  'thoi gian tao',
+  'thuong hieu',
+  'ton nho nhat',
+  'ton lon nhat',
+  'duoc ban truc tiep',
+  'vi tri',
+  'quy doi',
+])
+
+function isPriceListColumn(header: string) {
+  const normalized = normalizeKiotVietHeader(header)
+  return normalized.length > 0 && !nonPriceListHeaders.has(normalized) && normalized !== 'gia ban'
+}
+
+function normalizePriceListName(header: string) {
+  return header.trim()
+}
+
+function isDefaultPriceListName(name: string) {
+  return normalizeKiotVietHeader(name) === normalizeKiotVietHeader('Bảng giá chung')
+}
+
+function comparePriceListNames(left: { price_list_name: string }, right: { price_list_name: string }) {
+  const leftDefault = isDefaultPriceListName(left.price_list_name)
+  const rightDefault = isDefaultPriceListName(right.price_list_name)
+  if (leftDefault !== rightDefault) return leftDefault ? -1 : 1
+  const leftNumber = Number(left.price_list_name)
+  const rightNumber = Number(right.price_list_name)
+  if (Number.isFinite(leftNumber) && Number.isFinite(rightNumber)) return leftNumber - rightNumber
+  return left.price_list_name.localeCompare(right.price_list_name, 'vi')
 }
 
 function provisionalStockImportRows(rows: KiotVietImportProductRow[]) {

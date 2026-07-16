@@ -13,6 +13,7 @@ Nguyên tắc:
 - Ưu tiên CSS dùng chung trước: `management-*`, `account-menu-*`, `button`, `status-chip`, modal/table/filter shared.
 - CSS riêng theo trang chỉ giữ layout đặc thù. Không tạo lại màu, font, radius, shadow, active state khi đã có rule chung.
 - Không dùng Supabase trong UI/API/runtime. QCVL dùng Node API + PostgreSQL.
+- Theme mặc định là tối; lần mở sau phải giữ theme người dùng đã chọn.
 
 ## 2. AppShell desktop
 
@@ -75,6 +76,39 @@ Quy chuẩn:
 - Nếu không có kết quả sau khi đã gọi tìm, bảng/list chính hiển thị empty state của trang.
 
 POS được phép dùng shared search nhưng vẫn giữ hành vi riêng của F3 và dropdown kết quả; không ép POS theo quy tắc live-search back-office.
+
+## 4.1. Detail shell chung
+
+Detail view của các trang quản trị dùng cùng bộ shell:
+
+- `ManagementDetailPanel` cho khung ngoài.
+- `ManagementDetailHeader` cho header tiêu đề/hành động.
+- `ManagementDetailSummary` cho tên + mã + meta line.
+- `ManagementDetailSection` cho từng tab/panel.
+- `ManagementDetailInfoList` cho grid label/value; nếu một ô không đủ một dòng thì toàn grid của detail đó chuyển sang label trên, value dưới.
+- `ManagementDetailCard` cho cụm thông tin phụ riêng.
+- `ManagementDetailInlineNote` cho ghi chú readonly.
+- `ManagementDetailNote` cho ghi chú readonly có fallback + icon.
+- `ManagementDetailNoteInput` cho textarea ghi chú sửa nhanh.
+
+Quy ước note:
+
+- `ManagementDetailNote` dùng `Chưa có ghi chú` làm fallback mặc định.
+- Ghi chú readonly phải dùng shell chung, không tự viết `<p>` riêng nếu cùng kiểu trình bày.
+- Ghi chú sửa nhanh phải dùng `ManagementDetailNoteInput`, không dựng textarea thô cho từng trang.
+
+## 4.2. Page size theo viewport
+
+List footer chính của các trang quản trị dùng chung dải page size: `15, 20, 25, 30, 50, 100`.
+
+Quy ước mặc định:
+
+- Màn laptop/desktop nhỏ: `15`.
+- Desktop trung bình: `20`.
+- Desktop rộng: `25`.
+- Màn rất rộng: `30`.
+
+Các trang quản trị dùng helper chung để chọn mặc định theo chiều rộng màn hình, không hard-code riêng từng module. Bảng phụ trong detail như lịch sử/thẻ kho có thể giữ page size nghiệp vụ riêng nếu không dùng footer list chính.
 
 ## 5. Button và icon
 
@@ -140,6 +174,25 @@ Danh sách quản lý dùng:
 - `management-table-footer`
 - `management-filter-*`
 - `management-compact-search`
+- `ManagementChipPicker` + `useChipSelection` cho bộ lọc chọn nhiều giá trị dạng thẻ.
+
+Quy tac chip picker shared:
+
+- Dung cho filter co danh sach chon nhieu nhu bang gia, nhom, tai khoan, nguoi tao hoac cac bo loc tag tuong tu.
+- Moi gia tri da chon la mot the rieng, co nut `x` de bo chon neu nghiep vu cho phep.
+- `initialSelectedIds` chi dung de chon mac dinh luc dau; khong khoa gia tri. Neu can khoa that thi dung `lockedSelectedIds` ro rang.
+- Bam/focus vao o chip picker thi mo dropdown; go chu trong o de loc nhanh lua chon.
+- Khong hien nut `+N khac` nhu action chon them. Dau `+N` chi dung cho truong hop collapse chip vi thieu chieu ngang, neu sau nay can.
+- Khong dung nut mui ten dropdown rieng trong o; toan bo o la vung mo dropdown.
+- Component chi quan ly UI state chon/bo/loc text. Query API, nghiep vu default va mapping du lieu phai nam o page/service/helper cua feature.
+
+Quy tac table shared:
+
+- Header sticky chi ap dung cho table cap 1 trong viewport: `.management-table-viewport > table > thead th`.
+- Khong viet selector rong `.management-list-surface thead th`; expanded detail table nam trong row chi tiet phai de header `static` de khong chong noi dung khi cuon.
+- Detail table trong inline detail dung chung token table nhung khong tu bien thanh sticky header.
+- Detail table dang `ma + ten + cac cot so` phai dung `management-detail-table management-detail-lines-table`. Pattern nay giu ma/ten canh trai, cac cot so tu cot 3 canh phai, header/value khong bi wrap; ap dung cho dong hang hoa, dong kiem kho va cac detail tuong tu.
+- Detail table lien ket chung tu/tien phai dung `management-detail-table management-detail-linked-table` khi can cot co width co dinh va canh theo tieu de.
 
 Trang riêng chỉ thêm class khi cần bố cục đặc thù.
 

@@ -1,5 +1,6 @@
 import { mkdir, readFile, copyFile } from 'node:fs/promises'
 import { existsSync, readFileSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import pg from 'pg'
@@ -14,6 +15,8 @@ interface DevMemoryState {
   version: 1
   products?: Array<Entry<ProductListData>>
   defaultSalePrices?: Array<[string, number]>
+  priceListNames?: Array<[string, { id: string; name: string }]>
+  namedSalePrices?: Array<[string, Array<[string, number]>]>
   provisionalStockBalances?: Array<[string, { quantity: number; unit_name: string; source_label: string | null }]>
   draftBoms?: Array<[string, unknown]>
   stocktakeItems?: Array<[string, Array<[number, unknown]>]>
@@ -65,6 +68,23 @@ function mapValues<T>(entries: Array<Entry<T>> | undefined) {
 
 function flattenRows(entries: Array<[string, Array<[number, unknown]>]> | undefined) {
   return (entries ?? []).flatMap(([, rows]) => rows.map(([, row]) => row))
+}
+
+export function flattenNamedSalePriceRows(entries: Array<[string, Array<[string, number]>]> | undefined) {
+  return (entries ?? []).flatMap(([priceListName, rows]) => rows.map(([productCode, unitPrice]) => ({
+    product_code: productCode,
+    price_list_name: priceListName,
+    unit_price: unitPrice,
+  })))
+}
+
+export function devMemoryProductCodeFromId(productId: string | null | undefined) {
+  const match = /^product-(.+?)(?:-del)?$/i.exec(String(productId ?? '').trim())
+  return match ? match[1].toUpperCase() : null
+}
+
+export function remapImportedOrderItemProductId(productId: string, idsByDevProductId: Map<string, string>) {
+  return idsByDevProductId.get(productId) ?? productId
 }
 
 export function financeAccountsFromState(state: Pick<DevMemoryState, 'financeAccounts' | 'cashbookEntries'>) {
@@ -203,7 +223,61 @@ async function ensureSalesTables(repo: ReturnType<typeof createPgRepository>, or
   await repo.listSalesDocuments?.({ organizationId, url: new URL('http://api.local/api/v1/sales-documents') })
 }
 
-async function upsertSalesDocument(pool: pg.Pool, organizationId: string, document: SalesDocumentData) {
+async function ensureDefaultPriceList(pool: pg.Pool, repo: ReturnType<typeof createPgRepository>, organizationId: string) {
+  const existing = await repo.findDefaultPriceList?.({ organizationId })
+  if (existing) return existing
+
+  await repo.listPriceLists?.({ organizationId })
+  const result = await pool.query(
+    `
+      insert into price_lists (id, organization_id, code, name, is_default, is_active, created_at, updated_at)
+      values ($1, $2, 'DEFAULT', 'Bang gia le', true, true, now(), now())
+      on conflict (organization_id, code)
+      do update set
+        name = excluded.name,
+        is_default = true,
+        is_active = true,
+        updated_at = now()
+      returning id::text, name
+    `,
+    [randomUUID(), organizationId],
+  )
+  return { id: String(result.rows[0].id), name: String(result.rows[0].name) }
+}
+
+async function loadProductIdsByDevMemoryId(pool: pg.Pool, organizationId: string, products: ProductListData[]) {
+  const codeByDevProductId = new Map<string, string>()
+  for (const product of products) {
+    const legacyCode = devMemoryProductCodeFromId(product.id)
+    if (!legacyCode) continue
+    codeByDevProductId.set(product.id, legacyCode.toLowerCase())
+  }
+  if (codeByDevProductId.size === 0) return new Map<string, string>()
+
+  const result = await pool.query(
+    `
+      select id::text, lower(code) as code_key
+      from products
+      where organization_id = $1
+        and lower(code) = any($2::text[])
+    `,
+    [organizationId, [...new Set(codeByDevProductId.values())]],
+  )
+  const idByCode = new Map(result.rows.map((row) => [String(row.code_key), String(row.id)]))
+  const idsByDevProductId = new Map<string, string>()
+  for (const [devProductId, codeKey] of codeByDevProductId) {
+    const productId = idByCode.get(codeKey)
+    if (productId) idsByDevProductId.set(devProductId, productId)
+  }
+  return idsByDevProductId
+}
+
+function importedOrderItemSnapshot(item: SalesDocumentData['items'][number], productId: string) {
+  if (item.product_id === productId) return item
+  return { ...item, product_id: productId, source_product_id: item.product_id }
+}
+
+async function upsertSalesDocument(pool: pg.Pool, organizationId: string, document: SalesDocumentData, idsByDevProductId = new Map<string, string>()) {
   await pool.query(
     `
       insert into orders (
@@ -249,6 +323,7 @@ async function upsertSalesDocument(pool: pg.Pool, organizationId: string, docume
   )
   await pool.query('delete from order_items where organization_id = $1 and order_id = $2', [organizationId, document.id])
   for (const [index, item] of document.items.entries()) {
+    const productId = remapImportedOrderItemProductId(item.product_id, idsByDevProductId)
     await pool.query(
       `
         insert into order_items (organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order)
@@ -257,8 +332,8 @@ async function upsertSalesDocument(pool: pg.Pool, organizationId: string, docume
       [
         organizationId,
         document.id,
-        item.product_id,
-        JSON.stringify(item),
+        productId,
+        JSON.stringify(importedOrderItemSnapshot(item, productId)),
         'quantity' in item && typeof item.quantity === 'number' ? item.quantity : 0,
         'unit_price' in item && typeof item.unit_price === 'number' ? item.unit_price : 0,
         'discount_amount' in item && typeof item.discount_amount === 'number' ? item.discount_amount : 0,
@@ -282,7 +357,47 @@ function chunks<T>(items: T[], size: number) {
   return result
 }
 
-async function upsertSalesDocuments(pool: pg.Pool, organizationId: string, documents: SalesDocumentData[]) {
+async function refreshPosProductUsageFromOrders(pool: pg.Pool, organizationId: string) {
+  await pool.query(`
+    create table if not exists pos_product_usage (
+      organization_id uuid not null references organizations(id) on delete cascade,
+      product_id text not null,
+      usage_count integer not null default 0 check (usage_count >= 0),
+      updated_at timestamptz not null default now(),
+      primary key (organization_id, product_id)
+    )
+  `)
+  await pool.query('create index if not exists pos_product_usage_rank_idx on pos_product_usage (organization_id, usage_count desc, product_id)')
+  await pool.query('delete from pos_product_usage where organization_id = $1', [organizationId])
+  await pool.query(
+    `
+      insert into pos_product_usage (organization_id, product_id, usage_count, updated_at)
+      select
+        oi.organization_id,
+        p.id::text,
+        count(*)::integer,
+        now()
+      from order_items oi
+      join orders o on o.organization_id = oi.organization_id and o.id = oi.order_id
+      join products p on p.organization_id = oi.organization_id
+        and (
+          p.id::text = oi.product_id
+          or (
+            oi.product_id ~* '^product-.+'
+            and lower(p.code) = regexp_replace(regexp_replace(lower(oi.product_id), '^product-', ''), '-del$', '')
+          )
+        )
+      where oi.organization_id = $1
+        and o.order_type in ('invoice', 'quote')
+      group by oi.organization_id, p.id
+      on conflict (organization_id, product_id)
+      do update set usage_count = excluded.usage_count, updated_at = now()
+    `,
+    [organizationId],
+  )
+}
+
+async function upsertSalesDocuments(pool: pg.Pool, organizationId: string, documents: SalesDocumentData[], idsByDevProductId = new Map<string, string>()) {
   if (documents.length === 0) return
   await pool.query('begin')
   try {
@@ -342,17 +457,20 @@ async function upsertSalesDocuments(pool: pg.Pool, organizationId: string, docum
 
     const items = documents.flatMap((document) => document.items.map((item, index) => ({ document, item, index })))
     for (const batch of chunks(items, 1000)) {
-      const values = batch.flatMap(({ document, item, index }) => [
-        organizationId,
-        document.id,
-        item.product_id,
-        JSON.stringify(item),
-        'quantity' in item && typeof item.quantity === 'number' ? item.quantity : 0,
-        'unit_price' in item && typeof item.unit_price === 'number' ? item.unit_price : 0,
-        'discount_amount' in item && typeof item.discount_amount === 'number' ? item.discount_amount : 0,
-        'line_total' in item && typeof item.line_total === 'number' ? item.line_total : 0,
-        index + 1,
-      ])
+      const values = batch.flatMap(({ document, item, index }) => {
+        const productId = remapImportedOrderItemProductId(item.product_id, idsByDevProductId)
+        return [
+          organizationId,
+          document.id,
+          productId,
+          JSON.stringify(importedOrderItemSnapshot(item, productId)),
+          'quantity' in item && typeof item.quantity === 'number' ? item.quantity : 0,
+          'unit_price' in item && typeof item.unit_price === 'number' ? item.unit_price : 0,
+          'discount_amount' in item && typeof item.discount_amount === 'number' ? item.discount_amount : 0,
+          'line_total' in item && typeof item.line_total === 'number' ? item.line_total : 0,
+          index + 1,
+        ]
+      })
       await pool.query(
         `
           insert into order_items (
@@ -369,6 +487,7 @@ async function upsertSalesDocuments(pool: pg.Pool, organizationId: string, docum
     await pool.query('rollback')
     throw error
   }
+  await refreshPosProductUsageFromOrders(pool, organizationId)
 }
 
 async function upsertFinanceAccounts(pool: pg.Pool, organizationId: string, accounts: FinanceAccountData[]) {
@@ -521,7 +640,7 @@ async function main() {
       })),
     })
 
-    const priceList = await repo.findDefaultPriceList?.({ organizationId })
+    const priceList = await ensureDefaultPriceList(pool, repo, organizationId)
     if (priceList) {
       await repo.upsertDefaultPriceListItems?.({
         organizationId,
@@ -529,6 +648,11 @@ async function main() {
         rows: (state.defaultSalePrices ?? []).map(([productCode, unitPrice]) => ({ product_code: productCode, unit_price: unitPrice })),
       })
     }
+    await repo.upsertPriceListItemsByName?.({
+      organizationId,
+      defaultPriceListId: priceList?.id ?? null,
+      rows: flattenNamedSalePriceRows(state.namedSalePrices),
+    })
     await repo.upsertProvisionalStockBalances?.({
       organizationId,
       rows: (state.provisionalStockBalances ?? []).map(([productCode, value]) => ({
@@ -540,6 +664,7 @@ async function main() {
     })
     await repo.upsertDraftProductBoms?.({ organizationId, rows: mapValues(state.draftBoms as Array<Entry<never>> | undefined) })
     await repo.upsertImportedKiotVietStocktakes?.({ organizationId, createdBy: null, rows: flattenRows(state.stocktakeItems) as never[] })
+    const idsByDevProductId = await loadProductIdsByDevMemoryId(pool, organizationId, products)
 
     for (const customer of mapValues(state.customers)) {
       await upsertSnapshot(pool, 'customer_snapshots', organizationId, customer.id, customer.code, customer, customer.created_at)
@@ -552,7 +677,7 @@ async function main() {
     }
 
     await ensureSalesTables(repo, organizationId)
-    await upsertSalesDocuments(pool, organizationId, mapValues(state.salesDocuments))
+    await upsertSalesDocuments(pool, organizationId, mapValues(state.salesDocuments), idsByDevProductId)
     await upsertFinanceAccounts(pool, organizationId, financeAccountsFromState(state))
     await upsertCashbookEntries(pool, organizationId, cashbookEntriesFromState(state))
 

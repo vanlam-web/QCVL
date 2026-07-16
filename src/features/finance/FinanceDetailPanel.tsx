@@ -1,15 +1,21 @@
 import { Edit3, Printer, StickyNote, Trash2 } from 'lucide-react'
-import { ManagementDetailActionFooter, ManagementTableViewport } from '../../components/ui-shell/management-layout'
+import {
+  ManagementDetailActionFooter,
+  ManagementDetailHeader,
+  ManagementDetailInfoList,
+  ManagementDetailInlineNote,
+  ManagementDetailPanel,
+  ManagementInlineDetailTabs,
+  ManagementTableViewport,
+} from '../../components/ui-shell/management-layout'
 import { MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
-  cashbookDetailAccountLabel,
-  cashbookDetailAccountText,
   cashbookDetailAmountLabel,
   cashbookDetailCategoryText,
   cashbookDetailCounterpartyLabel,
   cashbookDetailCounterpartyText,
-  cashbookDetailCounterpartyTypeLabel,
   cashbookDetailCreatorText,
+  cashbookDetailPaymentMethodText,
   cashbookDetailNoteText,
   cashbookDetailPrimaryStatusText,
   cashbookDetailPrimaryStatusTone,
@@ -17,7 +23,6 @@ import {
   cashbookLinkedDocumentMessage,
   cashbookLinkedDocumentRows,
   financeDateText,
-  paymentMethodText,
 } from './finance-presenter'
 import type { CashbookEntryDetail } from './types'
 
@@ -27,45 +32,37 @@ interface FinanceDetailPanelProps {
 
 export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
   if (detail === null) return <p>Đang tải chi tiết...</p>
+  const counterpartyLabel = cashbookDetailCounterpartyLabel(detail)
+  const counterpartyText = cashbookDetailCounterpartyText(detail)
 
   return (
-    <div className="management-detail-panel finance-cashbook-detail">
-      <div className="inline-detail-tabbar">
-        <div className="inline-detail-tabs" role="tablist" aria-label="Chi tiết phiếu">
-          <button aria-selected="true" role="tab" type="button">Thông tin</button>
-        </div>
-      </div>
-      <header className="management-detail-header">
-        <h2>{cashbookDetailTitle(detail)}</h2>
+    <ManagementDetailPanel>
+      <ManagementInlineDetailTabs
+        activeKey="info"
+        ariaLabel="Chi tiết phiếu"
+        tabs={[{ key: 'info', label: 'Thông tin' }]}
+      />
+      <ManagementDetailHeader title={cashbookDetailTitle(detail)}>
         <StatusChip tone={cashbookDetailPrimaryStatusTone(detail)}>{cashbookDetailPrimaryStatusText(detail)}</StatusChip>
         <StatusChip tone={detail.is_business_accounted ? 'info' : 'warning'}>
           {detail.is_business_accounted ? 'Có hạch toán' : 'Không hạch toán'}
         </StatusChip>
-      </header>
-      <dl className="management-detail-meta-grid management-detail-meta-grid-four">
-        <div><dt>Người tạo:</dt><dd>{cashbookDetailCreatorText(detail)}</dd></div>
-        <div><dt>Thời gian:</dt><dd>{financeDateText(detail.created_at)}</dd></div>
-        <div><dt>Số tiền</dt><dd><MoneyText value={detail.amount_delta} /></dd></div>
-        <div><dt>{cashbookDetailAmountLabel(detail)}</dt><dd>{cashbookDetailCategoryText(detail)}</dd></div>
-        <div><dt>{detail.direction === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'}</dt><dd>{cashbookDetailCounterpartyTypeLabel(detail)}</dd></div>
-        <div><dt>Phương thức thanh toán</dt><dd>{paymentMethodText(detail.payment_method)}</dd></div>
-      </dl>
-      <dl className="management-detail-meta-rows">
-        <div>
-          <dt>{cashbookDetailCounterpartyLabel(detail)}</dt>
-          <dd>
-            <button aria-label={`${cashbookDetailCounterpartyLabel(detail)} ${detail.counterparty.name ?? '-'}`} className="finance-cashbook-detail-link" type="button">
-              {cashbookDetailCounterpartyText(detail)}
-            </button>
-          </dd>
-        </div>
-        <div><dt>{cashbookDetailAccountLabel(detail)}</dt><dd>{cashbookDetailAccountText(detail)}</dd></div>
-      </dl>
+      </ManagementDetailHeader>
+      <ManagementDetailInfoList
+        columns="three"
+        items={[
+          { label: 'Người tạo:', value: cashbookDetailCreatorText(detail) },
+          { label: 'Thời gian:', value: financeDateText(detail.created_at) },
+          { label: 'Số tiền', value: <MoneyText value={detail.amount_delta} /> },
+          { label: cashbookDetailAmountLabel(detail), value: cashbookDetailCategoryText(detail) },
+          { label: 'Phương thức thanh toán', value: cashbookDetailPaymentMethodText(detail) },
+          { label: counterpartyLabel, value: counterpartyText },
+        ]}
+      />
       <CashbookLinkedDocuments entry={detail} />
-      <div className="management-detail-inline-note">
-        <StickyNote aria-hidden="true" size={16} />
+      <ManagementDetailInlineNote icon={<StickyNote aria-hidden="true" size={16} />}>
         {cashbookDetailNoteText(detail)}
-      </div>
+      </ManagementDetailInlineNote>
       <ManagementDetailActionFooter
         leftActions={[
           {
@@ -88,7 +85,7 @@ export function FinanceDetailPanel({ detail }: FinanceDetailPanelProps) {
           },
         ]}
       />
-    </div>
+    </ManagementDetailPanel>
   )
 }
 
@@ -101,7 +98,7 @@ function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
       <div className="finance-cashbook-linked-documents-inner">
         <p>{cashbookLinkedDocumentMessage(entry)}</p>
         <ManagementTableViewport>
-          <table aria-label="Chứng từ liên kết" className="management-table">
+          <table aria-label="Chứng từ liên kết" className="management-table management-detail-table management-detail-linked-table finance-cashbook-linked-documents-table">
             <thead>
               <tr>
                 <th>Mã chứng từ</th>

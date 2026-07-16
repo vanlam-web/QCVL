@@ -22,10 +22,7 @@ export function PosCartPanel({
   return (
     <section aria-label="K02 giỏ hàng" className="pos-cart">
       {hasLines ? children : (
-        <div className="pos-cart-empty">
-          <strong>Chưa có hàng hóa</strong>
-          <span>Tìm hoặc chọn hàng để thêm vào hóa đơn.</span>
-        </div>
+        <div className="pos-cart-empty" aria-hidden="true" />
       )}
       <footer className="pos-cart-footer" aria-label="Ghi chú và tổng tiền">
         <label className="pos-cart-note">

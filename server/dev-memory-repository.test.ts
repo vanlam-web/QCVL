@@ -116,6 +116,83 @@ describe('createDevMemoryRepository persistence', () => {
     expect(bankEntries?.map((entry) => entry.code).sort()).toEqual(['PT-BANK-A', 'PT-BANK-B'])
   })
 
+  it('hydrates cashbook finance account from the current bank account record', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await (repository as any).createFinanceAccount({
+      organizationId: 'org-dev-memory',
+      account: {
+        id: 'bank-kv-0947900909',
+        code: 'MBBank',
+        name: 'MBBank',
+        account_type: 'bank',
+        is_default_cash: false,
+        is_active: true,
+        account_number: '0947900909',
+        account_holder: 'VAN VIET PHUONG LAM',
+        opening_balance: 0,
+        note: null,
+        notify_on_transaction: true,
+      },
+    })
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: {
+        id: 'order-cashbook-account-hydration',
+        code: 'HD-CASHBOOK-ACCOUNT-HYDRATION',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-13T08:00:00.000Z',
+        customer: { id: 'customer-cashbook-account-hydration', code: 'KHTEST', name: 'Khach test', phone: null },
+        seller: { id: 'admin', name: 'Admin' },
+        subtotal_amount: 0,
+        discount_amount: 0,
+        total_amount: 0,
+        paid_amount: 0,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [],
+      },
+      cashbookEntries: [
+        {
+          id: 'cashbook-bank-current-account',
+          code: 'TTHD011149',
+          status: 'posted',
+          direction: 'in',
+          amount_delta: 220000,
+          finance_account: { id: 'bank-kv-0947900909', code: '0947900909', name: 'van viet phuong lam', account_type: 'bank' },
+          is_business_accounted: true,
+          source_type: 'kiotviet_cashbook',
+          created_at: '2026-07-13T08:01:00.000Z',
+          note: '',
+          counterparty: { type: 'other', name: '', phone: null },
+        },
+      ],
+    })
+
+    const detail = await repository.getCashbookEntry?.({
+      organizationId: 'org-dev-memory',
+      id: 'cashbook-bank-current-account',
+    })
+    const items = await repository.listCashbookEntries?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/finance/cashbook?search=TTHD011149&page=1&page_size=10'),
+    })
+
+    expect(detail?.finance_account).toEqual(expect.objectContaining({
+      code: '0947900909',
+      name: 'MBBank',
+      account_number: '0947900909',
+      account_holder: 'VAN VIET PHUONG LAM',
+    }))
+    expect(items?.[0]?.finance_account).toEqual(expect.objectContaining({
+      code: '0947900909',
+      name: 'MBBank',
+      account_number: '0947900909',
+    }))
+  })
+
   it('excludes replaced deleted bank accounts from broad bank cashbook filters', async () => {
     const repository = await createDevMemoryRepository()
 
@@ -396,6 +473,127 @@ describe('createDevMemoryRepository persistence', () => {
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
+  })
+
+  it('persists imported price lists and deletes imported products without crashing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
+    const stateFile = join(dir, 'state.json')
+
+    try {
+      const repository = await createDevMemoryRepository({ stateFile })
+      await repository.upsertProductsByCode?.({
+        organizationId: 'org-dev-memory',
+        rows: [
+          {
+            rowNumber: 2,
+            code: 'PRICE-PERSIST',
+            name: 'Hang co bang gia',
+            product_group_name: null,
+            product_group_id: null,
+            product_kind: 'goods',
+            inventory_shape: 'normal',
+            sell_method: 'quantity',
+            track_inventory: true,
+            unit_name: 'Cai',
+            latest_purchase_cost: 1000,
+            status: 'active',
+            unit_conversions: [],
+            sale_price: null,
+            provisional_stock: null,
+            bom_text: null,
+            source_created_at: null,
+            ignored: {
+              brand: null,
+              min_stock: null,
+              max_stock: null,
+              direct_sale: null,
+              location: null,
+            },
+          },
+        ],
+      })
+      await repository.upsertPriceListItemsByName?.({
+        organizationId: 'org-dev-memory',
+        rows: [
+          {
+            rowNumber: 2,
+            product_code: 'PRICE-PERSIST',
+            price_list_name: '25',
+            unit_price: 25000,
+          },
+        ],
+      })
+
+      const persisted = JSON.parse(await readFile(stateFile, 'utf8'))
+      const result = await repository.deleteImportedKiotVietProducts?.({ organizationId: 'org-dev-memory' })
+      await repository.close()
+      const afterDelete = JSON.parse(await readFile(stateFile, 'utf8'))
+
+      expect(persisted.priceListNames).toEqual(expect.arrayContaining([
+        ['25', expect.objectContaining({ name: '25' })],
+      ]))
+      expect(persisted.namedSalePrices).toEqual(expect.arrayContaining([
+        ['25', [['PRICE-PERSIST', 25000]]],
+      ]))
+      expect(result).toEqual({ deleted: 1, blocked: 0 })
+      expect(afterDelete.priceListNames).toEqual(expect.arrayContaining([
+        ['25', expect.objectContaining({ name: '25' })],
+      ]))
+      expect(afterDelete.namedSalePrices).toEqual([])
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('keeps existing product unit conversions when an import row has none', async () => {
+    const repository = await createDevMemoryRepository()
+
+    const baseRow = {
+      code: 'F5',
+      name: 'Fomex 5mm',
+      status: 'active' as const,
+      product_group_id: null,
+      unit_name: 'Tấm',
+      sell_method: 'quantity' as const,
+      product_kind: 'goods' as const,
+      inventory_shape: 'normal' as const,
+      track_inventory: true,
+      latest_purchase_cost: 126000,
+      source_created_at: null,
+      source: {} as never,
+    }
+
+    await repository.upsertProductsByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [{
+        ...baseRow,
+        unit_conversions: [{
+          source_code: '5mm Tấc',
+          unit_name: 'Tấc',
+          stock_qty_per_unit: 0.05,
+          is_default_purchase_unit: true,
+          is_default_sale_unit: false,
+        }],
+      }],
+    })
+
+    await repository.upsertProductsByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [{ ...baseRow, latest_purchase_cost: 130000, unit_conversions: [] }],
+    })
+
+    const products = await repository.listProducts?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/products?search=F5&status=all'),
+    })
+
+    expect(products?.find((product) => product.code === 'F5')?.unit_conversions).toEqual([{
+      source_code: '5mm Tấc',
+      unit_name: 'Tấc',
+      stock_qty_per_unit: 0.05,
+      is_default_purchase_unit: true,
+      is_default_sale_unit: false,
+    }])
   })
 
   it('matches KiotViet unit-conversion source codes to the parent product in dev memory', async () => {
@@ -2004,6 +2202,96 @@ describe('createDevMemoryRepository persistence', () => {
     }
   })
 
+  it('links exact-matching customer and supplier imports and keeps the link after restart', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
+    const stateFile = join(dir, 'state.json')
+
+    try {
+      const first = await createDevMemoryRepository({ stateFile })
+      await first.upsertCustomersByCode?.({
+        organizationId: 'org-dev-memory',
+        rows: [
+          {
+            rowNumber: 2,
+            code: 'UT',
+            name: 'Út Tèo',
+            phone: null,
+            email: null,
+            address: 'Triệu Phong',
+            area_name: null,
+            ward_name: null,
+            tax_code: null,
+            customer_group_name: null,
+            customer_group_id: null,
+            note: null,
+            customer_type: 'individual',
+            company_name: null,
+            source_creator_name: null,
+            source_created_at: null,
+            last_transaction_at: null,
+            kiotviet_current_debt: null,
+            kiotviet_total_sales: null,
+            kiotviet_net_sales: null,
+            status: 'active',
+          },
+        ],
+      })
+      await first.upsertSuppliersByCode?.({
+        organizationId: 'org-dev-memory',
+        rows: [
+          {
+            rowNumber: 2,
+            code: 'NCC000035',
+            name: 'Út Tèo',
+            phone: null,
+            email: null,
+            address: 'Triệu Phong',
+            area_name: null,
+            ward_name: null,
+            tax_code: null,
+            note: null,
+            company_name: null,
+            source_creator_name: null,
+            source_created_at: null,
+            status: 'active',
+            kiotviet_current_payable: null,
+            kiotviet_total_purchase: null,
+            kiotviet_net_purchase: null,
+          },
+        ],
+      })
+      const linkedCustomers = await first.listCustomers?.({
+        organizationId: 'org-dev-memory',
+        url: new URL('http://api.local/api/v1/customers?page=1&page_size=100'),
+      })
+      await first.close()
+
+      const restarted = await createDevMemoryRepository({ stateFile })
+      const restartedCustomers = await restarted.listCustomers?.({
+        organizationId: 'org-dev-memory',
+        url: new URL('http://api.local/api/v1/customers?page=1&page_size=100'),
+      })
+      await restarted.close()
+
+      expect(linkedCustomers?.[0]).toEqual(expect.objectContaining({
+        code: 'UT',
+        linked_supplier: expect.objectContaining({
+          code: 'NCC000035',
+          name: 'Út Tèo',
+        }),
+      }))
+      expect(restartedCustomers?.[0]).toEqual(expect.objectContaining({
+        code: 'UT',
+        linked_supplier: expect.objectContaining({
+          code: 'NCC000035',
+          name: 'Út Tèo',
+        }),
+      }))
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('deletes old imported KiotViet supplier rows', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
     const stateFile = join(dir, 'state.json')
@@ -2639,5 +2927,97 @@ describe('createDevMemoryRepository persistence', () => {
     expect(cashbook?.find((entry) => entry.code === 'PCPN000685')?.allocations?.map((allocation) => [allocation.order_code, allocation.allocated_amount])).toEqual([
       ['PN000685', 90000],
     ])
+  })
+
+  test('filters imported purchase receipts by supplier code when supplier id differs', async () => {
+    const repository = await createDevMemoryRepository()
+    await repository.upsertProductsByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [{
+        rowNumber: 2,
+        code: 'HH000001',
+        name: 'Hàng test',
+        product_group_name: null,
+        product_group_id: null,
+        product_kind: 'goods',
+        inventory_shape: 'normal',
+        sell_method: 'quantity',
+        track_inventory: true,
+        unit_name: 'Cái',
+        latest_purchase_cost: 2010000,
+        status: 'active',
+        unit_conversions: [],
+        sale_price: null,
+        provisional_stock: null,
+        bom_text: null,
+        source_created_at: null,
+        ignored: { brand: null, min_stock: null, max_stock: null, direct_sale: null, location: null },
+      }],
+    })
+    await repository.upsertSuppliersByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [{
+        rowNumber: 2,
+        code: 'NCC000038',
+        name: 'O Hoa',
+        phone: null,
+        email: null,
+        address: null,
+        area_name: null,
+        ward_name: null,
+        tax_code: null,
+        note: null,
+        company_name: null,
+        source_creator_name: null,
+        source_created_at: null,
+        status: 'active',
+        kiotviet_current_payable: null,
+        kiotviet_total_purchase: null,
+        kiotviet_net_purchase: null,
+      }],
+    })
+    await repository.upsertImportedKiotVietPurchaseReceipts?.({
+      organizationId: 'org-dev-memory',
+      rows: [{
+        rowNumber: 2,
+        source_code: 'PN000502',
+        received_at: '2025-12-20T10:49:00.000Z',
+        source_created_at: null,
+        updated_at: null,
+        supplier_code: 'NCC000038',
+        supplier_name: 'O Hoa',
+        supplier_phone: null,
+        supplier_address: null,
+        received_by_name: null,
+        source_creator_name: 'Nguyễn Thị Bích Nương',
+        subtotal_amount: 2010000,
+        receipt_discount_amount: 0,
+        payable_amount: 2010000,
+        paid_amount: 2010000,
+        note: null,
+        supplier_document_no: null,
+        total_quantity: 1,
+        total_item_count: 1,
+        status: 'posted',
+        product_code: 'HH000001',
+        product_name: 'Hàng test',
+        brand_name: null,
+        unit_name: 'Cái',
+        product_note: null,
+        list_unit_cost: null,
+        line_discount_percent: null,
+        line_discount_amount: 0,
+        unit_cost: 2010000,
+        quantity: 1,
+        line_total: 2010000,
+      }],
+    })
+
+    const receipts = await repository.listPurchaseReceipts?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/purchase/receipts?supplier_id=internal-id-that-does-not-match&supplier_code=NCC000038&status=posted&page=1&page_size=100'),
+    })
+
+    expect(receipts?.map((receipt) => receipt.code)).toEqual(['PN000502'])
   })
 })

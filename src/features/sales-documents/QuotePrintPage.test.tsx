@@ -78,6 +78,7 @@ function makeService(detail: SalesDocumentDetail = quoteDetail): SalesDocumentSe
     importKiotVietInvoices: vi.fn(),
     deleteImportedKiotVietInvoices: vi.fn(),
     cancelSalesDocument: vi.fn(),
+    updateSalesDocumentNote: vi.fn(),
   }
 }
 

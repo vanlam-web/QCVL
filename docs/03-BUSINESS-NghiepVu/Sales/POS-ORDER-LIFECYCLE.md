@@ -1,4 +1,4 @@
-# POS-ORDER-LIFECYCLE — Vòng đời đơn hàng POS
+﻿# POS-ORDER-LIFECYCLE — Vòng đời đơn hàng POS
 
 > **Vai trò:** Source of Truth nghiệp vụ cho trạng thái đơn hàng POS.
 
@@ -113,7 +113,7 @@ Khi lưu báo giá, hệ thống lưu snapshot dữ liệu tại thời điểm 
 - đơn vị bán và cách tính bán
 - số lượng, kích thước hoặc mét tới nếu có
 - đơn giá đã áp dụng
-- nguồn giá: bảng giá chung, bảng giá nhóm, fallback hoặc giá sửa tay
+- nguồn giá: giá chung, bảng giá nhóm, fallback hoặc giá sửa tay
 - ghi chú dòng và ghi chú đơn
 - thành tiền dòng và tổng tiền báo giá
 

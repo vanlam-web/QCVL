@@ -7,6 +7,7 @@ import type { InventoryService } from '../inventory/inventory-service'
 import type { OrderService } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
 import { saveQuoteReopenPayload } from './quote-draft-handoff'
+import { posDraftStorageKey } from './pos-core'
 
 function makeCatalogService(overrides: Partial<CatalogService> = {}): CatalogService {
   return {
@@ -200,6 +201,8 @@ it('renders POS landmarks, profile identity, and active product grid', async () 
   expect(within(screen.getByLabelText('K01 tiện ích')).getByRole('button', { name: 'Khui vật tư' })).toBeEnabled()
   const cartWorkspace = screen.getByLabelText('K02 giỏ hàng')
   const salesWorkspace = screen.getByLabelText('K03 sản phẩm')
+  expect(within(cartWorkspace).queryByText('Chưa có hàng hóa')).not.toBeInTheDocument()
+  expect(within(cartWorkspace).queryByText('Tìm hoặc chọn hàng để thêm vào hóa đơn.')).not.toBeInTheDocument()
   expect(within(cartWorkspace).queryByLabelText('Khách hàng')).not.toBeInTheDocument()
   expect(within(cartWorkspace).queryByLabelText('K02-D hàng đợi máy sản xuất')).not.toBeInTheDocument()
   expect(within(salesWorkspace).getByLabelText('Khách hàng')).toBeInTheDocument()
@@ -503,6 +506,144 @@ it('checks out POS line with selected KiotViet unit conversion', async () => {
   )
 })
 
+it('hydrates restored POS draft lines with current catalog unit conversions', async () => {
+  const staleProduct = {
+    id: 'p-f5',
+    code: 'F5',
+    name: 'Fomex 5mm',
+    status: 'active' as const,
+    unit_name: 'Tấm',
+    sell_method: 'quantity' as const,
+  }
+  const currentProduct = {
+    ...staleProduct,
+    unit_conversions: [
+      {
+        unit_id: 'unit-tac',
+        unit_name: 'Tấc',
+        stock_qty_per_unit: 0.05,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+      {
+        unit_id: 'unit-tam-cnc',
+        unit_name: 'Tấm CNC',
+        stock_qty_per_unit: 1,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+    ],
+  }
+  window.localStorage.setItem(posDraftStorageKey, JSON.stringify([{
+    id: 'invoice-1',
+    number: 1,
+    createdAt: '2026-07-16T08:00:00.000Z',
+    cartLines: [{
+      id: 'stale-f5-line',
+      product: staleProduct,
+      quantity: 1,
+      unitPrice: 195615,
+      priceSource: 'default_price_list',
+      isManualPrice: false,
+      discountAmount: 0,
+    }],
+    selectedCustomer: null,
+    orderNote: '',
+  }]))
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({ items: [currentProduct], page: 1, page_size: 120, total: 1 })),
+    resolvePrices: vi.fn(async () => ({
+      items: [{
+        product_id: 'p-f5',
+        unit_price: 195615,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      }],
+    })),
+  })
+
+  renderPosShell({ catalogService })
+
+  const unitSelect = await screen.findByRole('combobox', { name: /Fomex 5mm/ })
+  expect(within(unitSelect).getByRole('option', { name: 'Tấc' })).toBeInTheDocument()
+  expect(within(unitSelect).getByRole('option', { name: 'Tấm CNC' })).toBeInTheDocument()
+  await userEvent.selectOptions(unitSelect, 'Tấm CNC')
+  expect(unitSelect).toHaveValue('Tấm CNC')
+  expect(unitSelect.closest('.pos-cart-lines')).toHaveStyle({
+    '--pos-line-unit-width': '4.9rem',
+  })
+})
+
+it('lets the cashier choose a converted sale unit for m2 products', async () => {
+  const areaProduct = {
+    id: 'p-area-unit',
+    code: 'BANNER-M2',
+    name: 'Banner m2',
+    status: 'active' as const,
+    unit_name: 'm2',
+    sell_method: 'area_m2' as const,
+    unit_conversions: [
+      {
+        unit_id: 'unit-sheet',
+        unit_name: 'tam',
+        stock_qty_per_unit: 2.5,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+    ],
+  }
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({ items: [areaProduct], page: 1, page_size: 120, total: 1 })),
+    resolvePrices: vi.fn(async () => ({
+      items: [{
+        product_id: 'p-area-unit',
+        unit_price: 50000,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      }],
+    })),
+  })
+  const orderService = makeOrderService({
+    checkout: vi.fn(async () => ({
+      order: {
+        id: 'order-area-unit',
+        code: 'HD-POS-AREA-UNIT',
+        order_type: 'invoice' as const,
+        status: 'completed' as const,
+        total_amount: 50000,
+        paid_amount: 50000,
+        debt_amount: 0,
+        payment_status: 'paid' as const,
+      },
+      payment_receipt: null,
+      inventory_warnings: [],
+    })),
+  })
+
+  renderPosShell({ catalogService, orderService })
+
+  await userEvent.click(await screen.findByRole('button', { name: /Banner m2/ }))
+  expect(screen.getByLabelText('Diện tích Banner m2')).toHaveTextContent(/=\s*1/)
+  expect(screen.getByRole('combobox', { name: /Banner m2/ })).toHaveValue('m2')
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: /Banner m2/ }), 'tam')
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  await waitFor(() => expect(orderService.checkout).toHaveBeenCalledTimes(1))
+  expect(orderService.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      items: [
+        expect.objectContaining({
+          product_id: 'p-area-unit',
+          quantity: 1,
+          sale_unit_name: 'tam',
+          stock_qty_per_sale_unit: 2.5,
+        }),
+      ],
+    }),
+  )
+})
+
 it('does not show quick material opening when preview has no supported shortage', async () => {
   const inventoryService = makeInventoryService()
   renderPosShell({ inventoryService })
@@ -770,7 +911,7 @@ it('keeps K01 utility actions visible beside connection and profile', async () =
   expect(within(actions).queryByRole('button', { name: 'Tải lại giao diện' })).not.toBeInTheDocument()
   expect(within(actions).getByLabelText('connection status')).toHaveAttribute('title', 'Đã kết nối')
   const userActions = within(actions).getByLabelText('Tài khoản và giao diện')
-  expect(within(userActions).getByRole('button', { name: 'Đổi sang giao diện tối' })).toBeInTheDocument()
+  expect(within(userActions).getByRole('button', { name: 'Đổi sang giao diện sáng' })).toBeInTheDocument()
   expect(within(userActions).getByRole('button', { name: 'Tài khoản' })).toBeInTheDocument()
 })
 
@@ -1033,7 +1174,7 @@ it('lets the cashier enter width, height, and count for m2 products', async () =
   fireEvent.change(screen.getByLabelText('Số tấm Decal PP'), { target: { value: '2' } })
 
   const cart = screen.getByLabelText('K02 giỏ hàng')
-  expect(within(cart).getByLabelText('Diện tích Decal PP')).toHaveTextContent('7.92 m²')
+  expect(within(cart).getByLabelText('Diện tích Decal PP')).toHaveTextContent(/=\s*7\.92/)
   expect(within(cart).getAllByText('158 400').length).toBeGreaterThan(0)
 
   const checkoutDrawer = await openCheckoutDrawer()
@@ -1134,7 +1275,7 @@ it('replaces the selected m2 width with a dot decimal after adding a product', a
   fireEvent.change(widthInput, { target: { value: '1.2' } })
 
   expect(widthInput).toHaveValue('1.2')
-  expect(screen.getByLabelText('Diện tích Decal PP')).toHaveTextContent('1.2 m²')
+  expect(screen.getByLabelText('Diện tích Decal PP')).toHaveTextContent('= 1.2')
 })
 
 it('shows cart row headers, line note, and add-row action while editing a line', async () => {
@@ -1520,7 +1661,7 @@ it('adds a production queue payload to the local draft cart without checkout', a
 
   const cart = screen.getByLabelText('K02 giỏ hàng')
   expect(await within(cart).findByText('Decal PP')).toBeInTheDocument()
-  expect(within(cart).getByLabelText('Diện tích Decal PP')).toHaveTextContent('1.2 m²')
+  expect(within(cart).getByLabelText('Diện tích Decal PP')).toHaveTextContent('= 1.2')
   expect(within(cart).getAllByText('78 000').length).toBeGreaterThan(0)
   expect(screen.getByDisplayValue('Khach le')).toBeInTheDocument()
   expect(orderService.checkout).not.toHaveBeenCalled()

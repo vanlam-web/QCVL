@@ -1,4 +1,4 @@
-# POS-PRICING — Nghiệp vụ giá bán POS
+﻿# POS-PRICING — Nghiệp vụ giá bán POS
 
 > **Nguồn:** Chốt từ draft Git history
 
@@ -17,10 +17,10 @@ Tài liệu này là Source of Truth cho cách POS xác định giá mặc đị
 Giá mặc định trên POS được xác định theo thứ tự:
 
 1. Khách hàng có nhóm khách: dùng bảng giá của nhóm khách.
-2. Khách hàng không có nhóm: dùng bảng giá chung.
-3. Chưa chọn khách hàng: dùng bảng giá chung.
+2. Khách hàng không có nhóm: dùng giá chung.
+3. Chưa chọn khách hàng: dùng giá chung.
 
-Nếu bảng giá của nhóm không có giá cho sản phẩm, POS dùng giá trong bảng giá chung cho sản phẩm đó.
+Nếu bảng giá của nhóm không có giá cho sản phẩm, POS dùng giá chung cho sản phẩm đó.
 
 ### BR-PRICE-02: Đổi khách trên đơn
 
@@ -28,7 +28,7 @@ Khi đổi khách trên đơn, POS cập nhật giá các dòng hàng theo bản
 
 Nếu khách mới có nhóm, dùng bảng giá của nhóm khách mới.
 
-Nếu khách mới không có nhóm, dùng bảng giá chung.
+Nếu khách mới không có nhóm, dùng giá chung.
 
 ### BR-PRICE-03: Không có chiết khấu riêng trong Phase 1
 
@@ -41,7 +41,7 @@ Luồng giá Phase 1:
 ```text
 Khách hàng
 -> Nhóm khách hoặc không nhóm
--> Bảng giá nhóm hoặc bảng giá chung
+-> Bảng giá nhóm hoặc giá chung
 -> Giá mặc định trên POS
 ```
 
@@ -53,7 +53,7 @@ Giá sửa tay:
 
 - chỉ áp dụng cho lần bán hiện tại
 - không cập nhật ngược vào bảng giá nhóm
-- không cập nhật ngược vào bảng giá chung
+- không cập nhật ngược vào giá chung
 - được lưu vào lịch sử giá của khách hàng với sản phẩm đó
 
 ### BR-PRICE-05: Lịch sử giá theo khách và sản phẩm
@@ -156,10 +156,10 @@ Các nội dung sau không chốt trong tài liệu này:
 
 ## 6. Acceptance Criteria nghiệp vụ
 
-1. Khách không gán nhóm dùng bảng giá chung.
+1. Khách không gán nhóm dùng giá chung.
 2. Khách có nhóm dùng bảng giá của nhóm.
 3. Đổi khách trên đơn làm cập nhật giá dòng hàng theo bảng giá của khách mới.
-4. Giá sửa tay không thay đổi bảng giá chung hoặc bảng giá nhóm.
+4. Giá sửa tay không thay đổi giá chung hoặc bảng giá nhóm.
 5. Giá sửa tay được lưu vào lịch sử theo khách hàng và sản phẩm.
 6. Hệ thống chỉ cung cấp lịch sử giá gần đây khi khách hàng có lịch sử giá với sản phẩm đó.
 7. Lịch sử giá gần đây trả tối đa 5 giá gần nhất.

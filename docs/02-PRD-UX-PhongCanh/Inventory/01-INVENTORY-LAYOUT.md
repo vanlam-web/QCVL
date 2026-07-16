@@ -1,4 +1,4 @@
-# INVENTORY-LAYOUT — Bố cục tổng thể Hàng hóa và kiểm kho
+﻿# INVENTORY-LAYOUT — Bố cục tổng thể Hàng hóa và kiểm kho
 
 > **Nguồn tham khảo UI:** KiotViet trang Hàng hóa ở viewport desktop rộng.
 
@@ -53,7 +53,7 @@ QC-OMS giữ tinh thần thao tác nhanh của KiotViet: menu module ở trên, 
 - Không hiện tag/checkbox `Bán trực tiếp` ở danh sách, chi tiết hoặc modal. Toàn bộ hàng/dịch vụ đang `active` mặc định được bán trực tiếp; hàng `inactive` không xuất hiện ở POS.
 - Không dùng ảnh hàng hóa, vị trí kho, mô tả dài, thương hiệu, trọng lượng và tồn nhỏ nhất/lớn nhất trong scope hiện tại. Tab `Ghi chú` được giữ nếu đơn giản và không ảnh hưởng luồng chính.
 - `Kích thước` vẫn cần cho hàng cuộn/tấm và các nghiệp vụ quy đổi, nhưng phải gắn với mô hình cuộn/tấm/đơn vị quy đổi, không đưa thành field trang trí chung cho mọi hàng.
-- Nhóm hàng phải làm thật để phục vụ import KiotViet và lọc danh mục. Nếu chưa kịp triển khai cùng đợt sửa UI, sản phẩm tạm thuộc nhóm mặc định; giá bán fallback về bảng giá chung.
+- Nhóm hàng phải làm thật để phục vụ import KiotViet và lọc danh mục. Nếu chưa kịp triển khai cùng đợt sửa UI, sản phẩm tạm thuộc nhóm mặc định; giá bán fallback về giá chung.
 - Với màn hẹp, sidebar có thể thu gọn thành nút lọc; không dùng viewport hẹp của browser làm chuẩn desktop.
 - Không đưa hướng dẫn dài trong màn hình; trạng thái và hành động phải rõ qua nhãn nút, icon và tooltip.
 
@@ -100,7 +100,7 @@ Nếu cần mở POS sớm cho báo giá, POS được phép cảnh báo tồn v
 | Hàng tấm | `inventory_shape = sheet`, `sell_method = sheet`, `track_inventory = true` | Hiện nhãn tồn kho `Tấm`; đơn vị mặc định `tấm` |
 | Combo - đóng gói | `inventory_shape = normal`, `sell_method = combo`, `track_inventory = false` | Ẩn phần tồn kho; hiện khu vực `Vật tư cấu thành` để nhập vật tư và định mức |
 
-Form tạo mới ghi được `mã hàng`, `tên hàng`, `loại hàng`, `đơn vị`, `cách tính bán`, `trạng thái` và `giá vốn`. Nếu nhập trực tiếp một hàng mới mà không chọn loại đặc thù, mặc định là `Hàng thường`. `Giá bán` vẫn thuộc module Bảng giá: giá nhập ở đây chỉ được hiểu là giá bán chung/default khi backend đã nối Bảng giá; nếu không có giá theo nhóm khách thì POS lấy giá ở bảng giá chung. QC-OMS không dùng ảnh hàng hóa trong modal này.
+Form tạo mới ghi được `mã hàng`, `tên hàng`, `loại hàng`, `đơn vị`, `cách tính bán`, `trạng thái` và `giá vốn`. Nếu nhập trực tiếp một hàng mới mà không chọn loại đặc thù, mặc định là `Hàng thường`. `Giá bán` vẫn thuộc module Bảng giá: giá nhập ở đây chỉ được hiểu là giá chung/default khi backend đã nối Bảng giá; nếu không có giá theo nhóm khách thì POS lấy giá chung. QC-OMS không dùng ảnh hàng hóa trong modal này.
 
 Với `Combo - đóng gói`, người dùng nhập BOM cấp 1 ngay trong modal tạo hàng. Khi lưu, frontend tạo sản phẩm combo trước rồi gọi API lưu BOM cho sản phẩm vừa tạo. Khi bán combo, hệ thống không trừ tồn theo mã combo; tồn được trừ vào vật tư thành phần theo BOM active tại thời điểm chốt chứng từ. Sau khi combo đã tồn tại, người dùng vẫn có thể mở chi tiết dòng hàng trong danh sách để sửa BOM/version hiện hành.
 
@@ -166,7 +166,7 @@ Sửa hàng hóa có thể ảnh hưởng POS ở các điểm sau:
 
 - Đổi `status` sang ngưng bán: hàng biến mất khỏi tìm kiếm/chọn hàng trong POS, nhưng chứng từ cũ giữ snapshot cũ.
 - Đổi tên/mã/đơn vị/cách tính bán: POS phải dùng dữ liệu mới cho đơn mới; chứng từ đã chốt vẫn dùng snapshot tại thời điểm bán.
-- Đổi giá bán chung hoặc bảng giá nhóm khách: POS lấy giá theo nhóm khách trước, nếu không có thì fallback bảng giá chung. Nếu KiotViet import không có giá hoặc giá trống thì bỏ qua, không tạo giá rỗng.
+- Đổi giá chung hoặc bảng giá nhóm khách: POS lấy giá theo nhóm khách trước, nếu không có thì fallback giá chung. Nếu KiotViet import không có giá hoặc giá trống thì bỏ qua, không tạo giá rỗng.
 - Đổi quy đổi đơn vị: ảnh hưởng tính tiền và trừ kho cho đơn mới. Cần giữ snapshot đơn vị/quy đổi trên dòng chứng từ để không làm sai hóa đơn cũ.
 - Sửa BOM combo: chỉ ảnh hưởng đơn mới hoặc dòng POS chưa chốt. Đơn/chứng từ đã chốt phải giữ BOM snapshot cũ.
 - Sửa tồn hàng thường: phải tạo phiếu kiểm kho tự động, ghi stock movement và thẻ kho. POS sau đó đọc tồn mới.

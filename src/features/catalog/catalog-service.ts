@@ -23,6 +23,7 @@ import type {
   ProductStockMovementListResponse,
   ProductStocktake,
   ProductStatus,
+  ProductStatusFilter,
   ResolvePricesResponse,
   SellMethod,
 } from './types'
@@ -49,7 +50,7 @@ export function createCatalogService(api: CatalogApiRequester) {
   return {
     listProducts: (input: {
       search?: string
-      status?: ProductStatus | 'all'
+      status?: ProductStatusFilter
       sell_method?: SellMethod
       inventory_shape?: Product['inventory_shape']
       product_kind?: ProductKind

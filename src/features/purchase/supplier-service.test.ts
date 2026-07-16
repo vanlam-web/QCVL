@@ -27,6 +27,24 @@ it('builds supplier list filters from existing supplier fields', async () => {
   ])
 })
 
+it('builds supplier receipt history filters from supplier id and code', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: SupplierApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createSupplierService({ request })
+
+  await service.listPurchaseReceipts({ id: 'supplier-38', code: 'NCC000038' })
+
+  expect(calls).toEqual([
+    [
+      '/api/v1/purchase/receipts?supplier_id=supplier-38&supplier_code=NCC000038&status=posted&page=1&page_size=100',
+      undefined,
+    ],
+  ])
+})
+
 it('sends supplier KiotViet xlsx base64 to server import endpoints', async () => {
   const calls: Array<[string, RequestInit | undefined]> = []
   const request: SupplierApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

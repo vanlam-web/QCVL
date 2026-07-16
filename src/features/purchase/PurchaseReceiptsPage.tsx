@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Save, Search, Trash2, WalletCards } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
 import type {
@@ -7,6 +7,7 @@ import type {
   PurchaseReceiptFinanceAccount,
   PurchaseReceiptInput,
   PurchaseReceiptProduct,
+  PurchaseReceiptSupplierPayment,
   PurchaseReceiptStatus,
   RollPhysicalPayload,
   SheetPhysicalPayload,
@@ -27,15 +28,25 @@ import {
 } from './purchase-receipt-calculations'
 import { purchaseReceiptTimeQuickOptions } from './purchase-receipt-filters'
 import { isExactPurchaseReceiptCode, money, statusText } from './purchase-receipt-presenter'
-import { EmptyState, MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
+import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDataTable,
   ManagementDateRangeInputs,
+  ManagementDetailActionFooter,
+  ManagementDetailHeader,
+  ManagementDetailInfoList,
+  ManagementDetailInlineNote,
+  ManagementDetailNoteInput,
+  ManagementDetailPanel,
+  ManagementDetailSection,
+  ManagementDetailSummary,
+  ManagementInlineDetailTabs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementTableCheckboxControl,
@@ -43,11 +54,13 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { normalizeManagementSearchText, preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
+import type { CurrentUserData } from '../../lib/api/types'
 
 const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 
@@ -69,10 +82,135 @@ const blankForm: PurchaseReceiptInput = {
   notes: '',
   discount_amount: 0,
   paid_amount: 0,
-  items: [blankLine],
+  items: [],
 }
 
-const purchaseReceiptPageSize = 15
+const receiptProductSearchPageSize = 20
+const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
+const receiptCreateDraftWindowNamePrefix = 'qc-oms.purchase-receipt-create-draft='
+
+interface PurchaseReceiptCreateDraft {
+  form: PurchaseReceiptInput
+  paymentMethod: 'cash' | 'bank_transfer'
+  financeAccountId: string
+  rollLengthTexts: Record<number, string>
+  receiptWorkspaceSideCollapsed: boolean
+}
+
+function createPurchaseReceiptLine(product: PurchaseReceiptProduct): PurchaseReceiptInput['items'][number] {
+  const inventoryShape = product.inventory_shape ?? 'normal'
+  return {
+    product_id: product.id,
+    inventory_shape: inventoryShape,
+    unit_name: purchaseUnitForProduct(product),
+    quantity: 1,
+    unit_cost: product.latest_purchase_cost ?? 0,
+    discount_amount: 0,
+    physical_payload: defaultPhysicalPayload(inventoryShape),
+  }
+}
+
+function receiptProductMatchesSearch(product: PurchaseReceiptProduct, query: string) {
+  const normalizedText = normalizeManagementSearchText(`${product.code} ${product.name}`)
+  if (normalizedText.includes(query)) return true
+  return normalizedText.split(/\s+/).some((part) => part.includes(query))
+}
+
+function receiptProductSearchRank(product: PurchaseReceiptProduct, query: string) {
+  const code = normalizeManagementSearchText(product.code)
+  const name = normalizeManagementSearchText(product.name)
+  const combined = normalizeManagementSearchText(`${product.code} ${product.name}`)
+  if (code === query || name === query) return 0
+  if (code.startsWith(query) || name.startsWith(query)) return 1
+  if (name.split(/\s+/).some((part) => part.startsWith(query))) return 2
+  if (combined.split(/\s+/).some((part) => part.startsWith(query))) return 3
+  if (name.includes(query)) return 4
+  if (combined.includes(query)) return 5
+  return 6
+}
+
+function uniqueReceiptProductsById(products: PurchaseReceiptProduct[]) {
+  const seen = new Set<string>()
+  return products.filter((product) => {
+    if (seen.has(product.id)) return false
+    seen.add(product.id)
+    return true
+  })
+}
+
+function defaultReceiptSupplierId(suppliers: Supplier[]) {
+  const defaultSupplier = suppliers.find((supplier) => {
+    const text = normalizeManagementSearchText(`${supplier.code} ${supplier.name}`)
+    return text.includes('ncc le') || text.includes('nha cung cap le')
+  })
+  return (defaultSupplier ?? suppliers[0])?.id ?? ''
+}
+
+function accountDisplayName(currentUser?: CurrentUserData) {
+  if (!currentUser) return ''
+  return currentUser.user.display_name.trim() || currentUser.user.email
+}
+
+function readReceiptCreateDraft() {
+  if (typeof window === 'undefined') return null
+  const rawSession = window.sessionStorage.getItem(receiptCreateDraftStorageKey)
+  if (rawSession) {
+    try {
+      const parsed = JSON.parse(rawSession) as Partial<PurchaseReceiptCreateDraft>
+      if (!parsed.form || !Array.isArray(parsed.form.items)) return null
+      return {
+        form: { ...blankForm, ...parsed.form },
+        paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
+        financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
+        rollLengthTexts: parsed.rollLengthTexts ?? {},
+        receiptWorkspaceSideCollapsed: Boolean(parsed.receiptWorkspaceSideCollapsed),
+      } satisfies PurchaseReceiptCreateDraft
+    } catch {
+      // fall through to window.name/localStorage fallback
+    }
+  }
+  if (window.name.startsWith(receiptCreateDraftWindowNamePrefix)) {
+    try {
+      const raw = decodeURIComponent(window.name.slice(receiptCreateDraftWindowNamePrefix.length))
+      const parsed = JSON.parse(raw) as Partial<PurchaseReceiptCreateDraft>
+      if (!parsed.form || !Array.isArray(parsed.form.items)) return null
+      return {
+        form: { ...blankForm, ...parsed.form },
+        paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
+        financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
+        rollLengthTexts: parsed.rollLengthTexts ?? {},
+        receiptWorkspaceSideCollapsed: Boolean(parsed.receiptWorkspaceSideCollapsed),
+      } satisfies PurchaseReceiptCreateDraft
+    } catch {
+      // fall through to storage fallback
+    }
+  }
+  const raw = window.localStorage.getItem(receiptCreateDraftStorageKey)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as Partial<PurchaseReceiptCreateDraft>
+    if (!parsed.form || !Array.isArray(parsed.form.items)) return null
+    return {
+      form: { ...blankForm, ...parsed.form },
+      paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
+      financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
+      rollLengthTexts: parsed.rollLengthTexts ?? {},
+      receiptWorkspaceSideCollapsed: Boolean(parsed.receiptWorkspaceSideCollapsed),
+    } satisfies PurchaseReceiptCreateDraft
+  } catch {
+    return null
+  }
+}
+
+function writeReceiptCreateDraft(draft: PurchaseReceiptCreateDraft) {
+  if (typeof window === 'undefined') return
+  window.sessionStorage.setItem(receiptCreateDraftStorageKey, JSON.stringify(draft))
+  window.name = `${receiptCreateDraftWindowNamePrefix}${encodeURIComponent(JSON.stringify(draft))}`
+  window.localStorage.setItem(receiptCreateDraftStorageKey, JSON.stringify(draft))
+}
+
+type ReceiptDetailTab = 'info' | 'payments'
+
 type PurchaseReceiptSortKey = 'code' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
 
 function receiptTotalQuantity(receipt: PurchaseReceipt) {
@@ -83,9 +221,41 @@ function quantityText(value: number) {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
+function supplierPaymentStatusText(status: 'posted' | 'cancelled') {
+  return status === 'posted' ? 'Đã thanh toán' : 'Đã hủy'
+}
+
+function supplierPaymentMethodText(method: 'cash' | 'bank_transfer') {
+  return method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'
+}
+
+function purchaseReceiptPaymentRows(receipt: PurchaseReceipt): PurchaseReceiptSupplierPayment[] {
+  if (receipt.status !== 'posted') return receipt.supplier_payments
+
+  const afterPostPaymentsTotal = receipt.supplier_payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
+  const importPaidAmount = Math.max(Number(receipt.paid_amount || 0) - afterPostPaymentsTotal, 0)
+
+  if (importPaidAmount <= 0) return receipt.supplier_payments
+
+  return [
+    {
+      id: `${receipt.id}-import-payment`,
+      code: `PC${receipt.code}`,
+      paid_at: receipt.received_at,
+      created_by: receipt.created_by.name,
+      payment_method: 'bank_transfer',
+      status: 'posted',
+      amount: importPaidAmount,
+    },
+    ...receipt.supplier_payments,
+  ]
+}
+
 export function PurchaseReceiptsPage({
+  currentUser,
   service,
 }: {
+  currentUser?: CurrentUserData
   service: PurchaseReceiptService
   onOpenDashboard: () => void
 }) {
@@ -98,8 +268,9 @@ export function PurchaseReceiptsPage({
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
   const [receiptListSummary, setReceiptListSummary] = useState<{ payable_amount: number; remaining_amount: number } | null>(null)
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(purchaseReceiptPageSize)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>('posted')
   const [dateFrom, setDateFrom] = useState('')
@@ -113,7 +284,10 @@ export function PurchaseReceiptsPage({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingStatus, setEditingStatus] = useState<PurchaseReceiptStatus | null>(null)
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null)
+  const [receiptDetailTab, setReceiptDetailTab] = useState<ReceiptDetailTab>('info')
   const [form, setForm] = useState<PurchaseReceiptInput>(blankForm)
+  const [receiptProductSearch, setReceiptProductSearch] = useState('')
+  const [receiptWorkspaceSideCollapsed, setReceiptWorkspaceSideCollapsed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [posting, setPosting] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
@@ -126,7 +300,26 @@ export function PurchaseReceiptsPage({
   const [supplierPaymentFinanceAccountId, setSupplierPaymentFinanceAccountId] = useState('')
   const [rollLengthTexts, setRollLengthTexts] = useState<Record<number, string>>({})
   const [importOpen, setImportOpen] = useState(false)
+  const [productCreateOpen, setProductCreateOpen] = useState(false)
+  const [productCreateSaving, setProductCreateSaving] = useState(false)
+  const [productCreateError, setProductCreateError] = useState<string | null>(null)
+  const [productCreateForm, setProductCreateForm] = useState({
+    code: '',
+    name: '',
+    unitName: '',
+    sellMethod: 'quantity' as PurchaseReceiptProduct['sell_method'],
+  })
+  const [receiptProductCatalogSearchResult, setReceiptProductCatalogSearchResult] = useState<{
+    search: string
+    products: PurchaseReceiptProduct[]
+  }>({
+    search: '',
+    products: [],
+  })
   const [error, setError] = useState<string | null>(null)
+  const receiptProductSearchRef = useRef<HTMLInputElement | null>(null)
+  const receiptCreateDraftRestoredRef = useRef(false)
+  const skipReceiptCreateDraftPersistRef = useRef(false)
   const totals = useMemo(() => {
     return purchaseReceiptTotals(form)
   }, [form])
@@ -151,6 +344,28 @@ export function PurchaseReceiptsPage({
   const isReadOnly = editingStatus !== null && editingStatus !== 'draft'
   const selectedReceiptOutstanding = selectedReceipt ? receiptOutstandingAfterPost(selectedReceipt) : 0
   const isCreatingReceipt = detailOpen && editingId === null
+  const receiptProductSearchResults = useMemo(() => {
+    const search = receiptProductSearch.trim()
+    const query = normalizeManagementSearchText(receiptProductSearch)
+    if (!isCreatingReceipt || query.length === 0) return []
+    const searchProducts = receiptProductCatalogSearchResult.search === search ? receiptProductCatalogSearchResult.products : []
+    return uniqueReceiptProductsById([...searchProducts, ...products])
+      .filter((product) => receiptProductMatchesSearch(product, query))
+      .sort((left, right) => {
+        const rankDelta = receiptProductSearchRank(left, query) - receiptProductSearchRank(right, query)
+        if (rankDelta !== 0) return rankDelta
+        return left.name.localeCompare(right.name, 'vi')
+      })
+  }, [isCreatingReceipt, products, receiptProductCatalogSearchResult, receiptProductSearch])
+  const receiptProductSuggestions = useMemo(() => {
+    return receiptProductSearchResults.slice(0, 8).map((product) => ({
+      id: product.id,
+      primary: `${product.code} - ${product.name}`,
+      secondary: `ĐVT: ${purchaseUnitForProduct(product)}`,
+      meta: product.latest_purchase_cost !== null && product.latest_purchase_cost !== undefined ? `Giá nhập: ${money(product.latest_purchase_cost)}` : undefined,
+      ariaLabel: `Chọn hàng ${product.code} ${product.name}`,
+    }))
+  }, [receiptProductSearchResults])
   const receiptSummary = useMemo(() => {
     const fallback = purchaseReceiptListSummary(receipts ?? [])
     return {
@@ -174,6 +389,58 @@ export function PurchaseReceiptsPage({
     if (!showFavoriteReceiptsOnly) return sortedReceipts
     return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
   }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
+
+  useEffect(() => {
+    if (!isCreatingReceipt) return undefined
+
+    function focusProductSearch(event: KeyboardEvent) {
+      if (event.key !== 'F8' && event.key !== 'F3') return
+      event.preventDefault()
+      receiptProductSearchRef.current?.focus()
+      receiptProductSearchRef.current?.select()
+    }
+
+    window.addEventListener('keydown', focusProductSearch)
+    return () => window.removeEventListener('keydown', focusProductSearch)
+  }, [isCreatingReceipt])
+
+  useEffect(() => {
+    if (!isCreatingReceipt) return undefined
+
+    const search = receiptProductSearch.trim()
+    if (search.length === 0) {
+      setReceiptProductCatalogSearchResult({ search: '', products: [] })
+      return undefined
+    }
+
+    let active = true
+
+    async function searchProducts() {
+      try {
+        const productResult = await service.listProducts({
+          status: 'active',
+          search,
+          page: 1,
+          page_size: receiptProductSearchPageSize,
+        })
+        if (!active) return
+        setReceiptProductCatalogSearchResult({
+          search,
+          products: productResult.items.filter((product) => product.status === 'active'),
+        })
+      } catch (cause) {
+        if (!active) return
+        setReceiptProductCatalogSearchResult({ search, products: [] })
+        setError(formatApiError(cause, 'Không tìm được hàng hóa.'))
+      }
+    }
+
+    void searchProducts()
+
+    return () => {
+      active = false
+    }
+  }, [isCreatingReceipt, receiptProductSearch, service])
 
   async function loadReceipts(
     input: {
@@ -219,7 +486,7 @@ export function PurchaseReceiptsPage({
     async function loadInitialData() {
       setError(null)
       try {
-        const receiptResult = await service.listReceipts({ status: 'posted', page: 1, page_size: purchaseReceiptPageSize })
+        const receiptResult = await service.listReceipts({ status: 'posted', page: 1, page_size: defaultPageSize })
         if (!active) return
         setReceipts(receiptResult.items)
         setTotal(receiptResult.total)
@@ -236,23 +503,103 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [defaultPageSize, service])
 
   async function ensureReceiptLookupsLoaded() {
     const requests: Promise<void>[] = []
+    let nextSuppliers = suppliers
+    let nextProducts = products
     if (!suppliersLoaded) {
       requests.push(service.listSuppliers().then((result) => {
+        nextSuppliers = result.items
         setSuppliers(result.items)
         setSuppliersLoaded(true)
       }))
     }
     if (!productsLoaded) {
       requests.push(service.listProducts().then((result) => {
-        setProducts(result.items.filter((product) => product.status === 'active'))
+        nextProducts = result.items.filter((product) => product.status === 'active')
+        setProducts(nextProducts)
         setProductsLoaded(true)
       }))
     }
     await Promise.all(requests)
+    return { suppliers: nextSuppliers, products: nextProducts }
+  }
+
+  useEffect(() => {
+    if (receiptCreateDraftRestoredRef.current) return
+    receiptCreateDraftRestoredRef.current = true
+    const draft = readReceiptCreateDraft()
+    if (!draft) return
+    const receiptCreateDraft = draft
+
+    let active = true
+    async function restoreCreateDraft() {
+      try {
+        const lookups = await ensureReceiptLookupsLoaded()
+        if (!active) return
+        setEditingId(null)
+        setEditingStatus(null)
+        setSelectedReceipt(null)
+        setReceiptDetailTab('info')
+        setSupplierPaymentOpen(false)
+        setDetailOpen(true)
+        setForm({
+          ...receiptCreateDraft.form,
+          supplier_id: receiptCreateDraft.form.supplier_id || defaultReceiptSupplierId(lookups.suppliers),
+        })
+        setPaymentMethod(receiptCreateDraft.paymentMethod)
+        setFinanceAccountId(receiptCreateDraft.financeAccountId)
+        setRollLengthTexts(receiptCreateDraft.rollLengthTexts)
+        setReceiptWorkspaceSideCollapsed(receiptCreateDraft.receiptWorkspaceSideCollapsed)
+      } catch (cause) {
+        if (active) setError(formatApiError(cause, 'Không khôi phục được phiếu nhập đang tạo.'))
+      }
+    }
+
+    void restoreCreateDraft()
+    return () => {
+      active = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isCreatingReceipt) return
+    const draft: PurchaseReceiptCreateDraft = {
+      form,
+      paymentMethod,
+      financeAccountId,
+      rollLengthTexts,
+      receiptWorkspaceSideCollapsed,
+    }
+    writeReceiptCreateDraft(draft)
+
+    function persistDraft() {
+      writeReceiptCreateDraft(draft)
+    }
+
+    window.addEventListener('pagehide', persistDraft)
+    window.addEventListener('beforeunload', persistDraft)
+    return () => {
+      window.removeEventListener('pagehide', persistDraft)
+      window.removeEventListener('beforeunload', persistDraft)
+      if (skipReceiptCreateDraftPersistRef.current) {
+        skipReceiptCreateDraftPersistRef.current = false
+        return
+      }
+      persistDraft()
+    }
+  }, [financeAccountId, form, isCreatingReceipt, paymentMethod, receiptWorkspaceSideCollapsed, rollLengthTexts])
+
+  function clearReceiptCreateDraft() {
+    skipReceiptCreateDraftPersistRef.current = true
+    if (typeof window === 'undefined') return
+    if (window.name.startsWith(receiptCreateDraftWindowNamePrefix)) {
+      window.name = ''
+    }
+    window.sessionStorage.removeItem(receiptCreateDraftStorageKey)
+    window.localStorage.removeItem(receiptCreateDraftStorageKey)
   }
 
   async function ensureFinanceAccountsLoaded() {
@@ -294,6 +641,7 @@ export function PurchaseReceiptsPage({
         setSelectedReceipt(null)
         setDetailOpen(false)
         setEditingId(null)
+        setReceiptDetailTab('info')
       },
       load: (query) => applyReceiptSearch(query),
     })
@@ -347,6 +695,7 @@ export function PurchaseReceiptsPage({
       setEditingId(null)
       setEditingStatus(null)
       setSelectedReceipt(null)
+      setReceiptDetailTab('info')
       setDetailOpen(false)
       setSupplierPaymentOpen(false)
       setLoadingReceiptId(null)
@@ -358,6 +707,7 @@ export function PurchaseReceiptsPage({
     setEditingId(null)
     setEditingStatus(null)
     setSelectedReceipt(null)
+    setReceiptDetailTab('info')
     setSupplierPaymentOpen(false)
     try {
       const [detail] = await Promise.all([service.getReceipt(receipt.id), ensureReceiptLookupsLoaded()])
@@ -365,6 +715,7 @@ export function PurchaseReceiptsPage({
       setEditingId(detail.id)
       setEditingStatus(detail.status)
       setSelectedReceipt(detail)
+      setReceiptDetailTab('info')
       setForm({
         code: detail.code,
         supplier_id: detail.supplier_id,
@@ -408,6 +759,10 @@ export function PurchaseReceiptsPage({
   async function saveReceipt(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (isReadOnly) return
+    if (form.items.length === 0) {
+      setError('Chọn ít nhất 1 hàng hóa trước khi lưu phiếu nhập.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -416,9 +771,11 @@ export function PurchaseReceiptsPage({
       } else {
         await service.updateReceipt(editingId, form)
       }
+      if (editingId === null) clearReceiptCreateDraft()
       setEditingId(null)
       setEditingStatus(null)
       setSelectedReceipt(null)
+      setReceiptDetailTab('info')
       setDetailOpen(false)
       setForm(blankForm)
       await loadReceipts()
@@ -448,8 +805,10 @@ export function PurchaseReceiptsPage({
       setEditingId(null)
       setEditingStatus(null)
       setSelectedReceipt(null)
+      setReceiptDetailTab('info')
       setDetailOpen(false)
       setForm(blankForm)
+      clearReceiptCreateDraft()
       await loadReceipts()
     } catch (cause) {
       setError(formatApiError(cause, 'Không hoàn thành được phiếu nhập.'))
@@ -484,6 +843,57 @@ export function PurchaseReceiptsPage({
     })
   }
 
+  function selectReceiptProduct(productId: string) {
+    const product = receiptProductSearchResults.find((candidate) => candidate.id === productId)
+    if (!product) return
+
+    setProducts((current) => uniqueReceiptProductsById([product, ...current]))
+    const nextLine = createPurchaseReceiptLine(product)
+    const lineIndex = form.items.length
+    setForm((current) => {
+      return { ...current, items: [...current.items, nextLine] }
+    })
+    setRollLengthTexts((current) => {
+      const next = { ...current }
+      if (nextLine.inventory_shape === 'roll') next[lineIndex] = '1'
+      else delete next[lineIndex]
+      return next
+    })
+    setReceiptProductSearch('')
+    setReceiptProductCatalogSearchResult({ search: '', products: [] })
+  }
+
+  function submitReceiptProductSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const firstSuggestion = receiptProductSuggestions[0]
+    if (firstSuggestion) selectReceiptProduct(firstSuggestion.id)
+  }
+
+  async function createReceiptProduct(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setProductCreateSaving(true)
+    setProductCreateError(null)
+    try {
+      const created = await service.createProduct({
+        code: productCreateForm.code.trim(),
+        name: productCreateForm.name.trim(),
+        status: 'active',
+        unit_name: productCreateForm.unitName.trim(),
+        sell_method: productCreateForm.sellMethod,
+        inventory_shape: 'normal',
+        track_inventory: true,
+      })
+      setProducts((current) => [created, ...current].slice(0, 12))
+      setReceiptProductSearch(created.code)
+      setProductCreateForm({ code: '', name: '', unitName: '', sellMethod: 'quantity' })
+      setProductCreateOpen(false)
+    } catch (cause) {
+      setProductCreateError(formatApiError(cause, 'Không tạo được hàng hóa.'))
+    } finally {
+      setProductCreateSaving(false)
+    }
+  }
+
   function addLine() {
     setForm((current) => ({ ...current, items: [...current.items, { ...blankLine }] }))
   }
@@ -491,7 +901,7 @@ export function PurchaseReceiptsPage({
   function removeLine(index: number) {
     setForm((current) => ({
       ...current,
-      items: current.items.length === 1 ? current.items : current.items.filter((_, lineIndex) => lineIndex !== index),
+      items: current.items.filter((_, lineIndex) => lineIndex !== index),
     }))
   }
 
@@ -546,6 +956,7 @@ export function PurchaseReceiptsPage({
     setEditingId(null)
     setEditingStatus(null)
     setSelectedReceipt(null)
+    setReceiptDetailTab('info')
     setDetailOpen(true)
     setForm(blankForm)
     setPaymentMethod('cash')
@@ -555,6 +966,8 @@ export function PurchaseReceiptsPage({
     setSupplierPaymentMethod('cash')
     setSupplierPaymentFinanceAccountId('')
     setRollLengthTexts({})
+    setReceiptProductSearch('')
+    setReceiptProductCatalogSearchResult({ search: '', products: [] })
   }
 
   async function openCreateReceipt() {
@@ -562,11 +975,31 @@ export function PurchaseReceiptsPage({
     setDetailOpen(false)
     setLoadingReceiptId(null)
     try {
-      await ensureReceiptLookupsLoaded()
+      const lookups = await ensureReceiptLookupsLoaded()
       resetForm()
+      setForm((current) => ({ ...current, supplier_id: defaultReceiptSupplierId(lookups.suppliers) }))
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được dữ liệu tạo phiếu nhập.'))
     }
+  }
+
+  function closeCreateReceipt() {
+    clearReceiptCreateDraft()
+    setEditingId(null)
+    setEditingStatus(null)
+    setSelectedReceipt(null)
+    setReceiptDetailTab('info')
+    setDetailOpen(false)
+    setForm(blankForm)
+    setPaymentMethod('cash')
+    setFinanceAccountId('')
+    setSupplierPaymentOpen(false)
+    setSupplierPaymentAmount(0)
+    setSupplierPaymentMethod('cash')
+    setSupplierPaymentFinanceAccountId('')
+    setRollLengthTexts({})
+    setReceiptProductSearch('')
+    setReceiptProductCatalogSearchResult({ search: '', products: [] })
   }
 
   function openSupplierPaymentForReceipt() {
@@ -700,10 +1133,10 @@ export function PurchaseReceiptsPage({
 
   const receiptKpis = (
     <MetricGrid ariaLabel="Tổng quan phiếu nhập">
-      <MetricCard hint="Từ danh sách đang xem" label="Cần trả" tone="warning" value={<MoneyText value={receiptSummary.payable} />} />
+      <MetricCard hint="Theo bộ lọc hiện tại" label="Tổng tiền hàng" tone="warning" value={<MoneyText value={receiptSummary.payable} />} />
       <MetricCard
-        hint="Sau trả ngay và thanh toán NCC"
-        label="Còn phải trả"
+        hint="Theo bộ lọc hiện tại"
+        label="Tổng nợ"
         tone={receiptSummary.remaining > 0 ? 'warning' : 'neutral'}
         value={<MoneyText value={receiptSummary.remaining} />}
       />
@@ -715,31 +1148,293 @@ export function PurchaseReceiptsPage({
   const activeFilterSummary = receiptFilterChips.map((chip) => chip.label).join(' • ')
 
   function receiptDetailContent(ariaLabel: string) {
+    const detailTitle = isReadOnly ? 'Xem phiếu nhập' : editingId ? 'Sửa draft phiếu nhập' : 'Tạo draft phiếu nhập'
+    const detailStatus = editingStatus ? statusText(editingStatus) : 'Phiếu tạm'
+    const selectedReceiptPayments = selectedReceipt ? purchaseReceiptPaymentRows(selectedReceipt) : []
+    const hasPaymentHistory = selectedReceiptPayments.length > 0
+    const activeReceiptDetailTab = hasPaymentHistory ? receiptDetailTab : 'info'
+    const showInfoTab = activeReceiptDetailTab === 'info'
+
+    if (isReadOnly && selectedReceipt) {
+      return (
+        <ManagementDetailPanel>
+          <ManagementInlineDetailTabs
+            activeKey={activeReceiptDetailTab}
+            ariaLabel="Chi tiết phiếu nhập"
+            tabs={[
+              { key: 'info', label: 'Thông tin' },
+              ...(hasPaymentHistory ? [{ key: 'payments', label: 'Lịch sử thanh toán' }] : []),
+            ]}
+            onSelect={(key) => {
+              setReceiptDetailTab(key === 'payments' ? 'payments' : 'info')
+              setSupplierPaymentOpen(false)
+            }}
+          />
+          {showInfoTab ? (
+            <>
+              <ManagementDetailSummary
+                ariaLabel="Tóm tắt phiếu nhập"
+                code={selectedReceipt.code}
+                metaAriaLabel="Thông tin tạo phiếu nhập"
+                metaItems={[
+                  { label: 'Người tạo:', value: selectedReceipt.created_by.name },
+                  { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
+                  { label: 'Trạng thái:', value: detailStatus },
+                ]}
+                title={selectedReceipt.supplier.name}
+              />
+              <ManagementDetailSection ariaLabel="Thông tin nhanh phiếu nhập">
+                <ManagementDetailInfoList
+                  columns="three"
+                  items={[
+                    { label: 'Nhà cung cấp', value: selectedReceipt.supplier.name },
+                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? 'Chưa có' },
+                    { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
+                  ]}
+                />
+              </ManagementDetailSection>
+              <ManagementDetailSection ariaLabel={ariaLabel}>
+                <table aria-label="Dòng hàng phiếu nhập" className="management-detail-table management-detail-lines-table">
+                  <thead>
+                    <tr>
+                      <th>Mã hàng</th>
+                      <th>Tên hàng</th>
+                      <th>Số lượng</th>
+                      <th>Đơn giá</th>
+                      <th>Giảm giá</th>
+                      <th>Giá nhập</th>
+                      <th>Thành tiền</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedReceipt.items.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.product.code}</td>
+                        <td>
+                          <span>{item.product.name}</span>
+                          {item.physical_payload ? <small>{physicalSummary(item)}</small> : null}
+                        </td>
+                        <td>{`${quantityText(item.quantity)} ${item.unit_name_snapshot}`}</td>
+                        <td><MoneyText value={item.unit_cost} /></td>
+                        <td><MoneyText value={item.discount_amount} /></td>
+                        <td><MoneyText value={item.unit_cost} /></td>
+                        <td><MoneyText value={item.line_amount} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="management-detail-lower management-detail-lower-right">
+                  <ManagementDetailNoteInput
+                    ariaLabel="Ghi chú phiếu nhập"
+                    readOnly
+                    value={selectedReceipt.notes?.trim() || ''}
+                  />
+                  <dl className="management-detail-summary-box management-detail-summary-box-right">
+                    <div>
+                      <dt>{`Tổng tiền hàng (${selectedReceipt.items.length})`}</dt>
+                      <dd><MoneyText value={selectedReceipt.subtotal_amount} /></dd>
+                    </div>
+                    <div>
+                      <dt>Giảm giá phiếu</dt>
+                      <dd><MoneyText value={selectedReceipt.discount_amount} /></dd>
+                    </div>
+                    <div>
+                      <dt>Cần trả NCC</dt>
+                      <dd><MoneyText value={selectedReceipt.payable_amount} /></dd>
+                    </div>
+                    <div>
+                      <dt>Đã trả NCC</dt>
+                      <dd><MoneyText value={selectedReceipt.paid_amount} /></dd>
+                    </div>
+                    {selectedReceipt.remaining_amount > 0 ? (
+                      <div>
+                        <dt>Còn phải trả</dt>
+                        <dd><MoneyText value={selectedReceipt.remaining_amount} /></dd>
+                      </div>
+                    ) : null}
+                  </dl>
+                </div>
+              </ManagementDetailSection>
+              <ManagementDetailActionFooter
+                leftActions={[
+                  ...(selectedReceiptOutstanding > 0
+                    ? [{
+                        label: 'Thanh toán NCC',
+                        icon: <WalletCards aria-hidden="true" size={15} />,
+                        variant: 'primary' as const,
+                        onClick: openSupplierPaymentForReceipt,
+                      }]
+                    : []),
+                ]}
+                rightActions={[
+                  { label: 'In', icon: <Printer aria-hidden="true" size={15} />, onClick: () => window.print() },
+                ]}
+              />
+            </>
+          ) : null}
+          {activeReceiptDetailTab === 'payments' ? (
+            <ManagementDetailSection ariaLabel="Lịch sử thanh toán NCC">
+              {selectedReceiptPayments.length === 0 ? (
+                <ManagementDetailInlineNote>Chưa có thanh toán NCC sau nhập.</ManagementDetailInlineNote>
+              ) : (
+                <table className="management-detail-table management-detail-linked-table">
+                  <thead>
+                    <tr>
+                      <th>Mã phiếu</th>
+                      <th>Thời gian</th>
+                      <th>Người tạo</th>
+                      <th>Phương thức</th>
+                      <th>Trạng thái</th>
+                      <th>Tiền chi</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedReceiptPayments.map((payment) => (
+                      <tr key={payment.id}>
+                        <td>{payment.code}</td>
+                        <td>{formatKvDateTime(payment.paid_at)}</td>
+                        <td>{payment.created_by}</td>
+                        <td>{supplierPaymentMethodText(payment.payment_method)}</td>
+                        <td>
+                          <StatusChip tone={payment.status === 'posted' ? 'success' : 'neutral'}>
+                            {supplierPaymentStatusText(payment.status)}
+                          </StatusChip>
+                        </td>
+                        <td><MoneyText value={payment.amount} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {selectedReceiptOutstanding > 0 ? (
+                <button className="button button-primary" type="button" onClick={openSupplierPaymentForReceipt}>
+                  <WalletCards aria-hidden="true" size={16} />
+                  Thanh toán NCC
+                </button>
+              ) : null}
+            </ManagementDetailSection>
+          ) : null}
+          {supplierPaymentOpen ? (
+            <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
+              <section role="form" aria-label="Thanh toán nhà cung cấp" className="receipt-payment-box">
+                <h3>Thanh toán NCC</h3>
+                <p>{selectedReceipt.code}</p>
+                <p>Còn nợ: {money(selectedReceiptOutstanding)}</p>
+                <label>
+                  Số tiền trả cho {selectedReceipt.code}
+                  <input
+                    min="0"
+                    max={selectedReceiptOutstanding}
+                    step="1000"
+                    type="number"
+                    value={supplierPaymentAmount}
+                    onChange={(event) => setSupplierPaymentAmount(Number(event.target.value))}
+                  />
+                </label>
+                <label>
+                  Phương thức trả NCC
+                  <select
+                    value={supplierPaymentMethod}
+                    onChange={(event) => void changeSupplierPaymentMethod(event.target.value as 'cash' | 'bank_transfer')}
+                  >
+                    <option value="cash">Tiền mặt</option>
+                    <option value="bank_transfer">Chuyển khoản</option>
+                  </select>
+                </label>
+                {supplierPaymentMethod === 'bank_transfer' ? (
+                  <label>
+                    Tài khoản chuyển khoản NCC
+                    <select
+                      value={supplierPaymentFinanceAccountId}
+                      onChange={(event) => setSupplierPaymentFinanceAccountId(event.target.value)}
+                    >
+                      <option value="">Chọn tài khoản</option>
+                      {bankAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>
+                          {account.code} - {account.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                <button className="button button-primary" disabled={posting} type="button" onClick={() => void saveSupplierPayment()}>
+                  <Banknote aria-hidden="true" size={16} />
+                  Lưu thanh toán NCC
+                </button>
+              </section>
+            </ManagementDetailSection>
+          ) : null}
+        </ManagementDetailPanel>
+      )
+    }
+
     return (
-      <section aria-label={ariaLabel} className="management-detail-panel" role="region">
-        <div className="panel-heading">
-          <div>
-            <h2>Chi tiết phiếu</h2>
-            <p>Nhập hàng thường, cuộn/tấm vật lý và thanh toán NCC.</p>
-          </div>
-        </div>
-        <form aria-label="Thông tin phiếu nhập" className="purchase-receipt-form" onSubmit={saveReceipt}>
-          <header>
-            <h2>{isReadOnly ? 'Xem phiếu nhập' : editingId ? 'Sửa draft phiếu nhập' : 'Tạo draft phiếu nhập'}</h2>
-            {editingId !== null && editingStatus === 'draft' ? (
-              <button className="button button-primary" disabled={posting} type="button" onClick={() => void postReceipt()}>
-                <PackageCheck aria-hidden="true" size={16} />
-                Hoàn thành nhập hàng
-              </button>
+      <ManagementDetailPanel>
+        {editingId ? (
+          <ManagementInlineDetailTabs
+            activeKey={activeReceiptDetailTab}
+            ariaLabel="Chi tiết phiếu nhập"
+            tabs={[
+              { key: 'info', label: 'Thông tin' },
+              ...(hasPaymentHistory ? [{ key: 'payments', label: 'Lịch sử thanh toán' }] : []),
+            ]}
+            onSelect={(key) => {
+              setReceiptDetailTab(key === 'payments' ? 'payments' : 'info')
+              setSupplierPaymentOpen(false)
+            }}
+          />
+        ) : null}
+        {showInfoTab ? (
+          <>
+            <ManagementDetailHeader
+              title={detailTitle}
+              endAction={(
+                <div className="row-actions">
+                  {editingId !== null && editingStatus === 'draft' ? (
+                    <button className="button button-primary" disabled={posting} type="button" onClick={() => void postReceipt()}>
+                      <PackageCheck aria-hidden="true" size={16} />
+                      Hoàn thành nhập hàng
+                    </button>
+                  ) : null}
+                  {editingId ? (
+                    <button className="button button-secondary" type="button" onClick={resetForm}>
+                      <FilePlus2 aria-hidden="true" size={15} />
+                      Tạo mới
+                    </button>
+                  ) : null}
+                </div>
+              )}
+            />
+            {selectedReceipt ? (
+              <ManagementDetailSummary
+                ariaLabel="Tóm tắt phiếu nhập"
+                code={selectedReceipt.code}
+                metaAriaLabel="Thông tin tạo phiếu nhập"
+                metaItems={[
+                  { label: 'Người tạo:', value: selectedReceipt.created_by.name },
+                  { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
+                  { label: 'Trạng thái:', value: detailStatus },
+                ]}
+                title={selectedReceipt.supplier.name}
+              />
             ) : null}
-            {editingId ? (
-              <button className="button button-secondary" type="button" onClick={resetForm}>
-                <FilePlus2 aria-hidden="true" size={15} />
-                Tạo mới
-              </button>
+            {selectedReceipt ? (
+              <ManagementDetailSection ariaLabel="Thông tin nhanh phiếu nhập">
+                <ManagementDetailInfoList
+                  columns="four"
+                  items={[
+                    { label: 'Nhà cung cấp', value: selectedReceipt.supplier.name },
+                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? 'Chưa có' },
+                    { label: 'Cần trả NCC', value: money(selectedReceipt.payable_amount) },
+                    { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
+                  ]}
+                />
+                <ManagementDetailInlineNote>{selectedReceipt.notes?.trim() || 'Chưa có ghi chú'}</ManagementDetailInlineNote>
+              </ManagementDetailSection>
             ) : null}
-          </header>
-          <label>
+            <ManagementDetailSection ariaLabel={ariaLabel}>
+              <form aria-label="Thông tin phiếu nhập" className="purchase-receipt-form" onSubmit={saveReceipt}>
+                <label>
             Nhà cung cấp
             <select
               required
@@ -1018,44 +1713,87 @@ export function PurchaseReceiptsPage({
               ))}
             </div>
           ) : null}
-          {isReadOnly && selectedReceipt ? (
-            <section className="receipt-payment-history" aria-label="Lịch sử thanh toán NCC">
-              <h3>Lịch sử thanh toán NCC</h3>
-              {selectedReceipt.supplier_payments.length === 0 ? (
-                <p>Chưa có thanh toán NCC sau nhập.</p>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Mã phiếu</th>
-                      <th>Thời gian</th>
-                      <th>Phương thức</th>
-                      <th>Trạng thái</th>
-                      <th>Tiền chi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedReceipt.supplier_payments.map((payment) => (
-                      <tr key={payment.id}>
-                        <td>{payment.code}</td>
-                        <td>{formatKvDateTime(payment.paid_at)}</td>
-                        <td>{payment.payment_method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'}</td>
-                        <td>{payment.status === 'posted' ? 'Đã ghi' : 'Đã hủy'}</td>
-                        <td><MoneyText value={payment.amount} /></td>
-                      </tr>
+          {editingId !== null && editingStatus === 'draft' && Number(form.paid_amount || 0) > 0 ? (
+            <div className="receipt-payment-box">
+              <label>
+                Phương thức trả ngay
+                <select
+                  value={paymentMethod}
+                  onChange={(event) => void changeImmediatePaymentMethod(event.target.value as 'cash' | 'bank_transfer')}
+                >
+                  <option value="cash">Tiền mặt</option>
+                  <option value="bank_transfer">Chuyển khoản</option>
+                </select>
+              </label>
+              {paymentMethod === 'bank_transfer' ? (
+                <label>
+                  Tài khoản chuyển khoản
+                  <select value={financeAccountId} onChange={(event) => setFinanceAccountId(event.target.value)}>
+                    <option value="">Chọn tài khoản</option>
+                    {bankAccounts.map((account) => (
+                      <option key={account.id} value={account.id}>
+                        {account.code} - {account.name}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
-              )}
-              {selectedReceiptOutstanding > 0 ? (
-                <button className="button button-primary" type="button" onClick={openSupplierPaymentForReceipt}>
-                  <WalletCards aria-hidden="true" size={16} />
-                  Thanh toán NCC
-                </button>
+                  </select>
+                </label>
               ) : null}
-            </section>
+            </div>
           ) : null}
-          {supplierPaymentOpen && selectedReceipt ? (
+          {isReadOnly ? null : (
+            <button className="button button-secondary" disabled={saving} type="submit">
+              <Save aria-hidden="true" size={16} />
+              Lưu draft phiếu nhập
+            </button>
+          )}
+              </form>
+            </ManagementDetailSection>
+          </>
+        ) : null}
+        {activeReceiptDetailTab === 'payments' && selectedReceipt ? (
+          <ManagementDetailSection ariaLabel="Lịch sử thanh toán NCC">
+            {selectedReceiptPayments.length === 0 ? (
+              <ManagementDetailInlineNote>Chưa có thanh toán NCC sau nhập.</ManagementDetailInlineNote>
+            ) : (
+              <table className="management-detail-table management-detail-linked-table">
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Thời gian</th>
+                    <th>Người tạo</th>
+                    <th>Phương thức</th>
+                    <th>Trạng thái</th>
+                    <th>Tiền chi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedReceiptPayments.map((payment) => (
+                    <tr key={payment.id}>
+                      <td>{payment.code}</td>
+                      <td>{formatKvDateTime(payment.paid_at)}</td>
+                      <td>{payment.created_by}</td>
+                      <td>{supplierPaymentMethodText(payment.payment_method)}</td>
+                      <td>
+                        <StatusChip tone={payment.status === 'posted' ? 'success' : 'neutral'}>
+                          {supplierPaymentStatusText(payment.status)}
+                        </StatusChip>
+                      </td>
+                      <td><MoneyText value={payment.amount} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+            {selectedReceiptOutstanding > 0 ? (
+              <button className="button button-primary" type="button" onClick={openSupplierPaymentForReceipt}>
+                <WalletCards aria-hidden="true" size={16} />
+                Thanh toán NCC
+              </button>
+            ) : null}
+          </ManagementDetailSection>
+        ) : null}
+        {supplierPaymentOpen && selectedReceipt ? (
+          <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
             <section role="form" aria-label="Thanh toán nhà cung cấp" className="receipt-payment-box">
               <h3>Thanh toán NCC</h3>
               <p>{selectedReceipt.code}</p>
@@ -1102,39 +1840,326 @@ export function PurchaseReceiptsPage({
                 Lưu thanh toán NCC
               </button>
             </section>
-          ) : null}
-          {editingId !== null && editingStatus === 'draft' && Number(form.paid_amount || 0) > 0 ? (
-            <div className="receipt-payment-box">
-              <label>
-                Phương thức trả ngay
-                <select
-                  value={paymentMethod}
-                  onChange={(event) => void changeImmediatePaymentMethod(event.target.value as 'cash' | 'bank_transfer')}
-                >
-                  <option value="cash">Tiền mặt</option>
-                  <option value="bank_transfer">Chuyển khoản</option>
-                </select>
-              </label>
-              {paymentMethod === 'bank_transfer' ? (
-                <label>
-                  Tài khoản chuyển khoản
-                  <select value={financeAccountId} onChange={(event) => setFinanceAccountId(event.target.value)}>
-                    <option value="">Chọn tài khoản</option>
-                    {bankAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.code} - {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
+          </ManagementDetailSection>
+        ) : null}
+      </ManagementDetailPanel>
+    )
+  }
+
+  function renderCreateReceiptWorkspace() {
+    return (
+      <section aria-label="Tạo phiếu nhập" className="purchase-receipt-workspace" role="region">
+        <form
+          aria-label="Thông tin phiếu nhập"
+          className={`purchase-receipt-workspace-form${receiptWorkspaceSideCollapsed ? ' purchase-receipt-workspace-form-side-collapsed' : ''}`}
+          onSubmit={saveReceipt}
+        >
+          <div className="purchase-receipt-workspace-main">
+            <div className="management-table-viewport purchase-receipt-workspace-table-wrap">
+              {form.items.length === 0 ? (
+                <EmptyState>
+                  <p>Chọn hàng từ thanh tìm kiếm để thêm vào phiếu nhập.</p>
+                </EmptyState>
+              ) : (
+                <ul aria-label="Dòng hàng phiếu nhập mới" className="pos-cart-lines purchase-receipt-line-cards">
+                  <li aria-label="Cột dòng hàng nhập" className="pos-cart-line-heading purchase-receipt-line-heading">
+                    <div className="pos-cart-line-header pos-cart-line-header-static purchase-receipt-line-card-header">
+                      <span>STT</span>
+                      <span>Mã hàng</span>
+                      <span>Tên hàng</span>
+                      <span>ĐVT</span>
+                      <span>Số lượng</span>
+                      <span>Đơn giá</span>
+                      <span>Giảm giá</span>
+                      <span>Thành tiền</span>
+                    </div>
+                  </li>
+                  {form.items.map((line, index) => {
+                    const selectedProduct = products.find((product) => product.id === line.product_id)
+                    return (
+                      <li
+                        key={`${line.product_id || 'line'}-${index}`}
+                        aria-label={`Dòng hàng nhập ${index + 1}`}
+                        className="pos-cart-line-shell purchase-receipt-line-card"
+                      >
+                        <div className="pos-cart-line purchase-receipt-line-card-row">
+                          <span className="pos-cart-line-index">{index + 1}</span>
+                          <span className="purchase-receipt-line-code">{selectedProduct?.code ?? line.product_id}</span>
+                          <div className="pos-cart-line-name">
+                            <strong>{selectedProduct?.name ?? 'Hàng hóa'}</strong>
+                          </div>
+                          <input aria-label={`Đơn vị dòng ${index + 1}`} className="pos-cart-line-unit-select" readOnly value={line.unit_name} />
+                          <div className="pos-cart-line-quantity">
+                            <input
+                              aria-label={`Số lượng dòng ${index + 1}`}
+                              min="0.000001"
+                              readOnly={line.inventory_shape !== 'normal'}
+                              step="0.000001"
+                              type="number"
+                              value={line.quantity}
+                              onChange={(event) => updateLine(index, { quantity: Number(event.target.value) })}
+                            />
+                          </div>
+                          <div className="pos-cart-line-price">
+                            <input
+                              aria-label={`Đơn giá dòng ${index + 1}`}
+                              min="0"
+                              step="1000"
+                              type="number"
+                              value={line.unit_cost}
+                              onChange={(event) => updateLine(index, { unit_cost: Number(event.target.value) })}
+                            />
+                          </div>
+                          <div className="pos-cart-line-price purchase-receipt-line-discount">
+                            <input
+                              aria-label={`Giảm giá dòng ${index + 1}`}
+                              min="0"
+                              step="1000"
+                              type="number"
+                              value={line.discount_amount}
+                              onChange={(event) => updateLine(index, { discount_amount: Number(event.target.value) })}
+                            />
+                          </div>
+                          <strong className="pos-cart-line-total">{money(lineAmount(line))}</strong>
+                        </div>
+                        <button
+                          aria-label={`Xóa dòng ${index + 1}`}
+                          className="pos-cart-line-remove"
+                          type="button"
+                          onClick={() => removeLine(index)}
+                        >
+                          ×
+                        </button>
+                        {line.inventory_shape === 'roll' ? (() => {
+                          const payload = rollPayload(line.physical_payload)
+                          const firstLength = payload.rolls.lengths_m[0] ?? 1
+                          return (
+                            <div className="receipt-physical-box purchase-receipt-line-physical" aria-label={`Thông tin cuộn dòng ${index + 1}`}>
+                              <label>
+                                Khổ rộng cuộn dòng {index + 1}
+                                <input
+                                  min="0.001"
+                                  step="0.001"
+                                  type="number"
+                                  value={payload.rolls.width_m}
+                                  onChange={(event) => updateRollPayload(index, { width_m: Number(event.target.value) })}
+                                />
+                              </label>
+                              <label>
+                                Số cuộn cùng quy cách dòng {index + 1}
+                                <input
+                                  min="1"
+                                  step="1"
+                                  type="number"
+                                  value={payload.rolls.lengths_m.length}
+                                  onChange={(event) => {
+                                    const count = Math.max(Math.floor(Number(event.target.value) || 0), 0)
+                                    const lengths = Array.from({ length: count }, () => firstLength || 1)
+                                    setRollLengthTexts((current) => ({ ...current, [index]: lengths.join(', ') }))
+                                    updateRollPayload(index, { lengths_m: lengths })
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                Chiều dài mỗi cuộn dòng {index + 1}
+                                <input
+                                  min="0.001"
+                                  step="0.001"
+                                  type="number"
+                                  value={firstLength}
+                                  onChange={(event) => {
+                                    const length = Number(event.target.value)
+                                    const lengths = payload.rolls.lengths_m.map(() => length)
+                                    setRollLengthTexts((current) => ({ ...current, [index]: lengths.join(', ') }))
+                                    updateRollPayload(index, { lengths_m: lengths })
+                                  }}
+                                />
+                              </label>
+                              <label>
+                                Chiều dài từng cuộn dòng {index + 1}
+                                <textarea
+                                  value={rollLengthTexts[index] ?? payload.rolls.lengths_m.join(', ')}
+                                  onChange={(event) => {
+                                    const text = event.target.value
+                                    setRollLengthTexts((current) => ({ ...current, [index]: text }))
+                                    const lengths = text
+                                      .split(',')
+                                      .map((value) => Number(value.trim()))
+                                      .filter((value) => Number.isFinite(value) && value > 0)
+                                    updateRollPayload(index, { lengths_m: lengths })
+                                  }}
+                                />
+                              </label>
+                              <p className="physical-summary">{physicalSummary(line)}</p>
+                            </div>
+                          )
+                        })() : null}
+                        {line.inventory_shape === 'sheet' ? (
+                          <div className="receipt-physical-box purchase-receipt-line-physical" aria-label={`Thông tin tấm dòng ${index + 1}`}>
+                            {sheetPayload(line.physical_payload).sheet_groups.map((group, groupIndex) => (
+                              <fieldset key={groupIndex}>
+                                <legend>Nhóm tấm {groupIndex + 1}</legend>
+                                <label>
+                                  Rộng nhóm {groupIndex + 1} dòng {index + 1}
+                                  <input
+                                    min="0.001"
+                                    step="0.001"
+                                    type="number"
+                                    value={group.width_m}
+                                    onChange={(event) => updateSheetPayload(index, groupIndex, { width_m: Number(event.target.value) })}
+                                  />
+                                </label>
+                                <label>
+                                  Dài nhóm {groupIndex + 1} dòng {index + 1}
+                                  <input
+                                    min="0.001"
+                                    step="0.001"
+                                    type="number"
+                                    value={group.length_m}
+                                    onChange={(event) => updateSheetPayload(index, groupIndex, { length_m: Number(event.target.value) })}
+                                  />
+                                </label>
+                                <label>
+                                  Số tấm nhóm {groupIndex + 1} dòng {index + 1}
+                                  <input
+                                    min="1"
+                                    step="1"
+                                    type="number"
+                                    value={group.quantity}
+                                    onChange={(event) => updateSheetPayload(index, groupIndex, { quantity: Math.max(Math.floor(Number(event.target.value) || 0), 0) })}
+                                  />
+                                </label>
+                                <button className="button button-danger" type="button" onClick={() => removeSheetGroup(index, groupIndex)}>
+                                  <Trash2 aria-hidden="true" size={15} />
+                                  Xóa nhóm tấm {groupIndex + 1}
+                                </button>
+                              </fieldset>
+                            ))}
+                            <p className="physical-summary">{physicalSummary(line)}</p>
+                            <button className="button button-secondary" type="button" onClick={() => addSheetGroup(index)}>
+                              <Plus aria-hidden="true" size={15} />
+                              Thêm nhóm kích thước
+                            </button>
+                          </div>
+                        ) : null}
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
             </div>
-          ) : null}
-          {isReadOnly ? null : (
-            <button className="button button-secondary" disabled={saving} type="submit">
-              <Save aria-hidden="true" size={16} />
-              Lưu draft phiếu nhập
-            </button>
+          </div>
+
+          {receiptWorkspaceSideCollapsed ? (
+            <div className="management-filter-rail purchase-receipt-workspace-side-rail">
+              <button
+                aria-label="Mở thông tin phiếu nhập"
+                className="management-filter-expand-button"
+                type="button"
+                onClick={() => setReceiptWorkspaceSideCollapsed(false)}
+              >
+                <ChevronLeft aria-hidden="true" size={18} />
+              </button>
+            </div>
+          ) : (
+            <aside className="management-filter-sidebar purchase-receipt-workspace-side" aria-label="Thông tin phiếu nhập bên phải">
+              <button
+                aria-label="Ẩn thông tin phiếu nhập"
+                className="management-filter-collapse-button"
+                type="button"
+                onClick={() => setReceiptWorkspaceSideCollapsed(true)}
+              >
+                <ChevronRight aria-hidden="true" size={18} />
+              </button>
+              <div className="purchase-receipt-workspace-side-body">
+                <label>
+                  Tài khoản
+                  <input readOnly value={accountDisplayName(currentUser)} />
+                </label>
+                <label>
+                  Mã phiếu nhập
+                  <input
+                    placeholder="Mã phiếu tự động"
+                    value={form.code}
+                    onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Thời gian nhập
+                  <input
+                    required
+                    type="datetime-local"
+                    value={form.received_at}
+                    onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Số hóa đơn đầu vào
+                  <input
+                    value={form.supplier_document_no}
+                    onChange={(event) => setForm((current) => ({ ...current, supplier_document_no: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Giảm giá phiếu
+                  <input
+                    min="0"
+                    step="1000"
+                    type="number"
+                    value={form.discount_amount}
+                    onChange={(event) => setForm((current) => ({ ...current, discount_amount: Number(event.target.value) }))}
+                  />
+                </label>
+                <label>
+                  Đã trả tạm
+                  <input
+                    min="0"
+                    step="1000"
+                    type="number"
+                    value={form.paid_amount}
+                    onChange={(event) => setForm((current) => ({ ...current, paid_amount: Number(event.target.value) }))}
+                  />
+                </label>
+                <dl className="purchase-receipt-workspace-totals">
+                  <div>
+                    <dt>Tổng tiền hàng</dt>
+                    <dd>{money(totals.subtotal)}</dd>
+                  </div>
+                  <div>
+                    <dt>Giảm giá</dt>
+                    <dd>{money(form.discount_amount)}</dd>
+                  </div>
+                  <div>
+                    <dt>Tổng nợ</dt>
+                    <dd>{money(totals.remaining)}</dd>
+                  </div>
+                </dl>
+                <label>
+                  Ghi chú
+                  <textarea
+                    value={form.notes}
+                    onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                  />
+                </label>
+                {lowCostWarnings.length > 0 ? (
+                  <div role="alert" className="receipt-warning-box">
+                    {lowCostWarnings.map((warning) => (
+                      <p key={warning}>{warning}</p>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+              <footer className="management-filter-actions purchase-receipt-workspace-actions">
+                <button className="button button-secondary" disabled={saving} type="submit">
+                  <Save aria-hidden="true" size={16} />
+                  Lưu tạm
+                </button>
+                <button className="button button-primary" disabled={saving || posting} type="submit">
+                  <PackageCheck aria-hidden="true" size={16} />
+                  Hoàn thành
+                </button>
+              </footer>
+            </aside>
           )}
         </form>
       </section>
@@ -1143,16 +2168,104 @@ export function PurchaseReceiptsPage({
 
   function receiptDetailLoading(ariaLabel: string) {
     return (
-      <section aria-label={ariaLabel} className="management-detail-panel" role="region">
-        <p>Đang tải chi tiết phiếu nhập...</p>
-      </section>
+      <ManagementDetailPanel>
+        <ManagementDetailSection ariaLabel={ariaLabel}>
+          <ManagementDetailInlineNote>Đang tải chi tiết phiếu nhập...</ManagementDetailInlineNote>
+        </ManagementDetailSection>
+      </ManagementDetailPanel>
     )
   }
 
   return (
     <ManagementPage
-      title="Phiếu nhập"
-      actions={
+      className={`purchase-receipts-page${isCreatingReceipt ? ' purchase-receipts-page-create' : ''}`}
+      title={isCreatingReceipt ? 'Nhập hàng' : 'Phiếu nhập'}
+      titlePrefix={isCreatingReceipt ? (
+        <button
+          aria-label="Quay lại danh sách phiếu nhập"
+          className="management-page-title-back"
+          type="button"
+          onClick={closeCreateReceipt}
+        >
+          <ChevronLeft aria-hidden="true" size={20} />
+        </button>
+      ) : undefined}
+      actions={isCreatingReceipt ? (
+        <ManagementCompactToolbar
+          ariaLabel="Tìm hàng nhập"
+          className="purchase-receipt-product-search-toolbar"
+          onSubmit={submitReceiptProductSearch}
+        >
+          <label className="management-compact-search pos-topbar-search-control">
+            <span className="pos-topbar-search-label">Tìm hàng (F3)</span>
+            <span className="management-compact-search-leading">
+              <Search aria-hidden="true" size={16} />
+            </span>
+            <input
+              ref={receiptProductSearchRef}
+              value={receiptProductSearch}
+              placeholder="Tìm hàng hóa theo mã hoặc tên"
+              onChange={(event) => setReceiptProductSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  setReceiptProductSearch('')
+                  return
+                }
+                if (event.key !== 'Enter') return
+                const firstSuggestion = receiptProductSuggestions[0]
+                if (firstSuggestion === undefined) return
+                event.preventDefault()
+                selectReceiptProduct(firstSuggestion.id)
+              }}
+            />
+            <span className="management-compact-search-trailing">
+              <button
+                aria-label={receiptProductSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
+                className={`management-compact-create-action pos-search-add-button${receiptProductSearch.trim().length > 0 ? ' management-compact-create-action-clear' : ''}`}
+                title={receiptProductSearch.trim().length > 0 ? 'Xóa tìm kiếm' : 'Tạo hàng hóa'}
+                type="button"
+                onClick={() => {
+                  if (receiptProductSearch.trim().length > 0) {
+                    setReceiptProductSearch('')
+                    return
+                  }
+                  setProductCreateOpen(true)
+                }}
+              >
+                <Plus aria-hidden="true" size={18} />
+              </button>
+            </span>
+          </label>
+          {receiptProductSearch.trim().length > 0 ? (
+            <ul aria-label="Kết quả tìm hàng" className="pos-search-results purchase-receipt-product-search-results" role="listbox">
+              {receiptProductSuggestions.length > 0 ? (
+                receiptProductSuggestions.map((suggestion) => {
+                  const product = products.find((candidate) => candidate.id === suggestion.id)
+                  const price = product?.latest_purchase_cost ?? 0
+                  return (
+                    <li key={suggestion.id}>
+                      <button
+                        role="option"
+                        aria-selected="false"
+                        type="button"
+                        onClick={() => selectReceiptProduct(suggestion.id)}
+                      >
+                        <strong>{suggestion.primary}</strong>
+                        <span>{suggestion.secondary}</span>
+                        <span>{suggestion.meta ?? money(price)}</span>
+                      </button>
+                    </li>
+                  )
+                })
+              ) : (
+                <li role="option" aria-selected="false">
+                  Không tìm thấy hàng hóa phù hợp
+                </li>
+              )}
+            </ul>
+          ) : null}
+        </ManagementCompactToolbar>
+      ) : (
         <ManagementCompactToolbar ariaLabel="Lọc phiếu nhập" onSubmit={filterReceipts}>
           <ManagementCompactSearch
             label="Tìm phiếu/NCC"
@@ -1164,12 +2277,9 @@ export function PurchaseReceiptsPage({
             value={search}
             onChange={changeReceiptSearch}
           />
-          <button className="button button-secondary" type="button" onClick={() => setImportOpen(true)}>
-            <FilePlus2 aria-hidden="true" size={16} />
-            Import KV
-          </button>
+          <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
         </ManagementCompactToolbar>
-      }
+      )}
       kpis={receiptKpis}
       filter={
         <ManagementFilterSidebar
@@ -1276,8 +2386,8 @@ export function PurchaseReceiptsPage({
           </ManagementFilterGroup>
         </ManagementFilterSidebar>
       }
-      filterVisible={showFilters}
-      filterCollapsedControl={
+      filterVisible={showFilters && !isCreatingReceipt}
+      filterCollapsedControl={!isCreatingReceipt ? (
         <button
           aria-label="Mở bộ lọc phiếu nhập"
           className="management-filter-expand-button"
@@ -1287,13 +2397,13 @@ export function PurchaseReceiptsPage({
         >
           <ChevronRight aria-hidden="true" size={16} />
         </button>
-      }
+      ) : undefined}
     >
-      <ManagementListSurface ariaLabel="Danh sách phiếu nhập">
-        {error ? <p role="alert">{error}</p> : null}
-        {receipts === null && error === null ? <p>Đang tải phiếu nhập...</p> : null}
-        {isCreatingReceipt ? receiptDetailContent('Tạo phiếu nhập') : null}
-        {receipts ? (
+      {error ? <p role="alert">{error}</p> : null}
+      {receipts === null && error === null ? <p>Đang tải phiếu nhập...</p> : null}
+      {isCreatingReceipt ? renderCreateReceiptWorkspace() : null}
+      {!isCreatingReceipt && receipts ? (
+        <ManagementListSurface ariaLabel="Danh sách phiếu nhập">
             <>
               {receipts.length === 0 ? (
                 <EmptyState>
@@ -1361,30 +2471,29 @@ export function PurchaseReceiptsPage({
                       },
                       {
                         key: 'total-quantity',
-                        header: <ManagementSortableHeader kind="number" sortKey="total_quantity" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng số lượng</ManagementSortableHeader>,
+                        header: <ManagementSortableHeader kind="number" sortKey="total_quantity" sortState={receiptSortState} onSort={requestReceiptSort}>Số lượng</ManagementSortableHeader>,
                         headerIsCell: true,
                         cell: (receipt) => quantityText(receiptTotalQuantity(receipt)),
                       },
                       {
                         key: 'subtotal',
-                        header: <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tổng tiền hàng</ManagementSortableHeader>,
+                        header: <ManagementSortableHeader kind="number" sortKey="subtotal_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Thành tiền</ManagementSortableHeader>,
                         headerIsCell: true,
                         cell: (receipt) => <MoneyText value={receipt.subtotal_amount} />,
                       },
                       {
                         key: 'payable',
-                        header: <ManagementSortableHeader kind="number" sortKey="payable_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Cần trả NCC</ManagementSortableHeader>,
+                        header: <ManagementSortableHeader kind="number" sortKey="payable_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Cần trả</ManagementSortableHeader>,
                         headerIsCell: true,
                         cell: (receipt) => <MoneyText value={receipt.payable_amount} />,
                       },
                       {
                         key: 'paid',
-                        header: <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Tiền đã trả NCC</ManagementSortableHeader>,
+                        header: <ManagementSortableHeader kind="number" sortKey="paid_amount" sortState={receiptSortState} onSort={requestReceiptSort}>Đã trả</ManagementSortableHeader>,
                         headerIsCell: true,
                         cell: (receipt) => <MoneyText value={receipt.paid_amount} />,
                       },
                     ]}
-                    detailClassName="management-detail-panel"
                     getDetailLabel={(receipt) => `Chi tiết phiếu nhập ${receipt.code}`}
                     getRowKey={(receipt) => receipt.id}
                     items={visibleReceipts}
@@ -1419,8 +2528,8 @@ export function PurchaseReceiptsPage({
                 onPrevious={() => void goToPage(page - 1)}
               />
             </>
-          ) : null}
-      </ManagementListSurface>
+        </ManagementListSurface>
+      ) : null}
       <PurchaseReceiptImportDialog
         open={importOpen}
         service={service}
@@ -1428,6 +2537,67 @@ export function PurchaseReceiptsPage({
         onImported={() => void loadReceipts({ page: 1, page_size: pageSize })}
         onOldDataDeleted={() => void loadReceipts({ page: 1, page_size: pageSize })}
       />
+      {productCreateOpen ? (
+        <aside aria-label="Tạo hàng hóa" className="pos-product-create-popover">
+          <form onSubmit={createReceiptProduct}>
+            <header>
+              <h2>Tạo hàng hóa</h2>
+              <button
+                aria-label="Đóng tạo hàng hóa"
+                type="button"
+                onClick={() => {
+                  setProductCreateOpen(false)
+                  setProductCreateError(null)
+                }}
+              >
+                ×
+              </button>
+            </header>
+            {productCreateError ? <p role="alert">{productCreateError}</p> : null}
+            <label>
+              Mã hàng
+              <input
+                value={productCreateForm.code}
+                onChange={(event) => setProductCreateForm((current) => ({ ...current, code: event.target.value }))}
+              />
+            </label>
+            <label>
+              Tên hàng
+              <input
+                required
+                value={productCreateForm.name}
+                onChange={(event) => setProductCreateForm((current) => ({ ...current, name: event.target.value }))}
+              />
+            </label>
+            <label>
+              Đơn vị
+              <input
+                required
+                value={productCreateForm.unitName}
+                onChange={(event) => setProductCreateForm((current) => ({ ...current, unitName: event.target.value }))}
+              />
+            </label>
+            <label>
+              Loại bán
+              <select
+                value={productCreateForm.sellMethod}
+                onChange={(event) => setProductCreateForm((current) => ({
+                  ...current,
+                  sellMethod: event.target.value as PurchaseReceiptProduct['sell_method'],
+                }))}
+              >
+                <option value="quantity">Theo số lượng</option>
+                <option value="area_m2">Theo m2</option>
+                <option value="linear_m">Theo mét dài</option>
+                <option value="sheet">Theo tấm</option>
+              </select>
+            </label>
+            <button className="button button-primary" disabled={productCreateSaving} type="submit">
+              Thêm hàng hóa
+            </button>
+          </form>
+        </aside>
+      ) : null}
     </ManagementPage>
   )
 }

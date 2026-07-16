@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
@@ -9,8 +9,15 @@ import {
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDetailActionFooter,
+  ManagementDetailHeader,
   ManagementDetailInfoList,
   ManagementDetailInlineNote,
+  ManagementDetailPanel,
+  ManagementDetailMetaText,
+  ManagementDetailNote,
+  ManagementDetailNoteInput,
+  ManagementDetailSection,
+  ManagementDetailSummary,
   ManagementDetailRow,
   ManagementDataTable,
   ManagementFilterGroup,
@@ -179,7 +186,24 @@ it('can hide the filter sidebar and let the list use the full width', () => {
   )
 
   expect(screen.queryByRole('complementary', { name: 'Bộ lọc chứng từ' })).not.toBeInTheDocument()
+  expect(screen.getByLabelText('Chứng từ')).toHaveClass('management-layout-filters-none')
+  expect(screen.getByLabelText('Chứng từ')).not.toHaveClass('management-layout-filters-hidden')
+})
+
+it('keeps a filter rail when the hidden filter has a collapsed control', () => {
+  render(
+    <ManagementPage
+      filter={<ManagementFilterSidebar ariaLabel="Bộ lọc chứng từ">Bộ lọc</ManagementFilterSidebar>}
+      filterCollapsedControl={<button type="button">Mở lọc</button>}
+      filterVisible={false}
+      title="Chứng từ"
+    >
+      <ManagementListSurface ariaLabel="Danh sách chứng từ">Danh sách</ManagementListSurface>
+    </ManagementPage>,
+  )
+
   expect(screen.getByLabelText('Chứng từ')).toHaveClass('management-layout-filters-hidden')
+  expect(screen.getByRole('button', { name: 'Mở lọc' }).closest('.management-filter-rail')).not.toBeNull()
 })
 
 it('renders reusable compact search toolbar with an icon action inside the search box', async () => {
@@ -696,20 +720,145 @@ it('renders shared detail info list and inline note', () => {
   render(
     <section aria-label="Thông tin khách hàng">
       <ManagementDetailInfoList
+        columns="four"
         items={[
           { label: 'MST', value: '0312345678' },
           { label: 'Người tạo', value: 'Chưa khớp tài khoản' },
         ]}
       />
+      <ManagementDetailMetaText label="Nhóm khách:" value="Khách VIP" />
       <ManagementDetailInlineNote icon={<span data-testid="note-icon" />}>Ghi chú khách KV</ManagementDetailInlineNote>
     </section>,
   )
 
   const panel = screen.getByRole('region', { name: 'Thông tin khách hàng' })
+  expect(within(panel).getByText('MST').closest('dl')).toHaveClass('management-detail-meta-grid', 'management-detail-meta-grid-four')
   expect(within(panel).getByText('MST')).toBeInTheDocument()
+  expect(within(panel).getByText('MST')).toHaveClass('management-detail-meta-label')
   expect(within(panel).getByText('0312345678')).toBeInTheDocument()
+  expect(within(panel).getByText('0312345678')).toHaveClass('management-detail-meta-value')
   expect(within(panel).getByText('Người tạo')).toBeInTheDocument()
   expect(within(panel).getByText('Chưa khớp tài khoản')).toBeInTheDocument()
+  expect(within(panel).getByText('Nhóm khách:')).toHaveClass('management-detail-meta-label')
+  expect(within(panel).getByText('Khách VIP')).toHaveClass('management-detail-meta-value')
   expect(within(panel).getByText('Ghi chú khách KV')).toHaveClass('management-detail-inline-note')
   expect(screen.getByTestId('note-icon')).toBeInTheDocument()
+})
+
+it('stacks every shared detail info item when one item cannot fit on one line', async () => {
+  let resizeCallback: ResizeObserverCallback | null = null
+  class MockResizeObserver {
+    observe = vi.fn()
+    disconnect = vi.fn()
+
+    constructor(callback: ResizeObserverCallback) {
+      resizeCallback = callback
+    }
+  }
+  vi.stubGlobal('ResizeObserver', MockResizeObserver)
+
+  render(
+    <ManagementDetailInfoList
+      columns="three"
+      items={[
+        { label: 'Người tạo:', value: 'Văn Lâm' },
+        { label: 'Phương thức thanh toán', value: 'MBBank: 0947900909' },
+        { label: 'Ghi chú', value: '-' },
+      ]}
+    />,
+  )
+
+  const grid = screen.getByText('Phương thức thanh toán').closest('dl') as HTMLElement
+  const items = Array.from(grid.querySelectorAll(':scope > div')) as HTMLElement[]
+
+  items.forEach((item, index) => {
+    Object.defineProperty(item, 'clientWidth', { configurable: true, value: 240 })
+    Object.defineProperty(item.querySelector('dt'), 'scrollWidth', { configurable: true, value: index === 1 ? 110 : 50 })
+    Object.defineProperty(item.querySelector('dd'), 'scrollWidth', { configurable: true, value: index === 1 ? 100 : 60 })
+  })
+
+  act(() => {
+    resizeCallback?.([], {} as ResizeObserver)
+  })
+
+  await waitFor(() => expect(grid).not.toHaveClass('management-detail-meta-grid-stacked'))
+
+  Object.defineProperty(items[1], 'clientWidth', { configurable: true, value: 180 })
+
+  act(() => {
+    resizeCallback?.([], {} as ResizeObserver)
+  })
+
+  await waitFor(() => expect(grid).toHaveClass('management-detail-meta-grid-stacked'))
+
+  vi.unstubAllGlobals()
+})
+
+it('renders shared detail shell blocks for page-specific content', () => {
+  render(
+    <ManagementDetailPanel className="custom-detail-panel">
+      <ManagementDetailHeader
+        title="Phiếu thu PT0001"
+        endAction={<span data-testid="status-chip">Chưa thanh toán</span>}
+      />
+      <ManagementDetailSummary
+        ariaLabel="Thông tin tạo khách hàng"
+        code="KH000522"
+        metaItems={[
+          { label: 'Người tạo:', value: 'Văn Lâm' },
+          { label: 'Ngày tạo:', value: '08/07/2026' },
+          { label: 'Nhóm khách:', value: 'Chưa có' },
+        ]}
+        title="Lanh Hồ"
+      />
+      <ManagementDetailSection ariaLabel="Thông tin khách hàng" role="tabpanel">
+        <p>Ruột dữ liệu</p>
+      </ManagementDetailSection>
+    </ManagementDetailPanel>,
+  )
+
+  const panel = screen.getByText('Ruột dữ liệu').closest('.management-detail-panel')
+  expect(panel).toHaveClass('management-detail-panel', 'custom-detail-panel')
+  expect(within(panel as HTMLElement).getByRole('heading', { name: 'Phiếu thu PT0001' })).toBeInTheDocument()
+  expect(within(panel as HTMLElement).getByTestId('status-chip')).toHaveTextContent('Chưa thanh toán')
+  const summary = within(panel as HTMLElement).getByRole('group', { name: 'Thông tin tạo khách hàng' })
+  expect(summary).toHaveClass('management-detail-summary')
+  expect(within(summary).getByRole('heading', { name: 'Lanh Hồ' })).toBeInTheDocument()
+  expect(within(summary).getByText('KH000522')).toBeInTheDocument()
+  expect(within(summary).getByText('Người tạo:')).toHaveClass('management-detail-meta-label')
+  expect(within(summary).getByText('Văn Lâm')).toHaveClass('management-detail-meta-value')
+  expect(within(panel as HTMLElement).getByRole('tabpanel', { name: 'Thông tin khách hàng' })).toHaveClass('management-detail-section')
+})
+
+it('renders shared editable detail note input', async () => {
+  const onChange = vi.fn()
+  render(
+    <ManagementDetailNoteInput
+      ariaLabel="Ghi chú hóa đơn"
+      placeholder="Ghi chú..."
+      value="Khách lấy sau"
+      onChange={onChange}
+    />,
+  )
+
+  const input = screen.getByRole('textbox', { name: 'Ghi chú hóa đơn' })
+  expect(input).toHaveClass('management-detail-note')
+  expect(input).toHaveValue('Khách lấy sau')
+
+  await userEvent.type(input, ' thêm')
+  expect(onChange).toHaveBeenCalled()
+})
+
+it('renders shared read-only detail note with fallback and icon', () => {
+  render(
+    <section aria-label="Ghi chú chi tiết">
+      <ManagementDetailNote icon={<span data-testid="note-icon" />} value="  Ghi chú NCC  " />
+      <ManagementDetailNote value="   " />
+    </section>,
+  )
+
+  const panel = screen.getByRole('region', { name: 'Ghi chú chi tiết' })
+  expect(within(panel).getByText('Ghi chú NCC')).toHaveClass('management-detail-inline-note')
+  expect(screen.getByTestId('note-icon')).toBeInTheDocument()
+  expect(within(panel).getByText('Chưa có ghi chú')).toHaveClass('management-detail-inline-note')
 })

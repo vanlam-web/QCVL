@@ -134,6 +134,7 @@ export interface ProductListData {
   latest_purchase_cost: number | null
   latest_purchase_cost_at: string | null
   default_sale_price: number | null
+  price_list_prices?: Record<string, number>
   product_group_id: string | null
   product_group: { id: string; code: string; name: string } | null
   inventory_shape: string
@@ -195,6 +196,7 @@ export interface CustomerListData {
   last_transaction_at?: string | null
   kiotviet_net_sales?: number | null
   status?: string | null
+  linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
 }
 export interface SupplierListData {
   id: string
@@ -228,7 +230,16 @@ export interface FinanceAccountData {
   note?: string | null
   notify_on_transaction?: boolean
 }
-export type CashbookEntryData = ReturnType<typeof makeCashbookEntry> & {
+export type CashbookEntryData = Omit<ReturnType<typeof makeCashbookEntry>, 'finance_account'> & {
+  finance_account: {
+    id: string
+    code: string
+    name: string
+    account_type: 'cash' | 'bank'
+    account_number?: string | null
+    account_holder?: string | null
+  }
+  created_by?: { id: string; name: string } | null
   source?: {
     type: string
     id: string
@@ -356,10 +367,36 @@ export interface ServerRepository {
   listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
+  listPriceLists?(input: { organizationId: string }): Promise<Array<{ id: string; code: string; name: string; is_default: boolean; is_active: boolean }>>
+  resolvePrices?(input: {
+    organizationId: string
+    productIds: string[]
+    customerId: string | null
+  }): Promise<Array<{
+    product_id: string
+    unit_price: number
+    price_source: 'default_price_list' | 'customer_group_price_list' | 'fallback_default_price_list'
+    price_list_id: string
+  }>>
   listCustomers?(input: { organizationId: string; url: URL }): Promise<CustomerListData[]>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
   findCustomersByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   listSuppliers?(input: { organizationId: string; url: URL }): Promise<SupplierListData[]>
+  updateSupplier?(input: {
+    organizationId: string
+    id: string
+    patch: {
+      code?: string
+      name?: string
+      phone?: string | null
+      email?: string | null
+      address?: string | null
+      tax_code?: string | null
+      linked_customer_id?: string | null
+      notes?: string | null
+      status?: string
+    }
+  }): Promise<SupplierListData | null>
   listFinanceAccounts?(input: { organizationId: string; url: URL }): Promise<FinanceAccountData[]>
   createFinanceAccount?(input: { organizationId: string; account: Omit<FinanceAccountData, 'id'> & { id?: string } }): Promise<FinanceAccountData>
   updateFinanceAccount?(input: { organizationId: string; id: string; patch: Partial<FinanceAccountData> }): Promise<FinanceAccountData | null>
@@ -407,6 +444,11 @@ export interface ServerRepository {
     priceListId: string
     rows: Array<{ product_code: string; unit_price: number }>
   }): Promise<{ created: number; updated: number; skipped: number }>
+  upsertPriceListItemsByName?(input: {
+    organizationId: string
+    defaultPriceListId: string | null
+    rows: Array<{ product_code: string; price_list_name: string; unit_price: number }>
+  }): Promise<{ created: number; updated: number; skipped: number }>
   upsertProvisionalStockBalances?(input: {
     organizationId: string
     rows: Array<{ product_code: string; quantity: number; unit_name: string; source_label: string }>
@@ -435,6 +477,40 @@ export interface ServerRepository {
   getStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
   updateStocktakeNote?(input: { organizationId: string; id: string; note: string | null }): Promise<StocktakeDetailData | null>
   cancelStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
+  adjustNormalProductStock?(input: {
+    organizationId: string
+    productId: string
+    actualQty: number
+    reason: string
+    createdBy: { id: string; name: string }
+  }): Promise<StocktakeDetailData | null>
+  createMaterialOpening?(input: {
+    organizationId: string
+    input: {
+      product_id: string
+      inventory_shape: 'normal' | 'roll' | 'sheet'
+      opened_unit_id?: string
+      opened_qty?: number
+      old_remaining_qty?: number
+      old_inventory_roll_id?: string
+      old_remaining_length_m?: number
+      old_inventory_sheet_id?: string
+      old_remaining_width_m?: number
+      discard_old_sheet?: boolean
+      note?: string
+    }
+  }): Promise<{
+    id: string
+    product_id: string
+    inventory_shape: 'normal' | 'roll' | 'sheet'
+    source_type: 'manual_normal' | 'standard_object' | 'kiotviet_provisional'
+    opened_unit_id: string | null
+    opened_qty: number | null
+    opened_stock_qty: number | null
+    stock_movement_id: string | null
+    warnings: string[]
+    created_at: string
+  }>
   saveSalesDocument?(input: {
     organizationId: string
     document: SalesDocumentData
@@ -443,6 +519,7 @@ export interface ServerRepository {
   listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
   getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
   cancelSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
+  updateSalesDocumentNote?(input: { organizationId: string; id: string; note: string | null }): Promise<SalesDocumentData | null>
   findSalesDocumentsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   deleteImportedKiotVietInvoices?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   upsertImportedKiotVietInvoices?(input: {
@@ -965,7 +1042,11 @@ function filterProducts(url: URL) {
   const createdTo = url.searchParams.get('created_to')
 
   return products.filter((product) => {
-    if (status && status !== 'all' && product.status !== status) return false
+    if (status === 'deleted') {
+      if (!/\{DEL\}/i.test(product.code)) return false
+    } else if (status && status !== 'all') {
+      if (product.status !== status || /\{DEL\}/i.test(product.code)) return false
+    }
     if (sellMethod && product.sell_method !== sellMethod) return false
     if (inventoryShape && product.inventory_shape !== inventoryShape) return false
     if (productKind && product.product_kind !== productKind) return false
@@ -1010,6 +1091,30 @@ function checkoutProductIds(body: Parameters<typeof makeOrderFromCheckout>[0]) {
   return (body.items ?? [])
     .map((item) => item.product_id)
     .filter((productId): productId is string => typeof productId === 'string' && productId.trim() !== '')
+}
+
+function salesDocumentCodePrefix(orderType: 'invoice' | 'quote') {
+  return orderType === 'quote' ? 'BG' : 'HD'
+}
+
+async function nextSalesDocumentCode(
+  repository: ServerRepository,
+  organizationId: string,
+  orderType: 'invoice' | 'quote',
+) {
+  const prefix = salesDocumentCodePrefix(orderType)
+  const documents = repository.listSalesDocuments
+    ? await repository.listSalesDocuments({
+        organizationId,
+        url: new URL(`http://api.local/api/v1/sales-documents?type=${orderType}&page=1&page_size=100000`),
+      })
+    : salesDocuments.filter((document) => document.order_type === orderType)
+  const nextNumber = documents.reduce((max, document) => {
+    const match = new RegExp(`^${prefix}(\\d{6})(?:\\.\\d+)?$`).exec(document.code)
+    if (!match) return max
+    return Math.max(max, Number(match[1]))
+  }, 0) + 1
+  return `${prefix}${String(nextNumber).padStart(6, '0')}`
 }
 
 function checkoutPaymentStatus(orderType: 'invoice' | 'quote', paidAmount: number, debtAmount: number) {
@@ -1223,6 +1328,9 @@ function supplierImportRepository(repository: ServerRepository) {
       let created = 0
       let updated = 0
       for (const row of input.rows) {
+        const index = suppliers.findIndex((supplier) => supplier.code === row.code)
+        const existing = index >= 0 ? suppliers[index] : null
+        const linkedCustomer = findMatchingCustomerForSupplier(row, customers)
         const patch = {
           code: row.code,
           name: row.name,
@@ -1230,8 +1338,8 @@ function supplierImportRepository(repository: ServerRepository) {
           email: row.email,
           address: row.address,
           tax_code: row.tax_code,
-          linked_customer_id: null,
-          linked_customer: null,
+          linked_customer_id: existing?.linked_customer_id ?? linkedCustomer?.id ?? null,
+          linked_customer: existing?.linked_customer ?? (linkedCustomer ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name } : null),
           notes: row.note,
           status: row.status,
           current_payable_amount: row.kiotviet_current_payable ?? 0,
@@ -1241,7 +1349,6 @@ function supplierImportRepository(repository: ServerRepository) {
           source_created_at: row.source_created_at,
           company_name: row.company_name,
         }
-        const index = suppliers.findIndex((supplier) => supplier.code === row.code)
         if (index >= 0) {
           suppliers[index] = { ...suppliers[index], ...patch }
           updated += 1
@@ -1326,9 +1433,17 @@ function filterPurchaseReceipts(url: URL) {
   const dateFrom = url.searchParams.get('date_from')
   const dateTo = url.searchParams.get('date_to')
   const createdBy = url.searchParams.get('created_by')
+  const supplierId = url.searchParams.get('supplier_id')
+  const supplierCode = normalizeSearchText(url.searchParams.get('supplier_code') ?? '')
 
   return newestFirst(purchaseReceipts.filter((receipt) => {
     if (status && status !== 'all' && receipt.status !== status) return false
+    if (
+      (supplierId || supplierCode) &&
+      receipt.supplier_id !== supplierId &&
+      receipt.supplier.id !== supplierId &&
+      normalizeSearchText(receipt.supplier.code) !== supplierCode
+    ) return false
     if (!dateRangeMatches(receipt.received_at, dateFrom, dateTo)) return false
     if (createdBy && createdBy !== 'all' && receipt.created_by.id !== createdBy) return false
     if (search) {
@@ -1347,6 +1462,26 @@ function filterCustomerDebts(url: URL) {
     const haystack = normalizeSearchText(`${debt.customer_code} ${debt.customer_name} ${debt.oldest_order_code}`)
     return haystack.includes(search)
   }))
+}
+
+function hydrateLinkedSuppliers(customersToHydrate: readonly CustomerListData[], supplierRows: readonly SupplierListData[]) {
+  return customersToHydrate.map((customer) => {
+    const linkedSupplier = supplierRows.find((supplier) => supplier.linked_customer_id === customer.id)
+      ?? supplierRows.find((supplier) => supplierMatchesCustomer(supplier, customer))
+      ?? null
+    return linkedSupplier
+      ? { ...customer, linked_supplier: { id: linkedSupplier.id, code: linkedSupplier.code, name: linkedSupplier.name, linked_at: linkedSupplier.created_at ?? null } }
+      : { ...customer, linked_supplier: null }
+  })
+}
+
+function supplierMatchesCustomer(supplier: Pick<SupplierListData, 'code' | 'name'>, customer: Pick<CustomerListData, 'code' | 'name'>) {
+  return normalizeSearchText(supplier.code) === normalizeSearchText(customer.code)
+    || normalizeSearchText(supplier.name) === normalizeSearchText(customer.name)
+}
+
+function findMatchingCustomerForSupplier(supplier: Pick<SupplierListData, 'code' | 'name'>, customerRows: readonly CustomerListData[]) {
+  return customerRows.find((customer) => supplierMatchesCustomer(supplier, customer)) ?? null
 }
 
 function customerActivityFromSalesDocuments() {
@@ -1410,9 +1545,7 @@ function makeOrderFromCheckout(body: {
     discount_amount?: number
   }>
   payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
-}, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>) {
-  const number = salesDocuments.length + 1
-  const codeSuffix = `${pad(number)}-${randomUUID().slice(0, 8).toUpperCase()}`
+}, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>, code: string, seller: { id: string; name: string }) {
   const createdAt = runtimeIso()
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
   const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
@@ -1426,12 +1559,12 @@ function makeOrderFromCheckout(body: {
 
   return {
     id: randomUUID(),
-    code: `${orderType === 'quote' ? 'BG-POS' : 'HD-POS'}-${codeSuffix}`,
+    code,
     order_type: orderType,
     status: orderType === 'quote' ? 'active' : 'completed',
     created_at: createdAt,
     customer: { id: customer.id, code: customer.code, name: customer.name, phone: customer.phone },
-    seller: { id: 'admin', name: 'Admin' },
+    seller,
     subtotal_amount: subtotal,
     discount_amount: discount,
     total_amount: total,
@@ -1466,13 +1599,20 @@ function addCustomerSalesFromCheckout(order: ReturnType<typeof makeOrderFromChec
   if (customer) customer.total_sales_amount += order.total_amount
 }
 
-function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
-  const entries = previewCashbookEntriesFromCheckout(order, payment)
+function addCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}, createdBy = order.seller) {
+  const entries = previewCashbookEntriesFromCheckout(order, payment, createdBy)
   cashbookEntries.unshift(...entries)
   return entries
 }
 
-function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}) {
+function checkoutPaymentReceiptCode(orderCode: string, index: number, accountType: 'cash' | 'bank') {
+  const invoiceMatch = /^HD(\d{6}(?:\.\d+)?)$/.exec(orderCode)
+  const baseCode = invoiceMatch ? `TTHD${invoiceMatch[1]}` : `TT${String(cashbookEntries.length + 1).padStart(6, '0')}`
+  if (index === 0) return baseCode
+  return `${baseCode}-${accountType === 'bank' ? 'NH' : 'TM'}`
+}
+
+function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}, createdBy = order.seller) {
   const entries: CashbookEntryData[] = []
   const createdAt = runtimeIso()
   const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
@@ -1485,9 +1625,8 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
 
   for (const method of methods) {
     if (method.amount <= 0) continue
-    const codeSuffix = `${pad(cashbookEntries.length + entries.length + 1)}-${randomUUID().slice(0, 8).toUpperCase()}`
     const entryId = randomUUID()
-    const entryCode = `PT-POS-${codeSuffix}`
+    const entryCode = checkoutPaymentReceiptCode(order.code, entries.length, method.account.account_type)
     const remainingAfter = Math.max(order.total_amount - collectedBefore - method.amount, 0)
     entries.push({
       id: entryId,
@@ -1498,6 +1637,7 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
       finance_account: { id: method.account.id, code: method.account.code, name: method.account.name, account_type: method.account.account_type },
       is_business_accounted: true,
       source_type: 'payment_receipt_method',
+      created_by: createdBy,
       created_at: createdAt,
       note: `Thu tien ${order.code}`,
       counterparty: { type: 'customer', name: order.customer.name, phone: order.customer.phone },
@@ -1590,7 +1730,7 @@ async function collectCustomerDebt(request: Request) {
     if (index >= 0) customerDebtItems.splice(index, 1)
   }
 
-  const receiptCode = `PT-CN-${pad(cashbookEntries.length + 1)}`
+  const receiptCode = `TT${String(cashbookEntries.length + 1).padStart(6, '0')}`
   const createdAt = runtimeIso()
   const customerName = customer?.name ?? debt.customer_name
   const customerPhone = customer && 'phone' in customer ? customer.phone : null
@@ -1602,6 +1742,7 @@ async function collectCustomerDebt(request: Request) {
     direction: 'in',
     is_business_accounted: true,
     source_type: 'payment_receipt_method',
+    created_by: null,
     created_at: createdAt,
     note: entryNote,
     counterparty: { type: 'customer', name: customerName, phone: customerPhone },
@@ -1760,7 +1901,27 @@ function cashbookPaymentMethod(entry: CashbookEntryData) {
   return entry.finance_account.account_type === 'bank' ? 'bank_transfer' : 'cash'
 }
 
-function enrichCashbookEntryDetail(entry: CashbookEntryData, currentUser: CurrentUserData) {
+function inferredLinkedDocumentCodeFromCashbookEntry(entry: CashbookEntryData) {
+  const noteDocumentMatch = entry.note?.match(/\b(?:HD|PN)\d+(?:\.\d+)?\b/i)
+  if (noteDocumentMatch) return noteDocumentMatch[0].toUpperCase()
+
+  const normalizedCode = entry.code.trim().toUpperCase()
+  const invoicePaymentMatch = normalizedCode.match(/^TTHD(\d+(?:\.\d+)?)$/)
+  if (invoicePaymentMatch) return `HD${invoicePaymentMatch[1]}`
+  const purchasePaymentMatch = normalizedCode.match(/^PCPN(\d+(?:\.\d+)?)$/)
+  if (purchasePaymentMatch) return `PN${purchasePaymentMatch[1]}`
+  return null
+}
+
+function cashbookCounterpartyNeedsDocumentHydration(entry: CashbookEntryData) {
+  return entry.direction === 'in'
+    && (!entry.counterparty?.name || entry.counterparty.name.trim().length === 0)
+}
+
+async function enrichCashbookEntryDetail(
+  entry: CashbookEntryData,
+  resolveLinkedDocument?: (code: string) => Promise<SalesDocumentData | null>,
+) {
   const allocations = entry.allocations ?? []
   const entrySource = entry.source && typeof entry.source.type === 'string' && typeof entry.source.code === 'string'
     ? entry.source
@@ -1771,11 +1932,18 @@ function enrichCashbookEntryDetail(entry: CashbookEntryData, currentUser: Curren
     code: entry.code,
     order_code: null,
   }
+  const linkedDocumentCode = source.order_code ?? allocations[0]?.order_code ?? inferredLinkedDocumentCodeFromCashbookEntry(entry)
+  const linkedDocument = linkedDocumentCode && resolveLinkedDocument
+    ? await resolveLinkedDocument(linkedDocumentCode)
+    : null
+  const counterparty = linkedDocument && cashbookCounterpartyNeedsDocumentHydration(entry)
+    ? { type: 'customer' as const, name: linkedDocument.customer.name, phone: linkedDocument.customer.phone }
+    : entry.counterparty
   return {
     ...entry,
-    created_by: { id: currentUser.user.id, name: currentUser.user.display_name },
+    counterparty,
     payment_method: cashbookPaymentMethod(entry),
-    source: { ...source, order_code: source.order_code ?? allocations[0]?.order_code ?? null },
+    source: { ...source, order_code: linkedDocumentCode },
     allocations,
   }
 }
@@ -2010,13 +2178,17 @@ async function getDevApiResponse(
           organizationId: currentUser.organization.id,
           url,
         })
+        const repositorySuppliers = await repository.listSuppliers?.({
+          organizationId: currentUser.organization.id,
+          url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
+        })
         const localActivity = repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
         const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer) => {
           const totals = financialTotals?.get(customer.id)
           const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
           return { ...customer, ...totals, created_by: resolveCustomerCreatedBy(customer, userList), last_activity_at: lastActivityAt }
         })
-        const sortedCustomers = newestFirst(filteredCustomers)
+        const sortedCustomers = newestFirst(hydrateLinkedSuppliers(filteredCustomers, repositorySuppliers ?? suppliers))
         return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
       },
       createCustomer: async () => {
@@ -2059,12 +2231,26 @@ async function getDevApiResponse(
       resolvePricing: async () => {
         const body = await readJson(request)
         const productIds = Array.isArray(body.product_ids) ? body.product_ids : products.map((product) => product.id)
+        const repositoryPrices = await repository.resolvePrices?.({
+          organizationId: currentUser.organization.id,
+          productIds: productIds.map(String),
+          customerId: typeof body.customer_id === 'string' && body.customer_id.trim() ? body.customer_id.trim() : null,
+        })
+        if (repositoryPrices) {
+          return {
+            found: true,
+            data: { items: repositoryPrices },
+          }
+        }
         return {
           found: true,
           data: { items: productIds.map((productId) => ({ product_id: productId, unit_price: 600000, price_source: 'default_price_list', price_list_id: 'pl-default' })) },
         }
       },
-      priceLists: async () => ({ found: true, data: { items: priceLists } }),
+      priceLists: async () => ({
+        found: true,
+        data: { items: await repository.listPriceLists?.({ organizationId: currentUser.organization.id }) ?? priceLists },
+      }),
       previewPriceFormula: async () => ({ found: true, data: { affected_count: 1, items: [{ product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, latest_purchase_cost: 250000, current_mode: 'manual', current_unit_price: 600000, computed_prices: [{ price_list_id: 'pl-default', price_list_name: 'Bang gia le', current_unit_price: 600000, computed_unit_price: 620000, delta: 20000 }] }] } }),
       applyPriceFormula: async () => ({ found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }),
     },
@@ -2079,7 +2265,24 @@ async function getDevApiResponse(
         return { found: true, data: { ...paged(items, page, pageSize), summary: inventoryProductListSummary(items) } }
       },
       getProduct: async () => ({ found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }),
-      adjustStock: async () => ({ found: true, data: makeStocktake(currentUser.user) }),
+      adjustStock: async () => {
+        const body = await readJson(request)
+        const actualQty = Number(body.actual_qty)
+        const reason = requiredString(body.reason, 'reason')
+        if (!Number.isFinite(actualQty) || actualQty < 0) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'actual_qty must be a non-negative number.', { actual_qty: ['actual_qty must be a non-negative number.'] })
+        }
+        const item = await repository.adjustNormalProductStock?.({
+          organizationId: currentUser.organization.id,
+          productId: getIdFromPath(path) ?? '',
+          actualQty,
+          reason,
+          createdBy: { id: currentUser.user.id, name: currentUser.user.display_name },
+        }) ?? makeStocktake(currentUser.user)
+        return item
+          ? { found: true, data: item }
+          : { found: true, data: { message: 'Product not found' }, status: 404 }
+      },
       stockMovements: async () => {
         const repositoryMovements = await repository.listStockMovements?.({ organizationId: currentUser.organization.id, url })
         const productId = url.searchParams.get('product_id')
@@ -2179,7 +2382,26 @@ async function getDevApiResponse(
         return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
       },
       materialOpeningOptions: async () => ({ found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }),
-      createMaterialOpening: async () => ({ found: true, data: { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }, status: 201 }),
+      createMaterialOpening: async () => {
+        const body = await readJson(request)
+        const created = await repository.createMaterialOpening?.({
+          organizationId: currentUser.organization.id,
+          input: {
+            product_id: requiredString(body.product_id, 'product_id'),
+            inventory_shape: body.inventory_shape === 'roll' || body.inventory_shape === 'sheet' ? body.inventory_shape : 'normal',
+            opened_unit_id: nullableString(body.opened_unit_id) ?? undefined,
+            opened_qty: body.opened_qty === undefined ? undefined : Number(body.opened_qty),
+            old_remaining_qty: body.old_remaining_qty === undefined ? undefined : Number(body.old_remaining_qty),
+            old_inventory_roll_id: nullableString(body.old_inventory_roll_id) ?? undefined,
+            old_remaining_length_m: body.old_remaining_length_m === undefined ? undefined : Number(body.old_remaining_length_m),
+            old_inventory_sheet_id: nullableString(body.old_inventory_sheet_id) ?? undefined,
+            old_remaining_width_m: body.old_remaining_width_m === undefined ? undefined : Number(body.old_remaining_width_m),
+            discard_old_sheet: Boolean(body.discard_old_sheet),
+            note: nullableString(body.note) ?? undefined,
+          },
+        }) ?? { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }
+        return { found: true, data: created, status: 201 }
+      },
     },
   )
   if (inventoryRoute.found) return inventoryRoute
@@ -2233,9 +2455,83 @@ async function getDevApiResponse(
         return { found: true, data: repositorySuppliers?.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }
       },
       createSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
-      updateSupplier: async () => ({ found: true, data: { ...suppliers[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
-      supplierPayableReceipts: async () => ({ found: true, data: { items: purchaseReceipts.slice(0, 10).map((receipt) => ({ id: receipt.id, code: receipt.code, supplier_document_no: receipt.supplier_document_no, received_at: receipt.received_at, payable_amount: receipt.payable_amount, paid_amount: receipt.paid_amount, remaining_amount: receipt.remaining_amount, paid_after_post_amount: 0, outstanding_amount: receipt.remaining_amount })) } }),
-      paySupplier: async () => ({ found: true, data: { supplier_payment_id: randomUUID(), code: 'PC0002', amount: 100000, cashbook_voucher_id: randomUUID() }, status: 201 }),
+      updateSupplier: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request)
+        const patch = supplierPatchFromBody(body)
+        if (repository.updateSupplier) {
+          const supplier = await repository.updateSupplier({ organizationId: currentUser.organization.id, id, patch })
+          return supplier
+            ? { found: true, data: supplier }
+            : { found: true, data: { message: 'Supplier not found' }, status: 404 }
+        }
+        const index = suppliers.findIndex((supplier) => supplier.id === id)
+        const current = index >= 0 ? suppliers[index] : suppliers[0]
+        const nextLinkedCustomerId = patch.linked_customer_id !== undefined ? patch.linked_customer_id : current.linked_customer_id
+        const linkedCustomer = nextLinkedCustomerId
+          ? customers.find((customer) => customer.id === nextLinkedCustomerId) ?? null
+          : null
+        const updated = {
+          ...current,
+          ...patch,
+          id,
+          linked_customer_id: nextLinkedCustomerId ?? null,
+          linked_customer: patch.linked_customer_id === undefined
+            ? current.linked_customer
+            : linkedCustomer
+              ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name }
+              : null,
+        }
+        if (index >= 0) suppliers[index] = updated
+        return { found: true, data: updated }
+      },
+      supplierPayableReceipts: async () => {
+        const supplierId = getSupplierIdFromPath(path)
+        const receiptUrl = new URL('http://api.local/api/v1/purchase/receipts')
+        receiptUrl.searchParams.set('supplier_id', supplierId)
+        receiptUrl.searchParams.set('status', 'posted')
+        const repositoryReceipts = await repository.listPurchaseReceipts?.({
+          organizationId: currentUser.organization.id,
+          url: receiptUrl,
+        })
+        const items = (repositoryReceipts ?? filterPurchaseReceipts(receiptUrl))
+          .filter((receipt) => receipt.remaining_amount > 0)
+          .map((receipt) => ({
+            id: receipt.id,
+            code: receipt.code,
+            supplier_document_no: receipt.supplier_document_no,
+            received_at: receipt.received_at,
+            payable_amount: receipt.payable_amount,
+            paid_amount: receipt.paid_amount,
+            remaining_amount: receipt.remaining_amount,
+            paid_after_post_amount: Math.max(receipt.paid_amount, 0),
+            outstanding_amount: receipt.remaining_amount,
+          }))
+        return { found: true, data: { items } }
+      },
+      paySupplier: async () => {
+        const body = await readJson(request)
+        const allocations = Array.isArray(body.allocations) ? body.allocations : []
+        const firstAllocation = allocations.find((allocation): allocation is { purchase_receipt_id: string; amount?: number } => (
+          allocation != null
+          && typeof allocation === 'object'
+          && 'purchase_receipt_id' in allocation
+          && typeof allocation.purchase_receipt_id === 'string'
+        ))
+        const receipt = firstAllocation
+          ? purchaseReceipts.find((item) => item.id === firstAllocation.purchase_receipt_id)
+          : null
+        const receiptCodeMatch = receipt?.code.match(/^PN(\d{6}(?:\.\d+)?)$/)
+        const code = receiptCodeMatch
+          ? `PCPN${receiptCodeMatch[1]}`
+          : `PC${String(cashbookEntries.length + 1).padStart(6, '0')}`
+        const amount = allocations.reduce((sum, allocation) => (
+          allocation != null && typeof allocation === 'object' && 'amount' in allocation
+            ? sum + Number(allocation.amount ?? 0)
+            : sum
+        ), 0)
+        return { found: true, data: { supplier_payment_id: randomUUID(), code, amount, cashbook_voucher_id: randomUUID() }, status: 201 }
+      },
       listReceipts: async () => {
         const repositoryReceipts = await repository.listPurchaseReceipts?.({
           organizationId: currentUser.organization.id,
@@ -2295,9 +2591,11 @@ async function getDevApiResponse(
       checkout: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
         const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
-        const order = makeOrderFromCheckout(body, 'invoice', customer)
+        const code = await nextSalesDocumentCode(repository, currentUser.organization.id, 'invoice')
+        const seller = { id: currentUser.user.id, name: currentUser.user.display_name }
+        const order = makeOrderFromCheckout(body, 'invoice', customer, code, seller)
         await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
-        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment) : addCashbookEntriesFromCheckout(order, body.payment)
+        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment, seller) : addCashbookEntriesFromCheckout(order, body.payment, seller)
         if (repository.saveSalesDocument) {
           await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: order, cashbookEntries: paymentEntries })
         } else {
@@ -2310,7 +2608,8 @@ async function getDevApiResponse(
       createQuote: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
         const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
-        const quote = makeOrderFromCheckout(body, 'quote', customer)
+        const code = await nextSalesDocumentCode(repository, currentUser.organization.id, 'quote')
+        const quote = makeOrderFromCheckout(body, 'quote', customer, code, { id: currentUser.user.id, name: currentUser.user.display_name })
         await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
         if (repository.saveSalesDocument) {
           await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
@@ -2332,25 +2631,7 @@ async function getDevApiResponse(
         const id = getIdFromPath(path) ?? ''
         if (repository.getSalesDocument) {
           const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
-          const productCatalog = repository.listProducts
-            ? await repository.listProducts({
-                organizationId: currentUser.organization.id,
-                url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
-              })
-            : products
-          return { found: true, data: makeSalesDocumentDetail(document ?? salesDocuments[0], productCatalog) }
-        }
-        return { found: true, data: makeSalesDocumentDetail(salesDocuments.find((document) => document.id === id) ?? salesDocuments[0]) }
-      },
-      updateSalesDocument: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request)
-        if (body.status !== 'cancelled') {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'Only sales document cancellation is supported.')
-        }
-        if (repository.cancelSalesDocument) {
-          const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
-          if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+          if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
           const productCatalog = repository.listProducts
             ? await repository.listProducts({
                 organizationId: currentUser.organization.id,
@@ -2358,6 +2639,42 @@ async function getDevApiResponse(
               })
             : products
           return { found: true, data: makeSalesDocumentDetail(document, productCatalog) }
+        }
+        const document = salesDocuments.find((item) => item.id === id || item.code === id)
+        if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
+        return { found: true, data: makeSalesDocumentDetail(document) }
+      },
+      updateSalesDocument: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request)
+        const productCatalog = async () => repository.listProducts
+          ? repository.listProducts({
+              organizationId: currentUser.organization.id,
+              url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
+            })
+          : products
+        if (body.note !== undefined && body.status === undefined) {
+          if (repository.updateSalesDocumentNote) {
+            const document = await repository.updateSalesDocumentNote({
+              organizationId: currentUser.organization.id,
+              id,
+              note: nullableString(body.note),
+            })
+            if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+            return { found: true, data: makeSalesDocumentDetail(document, await productCatalog()) }
+          }
+          const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
+          if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+          salesDocuments[index] = { ...salesDocuments[index], note: nullableString(body.note) ?? '' }
+          return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }
+        }
+        if (body.status !== 'cancelled' || body.note !== undefined) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'Only sales document cancellation or note update is supported.')
+        }
+        if (repository.cancelSalesDocument) {
+          const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
+          if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+          return { found: true, data: makeSalesDocumentDetail(document, await productCatalog()) }
         }
         const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
         if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
@@ -2525,10 +2842,26 @@ async function getDevApiResponse(
         if (repository.getCashbookEntry) {
           const entry = await repository.getCashbookEntry({ organizationId: currentUser.organization.id, id })
           if (entry === null) return { found: true, data: { message: 'Cashbook entry not found' }, status: 404 }
-          return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+          return {
+            found: true,
+            data: await enrichCashbookEntryDetail(entry, async (code) => {
+              const directDocument = await repository.getSalesDocument?.({ organizationId: currentUser.organization.id, id: code })
+              if (directDocument) return directDocument
+              const searchUrl = new URL('http://api.local/api/v1/sales-documents')
+              searchUrl.searchParams.set('search', code)
+              searchUrl.searchParams.set('type', 'invoice')
+              const documents = await repository.listSalesDocuments?.({ organizationId: currentUser.organization.id, url: searchUrl })
+              return documents?.find((document) => document.code === code) ?? null
+            }),
+          }
         }
         const entry = cashbookEntries.find((item) => item.id === id) ?? cashbookEntries[0]
-        return { found: true, data: enrichCashbookEntryDetail(entry, currentUser) }
+        return {
+          found: true,
+          data: await enrichCashbookEntryDetail(entry, async (code) => (
+            salesDocuments.find((document) => document.code === code) ?? null
+          )),
+        }
       },
       createCashbookVoucher: async () => ({ found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }),
       cancelCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }),
@@ -2706,6 +3039,12 @@ function getIdFromPath(path: string) {
   return parts.at(-1) === 'post' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' ? parts.at(-2) : parts.at(-1)
 }
 
+function getSupplierIdFromPath(path: string) {
+  const parts = path.split('/').filter(Boolean)
+  const supplierIndex = parts.indexOf('suppliers')
+  return supplierIndex >= 0 ? parts.at(supplierIndex + 1) ?? '' : ''
+}
+
 function getFinanceCustomerId(path: string) {
   const parts = path.split('/').filter(Boolean)
   return parts.at(-2) ?? 'customer-an'
@@ -2810,6 +3149,20 @@ async function readJson(request: Request): Promise<Record<string, unknown>> {
     return {}
   }
   return {}
+}
+
+function supplierPatchFromBody(body: Record<string, unknown>) {
+  return {
+    ...(body.code === undefined ? {} : { code: String(body.code).trim() }),
+    ...(body.name === undefined ? {} : { name: String(body.name).trim() }),
+    ...(body.phone === undefined ? {} : { phone: nullableString(body.phone) }),
+    ...(body.email === undefined ? {} : { email: nullableString(body.email) }),
+    ...(body.address === undefined ? {} : { address: nullableString(body.address) }),
+    ...(body.tax_code === undefined ? {} : { tax_code: nullableString(body.tax_code) }),
+    ...(body.linked_customer_id === undefined ? {} : { linked_customer_id: nullableString(body.linked_customer_id) }),
+    ...(body.notes === undefined ? {} : { notes: nullableString(body.notes) }),
+    ...(body.status === undefined ? {} : { status: String(body.status) }),
+  }
 }
 
 function importRowsFromBody(body: Record<string, unknown>) {

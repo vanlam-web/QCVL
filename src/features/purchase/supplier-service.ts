@@ -13,6 +13,7 @@ import type {
   SupplierPaymentResult,
   SupplierStatus,
 } from './types'
+import type { PurchaseReceiptListResponse } from './purchase-receipt-types'
 
 export interface SupplierApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
@@ -89,6 +90,16 @@ export function createSupplierService(api: SupplierApiRequester) {
     },
     listPayableReceipts: (supplierId: string) =>
       api.request<SupplierPayableReceiptListResponse>(`/api/v1/suppliers/${supplierId}/payable-receipts`),
+    listPurchaseReceipts: (supplier: Pick<Supplier, 'id' | 'code'>) => {
+      const params = new URLSearchParams({
+        supplier_id: supplier.id,
+        supplier_code: supplier.code,
+        status: 'posted',
+        page: '1',
+        page_size: '100',
+      })
+      return api.request<PurchaseReceiptListResponse>(`/api/v1/purchase/receipts?${params.toString()}`)
+    },
     listFinanceAccounts: () => api.request<SupplierFinanceAccountListResponse>('/api/v1/finance/accounts?is_active=true'),
     paySupplier: (supplierId: string, input: SupplierPaymentInput) =>
       api.request<SupplierPaymentResult>(`/api/v1/suppliers/${supplierId}/payments`, {

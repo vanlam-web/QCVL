@@ -46,6 +46,11 @@ export function createSalesDocumentService(api: SalesDocumentApiRequester) {
         method: 'PATCH',
         body: JSON.stringify({ status: 'cancelled' }),
       }),
+    updateSalesDocumentNote: (id: string, input: { note: string | null }) =>
+      api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     previewKiotVietInvoiceImport: async (input: { file: File }) =>
       api.request<KiotVietInvoiceImportPreview>('/api/v1/sales-documents/import/kiotviet/preview', {
         method: 'POST',

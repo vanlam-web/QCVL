@@ -202,6 +202,7 @@ function makeService(overrides: Partial<SalesDocumentService> = {}): SalesDocume
     })),
     deleteImportedKiotVietInvoices: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
     cancelSalesDocument: vi.fn(async () => ({ ...detail, status: 'cancelled' as const })),
+    updateSalesDocumentNote: vi.fn(async (_id: string, input: { note: string | null }) => ({ ...detail, note: input.note ?? '' })),
     ...overrides,
   }
 }
@@ -254,6 +255,13 @@ function makeCatalogService(overrides: Partial<CatalogService> = {}): Pick<Catal
   } as Pick<CatalogService, 'listPriceLists'>
 }
 
+function setViewportWidth(width: number) {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: width,
+  })
+}
+
 async function clickDocumentRow(code: string) {
   const table = await screen.findByRole('table', { name: 'Danh sách chứng từ bán hàng' })
   const codeCell = await within(table).findByText(code, { selector: 'tbody td:first-child strong' })
@@ -261,6 +269,32 @@ async function clickDocumentRow(code: string) {
   if (!row) throw new Error(`Không tìm thấy dòng chứng từ ${code}`)
   await userEvent.click(row)
 }
+
+it('uses a denser default page size on wide management screens', async () => {
+  const originalWidth = window.innerWidth
+  setViewportWidth(2209)
+  const service = makeService({
+    listSalesDocuments: vi.fn(async (input = {}) => ({
+      items: [listItem],
+      page: 1,
+      page_size: input.page_size ?? 15,
+      total: 153,
+    })),
+  })
+
+  try {
+    render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+    await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
+      page: 1,
+      page_size: 30,
+    })))
+    const footer = await screen.findByRole('navigation', { name: 'Phân trang chứng từ' })
+    expect(within(footer).getByRole('combobox', { name: 'Số dòng hiển thị' })).toHaveValue('30')
+  } finally {
+    setViewportWidth(originalWidth)
+  }
+})
 
 it('lists invoices with money, seller and customer snapshots', async () => {
   const service = makeService()
@@ -430,6 +464,29 @@ it('cancels an invoice after confirmation', async () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
 })
 
+it('saves invoice note from the shared detail textarea', async () => {
+  const updateSalesDocumentNote = vi.fn(async (_id: string, input: { note: string | null }) => ({
+    ...detail,
+    note: input.note ?? '',
+  }))
+  const service = makeService({ updateSalesDocumentNote })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await clickDocumentRow('HD010985')
+  const detailRegion = await screen.findByRole('region', { name: /HD010985/ })
+  const noteInput = within(detailRegion).getByRole('textbox', { name: /Ghi ch/ })
+
+  expect(noteInput).toHaveClass('management-detail-note')
+  expect(noteInput).toHaveValue('Khách lấy sau')
+
+  await userEvent.clear(noteInput)
+  await userEvent.type(noteInput, 'Ghi chú mới')
+  await userEvent.click(within(detailRegion).getByRole('button', { name: /L.u/ }))
+
+  await waitFor(() => expect(updateSalesDocumentNote).toHaveBeenCalledWith('order-1', { note: 'Ghi chú mới' }))
+  expect(noteInput).toHaveValue('Ghi chú mới')
+})
+
 it('uses 15-row pagination range and navigates pages through the list footer', async () => {
   const service = makeService({
     listSalesDocuments: vi.fn(async (input = {}) => ({
@@ -515,7 +572,7 @@ it('opens KiotViet invoice import and deletes old import data from the shared di
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
   await screen.findByText('HD010985')
 
-  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Import' }))
   const dialog = screen.getByRole('dialog', { name: 'Import hóa đơn KiotViet' })
   await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa dữ liệu cũ' }))
   await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
@@ -783,17 +840,17 @@ it('opens invoice detail with item, price list, debt and stock snapshots', async
   expect(detailHeader).toHaveClass('management-detail-header')
   expect(within(detailRegion).getByRole('heading', { name: 'Công ty Phong Cảnh' })).toBeInTheDocument()
   expect(within(detailRegion).getByText('HD010985')).toBeInTheDocument()
-  expect(within(detailHeader).getByText('Chưa thanh toán')).toHaveClass('status-chip', 'status-chip-neutral')
+  expect(within(detailHeader).getByText('Chưa thanh toán')).toHaveClass('status-chip', 'status-chip-danger')
   expect(within(detailHeader).queryByText('Hoàn tất')).not.toBeInTheDocument()
   expect(within(detailRegion).queryByText('Người tạo:')).not.toBeInTheDocument()
   expect(within(detailRegion).getByText('Người bán:').closest('div')).toHaveTextContent('Người bán:Admin')
   expect(within(detailRegion).getByText('Ngày bán:').closest('div')).toHaveTextContent('Ngày bán:30/06/2026 17:08')
-  expect(within(detailRegion).getByText('Bảng giá chung')).toBeInTheDocument()
+  expect(within(detailRegion).getByText('Giá chung')).toBeInTheDocument()
   expect(within(detailRegion).queryByText('Kênh bán:')).not.toBeInTheDocument()
   expect(within(detailRegion).queryByText('Chi nhánh')).not.toBeInTheDocument()
   expect(detailRegion.querySelector('.management-detail-meta-grid')).not.toBeNull()
   const lineTable = within(detailRegion).getByRole('table', { name: 'Dòng hàng' })
-  expect(lineTable).toHaveClass('management-detail-table')
+  expect(lineTable).toHaveClass('management-detail-table', 'management-detail-lines-table')
   expect(within(lineTable).getByRole('columnheader', { name: 'Mã hàng' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Tên hàng' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Số lượng' })).toBeInTheDocument()
@@ -824,6 +881,8 @@ it('opens invoice detail with item, price list, debt and stock snapshots', async
   expect(within(footer as HTMLElement).getByRole('button', { name: 'Lưu' })).toBeEnabled()
   expect(within(footer as HTMLElement).getByRole('button', { name: 'Lưu' })).toHaveClass('button-secondary')
   expect(within(footer as HTMLElement).getByRole('button', { name: 'In' })).toBeEnabled()
+  expect(within(footer as HTMLElement).queryByRole('button', { name: 'Tạo QR' })).not.toBeInTheDocument()
+  expect(within(footer as HTMLElement).queryByRole('button', { name: 'Trả hàng' })).not.toBeInTheDocument()
   expect(footer?.querySelector('.management-detail-footer-actions-left')).not.toBeNull()
   expect(footer?.querySelector('.management-detail-footer-actions-right')).not.toBeNull()
   expect(footer?.querySelectorAll('svg')).toHaveLength(5)
@@ -960,7 +1019,7 @@ it('keeps payment history visible when receipt data misses optional nested field
   expect(within(paymentHistory).getAllByText('-')).toHaveLength(1)
 })
 
-it('shows active invoice detail action placeholders until flows exist', async () => {
+it('shows invoice detail actions except return and QR flows', async () => {
   const service = makeService()
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
 
@@ -973,6 +1032,6 @@ it('shows active invoice detail action placeholders until flows exist', async ()
   expect(within(detailRegion).queryByRole('button', { name: 'Chỉnh sửa' })).not.toBeInTheDocument()
   expect(within(detailRegion).getByRole('button', { name: 'Lưu' })).toBeEnabled()
   expect(within(detailRegion).getByRole('button', { name: 'In' })).toBeEnabled()
-  expect(within(detailRegion).queryByRole('button', { name: 'Huỷ' })).not.toBeInTheDocument()
-  expect(within(detailRegion).queryByRole('button', { name: 'In lại' })).not.toBeInTheDocument()
+  expect(within(detailRegion).queryByRole('button', { name: 'Trả hàng' })).not.toBeInTheDocument()
+  expect(within(detailRegion).queryByRole('button', { name: 'Tạo QR' })).not.toBeInTheDocument()
 })

@@ -1,4 +1,4 @@
-# 02-PRICE-LIST-DETAIL — Chi tiết bảng giá
+﻿# 02-PRICE-LIST-DETAIL — Chi tiết bảng giá
 
 
 ---
@@ -18,7 +18,7 @@ Trang chi tiết bảng giá cho phép xem và sửa giá bán của từng sả
 ├──────────────────────────────────────────────────────────────────────────────┤
 │ [Theo mã/tên hàng...] [Nhóm hàng] [Trạng thái hàng]                         │
 │                                                                              │
-│ Mã hàng | Tên hàng | Đơn vị bán | Giá vốn | Giá bảng giá chung | Giá bảng này│
+│ Mã hàng | Tên hàng | Đơn vị bán | Giá vốn | Giá chung | Giá bảng này│
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -33,7 +33,7 @@ Trang chi tiết bảng giá cho phép xem và sửa giá bán của từng sả
 | Đơn vị bán | m2, m tới, tấm, cái, bộ... |
 | Cách tính bán | Theo số lượng, m2, m tới, tấm, combo |
 | Giá vốn | Chỉ đọc nếu có dữ liệu |
-| Giá bảng giá chung | Chỉ đọc để đối chiếu nếu đang sửa bảng giá nhóm |
+| Giá chung | Chỉ đọc để đối chiếu nếu đang sửa bảng giá nhóm |
 | Giá bảng này | Ô nhập giá áp dụng cho bảng hiện tại |
 | Trạng thái hàng | Đang bán hoặc ngưng bán |
 
@@ -49,7 +49,7 @@ Giá vốn là dữ liệu tham khảo lấy từ Purchase/Supplier hoặc tồn
 - Với sản phẩm bán theo `m tới`, giá là giá cho `1 m tới`.
 - Với sản phẩm bán theo `m2`, giá là giá cho `1 m2`.
 - Với sản phẩm bán theo số lượng, giá là giá cho một đơn vị bán.
-- Nếu bảng giá nhóm không có giá cho sản phẩm, POS fallback về bảng giá chung.
+- Nếu bảng giá nhóm không có giá cho sản phẩm, POS fallback về giá chung.
 - Sản phẩm ngưng bán vẫn có thể thấy trong bảng giá khi bật bộ lọc trạng thái, nhưng không xuất hiện trong POS.
 
 ---
@@ -78,7 +78,7 @@ Lịch sử giá theo khách + sản phẩm chỉ phát sinh khi POS lưu chứn
 
 Nếu người dùng thoát trang khi còn dòng giá chưa lưu, UI phải cảnh báo mất thay đổi.
 
-Nếu một sản phẩm có giá bằng `0`, POS vẫn dùng đúng giá `0` nếu đó là giá được khai báo. Trường hợp muốn fallback về bảng giá chung phải để dòng giá trống/không khai báo, không dùng `0` làm tín hiệu fallback.
+Nếu một sản phẩm có giá bằng `0`, POS vẫn dùng đúng giá `0` nếu đó là giá được khai báo. Trường hợp muốn fallback về giá chung phải để dòng giá trống/không khai báo, không dùng `0` làm tín hiệu fallback.
 
 Sau khi có dữ liệu giá vốn, màn này có thể có thao tác cập nhật/gợi ý giá từ công thức theo nhóm hàng. Công thức có thể lấy `giá vốn bình quân` hoặc `giá nhập cuối`, sau đó tính qua nhiều bước chi phí, hao hụt và lợi nhuận riêng cho từng bảng giá. Công thức lưu được làm mặc định lâu dài theo nhóm hàng/sản phẩm.
 

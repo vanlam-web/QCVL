@@ -1,4 +1,4 @@
-# POS-TABLES — Bảng phục vụ màn hình POS
+﻿# POS-TABLES — Bảng phục vụ màn hình POS
 
 > **Nguồn:** Cập nhật theo Business Sales `POS-CUSTOMER.md`, `POS-PRICING.md`, `POS-ORDER-LIFECYCLE.md`, `POS-ORDER-CALC.md`, `POS-CHECKOUT.md`
 
@@ -39,7 +39,7 @@ Lưu hồ sơ khách hàng phục vụ POS: chọn khách, chống trùng SĐT/m
 | `name` | `text` | ❌ | Tên khách hàng |
 | `phone` | `text` | ✅ | SĐT hiển thị theo người dùng nhập |
 | `phone_normalized` | `text` | ✅ | SĐT đã chuẩn hóa để chống trùng |
-| `customer_group_id` | `uuid` | ✅ | FK → `public.customer_groups.id`; null nghĩa là dùng bảng giá chung |
+| `customer_group_id` | `uuid` | ✅ | FK → `public.customer_groups.id`; null nghĩa là dùng giá chung |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
 | `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật gần nhất |
 
@@ -125,7 +125,7 @@ Lưu đầu bảng giá. Chi tiết giá theo sản phẩm nằm ở `public.pri
 | `organization_id` | `uuid` | ❌ | FK → `public.organizations.id` |
 | `code` | `text` | ❌ | Mã bảng giá |
 | `name` | `text` | ❌ | Tên bảng giá |
-| `is_default` | `boolean` | ❌ | Bảng giá chung mặc định của organization |
+| `is_default` | `boolean` | ❌ | Giá chung mặc định của organization |
 | `is_active` | `boolean` | ❌ | Bảng giá còn được áp dụng |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
 | `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật gần nhất |
@@ -133,7 +133,7 @@ Lưu đầu bảng giá. Chi tiết giá theo sản phẩm nằm ở `public.pri
 ### Ràng buộc
 
 - `UNIQUE (organization_id, code)`
-- Mỗi organization có đúng một bảng giá chung đang active tại một thời điểm.
+- Mỗi organization có đúng một giá chung đang active tại một thời điểm.
 - `name` không được rỗng sau khi trim.
 
 ### Index
@@ -147,7 +147,7 @@ Lưu đầu bảng giá. Chi tiết giá theo sản phẩm nằm ở `public.pri
 
 ### Mục đích
 
-Lưu đơn giá của từng sản phẩm trong từng bảng giá. Bảng này thay thế cách lưu mảng JSONB để dễ kiểm tra trùng, query và fallback về bảng giá chung.
+Lưu đơn giá của từng sản phẩm trong từng bảng giá. Bảng này thay thế cách lưu mảng JSONB để dễ kiểm tra trùng, query và fallback về giá chung.
 
 ### Các cột
 

@@ -17,6 +17,7 @@ const rows: KiotVietImportProductRow[] = [
     status: 'active',
     unit_conversions: [],
     sale_price: 0,
+    price_list_prices: [],
     provisional_stock: 4,
     bom_text: null,
     expected_out_of_stock_text: '15 ngày',
@@ -74,6 +75,38 @@ describe('product import server flow', () => {
       price_rows: 1,
       price_skipped_rows: 1,
       price_list_name: 'Bang gia le',
+    })
+  })
+
+  it('maps KiotViet price-book export columns into named price list prices', () => {
+    const result = mapKiotVietProductRows([{
+      rowNumber: 2,
+      'Mã hàng': 'F5d2',
+      'Tên hàng': 'Fomex 5mm - decal (2 mặt)',
+      'Đơn vị tính': 'Tấm',
+      'Nhóm hàng': 'Fomex >> Dán DC',
+      'Tồn kho': 0,
+      'Giá vốn': 9893.25,
+      'Giá nhập cuối': 9893.25,
+      'Bảng giá chung': 80000,
+      25: 80000,
+      26: 22754.48,
+      30: 0,
+      35: null,
+      40: 80000,
+    }])
+
+    expect(result.invalid).toHaveLength(0)
+    expect(result.valid[0]).toMatchObject({
+      code: 'F5d2',
+      sale_price: 80000,
+      provisional_stock: 0,
+      price_list_prices: [
+        { price_list_name: 'Bảng giá chung', unit_price: 80000 },
+        { price_list_name: '25', unit_price: 80000 },
+        { price_list_name: '26', unit_price: 22754.48 },
+        { price_list_name: '40', unit_price: 80000 },
+      ],
     })
   })
 
@@ -260,6 +293,50 @@ describe('product import server flow', () => {
       price_updated_rows: 0,
       price_skipped_rows: 1,
       price_list_name: 'Bang gia le',
+    })
+  })
+
+  it('applies named KiotViet price-list columns after product upsert', async () => {
+    const upsertPriceListItemsByName = vi.fn(async () => ({ created: 3, updated: 0, skipped: 0 }))
+    const repository = {
+      upsertProductGroupsByName: vi.fn(async () => new Map([['Fomex', 'group-1']])),
+      upsertProductsByCode: vi.fn(async () => ({ created: 1, updated: 0, skipped: 0 })),
+      findDefaultPriceList: vi.fn(async () => ({ id: 'pl-default', name: 'Bảng giá chung' })),
+      upsertPriceListItemsByName,
+    }
+
+    const result = await applyKiotVietProductImport({
+      organizationId: 'org-1',
+      repository,
+      rows: [{
+        ...rows[0],
+        code: 'F5d2',
+        product_group_name: 'Fomex',
+        sale_price: 80000,
+        price_list_prices: [
+          { price_list_name: 'Bảng giá chung', unit_price: 80000 },
+          { price_list_name: '25', unit_price: 80000 },
+          { price_list_name: '26', unit_price: 22754.48 },
+        ],
+      }],
+      invalidRows: [],
+      cleanupDemo: false,
+    })
+
+    expect(upsertPriceListItemsByName).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      defaultPriceListId: 'pl-default',
+      rows: [
+        { product_code: 'F5d2', price_list_name: 'Bảng giá chung', unit_price: 80000 },
+        { product_code: 'F5d2', price_list_name: '25', unit_price: 80000 },
+        { product_code: 'F5d2', price_list_name: '26', unit_price: 22754.48 },
+      ],
+    })
+    expect(result.summary).toMatchObject({
+      price_created_rows: 3,
+      price_updated_rows: 0,
+      price_skipped_rows: 0,
+      price_list_name: 'Bảng giá chung',
     })
   })
 

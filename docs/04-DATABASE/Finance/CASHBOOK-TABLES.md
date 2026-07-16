@@ -303,7 +303,7 @@ Cashbook row import rule:
 - Store absolute voucher amount where a voucher record is created; keep signed delta in `cashbook_entries.amount_delta`.
 - `Trang thai = Da thanh toan` maps to `posted`; `Trang thai = Da huy` maps to `cancelled`.
 - `Loai thu chi` maps to cashbook category/voucher type. Unknown categories should be preserved as source text instead of dropped.
-- `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, and `So dien thoai` are counterparty source fields. Match to customer/supplier only when a reliable code exists; otherwise keep source text.
+- `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, and `So dien thoai` are counterparty source fields. KiotViet So Quy export does not provide an explicit counterparty type column. QCVL must infer `counterparty_type` only from reliable matches: `KH...`/customer code to customer, `NCC...`/supplier code to supplier, or exact trusted catalog match; otherwise keep `other` and preserve source text.
 - Imported KiotViet historical rows must be traceable with `source_system = kiotviet` and source code/file metadata. Manual QCVL rows and POS-generated rows must not overwrite imported KV rows.
 
 Implementation order:

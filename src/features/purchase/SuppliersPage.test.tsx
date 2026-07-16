@@ -21,6 +21,9 @@ const supplier = {
   status: 'active' as const,
   current_payable_amount: 250000,
   total_purchase_amount: 300000,
+  source_creator_name: 'Văn Lâm',
+  created_at: '2026-07-08T03:00:00Z',
+  supplier_group: { id: 'supplier-group-1', name: 'Nhóm vật tư' },
 }
 
 const inactiveSupplier = {
@@ -47,10 +50,54 @@ const payableReceipts = [
   },
 ]
 
+const supplierReceipts = [
+  {
+    id: 'receipt-1',
+    code: 'PN000673',
+    supplier_id: 'supplier-1',
+    supplier: { id: 'supplier-1', code: 'NCC000031', name: 'Nguyễn Phong' },
+    received_at: '2026-07-02T03:00:00 000Z',
+    status: 'posted' as const,
+    supplier_document_no: 'HD-NCC-001',
+    subtotal_amount: 300000,
+    discount_amount: 0,
+    payable_amount: 300000,
+    paid_amount: 50000,
+    remaining_amount: 250000,
+    notes: null,
+    created_by: { id: 'user-1', name: 'Nguyễn Thị Mai Phương' },
+    created_at: '2026-07-02T03:00:00 000Z',
+    updated_at: '2026-07-02T03:00:00 000Z',
+    items: [],
+    supplier_payments: [],
+  },
+  {
+    id: 'receipt-2',
+    code: 'PN000674',
+    supplier_id: 'supplier-1',
+    supplier: { id: 'supplier-1', code: 'NCC000031', name: 'Nguyễn Phong' },
+    received_at: '2026-07-03T03:00:00 000Z',
+    status: 'posted' as const,
+    supplier_document_no: 'HD-NCC-002',
+    subtotal_amount: 100000,
+    discount_amount: 0,
+    payable_amount: 100000,
+    paid_amount: 100000,
+    remaining_amount: 0,
+    notes: null,
+    created_by: { id: 'user-1', name: 'Nguyễn Thị Mai Phương' },
+    created_at: '2026-07-03T03:00:00 000Z',
+    updated_at: '2026-07-03T03:00:00 000Z',
+    items: [],
+    supplier_payments: [],
+  },
+]
+
 function makeService(overrides: Partial<SupplierService> = {}): SupplierService {
   return {
     listSuppliers: vi.fn(async () => ({ items: [supplier], page: 1, page_size: 15, total: 1 })),
     getSupplier: vi.fn(async () => supplier),
+    listPurchaseReceipts: vi.fn(async () => ({ items: supplierReceipts, page: 1, page_size: 100, total: supplierReceipts.length })),
     createSupplier: vi.fn(async () => ({ ...supplier, id: 'supplier-2', code: 'NCC000001', phone: null })),
     updateSupplier: vi.fn(async () => ({ ...supplier, status: 'inactive' as const })),
     listCustomers: vi.fn(async () => ({ items: customers, page: 1, page_size: 20, total: 1 })),
@@ -86,11 +133,17 @@ async function openSupplierDetail(code = 'NCC000031') {
 
 async function openSupplierPaymentFromDetail(code = 'NCC000031') {
   await openSupplierDetail(code)
-  const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })
-  await userEvent.click(within(form).getByRole('button', { name: 'Thanh toán NCC' }))
+  const detail = await screen.findByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán NCC' }))
 }
 
-it('lists suppliers with payable and purchase totals plus linked customer', async () => {
+async function openSupplierEditFromDetail(code = 'NCC000031') {
+  await openSupplierDetail(code)
+  const detail = await screen.findByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chỉnh sửa' }))
+}
+
+it('lists suppliers with payable and purchase totals without a linked customer list column', async () => {
   const service = makeService()
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
@@ -110,11 +163,20 @@ it('lists suppliers with payable and purchase totals plus linked customer', asyn
   expect(screen.getByText('Nguyễn Phong')).toBeInTheDocument()
   const table = screen.getByRole('table')
   expect(table.closest('.management-table-viewport')).not.toBeNull()
-  expect(within(table).getByText('KH000123 - Nguyễn Phong')).toBeInTheDocument()
+  expect(within(table).queryByText('KH000123 - Nguyễn Phong')).not.toBeInTheDocument()
   expect(within(table).getByText('250 000')).toBeInTheDocument()
   expect(within(table).getByText('300 000')).toBeInTheDocument()
+  expect(within(table).queryByRole('columnheader', { name: 'Nhóm NCC' })).not.toBeInTheDocument()
+  expect(within(table).queryByRole('columnheader', { name: 'Email' })).not.toBeInTheDocument()
+  expect(within(table).queryByRole('columnheader', { name: 'Khách hàng liên kết' })).not.toBeInTheDocument()
   const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
   expect(headers).not.toContain('Thao tác')
+  expect(headers).not.toContain('Nhóm NCC')
+  expect(headers).not.toContain('Email')
+  const firstDataRow = table.querySelector('tbody tr')
+  const firstRowCells = Array.from(firstDataRow?.querySelectorAll('td') ?? []).map((cell) => cell.textContent?.trim())
+  expect(firstRowCells[5]).toContain('Đang hoạt động')
+  expect(within(firstDataRow as HTMLElement).getByLabelText('Có liên kết khách hàng')).toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: 'Phân trang nhà cung cấp' })).toHaveClass('management-table-footer')
   expect(screen.queryByRole('form', { name: 'Thông tin nhà cung cấp' })).not.toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Tạo nhà cung cấp' })).toBeInTheDocument()
@@ -277,22 +339,130 @@ it('creates supplier with blank phone and selected linked customer', async () =>
   })
 })
 
-it('opens supplier for editing and saves inactive status', async () => {
+it('opens supplier detail in view mode before editing and saves inactive status', async () => {
   const service = makeService()
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
   await openSupplierDetail()
-  const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })
   const detail = screen.getByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
-  expect(detail).toHaveClass('management-detail-panel')
+  expect(detail).not.toHaveClass('management-detail-panel')
+  expect(detail.querySelector('.management-detail-panel')).not.toBeNull()
+  expect(within(detail).getByRole('button', { name: 'Chỉnh sửa' })).toBeInTheDocument()
+  expect(within(detail).queryByRole('form', { name: 'Thông tin nhà cung cấp' })).not.toBeInTheDocument()
+  expect(within(detail).getByRole('tab', { name: 'Thông tin' })).toHaveAttribute('aria-selected', 'true')
+  expect(within(detail).getByRole('tab', { name: 'Lịch sử NCC này' })).toBeInTheDocument()
+  expect(within(detail).getByRole('tab', { name: 'Nợ NCC này' })).toBeInTheDocument()
+  expect(within(detail).queryByRole('heading', { name: 'Thông tin nhà cung cấp' })).not.toBeInTheDocument()
+  const detailSummary = within(detail).getByRole('group', { name: 'Tóm tắt nhà cung cấp' })
+  expect(detailSummary).toHaveClass('management-detail-summary')
+  expect(within(detailSummary).getByText('Người tạo:').parentElement).toHaveTextContent('Người tạo: Văn Lâm')
+  expect(within(detailSummary).getByText('Ngày tạo:').parentElement).toHaveTextContent('Ngày tạo: 08/07/2026')
+  expect(within(detailSummary).getByText('Nhóm nhà cung cấp:').parentElement).toHaveTextContent('Nhóm nhà cung cấp: Nhóm vật tư')
+  const metaLabels = Array.from(detailSummary.querySelectorAll('.management-detail-meta-label')).map((element) => element.textContent)
+  expect(metaLabels).toEqual(['Người tạo:', 'Ngày tạo:', 'Nhóm nhà cung cấp:'])
+  const linkedCard = within(detail).getByRole('region', { name: 'Khách hàng đồng thời là Nhà cung cấp' })
+  expect(linkedCard).toHaveTextContent('Khách hàng liên kết')
+  expect(linkedCard).toHaveTextContent('KH000123 - Nguyễn Phong')
+  expect(linkedCard).toHaveTextContent('Gộp khách hàng')
+  const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin nhanh nhà cung cấp' })
+  const infoGrid = infoPanel.querySelector('dl')
+  expect(infoGrid).toHaveClass('management-detail-meta-grid', 'management-detail-meta-grid-three')
+  expect(within(infoPanel).getByText('Điện thoại')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Email')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('MST')).toBeInTheDocument()
+  expect(within(infoPanel).getByText('Địa chỉ')).toBeInTheDocument()
+  expect(infoGrid?.querySelectorAll('dt')).toHaveLength(4)
+  const note = within(infoPanel).getByText('NCC cũng là khách hàng').closest('.management-detail-inline-note')
+  expect(note).not.toBeNull()
+  expect(note).toHaveTextContent('NCC cũng là khách hàng')
+  expect(note?.querySelector('svg')).not.toBeNull()
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử NCC này' }))
+  const historyPanel = within(detail).getByRole('tabpanel', { name: 'Lịch sử nhập/trả hàng của NCC này' })
+  const historyTable = within(historyPanel).getByRole('table', { name: 'Lịch sử nhập hàng của NCC này' })
+  expect(historyTable).toHaveClass('management-detail-table', 'management-detail-linked-table')
+  expect(within(historyTable).getByText('PN000673')).toBeInTheDocument()
+  expect(within(historyTable).getByText('PN000674')).toBeInTheDocument()
+  expect(within(historyTable).getByText('HD-NCC-001')).toBeInTheDocument()
+  expect(within(historyTable).getAllByText('Đã nhập')).toHaveLength(2)
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ NCC này' }))
+  const debtPanel = within(detail).getByRole('tabpanel', { name: 'Nợ cần trả của NCC này' })
+  const debtTable = within(debtPanel).getByRole('table', { name: 'Danh sách phiếu nợ của NCC này' })
+  expect(debtTable).toHaveClass('management-detail-table', 'management-detail-linked-table')
+  expect(within(debtTable).getByText('PN000673')).toBeInTheDocument()
+  expect(within(debtTable).queryByText('PN000674')).not.toBeInTheDocument()
+  expect(within(debtPanel).getAllByText('250 000').length).toBeGreaterThan(0)
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chỉnh sửa' }))
+  const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })
   expect(form.closest('tr')).toHaveClass('management-detail-row')
   expect(form.closest('tr')?.previousElementSibling).toHaveClass('management-data-row-selected')
   await userEvent.selectOptions(within(form).getByLabelText('Trạng thái NCC'), 'inactive')
   await userEvent.click(within(form).getByRole('button', { name: 'Lưu nhà cung cấp' }))
 
   expect(service.getSupplier).toHaveBeenCalledWith('supplier-1')
+  expect(service.listPurchaseReceipts).toHaveBeenCalledWith(expect.objectContaining({ id: 'supplier-1', code: 'NCC000031' }))
   expect(service.updateSupplier).toHaveBeenCalledWith('supplier-1', expect.objectContaining({ status: 'inactive' }))
+})
+
+it('keeps supplier detail open when clicking the selected supplier row again', async () => {
+  const service = makeService()
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openSupplierDetail()
+  expect(await screen.findByText('NCC cũng là khách hàng')).toBeInTheDocument()
+
+  await openSupplierDetail()
+
+  expect(screen.getByText('NCC cũng là khách hàng')).toBeInTheDocument()
+  expect(service.getSupplier).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('button', { name: 'NCC000031' }).closest('tr')).toHaveClass('management-data-row-selected')
+})
+
+it('shows history and debt only for the current supplier', async () => {
+  const foreignReceipt = {
+    id: 'receipt-foreign',
+    code: 'PN999999',
+    supplier_id: 'supplier-2',
+    supplier: { id: 'supplier-2', code: 'NCC000032', name: 'NCC tạm ngưng' },
+    received_at: '2026-07-04T03:00:00Z',
+    status: 'posted' as const,
+    supplier_document_no: 'HD-OTHER-001',
+    subtotal_amount: 123000,
+    discount_amount: 0,
+    payable_amount: 123000,
+    paid_amount: 0,
+    remaining_amount: 123000,
+    notes: null,
+    created_by: { id: 'user-1', name: 'Nguyễn Thị Mai Phương' },
+    created_at: '2026-07-04T03:00:00Z',
+    updated_at: '2026-07-04T03:00:00Z',
+    items: [],
+    supplier_payments: [],
+  }
+  const service = makeService({
+    listPurchaseReceipts: vi.fn(async () => ({
+      items: [...supplierReceipts, foreignReceipt],
+      page: 1,
+      page_size: 100,
+      total: supplierReceipts.length + 1,
+    })),
+  })
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openSupplierDetail()
+  const detail = screen.getByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử NCC này' }))
+  const historyPanel = within(detail).getByRole('tabpanel', { name: 'Lịch sử nhập/trả hàng của NCC này' })
+  expect(within(historyPanel).getByText('PN000673')).toBeInTheDocument()
+  expect(within(historyPanel).queryByText('PN999999')).not.toBeInTheDocument()
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ NCC này' }))
+  const debtPanel = within(detail).getByRole('tabpanel', { name: 'Nợ cần trả của NCC này' })
+  expect(within(debtPanel).getByText('PN000673')).toBeInTheDocument()
+  expect(within(debtPanel).queryByText('PN999999')).not.toBeInTheDocument()
 })
 
 it('clears stale supplier edit detail when switching rows fails', async () => {
@@ -306,7 +476,7 @@ it('clears stale supplier edit detail when switching rows fails', async () => {
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await openSupplierDetail()
+  await openSupplierEditFromDetail()
   expect(screen.getByRole('form', { name: 'Thông tin nhà cung cấp' })).toBeInTheDocument()
 
   await openSupplierDetail('NCC000032')
@@ -378,3 +548,30 @@ it('blocks supplier payment over selected receipt outstanding amount in UI', asy
   expect(await screen.findByRole('alert')).toHaveTextContent('Không được trả vượt số còn nợ của phiếu nhập.')
   expect(service.paySupplier).not.toHaveBeenCalled()
 })
+
+it('uses a denser supplier page size on wide management screens', async () => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 2209,
+  })
+  const service = makeService({
+    listSuppliers: vi.fn(async (input = {}) => ({
+      items: [supplier],
+      page: 1,
+      page_size: input.page_size ?? 15,
+      total: 1,
+    })),
+  })
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await waitFor(() => expect(service.listSuppliers).toHaveBeenCalledWith(expect.objectContaining({
+    status: 'active',
+    page: 1,
+    page_size: 30,
+  })))
+  const footer = await screen.findByRole('navigation', { name: 'Phân trang nhà cung cấp' })
+  expect(within(footer).getByRole('combobox', { name: 'Số dòng hiển thị' })).toHaveValue('30')
+})
+
+

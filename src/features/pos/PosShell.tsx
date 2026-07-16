@@ -171,6 +171,10 @@ export function PosShell({
   const valueInputMouseUpSelectRefs = useRef<Set<HTMLInputElement>>(new Set())
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? makeInvoiceTab(1)
   const cartLines = activeTab.cartLines
+  const layoutCartLines = useMemo(
+    () => cartLines.map((line) => ({ ...line, product: resolveCartLineProduct(line) })),
+    [cartLines, products],
+  )
   const selectedCustomer = activeTab.selectedCustomer
   const selectedCustomerId = selectedCustomer?.id
   const cartTotal = useMemo(
@@ -622,11 +626,12 @@ export function PosShell({
       ...tab,
       cartLines: tab.cartLines.map((line) => {
         if (line.id !== lineId) return line
-        const option = saleUnitOptions(line.product).find((candidate) => candidate.unitName === unitName)
-        if (option === undefined || option.stockQtyPerUnit === 1) {
-          return { ...line, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
+        const product = resolveCartLineProduct(line)
+        const option = saleUnitOptions(product).find((candidate) => candidate.unitName === unitName)
+        if (option === undefined || option.unitName === product.unit_name) {
+          return { ...line, product, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
         }
-        return { ...line, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
+        return { ...line, product, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
       }),
     }))
   }
@@ -927,6 +932,30 @@ export function PosShell({
     }))
   }
 
+  function renderLineSaleUnitControl(line: CheckoutCartLine) {
+    const product = resolveCartLineProduct(line)
+    const options = saleUnitOptions(product)
+    if (options.length > 1) {
+      return (
+        <select
+          aria-label={`Đơn vị ${product.name}`}
+          className="pos-cart-line-unit-select"
+          value={selectedSaleUnitText({ ...line, product })}
+          onChange={(event) => updateLineSaleUnit(line.id, event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option.unitName} value={option.unitName}>{option.unitName}</option>
+          ))}
+        </select>
+      )
+    }
+    return <strong className="pos-cart-line-unit">{product.unit_name}</strong>
+  }
+
+  function resolveCartLineProduct(line: CheckoutCartLine) {
+    return products.find((product) => product.id === line.product.id || product.code === line.product.code) ?? line.product
+  }
+
   return (
     <main className="pos-shell">
       <PosTopbar
@@ -967,7 +996,7 @@ export function PosShell({
           <ul
             aria-label="Dòng hàng trong giỏ"
             className="pos-cart-lines"
-            style={cartColumnStyle(cartLines)}
+            style={cartColumnStyle(layoutCartLines)}
           >
             {activeCartLineId === null ? (
               <li aria-label="Cột dòng hàng" className="pos-cart-line-heading">
@@ -1154,10 +1183,12 @@ export function PosShell({
                           onMouseUp={handleValueInputMouseUp}
                         />
                       </div>
-                      <span className="pos-cart-line-equals" aria-hidden="true">=</span>
-                      <strong className="pos-cart-line-unit" aria-label={`Diện tích ${line.product.name}`}>
-                        {formatMeasure(line.quantity)} {line.product.unit_name}
-                      </strong>
+                      <span className="pos-cart-line-equals pos-cart-line-area-result" aria-label={`Diện tích ${line.product.name}`}>
+                        = {formatMeasure(line.quantity)}
+                      </span>
+                      <span className="pos-cart-line-area-total">
+                        {renderLineSaleUnitControl(line)}
+                      </span>
                     </>
                   ) : (
                     <>
@@ -1184,20 +1215,7 @@ export function PosShell({
                         />
                       </div>
                       <span className="pos-cart-line-equals" aria-hidden="true" />
-                      {saleUnitOptions(line.product).length > 1 ? (
-                        <select
-                          aria-label={`Đơn vị ${line.product.name}`}
-                          className="pos-cart-line-unit-select"
-                          value={selectedSaleUnitText(line)}
-                          onChange={(event) => updateLineSaleUnit(line.id, event.target.value)}
-                        >
-                          {saleUnitOptions(line.product).map((option) => (
-                            <option key={option.unitName} value={option.unitName}>{option.unitName}</option>
-                          ))}
-                        </select>
-                      ) : (
-                        <strong className="pos-cart-line-unit">{line.product.unit_name}</strong>
-                      )}
+                      {renderLineSaleUnitControl(line)}
                     </>
                   )}
                   <div className="pos-cart-line-price">
@@ -1721,6 +1739,12 @@ function cartColumnStyle(lines: CheckoutCartLine[]): CSSProperties {
 }
 
 function unitColumnWidthCh(line: CheckoutCartLine) {
+  const unitOptions = saleUnitOptions(line.product)
+  if (unitOptions.length > 1) {
+    const longestOption = Math.max(...unitOptions.map((option) => option.unitName.length))
+    return Math.min(Math.max(longestOption * 0.75 + 2.4, 4.5), 12)
+  }
+
   const unitText = isAreaLine(line)
     ? `${formatMeasure(line.quantity)} ${line.product.unit_name}`
     : line.product.unit_name

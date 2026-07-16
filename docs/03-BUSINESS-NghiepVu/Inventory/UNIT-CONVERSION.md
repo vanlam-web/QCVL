@@ -40,6 +40,8 @@ Ví dụ:
 
 POS có thể bán bằng đơn vị khác đơn vị tồn chính nếu có cấu hình quy đổi.
 
+Quy tắc này áp dụng cho cả dòng hàng thường lẫn dòng hàng m² trong POS. Nếu sản phẩm có nhiều đơn vị bán hợp lệ, UI phải cho chọn đơn vị ngay trên dòng bán.
+
 Khi bán bằng đơn vị phụ, stock movement lưu cả:
 
 - số lượng bán theo đơn vị hiển thị

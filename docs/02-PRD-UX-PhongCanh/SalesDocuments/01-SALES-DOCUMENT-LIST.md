@@ -1,4 +1,4 @@
-# 01-SALES-DOCUMENT-LIST — Danh sách chứng từ bán hàng
+﻿# 01-SALES-DOCUMENT-LIST — Danh sách chứng từ bán hàng
 
 > **Phase hiện tại:** Đã có readonly list/detail cho `HD...` và `BG...`; báo giá active mở lại được vào POS draft
 > **Tham khảo:** KiotViet `Đơn hàng > Hóa đơn`; không dùng mô hình `Đặt hàng/Giao hàng`
@@ -13,6 +13,7 @@ Quan sát ngày `01/07/2026`:
 - Tìm trực tiếp mã `HD010985` mở được hóa đơn ngày `30/06/2026 17:08`.
 - Khi tìm theo mã, KiotViet tự đưa thời gian về `Toàn thời gian` và bỏ chọn các filter trạng thái/loại hóa đơn.
 - Danh sách có dòng tổng phía trên và các cột chính: mã hóa đơn, thời gian, mã trả hàng, mã khách hàng, khách hàng, tổng tiền hàng, giảm giá, tổng sau giảm giá, khách đã trả.
+- POS QCVL phải sinh mã chứng từ giống KiotViet: hóa đơn `HD` + 6 số, báo giá `BG` + 6 số, lấy số kế tiếp theo mã đang có. Dạng `HD-POS...`/`BG-POS...` chỉ là mã lịch sử/test cũ, không dùng cho chứng từ mới. Sau cleanup ngày `2026-07-14`, 7 hóa đơn POS/test `HD-POS-021...` đã được xóa khỏi `3202`; backup nằm tại `backups/dev-memory-state-before-delete-approved-fake-data-2026-07-14T15-44-30-303Z.json`.
 
 Áp dụng cho QC-OMS:
 
@@ -107,7 +108,7 @@ QC-OMS chỉ làm luồng **bán đứt**:
 | Phương thức thanh toán | Tất cả, Tiền mặt, Chuyển khoản, Kết hợp nếu có dữ liệu |
 | Khách hàng | Chọn khách hoặc nhập nhanh tên/mã/SĐT |
 | Người bán/người tạo | Trong QC-OMS hiện tại hai khái niệm này dùng cùng tài khoản tạo/chốt chứng từ; UI chỉ cần một filter người bán/người tạo |
-| Bảng giá | Bảng giá chung hoặc bảng giá theo nhóm khách |
+| Bảng giá | Giá chung hoặc bảng giá theo nhóm khách |
 
 Không có bộ lọc giao hàng, COD, đối tác giao hàng, kênh bán, HĐĐT, VAT, trạng thái giao hàng, trạng thái vận đơn hoặc trạng thái đồng bộ sàn.
 
@@ -154,15 +155,14 @@ Nếu POS/báo giá/hóa đơn không chọn khách, backend phải gán chứng
 | Báo giá active | Mở chi tiết readonly, mở lại vào POS draft local |
 | Báo giá không còn mở được | Mở chi tiết readonly; xử lý theo cảnh báo nếu sản phẩm/khách/giá đã lệch |
 
-### 5.2. Ngoài phạm vi hiện tại
+### 5.2. Chưa làm trong V1
 
-Các thao tác sau nằm ngoài phạm vi hiện tại, không coi là đã có trong implementation:
+Các thao tác sau không hiển thị trong footer chi tiết V1:
 
-| Trạng thái | Thao tác ngoài phạm vi hiện tại |
+| Trạng thái | Thao tác chưa làm |
 |---|---|
-| Báo giá | Hủy báo giá nếu Owner chốt nghiệp vụ riêng |
-| Hóa đơn hoàn thành | In lại bill, sửa hóa đơn, hủy hóa đơn |
-| Hóa đơn đã hủy | In/xem lịch sử; không cho sửa tiếp |
+| Hóa đơn hoàn thành | Trả hàng, Tạo QR |
+| Hóa đơn đã hủy | Trả hàng, Tạo QR |
 
 Quy tắc sửa/hủy hóa đơn khi mở phạm vi:
 

@@ -1,8 +1,10 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Product, ResolvedPrice } from '../catalog/types'
 import { formatMoney } from '../../lib/number-format'
 
-const productsPerPage = 12
+const fallbackGridMetrics = { columns: 2, rows: 5, pageSize: 10 }
+const minProductCardHeightRem = 4.9
+const threeColumnBreakpointPx = 420
 
 export function ProductGrid({
   products,
@@ -18,19 +20,72 @@ export function ProductGrid({
   footerAction?: ReactNode
 }) {
   const [page, setPage] = useState(1)
-  const totalPages = Math.max(1, Math.ceil(products.length / productsPerPage))
+  const [gridMetrics, setGridMetrics] = useState(fallbackGridMetrics)
+  const gridRef = useRef<HTMLDivElement>(null)
+  const totalPages = Math.max(1, Math.ceil(products.length / gridMetrics.pageSize))
   const safePage = Math.min(page, totalPages)
   const visibleProducts = useMemo(
-    () => products.slice((safePage - 1) * productsPerPage, safePage * productsPerPage),
-    [safePage, products],
+    () => products.slice((safePage - 1) * gridMetrics.pageSize, safePage * gridMetrics.pageSize),
+    [safePage, products, gridMetrics.pageSize],
   )
+  const gridStyle = {
+    '--product-grid-columns': gridMetrics.columns,
+    '--product-grid-card-height': `${minProductCardHeightRem}rem`,
+  } as CSSProperties
+
+  useLayoutEffect(() => {
+    const grid = gridRef.current
+    if (grid === null) return
+
+    function measure(element: HTMLDivElement) {
+      if (element.clientWidth === 0 || element.clientHeight === 0) return
+
+      const style = getComputedStyle(element)
+      const fontSize = Number.parseFloat(style.fontSize) || 16
+      const rowGap = Number.parseFloat(style.rowGap) || 0
+      const minCardHeight = minProductCardHeightRem * fontSize
+      const columns = element.clientWidth >= threeColumnBreakpointPx ? 3 : 2
+      const rows = Math.max(1, Math.floor((element.clientHeight + rowGap) / (minCardHeight + rowGap)))
+      const pageSize = Math.max(1, columns * rows)
+      setGridMetrics((current) => (
+        current.columns === columns && current.rows === rows && current.pageSize === pageSize
+          ? current
+          : { columns, rows, pageSize }
+      ))
+    }
+
+    measure(grid)
+    const animationFrame = window.requestAnimationFrame(() => measure(grid))
+    const timeout = window.setTimeout(() => measure(grid), 100)
+    if (typeof ResizeObserver === 'undefined') {
+      const handleResize = () => measure(grid)
+      window.addEventListener('resize', handleResize)
+      return () => {
+        window.cancelAnimationFrame(animationFrame)
+        window.clearTimeout(timeout)
+        window.removeEventListener('resize', handleResize)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(() => measure(grid))
+    resizeObserver.observe(grid)
+    return () => {
+      window.cancelAnimationFrame(animationFrame)
+      window.clearTimeout(timeout)
+      resizeObserver.disconnect()
+    }
+  }, [loading, products.length])
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages))
+  }, [totalPages])
 
   if (loading) return <p>Đang tải sản phẩm...</p>
   if (products.length === 0) return <p>Chưa có sản phẩm đang bán.</p>
 
   return (
     <section aria-label="Sản phẩm nhanh" className="product-grid-panel">
-      <div className="product-grid">
+      <div className="product-grid" ref={gridRef} style={gridStyle}>
         {visibleProducts.map((product) => {
           const price = prices[product.id]?.unit_price ?? 0
           return (

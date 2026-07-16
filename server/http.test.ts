@@ -11,9 +11,9 @@ const user = {
   status: 'active' as const,
 }
 
-function repository(passwordHash: string): ServerRepository {
+function repository(passwordHash: string, displayName = 'Admin'): ServerRepository {
   const sessions = new Map<string, string>()
-  const userWithPassword = { ...user, password_hash: passwordHash }
+  const userWithPassword = { ...user, display_name: displayName, password_hash: passwordHash }
 
   return {
     async findUserByEmail(email) {
@@ -31,7 +31,7 @@ function repository(passwordHash: string): ServerRepository {
     async getSessionUser(token) {
       return sessions.get(token) === user.id
         ? {
-            user: { id: user.id, email: user.email, display_name: user.display_name },
+            user: { id: user.id, email: user.email, display_name: displayName },
             organization: { id: 'org-1', code: 'VAN-LAM', name: 'Xuong Van Lam' },
             workstation: null,
             permissions: ['perm.create_order', 'perm.manage_users'],
@@ -44,8 +44,8 @@ function repository(passwordHash: string): ServerRepository {
   }
 }
 
-function persistentRepository(passwordHash: string): ServerRepository {
-  const base = repository(passwordHash)
+function persistentRepository(passwordHash: string, displayName = 'Admin'): ServerRepository {
+  const base = repository(passwordHash, displayName)
   const documents: Array<{
     id: string
     code: string
@@ -75,6 +75,7 @@ function persistentRepository(passwordHash: string): ServerRepository {
     created_at: string
     note: string
     counterparty: { type: string; name: string; phone: string | null }
+    created_by?: { id: string; name: string } | null
     source?: { type: string; id: string; code: string; order_code: string | null }
     allocations?: Array<{
       order_id: string
@@ -215,7 +216,7 @@ function persistentRepository(passwordHash: string): ServerRepository {
         remainingPayment -= allocated
       }
       const allocatedAmount = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
-      const receiptCode = `PT-CN-TEST-${cashbook.length + 1}`
+      const receiptCode = `TT${String(cashbook.length + 1).padStart(6, '0')}`
       if (allocatedAmount > 0) {
         cashbook.unshift({
           id: `cashbook-test-${cashbook.length + 1}`,
@@ -804,6 +805,57 @@ describe('createHttpHandler', () => {
     expect(body.data.items).toEqual([])
   })
 
+  test('filters deleted KiotViet products with the deleted status filter', async () => {
+    const repository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository })
+    const authorization = 'Bearer dev-token'
+
+    await repository.upsertProductsByCode?.({
+      organizationId: 'org-dev',
+      rows: [
+        {
+          code: 'SP000064{DEL}',
+          name: 'Sat V2',
+          status: 'inactive',
+          product_group_id: null,
+          unit_name: 'm',
+          sell_method: 'quantity',
+          product_kind: 'goods',
+          inventory_shape: 'normal',
+          track_inventory: true,
+          latest_purchase_cost: 0,
+          source_created_at: null,
+          unit_conversions: [],
+        },
+        {
+          code: 'LIVE',
+          name: 'Hang dang ban',
+          status: 'active',
+          product_group_id: null,
+          unit_name: 'cai',
+          sell_method: 'quantity',
+          product_kind: 'goods',
+          inventory_shape: 'normal',
+          track_inventory: true,
+          latest_purchase_cost: 0,
+          source_created_at: null,
+          unit_conversions: [],
+        },
+      ],
+    })
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products?status=deleted&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items).toHaveLength(1)
+    expect(body.data.items[0].code).toBe('SP000064{DEL}')
+  })
+
   test('sorts POS quick products by persisted invoice and quote usage', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -839,6 +891,48 @@ describe('createHttpHandler', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.items[0].id).toBe('product-005')
+  })
+
+  test('sorts POS quick products by dev-memory quote usage', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          rows: [
+            { rowNumber: 2, 'Mã hàng': 'LOW', 'Tên hàng': 'Ít bán', ĐVT: 'cái', 'Giá bán': 10000 },
+            { rowNumber: 3, 'Mã hàng': 'HOT', 'Tên hàng': 'Bán nhiều', ĐVT: 'cái', 'Giá bán': 25000 },
+          ],
+        }),
+      }),
+    )
+
+    for (let index = 0; index < 10; index++) {
+      await handler(
+        new Request('http://api.local/api/v1/orders/quotes', {
+          method: 'POST',
+          headers: { authorization },
+          body: JSON.stringify({
+            customer_id: 'customer-retail',
+            items: [{ product_id: 'product-hot', quantity: 1, unit_price: 25000, discount_amount: 0, price_source: 'manual' }],
+            payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+          }),
+        }),
+      )
+    }
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/products?status=active&page=1&page_size=5&sort=pos_usage', {
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items[0].id).toBe('product-hot')
   })
 
   test('previews KiotViet product import without writing products', async () => {
@@ -2348,6 +2442,69 @@ describe('createHttpHandler', () => {
     expect(body.data.total_all).toBe(2)
   })
 
+  test('resolves POS prices from imported KiotViet price lists with fallback to default price', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            { rowNumber: 2, SKU: 'F5d2', 'Tên hàng': 'Fomex 5mm - decal', ĐVT: 'Tấm', 'Nhóm hàng': 'Fomex', 'Bảng giá chung': 80000, 25: 75000 },
+            { rowNumber: 3, SKU: 'ADC', 'Tên hàng': 'Bảng Alu dán decal', ĐVT: 'Cái', 'Nhóm hàng': 'Thi công', 'Bảng giá chung': 30000 },
+            { rowNumber: 4, SKU: 'Z0', 'Tên hàng': 'Chưa có giá', ĐVT: 'Cái', 'Nhóm hàng': 'Thi công' },
+          ],
+        }),
+      }),
+    )
+    await handler(
+      new Request('http://api.local/api/v1/customers/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          rows: [{ rowNumber: 2, 'Mã khách hàng': 'KH25', 'Tên khách hàng': 'Khách bảng 25', 'Nhóm khách hàng': '25' }],
+        }),
+      }),
+    )
+
+    async function productId(code: string) {
+      const response = await handler(new Request(`http://api.local/api/v1/products?search=${code}`, { headers: { authorization } }))
+      const body = await response.json()
+      return body.data.items.find((product: { code: string }) => product.code === code).id as string
+    }
+
+    const customerResponse = await handler(new Request('http://api.local/api/v1/customers?search=KH25', { headers: { authorization } }))
+    const customerBody = await customerResponse.json()
+    const priceListResponse = await handler(new Request('http://api.local/api/v1/price-lists', { headers: { authorization } }))
+    const priceListBody = await priceListResponse.json()
+    const customerId = customerBody.data.items[0].id
+    const f5Id = await productId('F5d2')
+    const adcId = await productId('ADC')
+    const z0Id = await productId('Z0')
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/pricing/resolve', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ customer_id: customerId, product_ids: [f5Id, adcId, z0Id] }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(priceListBody.data.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: '25', is_active: true }),
+    ]))
+    expect(body.data.items).toEqual([
+      expect.objectContaining({ product_id: f5Id, unit_price: 75000, price_source: 'customer_group_price_list' }),
+      expect.objectContaining({ product_id: adcId, unit_price: 30000, price_source: 'fallback_default_price_list' }),
+      expect.objectContaining({ product_id: z0Id, unit_price: 0, price_source: 'default_price_list' }),
+    ])
+  })
+
   test('sorts product list by KiotViet created time descending by default', async () => {
     const productRepository = await createDevMemoryRepository()
     await productRepository.upsertProductsByCode?.({
@@ -2875,6 +3032,94 @@ describe('createHttpHandler', () => {
     expect(customerBody.data.items[0].total_sales_amount).toBe(4000000)
   })
 
+  test('creates POS invoice code with KiotViet-style HD sequence', async () => {
+    const repo = persistentRepository(await hashPassword('ChangeMe123!'))
+    const handler = createHttpHandler({ repository: repo })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await repo.saveSalesDocument?.({
+      organizationId: 'org-1',
+      document: {
+        id: 'order-hd-011149',
+        code: 'HD011149',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-15T09:00:00.000Z',
+        customer: { id: 'customer-001', code: 'KH000001', name: 'Khach cu', phone: null },
+        seller: { id: 'admin', name: 'Admin' },
+        subtotal_amount: 100000,
+        discount_amount: 0,
+        total_amount: 100000,
+        paid_amount: 100000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [{ product_id: 'product-001' }],
+      },
+      cashbookEntries: [],
+    })
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-002',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+
+    expect(checkout.status).toBe(201)
+    expect(checkoutBody.data.order.code).toBe('HD011150')
+    expect(checkoutBody.data.order.code).not.toContain('HD-POS')
+    expect(checkoutBody.data.payment_receipt.code).toBe('TTHD011150')
+    expect(checkoutBody.data.payment_receipt.code).not.toContain('PT-POS')
+  })
+
+  test('stores POS checkout cashbook creator from the current display name', async () => {
+    const repo = persistentRepository(await hashPassword('ChangeMe123!'), 'Thu ngân QCVL')
+    const handler = createHttpHandler({ repository: repo })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-002',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+    const cashbook = await handler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${checkoutBody.data.payment_receipt.code}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const cashbookBody = await cashbook.json()
+
+    expect(checkout.status).toBe(201)
+    expect(cashbookBody.data.items[0].code).toBe(checkoutBody.data.payment_receipt.code)
+    expect(cashbookBody.data.items[0].created_by).toEqual({ id: 'user-1', name: 'Thu ngân QCVL' })
+  })
+
   test('returns the checked-out product in POS sales document detail', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -2910,6 +3155,51 @@ describe('createHttpHandler', () => {
     expect(detailBody.data.items[0].product.id).toBe('product-002')
     expect(detailBody.data.items[0].product.code).toBe('DECAL-PP')
     expect(detailBody.data.items[0].unit_price).toBe(600000)
+  })
+
+  test('updates a POS sales document note and returns refreshed detail', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-002',
+          items: [{ product_id: 'product-002', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+          note: 'Ghi chú cũ',
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+
+    const update = await handler(
+      new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
+        method: 'PATCH',
+        headers: { authorization },
+        body: JSON.stringify({ note: 'Ghi chú mới' }),
+      }),
+    )
+    const detail = await handler(
+      new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
+        headers: { authorization },
+      }),
+    )
+    const updateBody = await update.json()
+    const detailBody = await detail.json()
+
+    expect(update.status).toBe(200)
+    expect(updateBody.data.note).toBe('Ghi chú mới')
+    expect(detailBody.data.note).toBe('Ghi chú mới')
   })
 
   test('hydrates POS sales document detail products from repository catalog for imported products', async () => {
@@ -3320,6 +3610,88 @@ describe('createHttpHandler', () => {
     expect(detailBody.data.allocations[0].order_code).toBe(orderCode)
   })
 
+  test('hydrates imported invoice cashbook payer from inferred sales document code', async () => {
+    const repo = persistentRepository(await hashPassword('ChangeMe123!'))
+    const handler = createHttpHandler({ repository: repo })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    await repo.saveSalesDocument?.({
+      organizationId: 'org-1',
+      document: {
+        id: 'order-hd-999999',
+        code: 'HD999999',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-13T09:22:00.000Z',
+        customer: { id: 'customer-hd-999999', code: 'KH999999', name: 'Khách từ hóa đơn', phone: '0909999999' },
+        seller: { id: 'seller-1', name: 'Seller 1' },
+        subtotal_amount: 220000,
+        discount_amount: 0,
+        total_amount: 220000,
+        paid_amount: 220000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: 'Invoice imported before cashbook',
+        items: [{ product_id: 'product-001' }],
+      },
+      cashbookEntries: [
+        {
+          id: 'cashbook-tthd-999999',
+          code: 'TTHD999999',
+          status: 'posted',
+          direction: 'in',
+          amount_delta: 220000,
+          finance_account: { id: 'bank-main', code: '0947900909', name: 'Văn Viết Phương Lâm', account_type: 'bank' },
+          is_business_accounted: true,
+          source_type: 'kiotviet_cashbook',
+          created_at: '2026-07-13T09:22:00.000Z',
+          note: 'Phiếu thu Tiền khách trả',
+          counterparty: { type: 'none', name: '', phone: null },
+        },
+      ],
+    })
+
+    const detail = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook/cashbook-tthd-999999', { headers: { authorization } }),
+    )
+    const detailBody = await detail.json()
+
+    expect(detail.status).toBe(200)
+    expect(detailBody.data.source.order_code).toBe('HD999999')
+    expect(detailBody.data.counterparty).toEqual({
+      type: 'customer',
+      name: 'Khách từ hóa đơn',
+      phone: '0909999999',
+    })
+  })
+
+  test('does not fallback to a demo invoice when sales document code is missing', async () => {
+    const handler = createHttpHandler({ repository: persistentRepository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/sales-documents/HD011149', { headers: { authorization } }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(404)
+    expect(body.data.code).not.toBe('DEV20-HD-001')
+  })
+
   test('adds fully unpaid POS checkout to customer debt detail', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -3565,6 +3937,7 @@ describe('createHttpHandler', () => {
     const customerListBody = await customerList.json()
 
     expect(collection.status).toBe(201)
+    expect(collectionBody.data.payment_receipt_id).toMatch(/^TT\d{6}$/)
     expect(collectionBody.data.allocated_amount).toBe(100000)
     expect(debtBody.data.total_debt).toBe(200000)
     expect(debtBody.data.invoices).toEqual(expect.arrayContaining([
@@ -3662,6 +4035,7 @@ describe('createHttpHandler', () => {
     const updatedInvoice = documentBody.data.items.find((item: { code: string }) => item.code === 'DEV20-HD-013')
 
     expect(collection.status).toBe(201)
+    expect(collectionBody.data.payment_receipt_id).toMatch(/^TT\d{6}$/)
     expect(collectionBody.data.allocated_amount).toBe(300000)
     expect(debtBody.data.total_debt).toBe(437500)
     expect(debtBody.data.invoices).toEqual(

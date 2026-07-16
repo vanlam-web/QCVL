@@ -1,5 +1,5 @@
 export type PaymentSettlementStatus = 'unpaid' | 'partial' | 'paid'
-export type PaymentSettlementTone = 'neutral' | 'warning' | 'success'
+export type PaymentSettlementTone = 'danger' | 'warning' | 'success'
 
 export function paymentSettlementStatusLabel(status: PaymentSettlementStatus) {
   if (status === 'paid') return 'Hoàn tất'
@@ -10,5 +10,5 @@ export function paymentSettlementStatusLabel(status: PaymentSettlementStatus) {
 export function paymentSettlementStatusTone(status: PaymentSettlementStatus): PaymentSettlementTone {
   if (status === 'paid') return 'success'
   if (status === 'partial') return 'warning'
-  return 'neutral'
+  return 'danger'
 }

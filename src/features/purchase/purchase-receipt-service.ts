@@ -16,7 +16,9 @@ import type {
   PurchaseReceiptSupplierPaymentInput,
   PurchaseReceiptSupplierPaymentResult,
   PurchaseReceiptStatus,
+  PurchaseReceiptProduct,
 } from './purchase-receipt-types'
+import type { Product, ProductStatus, SellMethod } from '../catalog/types'
 
 export interface PurchaseReceiptApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
@@ -31,6 +33,7 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         date_from?: string
         date_to?: string
         created_by?: string
+        supplier_id?: string
         page?: number
         page_size?: number
       } = {},
@@ -41,6 +44,7 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       if (input.date_from) params.set('date_from', input.date_from)
       if (input.date_to) params.set('date_to', input.date_to)
       if (input.created_by) params.set('created_by', input.created_by)
+      if (input.supplier_id) params.set('supplier_id', input.supplier_id)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
       const query = params.toString()
@@ -82,7 +86,33 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         method: 'DELETE',
       }),
     listSuppliers: () => api.request<PurchaseReceiptSupplierListResponse>('/api/v1/suppliers?status=active'),
-    listProducts: () => api.request<PurchaseReceiptProductListResponse>('/api/v1/products?status=active'),
+    listProducts: (input: {
+      search?: string
+      status?: 'active' | 'inactive' | 'all' | 'deleted'
+      page?: number
+      page_size?: number
+    } = {}) => {
+      const params = new URLSearchParams()
+      params.set('status', input.status ?? 'active')
+      if (input.search) params.set('search', input.search)
+      if (input.page) params.set('page', String(input.page))
+      if (input.page_size) params.set('page_size', String(input.page_size))
+      const query = params.toString()
+      return api.request<PurchaseReceiptProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
+    },
+    createProduct: (input: {
+      code: string
+      name: string
+      status: ProductStatus
+      unit_name: string
+      sell_method: SellMethod
+      inventory_shape?: Product['inventory_shape']
+      track_inventory?: boolean
+    }) =>
+      api.request<PurchaseReceiptProduct>('/api/v1/products', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     listFinanceAccounts: () =>
       api.request<PurchaseReceiptFinanceAccountListResponse>('/api/v1/finance/accounts?is_active=true'),
   }

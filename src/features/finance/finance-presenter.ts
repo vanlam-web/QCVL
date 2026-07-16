@@ -129,7 +129,19 @@ export function cashbookDetailCounterpartyText(entry: CashbookEntryDetail) {
 
 export function cashbookDetailAccountText(entry: CashbookEntryDetail) {
   if (entry.finance_account.account_type === 'cash') return 'Tiền mặt'
-  return [entry.finance_account.code, entry.finance_account.name].filter(Boolean).join(' - ')
+  return cashbookBankAccountText(entry.finance_account)
+}
+
+export function cashbookDetailPaymentMethodText(entry: CashbookEntryDetail) {
+  if (entry.payment_method === 'bank_transfer') return cashbookDetailAccountText(entry)
+  return paymentMethodText(entry.payment_method)
+}
+
+function cashbookBankAccountText(account: CashbookEntryDetail['finance_account']) {
+  const accountNumber = cleanDeletedFinanceAccountText(account.account_number ?? account.code)
+  const bankName = cleanDeletedFinanceAccountText(account.name)
+  if (bankName && accountNumber) return `${bankName}: ${accountNumber}`
+  return bankName || accountNumber || 'Ngân hàng'
 }
 
 export function cashbookLinkedDocumentMessage(entry: CashbookEntryDetail) {
@@ -155,8 +167,22 @@ function linkedKiotVietDocumentCodeFromCashbookCode(code: string) {
 }
 
 export function cashbookEntryNeedsCounterpartyHydration(entry: CashbookEntry) {
-  return entry.source_type === 'payment_receipt_method'
-    && entry.counterparty?.name == null
+  if (cashbookCounterpartyHasName(entry.counterparty)) return false
+  if (entry.source_type === 'payment_receipt_method') return true
+  return entry.source_type === 'kiotviet_cashbook'
+    && entry.direction === 'in'
+    && cashbookEntryLinkedDocumentCode(entry)?.startsWith('HD') === true
+}
+
+export function cashbookCounterpartyHasName(counterparty: CashbookEntry['counterparty']) {
+  return counterparty?.name?.trim() ? true : false
+}
+
+function cashbookEntryLinkedDocumentCode(entry: CashbookEntry) {
+  if (entry.source?.order_code != null) return entry.source.order_code
+  const noteDocumentMatch = entry.note?.match(/\b(?:HD|PN)\d+(?:\.\d+)?\b/i)
+  if (noteDocumentMatch) return noteDocumentMatch[0].toUpperCase()
+  return linkedKiotVietDocumentCodeFromCashbookCode(entry.code)
 }
 
 function linkedDocumentPaymentStatus(remainingAfter: number): Exclude<PaymentSettlementStatus, 'unpaid'> {

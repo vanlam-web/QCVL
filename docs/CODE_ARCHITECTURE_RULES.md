@@ -1,6 +1,6 @@
 # Code Architecture Rules
 
-> Cap nhat: 2026-07-10. File nay la quy tac bat buoc de tranh sua UI lam hong nghiep vu.
+> Cap nhat: 2026-07-14. File nay la quy tac bat buoc de tranh sua UI lam hong nghiep vu.
 
 ## Muc Tieu
 
@@ -24,6 +24,14 @@ Khi sua ruot, phai co test va khong dua logic nghiep vu moi vao component UI.
 7. Khong dung RAM fixture, localStorage hoac cache UI lam nguon luu du lieu nghiep vu.
 8. Dinh dang thoi gian UI phai uu tien helper chung `src/lib/date-format.ts`; filter ngay phai uu tien `src/lib/date-ranges.ts` va query di qua service/repository, khong tinh truc tiep trong JSX.
 9. O ngay trong bo loc phai dung `ManagementDateRangeInputs`. UI hien `dd/MM/yyyy` nhu KV, co icon lich va popup lich chung; service/API van nhan `YYYY-MM-DD`.
+10. Bo loc chon nhieu dang the phai dung `ManagementChipPicker` + `useChipSelection`. Khong tao picker rieng cho tung page; page chi truyen options, default selected va noi ket qua vao cot/query cua feature.
+11. Ten bang gia hien thi phai di qua helper chung `displayPriceListName`. Backend/import co the giu ten nguon `Bang gia le`/`Bảng giá chung`; UI phai hien bang gia mac dinh la `Gia chung` va khong so chuoi rieng trong page.
+12. Vung chi tiet duoi gom ghi chu + tong ket phai dung shared class `management-detail-lower management-detail-lower-right`, `management-detail-note`, `management-detail-summary-box management-detail-summary-box-right`. Ghi chu nhap/sua phai dung `ManagementDetailNoteInput`; khong tao textarea/CSS rieng theo tung page neu cung nhu cau. Gia tri tien/so trong summary phai khong xuong dong.
+13. Bang dong hang/dong kiem/chung tu con trong expanded detail phai uu tien `management-detail-table` va, neu bo cuc la `ma + ten + cac cot so`, them `management-detail-lines-table`. Class nay giu ma/ten canh trai, cac cot so tu cot 3 canh phai va khong wrap. Khong dung lai ten page-specific nhu `sales-document-lines-table` lam pattern moi; alias cu chi de tuong thich.
+14. Bang chung tu lien ket trong detail phai dung `management-detail-linked-table`. Pattern nay danh cho bang nho dang ma/thoi gian + cac cot tien: ma/thoi gian canh trai, cot tien canh phai, `table-layout: auto`, khong scroll ngang tren desktop binh thuong. Khong viet CSS rieng theo tung page neu chi de sua canh cot.
+15. Khung chi tiet phai tach ro vo/ruot bang shared shell: `ManagementDetailPanel`, `ManagementDetailHeader`, `ManagementDetailSummary`, `ManagementDetailSection`, `ManagementInlineDetailTabs`, `ManagementDetailInfoList`, `ManagementDetailMetaText`, `ManagementDetailInlineNote`, `ManagementDetailActionFooter`. Page chi truyen title, badge, metaItems, tab list, field list, table con va action descriptors; khong lap lai wrapper/summary/tab/footer theo tung page neu co the dung shell chung.
+16. Grid thong tin ngan trong detail phai dung `ManagementDetailInfoList`/`management-detail-meta-grid`. Grid nay tu do kich thuoc: neu tat ca cap label/value du cho 1 dong thi giu 1 dong; neu co bat ky o nao khong du cho 1 dong thi ca grid trong detail do doi sang 2 dong label tren, value duoi. Label va value luon canh trai, label nho/nhat hon, value dam hon. Khong viet CSS rieng theo page cho kieu `dt/dd` nay.
+17. UI tham chieu KiotViet chi duoc dua vao QCVL khi QCVL co field/API/hanh vi that. Tab shell co the giu de dung bo cuc da chot, nhung ruot tab, nut hanh dong, bang con, hoac field chua co nguon du lieu that phai hien empty/disabled ro rang hoac bo khoi UI; khong render du lieu gia/placeholder nhu da hoan thien.
 
 ## Mau File Chuan Cho Moi Feature
 
@@ -114,6 +122,13 @@ Da tach them trong dot sau:
 - Purchase import ngay 2026-07-12: neu dong nhap hang KiotViet thieu `Ma nha cung cap`, parser phai map ve `NCC le` (`NCC lẻ` trong UI/data) va `Nha cung cap le`. Preview khong bao thieu NCC cho fallback nay; apply import phai upsert NCC le truoc khi ghi phieu.
 - Shared time: `src/lib/date-format.ts` la helper chung cho hien thi `dd/MM/yyyy HH:mm`; cac presenter/page moi khong tu tao `Intl.DateTimeFormat` rieng neu khong co ly do ro trong doc.
 - Shared date filter: `ManagementDateRangeInputs` trong `src/components/ui-shell/management-layout.tsx` dung cho Hang hoa, Khach hang, Hoa don, Kiem kho, Phieu nhap va So quy. Khong tao lai cap input `type=date` rieng trong tung page vi browser/OS co the hien sai dinh dang KV. Khong con radio `Tuy chinh`: preset hien bang button/menu nhanh, hai o tu ngay/den ngay luon hien. Icon lich mo popup lich o ben phai cot filter nhu menu thoi gian nhanh; chi mot popup duoc mo, mo lich thi dong menu nhanh va mo menu nhanh thi dong lich. Preset thoi gian hien tai (thang nay, quy nay, nam nay) khong hien den ngay vuot qua hom nay; `Toan thoi gian` hien min/max ngay dang co du lieu khi co the.
+- Shared management table: sticky header chi duoc target table cap 1 bang `.management-table-viewport > table > thead th`. Khong dung selector rong `.management-list-surface thead th`, vi table chi tiet nam trong expanded row se bi sticky theo va chong len noi dung khi cuon.
+- Shared detail lower layout: `management-detail-lower-right` dung grid `minmax(0, 1fr) max-content`; cot note an phan trong, summary co theo label/value va value `white-space: nowrap`. Note nhap/sua dung `ManagementDetailNoteInput` de giu chung class `management-detail-note` va hanh vi input. Ap dung cho Sales Documents, Inventory/Stocktake va cac detail tuong tu, khong them CSS rieng neu cung nhu cau.
+- Shared detail shell: `ManagementDetailPanel`, `ManagementDetailHeader`, `ManagementDetailSummary`, `ManagementDetailSection`, `ManagementInlineDetailTabs`, `ManagementDetailInfoList`, `ManagementDetailInlineNote`, `ManagementDetailActionFooter` la vo chung cho expanded detail. Customers, Finance, Purchase/Suppliers da dung shell nay; cac page sau chi them ruot data/presenter/table, khong tao class rieng kieu `customer-detail-summary` hoac `finance-cashbook-detail` neu khong co khac biet that su.
+- Shared detail meta grid: `ManagementDetailInfoList` tu dong chuyen ca grid giua 1 dong va 2 dong theo do rong thuc te cua label/value. Neu 1 o bi chat, tat ca o trong cung detail grid chuyen sang 2 dong de doc dong bo. Tat ca label/value canh trai de khong bi ke thua canh phai tu bang cha.
+- Shared detail line table: `management-detail-lines-table` la pattern chung cho bang detail dang `ma + ten + so lieu` trong Sales Documents, Inventory/Stocktake va cac detail tuong tu. Sales Documents con giu `sales-document-lines-table` nhu alias cu, nhung feature moi phai dung class shared.
+- Shared linked document table: `management-detail-linked-table` la pattern chung cho bang chung tu lien ket trong detail, nhu So quy lien ket hoa don/phieu nhap. Cot dinh danh/thoi gian canh trai, cot tien canh phai, tieu de canh theo cot, khong co lai cot den muc kho doc tren man desktop rong.
+- Shared detail typography: nhan/label render san trong UI dung chu nho va nhat hon; gia tri lay tu DB/API dung chu dam hon. Khong viet style page-specific cho cap `dt/dd` neu pattern da co trong `management-detail-meta-grid` hoac shared detail class.
 - Sales Documents: presenter gom list summary, date text, line sell price, quote print display helper.
 - Account/Admin/Auth/Dashboard: presenter/helper gom role/status/permission/form/date/chart/login normalization.
 

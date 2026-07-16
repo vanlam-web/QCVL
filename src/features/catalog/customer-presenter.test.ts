@@ -24,6 +24,7 @@ describe('customer presenter', () => {
     expect(customerSalesDocumentStatusText(document)).toBe('Nợ')
     expect(customerSalesDocumentStatusText({ ...document, paid_amount: 50000, debt_amount: 50000, payment_status: 'partial' })).toBe('Nợ 1 phần')
     expect(customerSalesDocumentStatusText({ ...document, paid_amount: 100000, debt_amount: 0, payment_status: 'paid' })).toBe('Hoàn tất')
+    expect(customerSalesDocumentStatusText({ ...document, paid_amount: 100000, debt_amount: 100000, payment_status: 'paid' })).toBe('Hoàn tất')
     expect(customerSalesDocumentStatusText({ ...document, order_type: 'quote', status: 'active', payment_status: 'not_applicable' })).toBe('Đang hiệu lực')
   })
 

@@ -1,7 +1,7 @@
 ﻿# PROJECT-COORDINATION â€” Board Äiá»u Phá»‘i
 
 > **Vai trÃ²:** Board cho viá»‡c Ä‘ang má»Ÿ giá»¯a cÃ¡c luá»“ng Spec / Implement / Review.
-> **Cáº­p nháº­t:** 2026-07-08.
+> **Cáº­p nháº­t:** 2026-07-15.
 
 File nÃ y chá»‰ dÃ¹ng khi cÃ³ item Ä‘ang cáº§n nhiá»u luá»“ng phá»‘i há»£p. Náº¿u khÃ´ng cÃ³ item Ä‘ang má»Ÿ, xem queue sá»‘ng á»Ÿ [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) vÃ  issue review á»Ÿ [REVIEW-ISSUES.md](./REVIEW-ISSUES.md).
 
@@ -49,14 +49,16 @@ Viá»‡c:
 - Má»¥c tiÃªu nghiá»‡p vá»¥: HoÃ n táº¥t luá»“ng HÃ ng hÃ³a, Kiá»ƒm kho vÃ  POS theo thá»© tá»± Ä‘Ã£ chá»‘t: HÃ ng hÃ³a â†’ Kiá»ƒm kho hÃ ng thÆ°á»ng â†’ Cuá»™n/táº¥m/khui object-level â†’ POS trá»« kho tháº­t.
 - Luá»“ng Ä‘ang giá»¯: Implement
 - Luá»“ng nháº­n tiáº¿p: Implement
-- TÃ¬nh tráº¡ng: Implementing
+- TÃ¬nh tráº¡ng: Implementing / V1 hardening
 - Branch / PR / commit: current `main`; historical branch `codex/products-inventory-pos-completion` khÃ´ng cÃ³ trong checkout hiá»‡n táº¡i.
 - Source of Truth:
   - [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md)  - [Inventory layout](./02-PRD-UX-PhongCanh/Inventory/01-INVENTORY-LAYOUT.md)
   - [Stocktake](./02-PRD-UX-PhongCanh/Inventory/04-STOCKTAKE.md)
   - [Khui váº­t tÆ°](./02-PRD-UX-PhongCanh/POS/K01/01d-K01-KHUI.md)
-- BÃ¡o cÃ¡o gáº§n nháº¥t: Task 8 Ä‘Ã£ tick Ä‘á»§ trong plan: DB test `server/tests/database/015_material_opening_normal.test.sql` chá»©ng minh `open_normal_material_tx` táº¡o `inventory_material_openings`, ghi `stock_movements.material_opening_id` khi cáº§n vÃ  khÃ´ng táº¡o `stocktakes`; function/UI test Ä‘Ã£ phá»§ normal, roll, sheet material opening. Task 9 Ä‘Ã£ xong normal checkout `sale_deduction` vÃ  combo BOM component deduction; roll/sheet POS object-level deduction váº«n pending á»Ÿ Step 3. Review cÅ©ng ghi drift `REV-2026-07-08-001`: frontend/docs cÃ³ `/api/v1/pos/cart/validate` nhÆ°ng QCVL Node API router chÆ°a route endpoint nÃ y.
-- BÆ°á»›c tiáº¿p theo: Implement chá»‘t Task 9 Step 3 báº±ng má»™t trong hai hÆ°á»›ng: POS gá»­i object roll/sheet Ä‘Æ°á»£c chá»n Ä‘á»ƒ checkout trá»« Ä‘Ãºng object, hoáº·c backend tá»« chá»‘i rÃµ checkout roll/sheet khi thiáº¿u object; Ä‘á»“ng thá»i xá»­ lÃ½ `REV-2026-07-08-001`.
+- Báo cáo gần nhất: Ngày 2026-07-14 V1 đã chốt hướng chạy được trước: dữ liệu import chính đã lên NAS `3200`, PriceBook đồng bộ 3200/3202, POS quick products dùng nguồn lịch sử, hàng `{DEL}` được giữ cho lịch sử và lọc bằng `Đã xoá KV`. NAS có `inventory_provisional_balances=337` nhưng `stock_movements=0`, nên `/products` fallback hiển thị tồn KV tạm trong cột `Tồn QCVL` để không trống; detail vẫn gọi rõ là dữ liệu đối chiếu. Local `3202` đã ổn phần chi tiết hàng/dòng hàng trong expanded detail bằng shared `management-detail-lines-table`; sổ quỹ detail đã ổn theo shared finance detail/table layout, gồm hydrate người nộp/nhận cho `TTHD...`, bỏ dòng `Từ quỹ` trùng, phương thức thanh toán hiện tài khoản cụ thể, và bảng chứng từ liên kết dùng `management-detail-linked-table`. Owner đã duyệt xóa dữ liệu giả/test `A+B`: 5 dòng Sổ quỹ KV ngày `2026-07-13` không có chứng từ gốc và 7 hóa đơn POS/test `HD-POS-021...`; backup nằm tại `backups/dev-memory-state-before-delete-approved-fake-data-2026-07-14T15-44-30-303Z.json`. Sau dọn local còn `cashbookEntries=6899`, `salesDocuments=12355`, `salesDocumentItems=12355`; chưa xóa hồ sơ khách `Test KH`. Roll/sheet POS object-level deduction và review drift `REV-2026-07-08-001` vẫn pending.
+- Báo cáo cập nhật 2026-07-15: local `3202` đã sync bù data NAS để core counts khớp `3200` (`products=682`, `customers=542`, `suppliers=45`, `purchaseReceipts=684`, `salesDocuments=12361`, `cashbookEntries=6904`, `provisionalStockBalances=337`) và API `3100` đã restart sau khi ghi `logs/dev-memory-state.json`. UI `/suppliers` local và NAS khớp exact ở list/detail THN. Cùng mốc này, các chỉnh UI shell/detail 2026-07-15 cũng đã được build/copy lên NAS `3200` bằng `QCVL_NAS_DEPLOY_CONFIRM=true` và `QCVL_NAS_RESTART=false`. `build:nas`, `verify:nas-bundle`, `db:migrate` và `health:nas` đều pass; health cuối trả `persistence: "postgres"` trace `50e19ed9-f7aa-434d-bb13-9d84a68285a6`. So sánh share bằng `robocopy /MIR /L` cho `dist`, `dist-server`, `src`, `server`, `public`, `database` không báo file lệch; các file config copy lẻ (`package*.json`, `index.html`, `vite.config.ts`, `tsconfig*`, script build/migrate/seed`) khớp SHA-256. Local `3202` đã xác nhận `/suppliers`: theme tối, cột `Nhóm NCC`, không có cột `Khách hàng liên kết`, detail dùng `management-detail-meta-grid-three`, note chung `Chưa có ghi chú`.
+- Cách triển khai: Làm và kiểm tra từng bước trên local `3202` trước. Khi một bước đã ổn và được xác nhận, mới đẩy/sync bước đó lên NAS `3200`; không gom thay đổi chưa kiểm xong vào `3200`.
+- Bước tiếp theo: Implement rà V1 theo thứ tự: 1) không làm lại chi tiết hàng/dòng hàng và sổ quỹ đã ổn; chỉ rà tiếp UI chi tiết các module còn lại khi mở tới module đó, để hóa đơn/phiếu cũ thấy đúng dữ liệu lịch sử, kể cả hàng `{DEL}` và dữ liệu tham chiếu; 2) các nút thêm/sửa/xóa còn thiếu ở từng trang; 3) các bộ lọc còn thiếu hoặc chưa dùng shared controls; 4) đối chiếu KV/QCVL theo bộ lọc trước ngày 12; 5) xử lý `REV-2026-07-08-001`; 6) sau đó mới mở lại roll/sheet/object-level deduction và khui vật tư nâng cao.
 - Cáº§n Owner quyáº¿t Ä‘á»‹nh: KhÃ´ng á»Ÿ bÆ°á»›c hiá»‡n táº¡i. ChÆ°a deploy cloud theo quyáº¿t Ä‘á»‹nh gom batch.
 - Rá»§i ro: Kho/stock movement/POS lÃ  vÃ¹ng dá»¯ liá»‡u lÃ¢u dÃ i; má»i slice schema/API/stock movement cáº§n Spec gate vÃ  verification trÆ°á»›c merge.
 

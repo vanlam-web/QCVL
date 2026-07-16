@@ -1,6 +1,50 @@
 # QCVL NAS Dev Runbook
 
-> Cập nhật: 2026-07-10.
+> Cập nhật: 2026-07-16.
+
+## Latest NAS Deploy - 2026-07-16 POS Grid And Purchase/Supplier Batch
+
+Da build/copy batch POS/purchase/supplier/catalog UI tu local `3202` len NAS `3200`.
+
+- Lenh dung: `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas`.
+- `build:nas` pass, `verify:nas-bundle` pass: bundle dung `100.84.228.125:3200` va khong goi `100.84.228.125:3100`.
+- `db:migrate` pass, khong co migration moi (`migrated: []`, `baseline_stamped: []`).
+- `health:nas` pass sau deploy: `persistence: "postgres"`, trace `a2fec157-a21e-4f75-b143-56ae45969c55`.
+- POS `Sản phẩm nhanh` da co gian theo man hinh/noi dung: panel hep 2 cot, panel rong 3 cot, so the moi trang tinh theo chieu cao thuc cua luoi.
+- Khong restart `qcvl-app` vi chua co `QCVL_NAS_SSH_TARGET`; frontend build va source da copy, backend runtime chi chac chan nap server code moi sau restart.
+
+## Latest NAS Deploy - 2026-07-15 Shared Detail UI Copy
+
+Da build/copy batch UI shell/detail tu local `3202` len NAS `3200`.
+
+- Lenh dung: `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas`.
+- `build:nas` pass, `verify:nas-bundle` pass: bundle dung `100.84.228.125:3200` va khong goi `100.84.228.125:3100`.
+- `db:migrate` pass, khong co migration moi (`migrated: []`).
+- `health:nas` pass sau deploy: `persistence: "postgres"`, trace `50e19ed9-f7aa-434d-bb13-9d84a68285a6`.
+- Share compare sau copy bang `robocopy /MIR /L` cho `dist`, `dist-server`, `src`, `server`, `public`, `database` khong bao file lech; cac file config copy le khop SHA-256.
+- Local `3202` da verify `/suppliers` sau login: theme toi, cot `Nhom NCC`, khong con cot `Khach hang lien ket`, detail dung `management-detail-meta-grid-three`, note chung `Chua co ghi chu`.
+
+Gioi han cua lan nay:
+
+- Khong restart `qcvl-app` vi `QCVL_NAS_RESTART=false`; thay doi frontend build da nam trong `dist`, nhung backend/server runtime chi chac chan nap code moi sau restart.
+- Da smoke `/suppliers` sau login bang tab Codex dang mo va khop local. Chua co `QCVL_SMOKE_PASSWORD`/admin password trong env de chay smoke script toan bo UI tren NAS, va NAS `.env` chi co PostgreSQL config. Moi ket luan code/build tren share da khop va NAS health ok; backend runtime can restart moi chac chan nap code moi.
+
+## Pre-NAS Local Batch - 2026-07-14 V1 POS/PriceBook
+
+Local `3202` batch hien tai da gom:
+
+- PriceBook V1: import/luu nhieu bang gia tu file `BangGia_KV*.xlsx`; UI goi default list la `Gia chung`; POS resolve gia theo nhom khach, fallback ve `Gia chung`, san pham khong co gia tra `0`.
+- Bo loc bang gia dung `ManagementChipPicker` tach UI va hook `use-chip-selection` de tai su dung cho cac filter chip sau nay.
+- POS quick products goi `GET /api/v1/products?status=active&sort=pos_usage`; PostgreSQL dung `pos_product_usage`, dev-memory `3202` derive tu `salesDocuments.items` da luu/import de hang ban/bao gia nhieu lan len truoc.
+- POS gio hang rong khong hien text placeholder.
+
+Truoc khi dua batch nay len NAS:
+
+1. Chay test lien quan POS/PriceBook/import.
+2. Chay `npm run build:nas` va `npm run verify:nas-bundle`.
+3. Neu chi day code, dung `QCVL_NAS_DEPLOY_CONFIRM=true npm run deploy:nas`; deploy code khong copy `logs/dev-memory-state.json`.
+4. Neu muon NAS co dung du lieu local `3202`, chay import/sync DB rieng (`npm run import:dev-memory-to-postgres` voi confirm) sau khi owner dong y du lieu.
+5. Sau deploy/restart, verify NAS `health` tra `persistence: "postgres"` va mo `/pos`, `/price-book`.
 
 ## Latest NAS State - 2026-07-13 Imported 3202 Data
 

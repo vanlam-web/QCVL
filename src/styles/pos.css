@@ -277,8 +277,8 @@
 }
 
 .pos-cart-lines {
-  --pos-line-equals-width: 1rem;
-  --pos-line-unit-width: 2.25rem;
+  --pos-line-equals-width: 2.5rem;
+  --pos-line-unit-width: minmax(max-content, auto);
   --pos-line-price-width: 5rem;
   --pos-line-total-width: 4rem;
 
@@ -384,14 +384,6 @@
 
 .pos-cart-line-header span:nth-child(6) {
   text-align: center;
-}
-
-.pos-cart-line-header > span:nth-child(4) {
-  transform: translateX(-0.4rem);
-}
-
-.pos-cart-line-header > span:nth-child(5) {
-  transform: translateX(-0.65rem);
 }
 
 .pos-cart-line-index {
@@ -517,21 +509,69 @@
   font-variant-numeric: tabular-nums;
   font-weight: 400;
   text-align: center;
-  transform: translateX(-0.65rem);
   white-space: nowrap;
 }
 
 .pos-cart-line-unit-select {
   justify-self: stretch;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   min-height: 1.75rem;
-  border: 1px solid var(--color-border);
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  appearance: none;
+  background-color: transparent;
+  background-image: none;
   color: var(--color-text);
   font: inherit;
   font-size: 0.9rem;
+  padding: 0 0.45rem;
   text-align: center;
+  text-align-last: center;
+}
+
+.pos-cart-line-shell:hover .pos-cart-line-unit-select,
+.pos-cart-line-shell:focus-within .pos-cart-line-unit-select,
+.pos-cart-line-unit-select:hover,
+.pos-cart-line-unit-select:focus {
+  border-color: var(--color-border);
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 0.9rem) 50%,
+    calc(100% - 0.55rem) 50%;
+  background-size: 0.35rem 0.35rem, 0.35rem 0.35rem;
+  background-repeat: no-repeat;
+  padding-right: 1.55rem;
+}
+
+.pos-cart-line-area-total {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  width: 100%;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.pos-cart-line-area-total > strong {
+  font-weight: 400;
+}
+
+.pos-cart-line-area-total .pos-cart-line-unit,
+.pos-cart-line-area-total .pos-cart-line-unit-select {
+  transform: none;
+}
+
+.pos-cart-line-area-total .pos-cart-line-unit-select {
+  min-width: 3.75rem;
 }
 
 .pos-cart-line-equals {
@@ -542,8 +582,11 @@
   font-variant-numeric: tabular-nums;
   font-weight: 400;
   text-align: center;
-  transform: translateX(-0.4rem);
   white-space: nowrap;
+}
+
+.pos-cart-line-area-result {
+  text-align: right;
 }
 
 .pos-cart-line-quantity {
@@ -875,34 +918,42 @@
 
 .product-grid-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
   min-height: 0;
 }
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--product-grid-columns, 3), minmax(0, 1fr));
+  grid-auto-rows: var(--product-grid-card-height, 4.9rem);
+  align-content: start;
   gap: 0.75rem;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .product-grid button {
   display: grid;
-  min-height: 4.25rem;
+  min-width: 0;
+  min-height: 0;
   align-content: space-between;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface-muted);
   color: var(--color-text);
+  max-width: 100%;
   padding: 0.625rem 0.75rem;
   text-align: left;
 }
 
 .product-grid button strong {
-  display: block;
   min-width: 0;
   overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .product-grid button span {
@@ -2451,7 +2502,8 @@
   }
 
   .form-grid-two,
-  .customer-detail-tab-panel > dl,
+  .management-detail-summary,
+  .management-detail-section .management-detail-meta-grid,
   .customer-debt-panel dl,
   .customer-analysis-grid {
     grid-template-columns: 1fr;

@@ -17,6 +17,11 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const sessions = new Map<string, string>()
   const products = new Map<string, ProductListData>()
   const defaultSalePrices = new Map<string, number>()
+  const priceListNames = new Map<string, { id: string; name: string }>([
+    [priceListKey(defaultPriceList.name), defaultPriceList],
+    [priceListKey('Bảng giá chung'), defaultPriceList],
+  ])
+  const namedSalePrices = new Map<string, Map<string, number>>()
   const provisionalStockBalances = new Map<string, { quantity: number; unit_name: string; source_label: string | null }>()
   const draftBoms = new Map<string, Parameters<NonNullable<ServerRepository['upsertDraftProductBoms']>>[0]['rows'][number]>()
   const stocktakes = new Map<string, StocktakeListData>()
@@ -75,6 +80,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     await loadState(options.stateFile, {
       products,
       defaultSalePrices,
+      priceListNames,
+      namedSalePrices,
       provisionalStockBalances,
       draftBoms,
       stocktakes,
@@ -129,6 +136,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     await saveState(options.stateFile, {
       products,
       defaultSalePrices,
+      priceListNames,
+      namedSalePrices,
       provisionalStockBalances,
       draftBoms,
       stocktakes,
@@ -150,6 +159,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       groupNamesById,
     })
   }
+
+  if (syncExactCustomerSupplierLinks(customers, suppliers) > 0) await persist()
 
   return {
     async findUserByEmail(email) {
@@ -184,6 +195,12 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async listWorkstations() {
       return [{ id: 'ws-dev', code: 'DEV', name: 'May dev', status: 'active' }]
+    },
+    async getPosProductUsageCounts() {
+      return posProductUsageCountsFromSalesDocuments(salesDocuments)
+    },
+    async recordPosProductUsage() {
+      // Dev memory derives POS usage from saved sales documents, including imported history.
     },
     async listUsers(input) {
       const search = normalize(input.url.searchParams.get('search') ?? '')
@@ -324,15 +341,22 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
 
       const operatingStock = operatingStockByProductId(stockMovementsFromDocuments(purchaseReceipts, purchaseReceiptItems, salesDocuments, salesDocumentItems, stocktakes, stocktakeItems, products, draftBoms))
       return [...products.values()].filter((product) => {
-        if (status && status !== 'all' && product.status !== status) return false
+        if (status === 'deleted') {
+          if (!/\{DEL\}/i.test(product.code)) return false
+        } else if (status && status !== 'all') {
+          if (product.status !== status || /\{DEL\}/i.test(product.code)) return false
+        }
         if (sellMethod && product.sell_method !== sellMethod) return false
         if (inventoryShape && product.inventory_shape !== inventoryShape) return false
         if (productKind && product.product_kind !== productKind) return false
         if (productGroupId && product.product_group_id !== productGroupId) return false
         if (!dateRangeMatches(product.created_at, createdFrom, createdTo)) return false
-        if (search && !normalize(`${product.code} ${product.name}`).includes(search)) return false
-        return true
-      }).map((product) => withImportReviewMetadata(product, provisionalStockBalances, draftBoms, operatingStock))
+      if (search && !normalize(`${product.code} ${product.name}`).includes(search)) return false
+      return true
+      }).map((product) => ({
+        ...withImportReviewMetadata(product, provisionalStockBalances, draftBoms, operatingStock),
+        price_list_prices: priceListPricesForProduct(product.code, defaultSalePrices, priceListNames, namedSalePrices),
+      }))
     },
     async findProductsByCodes(input) {
       return new Set(input.codes.filter((code) => resolveProductByImportCode(products, code)))
@@ -354,6 +378,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const deleted = products.size
       products.clear()
       defaultSalePrices.clear()
+      namedSalePrices.clear()
       provisionalStockBalances.clear()
       draftBoms.clear()
       await persist()
@@ -361,6 +386,50 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async findDefaultPriceList() {
       return defaultPriceList
+    },
+    async listPriceLists() {
+      const byId = new Map<string, { id: string; code: string; name: string; is_default: boolean; is_active: boolean }>()
+      for (const priceList of priceListNames.values()) {
+        byId.set(priceList.id, {
+          id: priceList.id,
+          code: priceList.id === defaultPriceList.id ? 'DEFAULT' : priceList.name,
+          name: priceList.name,
+          is_default: priceList.id === defaultPriceList.id,
+          is_active: true,
+        })
+      }
+      return [...byId.values()].sort((left, right) => Number(right.is_default) - Number(left.is_default) || left.name.localeCompare(right.name, 'vi'))
+    },
+    async resolvePrices(input) {
+      const customer = input.customerId
+        ? [...customers.values()].find((item) => item.id === input.customerId) ?? null
+        : null
+      const customerPriceListKey = customer?.customer_group?.name
+        ? priceListKey(customer.customer_group.name)
+        : null
+      const customerPriceList = customerPriceListKey ? namedSalePrices.get(customerPriceListKey) ?? null : null
+      const customerPriceListMeta = customerPriceListKey ? priceListNames.get(customerPriceListKey) ?? null : null
+
+      return input.productIds.map((productId) => {
+        const product = [...products.values()].find((item) => item.id === productId)
+        const productCode = product?.code ?? productId
+        const defaultPrice = defaultSalePrices.get(productCode) ?? product?.default_sale_price ?? 0
+        const customerPrice = customerPriceList?.get(productCode)
+        if (customerPrice !== undefined && customerPriceListMeta) {
+          return {
+            product_id: productId,
+            unit_price: customerPrice,
+            price_source: 'customer_group_price_list' as const,
+            price_list_id: customerPriceListMeta.id,
+          }
+        }
+        return {
+          product_id: productId,
+          unit_price: defaultPrice,
+          price_source: customerPriceList ? (defaultPrice > 0 ? 'fallback_default_price_list' as const : 'default_price_list' as const) : 'default_price_list' as const,
+          price_list_id: defaultPriceList.id,
+        }
+      })
     },
     async upsertProductGroupsByName(input) {
       for (const name of input.names) {
@@ -399,6 +468,36 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         defaultSalePrices.set(row.product_code, row.unit_price)
         const existing = products.get(row.product_code)
         if (existing) products.set(row.product_code, { ...existing, default_sale_price: row.unit_price, updated_at: new Date().toISOString() })
+      }
+      await persist()
+      return { created, updated, skipped }
+    },
+    async upsertPriceListItemsByName(input) {
+      let created = 0
+      let updated = 0
+      let skipped = 0
+      for (const row of input.rows) {
+        const product = products.get(row.product_code)
+        if (!product) {
+          skipped += 1
+          continue
+        }
+        if (isDefaultSalePriceListName(row.price_list_name)) {
+          if (defaultSalePrices.has(row.product_code)) updated += 1
+          else created += 1
+          defaultSalePrices.set(row.product_code, row.unit_price)
+          products.set(row.product_code, { ...product, default_sale_price: row.unit_price, updated_at: new Date().toISOString() })
+          continue
+        }
+        const key = priceListKey(row.price_list_name)
+        if (!priceListNames.has(key)) {
+          priceListNames.set(key, { id: `pl-${slug(row.price_list_name)}`, name: row.price_list_name })
+        }
+        const prices = namedSalePrices.get(key) ?? new Map<string, number>()
+        if (prices.has(row.product_code)) updated += 1
+        else created += 1
+        prices.set(row.product_code, row.unit_price)
+        namedSalePrices.set(key, prices)
       }
       await persist()
       return { created, updated, skipped }
@@ -456,14 +555,14 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           if (search && !normalize(`${customer.code} ${customer.name} ${customer.phone ?? ''} ${customer.note ?? ''}`).includes(search)) return false
           return true
         })
-        .map((customer) => hydrateCustomerCreator(customerWithDisplaySalesAmount(customer), users))
+        .map((customer) => hydrateCustomerLinkedSupplier(hydrateCustomerCreator(customerWithDisplaySalesAmount(customer), users), suppliers))
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
     },
     async findCustomerByCode(input) {
       const customer = customers.get(input.code)
         ?? [...customers.values()].find((item) => normalize(item.code) === normalize(input.code))
         ?? null
-      return customer ? hydrateCustomerCreator(customer, users) : null
+      return customer ? hydrateCustomerLinkedSupplier(hydrateCustomerCreator(customer, users), suppliers) : null
     },
     async findCustomersByCodes(input) {
       return new Set(input.codes.filter((code) => customers.has(code)))
@@ -489,6 +588,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         else created += 1
         customers.set(row.code, toCustomer(row, existing, customerGroupNamesById, users))
       }
+      syncExactCustomerSupplierLinks(customers, suppliers)
       await persist()
       return { created, updated, skipped: 0 }
     },
@@ -532,10 +632,40 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         const existing = suppliers.get(row.code)
         if (existing) updated += 1
         else created += 1
-        suppliers.set(row.code, toSupplier(row, existing))
+        suppliers.set(row.code, toSupplier(row, existing, customers))
       }
       await persist()
       return { created, updated, skipped: 0 }
+    },
+    async updateSupplier(input) {
+      const existing = suppliers.get(input.id) ?? [...suppliers.values()].find((supplier) => supplier.id === input.id)
+      if (!existing) return null
+      const nextCode = input.patch.code ?? existing.code
+      const nextLinkedCustomerId = input.patch.linked_customer_id !== undefined ? input.patch.linked_customer_id : existing.linked_customer_id ?? null
+      const linkedCustomer = nextLinkedCustomerId ? [...customers.values()].find((customer) => customer.id === nextLinkedCustomerId) ?? null : null
+      const updated: SupplierListData = {
+        ...existing,
+        code: nextCode,
+        name: input.patch.name ?? existing.name,
+        phone: input.patch.phone ?? existing.phone,
+        email: input.patch.email ?? existing.email,
+        address: input.patch.address ?? existing.address,
+        tax_code: input.patch.tax_code ?? existing.tax_code,
+        linked_customer_id: nextLinkedCustomerId,
+        linked_customer: linkedCustomer ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name } : null,
+        notes: input.patch.notes ?? existing.notes,
+        status: (input.patch.status as SupplierListData['status'] | undefined) ?? existing.status,
+        current_payable_amount: existing.current_payable_amount,
+        total_purchase_amount: existing.total_purchase_amount,
+        created_at: existing.created_at,
+        source_creator_name: existing.source_creator_name,
+        source_created_at: existing.source_created_at,
+        company_name: existing.company_name,
+      }
+      suppliers.delete(existing.code)
+      suppliers.set(updated.code, updated)
+      await persist()
+      return updated
     },
     async deleteImportedKiotVietSuppliers() {
       let deleted = 0
@@ -605,9 +735,17 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const dateFrom = input.url.searchParams.get('date_from')
       const dateTo = input.url.searchParams.get('date_to')
       const createdBy = input.url.searchParams.get('created_by')
+      const supplierId = input.url.searchParams.get('supplier_id')
+      const supplierCode = normalize(input.url.searchParams.get('supplier_code') ?? '')
       return [...purchaseReceipts.values()]
         .filter((receipt) => {
           if (status && status !== 'all' && receipt.status !== status) return false
+          if (
+            (supplierId || supplierCode) &&
+            receipt.supplier_id !== supplierId &&
+            receipt.supplier.id !== supplierId &&
+            normalize(receipt.supplier.code) !== supplierCode
+          ) return false
           if (!dateRangeMatches(receipt.received_at, dateFrom, dateTo)) return false
           if (createdBy && createdBy !== 'all' && receipt.created_by.id !== createdBy) return false
           if (search && !normalize(`${receipt.code} ${receipt.supplier.code} ${receipt.supplier.name} ${receipt.supplier_document_no ?? ''} ${receipt.notes ?? ''}`).includes(search)) return false
@@ -718,6 +856,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       await persist()
       return cancelled
     },
+    async updateSalesDocumentNote(input) {
+      const entry = [...salesDocuments.entries()].find(([, document]) => document.id === input.id || document.code === input.id)
+      if (!entry) return null
+      const [code, document] = entry
+      const updated = { ...document, note: input.note } as SalesDocumentData
+      salesDocuments.set(code, updated)
+      await persist()
+      return updated
+    },
     async upsertImportedKiotVietCashbook(input) {
       let accountsCreated = 0
       let accountsUpdated = 0
@@ -762,7 +909,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const financeAccountType = input.url.searchParams.get('finance_account_type')
       const from = input.url.searchParams.get('from')
       const to = input.url.searchParams.get('to')
-      return [...cashbookEntries.values()]
+      return [...cashbookEntries.values()].map((entry) => hydrateCashbookEntryFinanceAccount(entry, financeAccounts))
         .filter((entry) => {
           if (financeAccountId && financeAccountId !== 'all' && entry.finance_account.id !== financeAccountId) return false
           if (financeAccountType && financeAccountType !== 'all' && entry.finance_account.account_type !== financeAccountType) return false
@@ -776,7 +923,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
     },
     async getCashbookEntry(input) {
-      return [...cashbookEntries.values()].find((entry) => entry.id === input.id || entry.code === input.id) ?? null
+      const entry = [...cashbookEntries.values()].find((item) => item.id === input.id || item.code === input.id)
+      return entry ? hydrateCashbookEntryFinanceAccount(entry, financeAccounts) : null
     },
     async listStockMovements(input) {
       const productId = input.url.searchParams.get('product_id')
@@ -934,6 +1082,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
 interface DevMemoryMaps {
   products: Map<string, ProductListData>
   defaultSalePrices: Map<string, number>
+  priceListNames: Map<string, { id: string; name: string }>
+  namedSalePrices: Map<string, Map<string, number>>
   provisionalStockBalances: Map<string, { quantity: number; unit_name: string; source_label: string | null }>
   draftBoms: Map<string, Parameters<NonNullable<ServerRepository['upsertDraftProductBoms']>>[0]['rows'][number]>
   stocktakes: Map<string, StocktakeListData>
@@ -959,6 +1109,8 @@ interface DevMemoryState {
   version: 1
   products: Array<[string, ProductListData]>
   defaultSalePrices: Array<[string, number]>
+  priceListNames: Array<[string, { id: string; name: string }]>
+  namedSalePrices: Array<[string, Array<[string, number]>]>
   provisionalStockBalances: Array<[string, { quantity: number; unit_name: string; source_label: string | null }]>
   draftBoms: Array<[string, Parameters<NonNullable<ServerRepository['upsertDraftProductBoms']>>[0]['rows'][number]]>
   stocktakes: Array<[string, StocktakeListData]>
@@ -993,6 +1145,7 @@ async function loadState(stateFile: string, maps: DevMemoryMaps) {
   if (state.version !== 1) return
   replaceMap(maps.products, state.products)
   replaceMap(maps.defaultSalePrices, state.defaultSalePrices)
+  replaceMap(maps.priceListNames, state.priceListNames)
   replaceMap(maps.provisionalStockBalances, state.provisionalStockBalances)
   replaceMap(maps.draftBoms, state.draftBoms)
   replaceMap(maps.stocktakes, state.stocktakes?.map(([key, stocktake]) => [key, sanitizePersistedStocktake(stocktake)]))
@@ -1009,6 +1162,16 @@ async function loadState(stateFile: string, maps: DevMemoryMaps) {
   replaceMap(maps.groupIds, state.groupIds)
   replaceMap(maps.groupNamesById, state.groupNamesById)
   maps.stocktakeItems.clear()
+  maps.namedSalePrices.clear()
+  for (const [priceListName, rows] of state.namedSalePrices ?? []) {
+    maps.namedSalePrices.set(priceListName, new Map(rows))
+  }
+  if (!maps.priceListNames.has(priceListKey(defaultPriceList.name))) {
+    maps.priceListNames.set(priceListKey(defaultPriceList.name), defaultPriceList)
+  }
+  if (!maps.priceListNames.has(priceListKey('Bảng giá chung'))) {
+    maps.priceListNames.set(priceListKey('Bảng giá chung'), defaultPriceList)
+  }
   for (const [sourceCode, rows] of state.stocktakeItems ?? []) {
     maps.stocktakeItems.set(sourceCode, new Map(rows))
   }
@@ -1028,6 +1191,8 @@ async function saveState(stateFile: string, maps: DevMemoryMaps) {
     version: 1,
     products: [...maps.products.entries()],
     defaultSalePrices: [...maps.defaultSalePrices.entries()],
+    priceListNames: [...maps.priceListNames.entries()],
+    namedSalePrices: [...maps.namedSalePrices.entries()].map(([priceListName, rows]) => [priceListName, [...rows.entries()]]),
     provisionalStockBalances: [...maps.provisionalStockBalances.entries()],
     draftBoms: [...maps.draftBoms.entries()],
     stocktakes: [...maps.stocktakes.entries()].map(([key, stocktake]) => [key, sanitizePersistedStocktake(stocktake)]),
@@ -1086,6 +1251,15 @@ function hydrateCustomerCreator(customer: CustomerListData, users: Map<string, U
   }
   const creator = resolveCustomerCreator(customer.source_creator_name, users)
   return creator ? { ...customer, created_by: creator } : customer
+}
+
+function hydrateCustomerLinkedSupplier(customer: CustomerListData, suppliers: Map<string, SupplierListData>): CustomerListData {
+  const linkedSupplier = [...suppliers.values()].find((supplier) => supplier.linked_customer_id === customer.id)
+    ?? [...suppliers.values()].find((supplier) => supplierMatchesCustomer(supplier, customer))
+    ?? null
+  return linkedSupplier
+    ? { ...customer, linked_supplier: { id: linkedSupplier.id, code: linkedSupplier.code, name: linkedSupplier.name, linked_at: linkedSupplier.created_at ?? null } }
+    : { ...customer, linked_supplier: null }
 }
 
 function withImportReviewMetadata(
@@ -1151,7 +1325,7 @@ function toProduct(
     product_group: row.product_group_id && groupName ? { id: row.product_group_id, code: slug(groupName).toUpperCase(), name: groupName } : null,
     inventory_shape: row.inventory_shape,
     track_inventory: row.track_inventory,
-    unit_conversions: row.unit_conversions,
+    unit_conversions: row.unit_conversions.length > 0 ? row.unit_conversions : existing?.unit_conversions ?? [],
     created_at: sourceCreatedAt ?? existing?.created_at ?? now,
     updated_at: now,
   }
@@ -1205,8 +1379,10 @@ function operatingStockByProductId(movements: StockMovementData[]) {
 function toSupplier(
   row: Parameters<NonNullable<ServerRepository['upsertSuppliersByCode']>>[0]['rows'][number],
   existing: SupplierListData | undefined,
+  customers: Map<string, CustomerListData>,
 ): SupplierListData {
   const now = new Date().toISOString()
+  const linkedCustomer = findMatchingCustomerForSupplier(row, customers)
   return {
     id: existing?.id ?? `supplier-kv-${slug(row.code)}`,
     code: row.code,
@@ -1215,8 +1391,8 @@ function toSupplier(
     email: row.email,
     address: row.address,
     tax_code: row.tax_code,
-    linked_customer_id: existing?.linked_customer_id ?? null,
-    linked_customer: existing?.linked_customer ?? null,
+    linked_customer_id: existing?.linked_customer_id ?? linkedCustomer?.id ?? null,
+    linked_customer: existing?.linked_customer ?? (linkedCustomer ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name } : null),
     notes: row.note,
     status: row.status,
     current_payable_amount: row.kiotviet_current_payable ?? 0,
@@ -1226,6 +1402,31 @@ function toSupplier(
     source_created_at: row.source_created_at,
     company_name: row.company_name,
   } satisfies SupplierListData
+}
+
+function supplierMatchesCustomer(supplier: Pick<SupplierListData, 'code' | 'name'>, customer: Pick<CustomerListData, 'code' | 'name'>) {
+  return normalize(supplier.code) === normalize(customer.code)
+    || normalize(supplier.name) === normalize(customer.name)
+}
+
+function findMatchingCustomerForSupplier(row: Pick<Parameters<NonNullable<ServerRepository['upsertSuppliersByCode']>>[0]['rows'][number], 'code' | 'name'>, customers: Map<string, CustomerListData>) {
+  return [...customers.values()].find((customer) => supplierMatchesCustomer(row, customer)) ?? null
+}
+
+function syncExactCustomerSupplierLinks(customers: Map<string, CustomerListData>, suppliers: Map<string, SupplierListData>) {
+  let updated = 0
+  for (const [code, supplier] of suppliers.entries()) {
+    if (supplier.linked_customer_id) continue
+    const customer = findMatchingCustomerForSupplier(supplier, customers)
+    if (!customer) continue
+    suppliers.set(code, {
+      ...supplier,
+      linked_customer_id: customer.id,
+      linked_customer: { id: customer.id, code: customer.code, name: customer.name },
+    })
+    updated += 1
+  }
+  return updated
 }
 
 function toImportedPurchaseReceipt(
@@ -1332,6 +1533,29 @@ function toImportedCashbookEntry(
     allocations: [],
     payment_method: row.account_type,
   } as CashbookEntryData
+}
+
+function hydrateCashbookEntryFinanceAccount(
+  entry: CashbookEntryData,
+  financeAccounts: Map<string, FinanceAccountData>,
+): CashbookEntryData {
+  const account = financeAccounts.get(entry.finance_account.id)
+  if (!account) return entry
+  return {
+    ...entry,
+    finance_account: cashbookFinanceAccountSnapshot(account),
+  }
+}
+
+function cashbookFinanceAccountSnapshot(account: FinanceAccountData): CashbookEntryData['finance_account'] {
+  return {
+    id: account.id,
+    code: account.account_type === 'bank' ? account.account_number ?? account.code : account.code,
+    name: account.name,
+    account_type: account.account_type,
+    account_number: account.account_number,
+    account_holder: account.account_holder,
+  }
 }
 
 type KiotVietCashbookRepositoryRow = Parameters<NonNullable<ServerRepository['upsertImportedKiotVietCashbook']>>[0]['rows'][number]
@@ -1854,6 +2078,20 @@ function posInvoiceRowsFromSalesDocument(
   return itemMap
 }
 
+function posProductUsageCountsFromSalesDocuments(salesDocuments: Map<string, SalesDocumentData>) {
+  const usageByProductId = new Map<string, number>()
+  for (const document of salesDocuments.values()) {
+    if (document.order_type !== 'invoice' && document.order_type !== 'quote') continue
+    const items = Array.isArray(document.items) ? document.items : []
+    for (const rawItem of items) {
+      const item = rawItem as { product_id?: unknown }
+      if (typeof item.product_id !== 'string' || item.product_id.trim() === '') continue
+      usageByProductId.set(item.product_id, (usageByProductId.get(item.product_id) ?? 0) + 1)
+    }
+  }
+  return usageByProductId
+}
+
 function stockMovementsFromDocuments(
   purchaseReceipts: Map<string, PurchaseReceiptData>,
   purchaseReceiptItems: Map<string, Map<number, Parameters<NonNullable<ServerRepository['upsertImportedKiotVietPurchaseReceipts']>>[0]['rows'][number]>>,
@@ -2154,6 +2392,32 @@ function slug(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48) || 'default'
+}
+
+function priceListKey(value: string) {
+  return normalize(value).replace(/\s+/g, ' ').trim()
+}
+
+function isDefaultSalePriceListName(value: string) {
+  const key = priceListKey(value)
+  return key === priceListKey(defaultPriceList.name) || key === priceListKey('Bảng giá chung')
+}
+
+function priceListPricesForProduct(
+  productCode: string,
+  defaultSalePrices: Map<string, number>,
+  priceListNames: Map<string, { id: string; name: string }>,
+  namedSalePrices: Map<string, Map<string, number>>,
+): Record<string, number> {
+  const prices: Record<string, number> = {}
+  const defaultPrice = defaultSalePrices.get(productCode)
+  if (defaultPrice !== undefined) prices[defaultPriceList.id] = defaultPrice
+  for (const [priceListKeyValue, priceRows] of namedSalePrices) {
+    const price = priceRows.get(productCode)
+    const priceList = priceListNames.get(priceListKeyValue)
+    if (price !== undefined && priceList) prices[priceList.id] = price
+  }
+  return prices
 }
 
 function normalize(value: string) {

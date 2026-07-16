@@ -17,6 +17,8 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           latest_purchase_cost: 100000,
           default_sale_price: 650000,
           inventory_shape: 'normal' as const,
+          created_at: '2026-07-15T01:00:00.000Z',
+          updated_at: '2026-07-16T01:00:00.000Z',
           unit_conversions: [
             {
               unit_id: 'unit-m-toi',
@@ -43,6 +45,8 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           sell_method: 'quantity' as const,
           latest_purchase_cost: 20000,
           inventory_shape: 'normal' as const,
+          created_at: '2026-07-01T01:00:00.000Z',
+          updated_at: '2026-07-01T01:00:00.000Z',
         },
       ],
       page: input.page ?? 1,
@@ -89,10 +93,23 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           ending_qty: 18.344,
           partner_name: 'Khách lẻ',
         },
+        {
+          id: 'movement-2',
+          product_id: 'p-1',
+          movement_type: 'stocktake_balance',
+          quantity_delta: 1.656,
+          created_at: '2026-07-08T05:30:00Z',
+          document_code: 'KK000043',
+          document_type: 'stocktake' as const,
+          transaction_price: 107752.2,
+          cost_price: 107752.2,
+          ending_qty: 20,
+          partner_name: 'Kho chính',
+        },
       ],
       page: 1,
       page_size: 15,
-      total: 1,
+      total: 2,
     })),
     listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
@@ -389,6 +406,9 @@ it('filters by status and toggles product active state', async () => {
   expect(within(sidebar).getByRole('combobox', { name: 'Tồn kho' })).toHaveValue('all')
   expect(within(sidebar).queryByRole('combobox', { name: 'Cách tính bán' })).not.toBeInTheDocument()
   expect(within(sidebar).getByRole('combobox', { name: 'Trạng thái hàng hóa' })).toHaveValue('active')
+  expect(within(sidebar).getByRole('option', { name: 'Đã xoá KV' })).toBeInTheDocument()
+  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái hàng hóa' }), 'deleted')
+  expect(service.listProducts).toHaveBeenLastCalledWith({ page: 1, page_size: 15, search: undefined, status: 'deleted' })
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái hàng hóa' }), 'all')
   expect(service.listProducts).toHaveBeenLastCalledWith({ page: 1, page_size: 15, search: undefined, status: 'all' })
   await userEvent.type(searchInput, 'MICA')
@@ -520,7 +540,7 @@ it('renders products as a goods and inventory-oriented list, not a pricebook wor
   const grid = await screen.findByRole('table', { name: 'Danh sách hàng hóa' })
   expect(grid).toHaveClass('management-table')
   expect(grid.closest('.management-table-viewport')).not.toBeNull()
-  expect(within(grid).getByRole('columnheader', { name: 'Tồn QCVL' })).toBeInTheDocument()
+  expect(within(grid).getByRole('columnheader', { name: 'Tồn kho' })).toBeInTheDocument()
   expect(within(grid).getByRole('checkbox', { name: 'Chọn tất cả dòng hàng hóa' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
   expect(within(grid).getByRole('button', { name: 'Chỉ hiện hàng ưu tiên' })).toHaveClass('finance-cashbook-star-button')
   expect(within(grid).getByRole('checkbox', { name: 'Chọn dòng MICA-3MM' }).parentElement).toHaveClass('finance-cashbook-checkbox-control')
@@ -559,6 +579,64 @@ it('sorts product rows from shared column headers', async () => {
   const rowsAfterReverseNameSort = within(grid).getAllByRole('row')
   expect(rowsAfterReverseNameSort[1]).toHaveTextContent('MICA-3MM')
   expect(within(grid).getByRole('columnheader', { name: 'Tên hàng' })).toHaveAttribute('aria-sort', 'descending')
+})
+
+it('shows recently created or edited products first by default', async () => {
+  const service = makeService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-old',
+          code: 'OLD',
+          name: 'Old product',
+          status: 'active' as const,
+          unit_name: 'cai',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 10000,
+          default_sale_price: 15000,
+          inventory_shape: 'normal' as const,
+          created_at: '2026-07-01T01:00:00.000Z',
+          updated_at: '2026-07-01T01:00:00.000Z',
+        },
+        {
+          id: 'p-new',
+          code: 'NEW',
+          name: 'New product',
+          status: 'active' as const,
+          unit_name: 'cai',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 20000,
+          default_sale_price: 25000,
+          inventory_shape: 'normal' as const,
+          created_at: '2026-07-15T01:00:00.000Z',
+          updated_at: null,
+        },
+        {
+          id: 'p-edit',
+          code: 'EDIT',
+          name: 'Edited product',
+          status: 'active' as const,
+          unit_name: 'cai',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 30000,
+          default_sale_price: 35000,
+          inventory_shape: 'normal' as const,
+          created_at: '2026-07-02T01:00:00.000Z',
+          updated_at: '2026-07-16T01:00:00.000Z',
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 3,
+    })),
+  })
+  render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const grid = await screen.findByRole('table', { name: 'Danh sách hàng hóa' })
+  const rows = within(grid).getAllByRole('row')
+  expect(rows[1]).toHaveTextContent('EDIT')
+  expect(rows[2]).toHaveTextContent('NEW')
+  expect(rows[3]).toHaveTextContent('OLD')
 })
 
 it('persists product favorite marks and filters the current product page by favorites', async () => {
@@ -757,8 +835,11 @@ it('shows stock card tab as a KV-style movement table with placeholders for miss
   expect(within(stockCardTable).getByText('-1,656')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('18,344')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('Khách lẻ')).toBeInTheDocument()
+  expect(within(stockCardTable).getByRole('button', { name: 'KK000043' })).toBeInTheDocument()
+  expect(within(stockCardTable).getByText('Cân bằng kiểm kho')).toBeInTheDocument()
+  expect(within(stockCardTable).queryByText('stocktake_balance')).not.toBeInTheDocument()
   expect(within(stockCardTable).queryByText('Chưa có')).not.toBeInTheDocument()
-  expect(within(detail).getByRole('navigation', { name: 'Phân trang thẻ kho MICA-3MM' })).toHaveTextContent('1 - 1 trong 1 dòng')
+  expect(within(detail).getByRole('navigation', { name: 'Phân trang thẻ kho MICA-3MM' })).toHaveTextContent('1 - 2 trong 2 dòng')
 })
 
 it('creates an automatic stocktake link when adjusting normal product stock from product detail', async () => {
@@ -823,7 +904,8 @@ it('shows KiotViet provisional stock and draft BOM metadata for imported product
   render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
 
   await screen.findByText('HH')
-  expect(screen.getByRole('columnheader', { name: 'Tồn QCVL' })).toBeInTheDocument()
+  expect(screen.getByRole('columnheader', { name: 'Tồn kho' })).toBeInTheDocument()
+  expect(screen.getByText('4 cai')).toBeInTheDocument()
 
   await userEvent.click(screen.getByText('HH'))
   const detail = screen.getByRole('region', { name: 'Chi tiết hàng hóa HH' })
@@ -878,7 +960,7 @@ it('shows calculated QCVL operating stock as the main product stock value', asyn
   render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
 
   await screen.findByText('BT')
-  expect(screen.getByRole('columnheader', { name: /Tồn QCVL/ })).toBeInTheDocument()
+  expect(screen.getByRole('columnheader', { name: /Tồn kho/ })).toBeInTheDocument()
   expect(screen.getByText('156 m2')).toBeInTheDocument()
 
   await userEvent.click(screen.getByText('BT'))

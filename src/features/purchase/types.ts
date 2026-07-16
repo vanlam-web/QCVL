@@ -6,6 +6,11 @@ export interface SupplierLinkedCustomer {
   name: string
 }
 
+export interface SupplierGroup {
+  id: string
+  name: string
+}
+
 export interface Supplier {
   id: string
   code: string
@@ -20,6 +25,11 @@ export interface Supplier {
   status: SupplierStatus
   current_payable_amount: number
   total_purchase_amount: number
+  created_by?: { id: string; name: string } | null
+  created_at?: string | null
+  source_creator_name?: string | null
+  source_created_at?: string | null
+  supplier_group?: SupplierGroup | null
 }
 
 export interface SupplierListResponse {

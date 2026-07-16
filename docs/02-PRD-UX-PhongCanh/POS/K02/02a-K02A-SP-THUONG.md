@@ -29,6 +29,7 @@ Khi một mặt hàng được chọn vào giỏ, cấu trúc giao diện ngoài
 
 - **Ẩn hoàn toàn** các trường `[Dài]`, `[Rộng]` và ô diện tích.
 - Chỉ hiển thị duy nhất 1 ô nhập liệu: `[ Số lượng ]`.
+- Nếu sản phẩm có đơn vị bán phụ trong `unit_conversions`, cột `ĐV` hiển thị dropdown để chọn đơn vị bán; nếu không có quy đổi thì hiển thị ĐVT cố định. Khi F5/reload hoặc mở lại tab nháp, POS hydrate lại dòng hàng từ catalog hiện tại để lấy `unit_conversions` mới nhất, không dùng snapshot đơn vị cũ trong localStorage.
 - **Hành vi:** Con trỏ tự động focus vào ô `[SL]` khi dòng vừa nhảy ra.
 
 **Cấu trúc cột:**
@@ -45,7 +46,7 @@ Khi một mặt hàng được chọn vào giỏ, cấu trúc giao diện ngoài
 
 **Quy tắc giá trên dòng:**
 
-- Đơn giá mặc định lấy theo bảng giá đang áp dụng của khách hàng; nếu khách không gán nhóm/bảng giá thì dùng Bảng giá chung.
+- Đơn giá mặc định lấy theo bảng giá đang áp dụng của khách hàng; nếu khách không gán nhóm/bảng giá thì dùng Giá chung.
 - Thu ngân được sửa đơn giá trực tiếp trên dòng hàng.
 - Dòng đã sửa giá thủ công phải có dấu hiệu nhận biết để khi đổi khách hoặc đổi bảng giá không bị tự tính đè.
 - Có nút nhỏ cạnh ô đơn giá để mở danh sách **5 giá gần đây** của đúng cặp khách hàng + sản phẩm.
@@ -81,7 +82,8 @@ Thành tiền = Số lượng × Đơn giá
 **Giao diện hiển thị ngoài:**
 
 - Mở rộng dòng và hiển thị rõ bộ 3 ô nhập thông số độc lập: `[ Rộng ] × [ Dài ] × [ Số lượng ]`.
-- Hiển thị chuỗi kết quả Realtime ngay kế bên: `= [ Tổng số m² ] m²`.
+- Hiển thị chuỗi kết quả Realtime ngay kế bên: `= [ Tổng số m² ] [ĐV]`.
+- Nếu sản phẩm m² có đơn vị bán phụ trong `unit_conversions`, phần `[ĐV]` là dropdown chọn đơn vị bán; đổi ĐV không đổi công thức tính diện tích, chỉ đổi đơn vị hiển thị/lưu khi chốt hóa đơn. Tab nháp khôi phục sau F5 vẫn lấy danh sách đơn vị từ catalog hiện tại.
 - **Hành vi:** Con trỏ tự động focus vào ô `[Rộng (m)]` khi dòng vừa nhảy ra.
 
 **Cấu trúc cột:**
@@ -101,7 +103,7 @@ Thành tiền = Số lượng × Đơn giá
 
 **Quy tắc giá trên dòng:**
 
-- Đơn giá mặc định lấy theo bảng giá đang áp dụng của khách hàng; nếu khách không gán nhóm/bảng giá thì dùng Bảng giá chung.
+- Đơn giá mặc định lấy theo bảng giá đang áp dụng của khách hàng; nếu khách không gán nhóm/bảng giá thì dùng Giá chung.
 - Thu ngân được sửa đơn giá trực tiếp trên dòng hàng.
 - Dòng đã sửa giá thủ công phải có dấu hiệu nhận biết để khi đổi khách hoặc đổi bảng giá không bị tự tính đè.
 - Có nút nhỏ cạnh ô đơn giá để mở danh sách **5 giá gần đây** của đúng cặp khách hàng + sản phẩm.

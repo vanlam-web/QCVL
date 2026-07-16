@@ -1,4 +1,4 @@
-# POS-CUSTOMER — Nghiệp vụ khách hàng POS
+﻿# POS-CUSTOMER — Nghiệp vụ khách hàng POS
 
 > **Nguồn:** Chốt từ draft Git history
 
@@ -48,7 +48,7 @@ Khách hàng có thể thuộc một nhóm khách.
 
 Nếu khách có nhóm, nhóm khách quyết định bảng giá mặc định áp dụng cho khách đó.
 
-Nếu khách không gán nhóm, POS áp dụng bảng giá chung.
+Nếu khách không gán nhóm, POS áp dụng giá chung.
 
 Không bắt buộc mọi khách hàng phải thuộc nhóm.
 
@@ -60,7 +60,7 @@ Không bắt buộc mọi khách hàng phải thuộc nhóm.
 2. Tạo khách có SĐT trùng trong cùng organization bị từ chối.
 3. Tạo khách không nhập mã sẽ tự sinh mã dạng `KH000001`.
 4. Mã khách nhập tay trùng trong cùng organization bị từ chối.
-5. Khách không gán nhóm dùng bảng giá chung.
+5. Khách không gán nhóm dùng giá chung.
 6. Khách có nhóm dùng bảng giá của nhóm.
 
 ---

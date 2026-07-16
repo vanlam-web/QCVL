@@ -1,9 +1,10 @@
 import type { FormEvent } from 'react'
-import { Download, Search, Upload } from 'lucide-react'
+import { Download, Search } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementImportButton,
 } from '../../components/ui-shell/management-layout'
 
 interface FinanceFiltersPanelProps {
@@ -38,10 +39,7 @@ export function FinanceFiltersPanel({
         />
       </ManagementCompactToolbar>
       <div className="finance-voucher-actions" aria-label="Tác vụ sổ quỹ">
-        <button className="button button-secondary" type="button" onClick={onOpenImport}>
-          <Upload aria-hidden="true" size={16} />
-          Import KV
-        </button>
+        <ManagementImportButton onClick={onOpenImport}>Import</ManagementImportButton>
         <button className="button button-secondary" type="button" onClick={onExportCashbook}>
           <Download aria-hidden="true" size={16} />
           Xuất file

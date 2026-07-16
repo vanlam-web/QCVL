@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Save, Search, WalletCards, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { formatKvDateTime } from '../../lib/date-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
 import type { SupplierInput, SupplierListFilters, SupplierService } from './supplier-service'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
@@ -9,8 +10,19 @@ import {
   ManagementCompactSearch,
   ManagementCompactToolbar,
   ManagementDataTable,
+  ManagementDetailActionFooter,
+  ManagementDetailCard,
+  ManagementDetailHeader,
+  ManagementDetailInfoList,
+  ManagementDetailInlineNote,
+  ManagementDetailNote,
+  ManagementDetailPanel,
+  ManagementDetailSection,
+  ManagementDetailSummary,
+  ManagementInlineDetailTabs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementTableFooter,
@@ -19,9 +31,12 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { formatPhoneDisplay } from '../../lib/phone-format'
 import { supplierNumberFilterValue } from './supplier-filters'
-import { supplierListSummary, supplierMoneyText } from './supplier-presenter'
+import { supplierCreatedDateText, supplierCreatorLabel, supplierGroupLabel, supplierListSummary, supplierMoneyText } from './supplier-presenter'
 import { SupplierImportDialog } from './SupplierImportDialog'
+import type { PurchaseReceipt, PurchaseReceiptStatus } from './purchase-receipt-types'
 
 const blankForm: SupplierInput = {
   code: '',
@@ -35,8 +50,51 @@ const blankForm: SupplierInput = {
   status: 'active',
 }
 
-const supplierPageSize = 15
-type SupplierSortKey = 'code' | 'name' | 'phone' | 'email' | 'current_payable_amount' | 'total_purchase_amount' | 'linked_customer' | 'status'
+type SupplierSortKey = 'code' | 'name' | 'phone' | 'current_payable_amount' | 'total_purchase_amount' | 'status'
+type SupplierDetailTab = 'info' | 'history' | 'debt'
+
+function SupplierCustomerLinkIcon() {
+  return (
+    <span aria-label="Có liên kết khách hàng" className="management-linked-partner-icon" title="Có liên kết khách hàng">
+      <Network aria-hidden="true" size={16} />
+    </span>
+  )
+}
+
+function supplierToForm(supplier: Supplier): SupplierInput {
+  return {
+    code: supplier.code,
+    name: supplier.name,
+    phone: supplier.phone ?? '',
+    email: supplier.email ?? '',
+    address: supplier.address ?? '',
+    tax_code: supplier.tax_code ?? '',
+    linked_customer_id: supplier.linked_customer_id,
+    notes: supplier.notes ?? '',
+    status: supplier.status,
+  }
+}
+
+function supplierReceiptOutstanding(receipt: Pick<PurchaseReceipt, 'remaining_amount'>) {
+  return Math.max(Number(receipt.remaining_amount || 0), 0)
+}
+
+function supplierReceiptBelongsToSupplier(receipt: PurchaseReceipt, supplier: Supplier) {
+  return receipt.supplier_id === supplier.id
+    || receipt.supplier.id === supplier.id
+    || receipt.supplier.code === supplier.code
+}
+
+function supplierReceiptStatusText(status: PurchaseReceiptStatus) {
+  switch (status) {
+    case 'posted':
+      return 'Đã nhập'
+    case 'cancelled':
+      return 'Đã hủy'
+    default:
+      return 'Draft'
+  }
+}
 
 export function SuppliersPage({
   service,
@@ -63,12 +121,15 @@ export function SuppliersPage({
   const [lastTotalPurchaseMax, setLastTotalPurchaseMax] = useState('')
   const [lastCurrentPayableMin, setLastCurrentPayableMin] = useState('')
   const [lastCurrentPayableMax, setLastCurrentPayableMax] = useState('')
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(supplierPageSize)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [showFilters, setShowFilters] = useState(true)
   const [supplierImportOpen, setSupplierImportOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [loadingSupplierId, setLoadingSupplierId] = useState<string | null>(null)
+  const [viewingSupplier, setViewingSupplier] = useState<Supplier | null>(null)
+  const [supplierDetailTab, setSupplierDetailTab] = useState<SupplierDetailTab>('info')
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState<SupplierInput>(blankForm)
   const [saving, setSaving] = useState(false)
@@ -76,6 +137,7 @@ export function SuppliersPage({
   const [error, setError] = useState<string | null>(null)
   const [paymentSupplier, setPaymentSupplier] = useState<Supplier | null>(null)
   const [payableReceipts, setPayableReceipts] = useState<SupplierPayableReceipt[]>([])
+  const [supplierReceipts, setSupplierReceipts] = useState<PurchaseReceipt[]>([])
   const [paymentAmounts, setPaymentAmounts] = useState<Record<string, number>>({})
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [paymentFinanceAccountId, setPaymentFinanceAccountId] = useState('')
@@ -92,14 +154,12 @@ export function SuppliersPage({
     code: { kind: 'text', value: (supplier) => supplier.code },
     name: { kind: 'text', value: (supplier) => supplier.name },
     phone: { kind: 'text', value: (supplier) => supplier.phone },
-    email: { kind: 'text', value: (supplier) => supplier.email },
     current_payable_amount: { kind: 'number', value: (supplier) => supplier.current_payable_amount },
     total_purchase_amount: { kind: 'number', value: (supplier) => supplier.total_purchase_amount },
-    linked_customer: { kind: 'text', value: (supplier) => supplier.linked_customer?.name },
     status: { kind: 'text', value: (supplier) => supplier.status },
   })
-  const isCreatingSupplier = detailOpen && editingId === null && paymentSupplier === null
-  const activeDetailSupplier = suppliers?.find((supplier) => supplier.id === editingId) ?? null
+  const editingSupplier = editingId ? viewingSupplier ?? suppliers?.find((supplier) => supplier.id === editingId) ?? null : null
+  const isCreatingSupplier = detailOpen && viewingSupplier === null && editingId === null && paymentSupplier === null
 
   async function loadSuppliers(
     input: SupplierListFilters & {
@@ -164,7 +224,7 @@ export function SuppliersPage({
     async function loadInitialData() {
       setError(null)
       try {
-        const supplierResult = await service.listSuppliers({ status: 'active', page: 1, page_size: supplierPageSize })
+        const supplierResult = await service.listSuppliers({ status: 'active', page: 1, page_size: defaultPageSize })
         if (!active) return
         setSuppliers(supplierResult.items)
         setTotal(supplierResult.total)
@@ -181,7 +241,7 @@ export function SuppliersPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [defaultPageSize, service])
 
   async function ensureCustomersLoaded() {
     if (customersLoaded) return
@@ -257,32 +317,53 @@ export function SuppliersPage({
   }
 
   async function openSupplier(supplier: Supplier) {
+    const isCurrentSupplierOpen =
+      detailOpen &&
+      (viewingSupplier?.id === supplier.id || editingId === supplier.id || paymentSupplier?.id === supplier.id)
+    if (isCurrentSupplierOpen || loadingSupplierId === supplier.id) return
+
     setError(null)
     setDetailOpen(false)
     setLoadingSupplierId(supplier.id)
+    setViewingSupplier(null)
+    setSupplierDetailTab('info')
     setPaymentSupplier(null)
+    setSupplierReceipts([])
     setEditingId(null)
     setForm(blankForm)
     try {
-      const [detail] = await Promise.all([service.getSupplier(supplier.id), ensureCustomersLoaded()])
+      const [detail, receiptResult] = await Promise.all([
+        service.getSupplier(supplier.id),
+        service.listPurchaseReceipts(supplier),
+      ])
       setDetailOpen(true)
-      setEditingId(detail.id)
-      setForm({
-        code: detail.code,
-        name: detail.name,
-        phone: detail.phone ?? '',
-        email: detail.email ?? '',
-        address: detail.address ?? '',
-        tax_code: detail.tax_code ?? '',
-        linked_customer_id: detail.linked_customer_id,
-        notes: detail.notes ?? '',
-        status: detail.status,
-      })
+      setViewingSupplier(detail)
+      setSupplierReceipts(receiptResult.items)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được chi tiết nhà cung cấp.'))
     } finally {
       setLoadingSupplierId(null)
     }
+  }
+
+  async function editSupplier(supplier: Supplier) {
+    setError(null)
+    try {
+      await ensureCustomersLoaded()
+      setPaymentSupplier(null)
+      setViewingSupplier(supplier)
+      setSupplierDetailTab('info')
+      setEditingId(supplier.id)
+      setDetailOpen(true)
+      setForm(supplierToForm(supplier))
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không tải được danh sách khách hàng.'))
+    }
+  }
+
+  function closeSupplierEdit() {
+    setEditingId(null)
+    setForm(blankForm)
   }
 
   async function changePaymentMethod(nextMethod: 'cash' | 'bank_transfer') {
@@ -307,6 +388,9 @@ export function SuppliersPage({
       }
       setEditingId(null)
       setDetailOpen(false)
+      setViewingSupplier(null)
+      setSupplierReceipts([])
+      setSupplierDetailTab('info')
       setForm(blankForm)
       await loadSuppliers()
     } catch (cause) {
@@ -321,6 +405,9 @@ export function SuppliersPage({
     setPaymentSupplier(null)
     setDetailOpen(false)
     setLoadingSupplierId(supplier.id)
+    setViewingSupplier(null)
+    setSupplierReceipts([])
+    setSupplierDetailTab('info')
     setEditingId(null)
     setForm(blankForm)
     setPayableReceipts([])
@@ -384,16 +471,11 @@ export function SuppliersPage({
     }
   }
 
-  function resetForm() {
-    setEditingId(null)
-    setDetailOpen(true)
-    setPaymentSupplier(null)
-    setForm(blankForm)
-  }
-
   async function openCreateSupplier() {
     setEditingId(null)
     setPaymentSupplier(null)
+    setViewingSupplier(null)
+    setSupplierDetailTab('info')
     setDetailOpen(false)
     setLoadingSupplierId(null)
     setForm(blankForm)
@@ -425,108 +507,282 @@ export function SuppliersPage({
   )
 
   function supplierForm() {
+    const detailSupplier = editingSupplier ?? viewingSupplier
+    const isEditingSupplier = editingId !== null
+    const detailTitle = isEditingSupplier
+      ? 'Sửa nhà cung cấp'
+      : detailSupplier
+        ? 'Thông tin nhà cung cấp'
+        : 'Thêm nhà cung cấp'
+    const supplierStatus = isEditingSupplier ? (form.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động') : detailSupplier?.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'
+    const currentSupplierReceipts = detailSupplier
+      ? supplierReceipts.filter((receipt) => supplierReceiptBelongsToSupplier(receipt, detailSupplier))
+      : []
+    const currentSupplierDebtReceipts = currentSupplierReceipts.filter((receipt) => supplierReceiptOutstanding(receipt) > 0)
+
     return (
-      <form aria-label="Thông tin nhà cung cấp" className="supplier-form" onSubmit={saveSupplier}>
-        <header>
-          <h2>{editingId ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp'}</h2>
-          <div className="row-actions">
-            {activeDetailSupplier && activeDetailSupplier.current_payable_amount > 0 ? (
-              <button className="button button-secondary" type="button" onClick={() => void openSupplierPayment(activeDetailSupplier)}>
-                <WalletCards aria-hidden="true" size={15} />
-                Thanh toán NCC
-              </button>
+      <ManagementDetailPanel>
+        {detailSupplier && !isEditingSupplier ? (
+          <ManagementInlineDetailTabs
+            activeKey={supplierDetailTab}
+            ariaLabel="Chi tiết nhà cung cấp"
+            tabs={[
+              { key: 'info', label: 'Thông tin' },
+              { key: 'history', label: 'Lịch sử NCC này' },
+              { key: 'debt', label: 'Nợ NCC này' },
+            ]}
+            onSelect={(key) => setSupplierDetailTab(key as SupplierDetailTab)}
+          />
+        ) : null}
+        {!detailSupplier || isEditingSupplier ? <ManagementDetailHeader title={detailTitle} /> : null}
+        {detailSupplier ? (
+          <ManagementDetailSummary
+            ariaLabel="Tóm tắt nhà cung cấp"
+            code={detailSupplier.code}
+            metaAriaLabel="Thông tin tạo nhà cung cấp"
+            metaItems={[
+              { label: 'Người tạo:', value: supplierCreatorLabel(detailSupplier) },
+              { label: 'Ngày tạo:', value: supplierCreatedDateText(detailSupplier) },
+              { label: 'Nhóm nhà cung cấp:', value: supplierGroupLabel(detailSupplier) },
+            ]}
+            title={detailSupplier.name}
+          />
+        ) : null}
+        {detailSupplier && !isEditingSupplier && supplierDetailTab === 'info' ? (
+          <ManagementDetailSection ariaLabel="Thông tin nhanh nhà cung cấp" role="tabpanel">
+            <ManagementDetailInfoList
+              columns="three"
+              items={[
+                { label: 'Điện thoại', value: formatPhoneDisplay(detailSupplier.phone, 'Chưa có') },
+                { label: 'Email', value: detailSupplier.email ?? 'Chưa có' },
+                { label: 'MST', value: detailSupplier.tax_code ?? 'Chưa có' },
+                { label: 'Địa chỉ', value: detailSupplier.address ?? 'Chưa có', span: 3 },
+              ]}
+            />
+            {detailSupplier.linked_customer ? (
+              <ManagementDetailCard
+                ariaLabel="Khách hàng đồng thời là Nhà cung cấp"
+                title="Khách hàng đồng thời là Nhà cung cấp"
+              >
+                <p>
+                  <span className="management-detail-meta-label">Khách hàng liên kết:</span>{' '}
+                  <strong>{detailSupplier.linked_customer.code} - {detailSupplier.linked_customer.name}</strong>
+                </p>
+                <p>
+                  Gộp khách hàng {detailSupplier.linked_customer.code} - {detailSupplier.linked_customer.name} và nhà cung cấp {detailSupplier.code} - {detailSupplier.name}
+                  {detailSupplier.created_at ? ` vào ${formatKvDateTime(detailSupplier.created_at)}` : ''}
+                </p>
+              </ManagementDetailCard>
             ) : null}
-            {editingId ? (
-              <button className="button button-secondary" type="button" onClick={resetForm}>
-                <Plus aria-hidden="true" size={15} />
-                Tạo mới
-              </button>
-            ) : null}
-          </div>
-        </header>
-        <label>
-          Mã NCC
-          <input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} />
-        </label>
-        <label>
-          Tên NCC
-          <input
-            required
-            value={form.name}
-            onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+            <ManagementDetailNote icon={<StickyNote aria-hidden="true" size={16} />} value={detailSupplier.notes} />
+          </ManagementDetailSection>
+        ) : null}
+        {detailSupplier && !isEditingSupplier && supplierDetailTab === 'history' ? (
+          <ManagementDetailSection ariaLabel="Lịch sử nhập/trả hàng của NCC này" role="tabpanel">
+            {currentSupplierReceipts.length === 0 ? (
+              <ManagementDetailInlineNote>Chưa có phiếu nhập đã hoàn thành cho nhà cung cấp này.</ManagementDetailInlineNote>
+            ) : (
+              <table aria-label="Lịch sử nhập hàng của NCC này" className="management-detail-table management-detail-linked-table">
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Thời gian</th>
+                    <th>Hóa đơn NCC</th>
+                    <th>Cần trả</th>
+                    <th>Đã trả</th>
+                    <th>Còn nợ</th>
+                    <th>Trạng thái</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentSupplierReceipts.map((receipt) => (
+                    <tr key={receipt.id}>
+                      <td>{receipt.code}</td>
+                      <td>{formatKvDateTime(receipt.received_at)}</td>
+                      <td>{receipt.supplier_document_no ?? '-'}</td>
+                      <td><MoneyText value={receipt.payable_amount} /></td>
+                      <td><MoneyText value={receipt.paid_amount} /></td>
+                      <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
+                      <td>
+                        <StatusChip tone={receipt.status === 'posted' ? 'success' : receipt.status === 'cancelled' ? 'danger' : 'neutral'}>
+                          {supplierReceiptStatusText(receipt.status)}
+                        </StatusChip>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </ManagementDetailSection>
+        ) : null}
+        {detailSupplier && !isEditingSupplier && supplierDetailTab === 'debt' ? (
+          <ManagementDetailSection ariaLabel="Nợ cần trả của NCC này" role="tabpanel">
+            <ManagementDetailInfoList
+              columns="three"
+              items={[
+                { label: 'Nợ cần trả hiện tại', value: supplierMoneyText(detailSupplier.current_payable_amount) },
+                { label: 'Tổng mua', value: supplierMoneyText(detailSupplier.total_purchase_amount) },
+                { label: 'Trạng thái', value: supplierStatus },
+              ]}
+            />
+            {currentSupplierDebtReceipts.length === 0 ? (
+              <ManagementDetailInlineNote>Không còn phiếu nhập đang nợ cho nhà cung cấp này.</ManagementDetailInlineNote>
+            ) : (
+              <table aria-label="Danh sách phiếu nợ của NCC này" className="management-detail-table management-detail-linked-table">
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Thời gian</th>
+                    <th>Hóa đơn NCC</th>
+                    <th>Cần trả</th>
+                    <th>Đã trả</th>
+                    <th>Còn nợ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentSupplierDebtReceipts.map((receipt) => (
+                    <tr key={receipt.id}>
+                      <td>{receipt.code}</td>
+                      <td>{formatKvDateTime(receipt.received_at)}</td>
+                      <td>{receipt.supplier_document_no ?? '-'}</td>
+                      <td><MoneyText value={receipt.payable_amount} /></td>
+                      <td><MoneyText value={receipt.paid_amount} /></td>
+                      <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </ManagementDetailSection>
+        ) : null}
+        {detailSupplier && !isEditingSupplier ? (
+          <ManagementDetailActionFooter
+            leftActions={[
+              ...(detailSupplier.current_payable_amount > 0
+                ? [{
+                    label: 'Thanh toán NCC',
+                    icon: <WalletCards aria-hidden="true" size={15} />,
+                    variant: 'secondary' as const,
+                    onClick: () => void openSupplierPayment(detailSupplier),
+                  }]
+                : []),
+            ]}
+            rightActions={[
+              {
+                label: 'Chỉnh sửa',
+                icon: <Pencil aria-hidden="true" size={15} />,
+                variant: 'secondary',
+                onClick: () => void editSupplier(detailSupplier),
+              },
+            ]}
           />
-        </label>
-        <label>
-          Điện thoại
-          <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-        </label>
-        <label>
-          Email
-          <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
-        </label>
-        <label>
-          Địa chỉ
-          <input
-            value={form.address}
-            onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
-          />
-        </label>
-        <label>
-          Mã số thuế
-          <input
-            value={form.tax_code}
-            onChange={(event) => setForm((current) => ({ ...current, tax_code: event.target.value }))}
-          />
-        </label>
-        <label>
-          Khách hàng liên kết
-          <select
-            value={form.linked_customer_id ?? ''}
-            onChange={(event) =>
-              setForm((current) => ({ ...current, linked_customer_id: event.target.value || null }))
-            }
-          >
-            <option value="">Không liên kết</option>
-            {customers.map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.code} - {customer.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Ghi chú
-          <textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
-        </label>
-        <label>
-          Trạng thái NCC
-          <select
-            value={form.status}
-            onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as SupplierStatus }))}
-          >
-            <option value="active">Đang hoạt động</option>
-            <option value="inactive">Ngừng hoạt động</option>
-          </select>
-        </label>
-        <button className="button button-primary" disabled={saving} type="submit">
-          <Save aria-hidden="true" size={16} />
-          Lưu nhà cung cấp
-        </button>
-      </form>
+        ) : null}
+        {(isEditingSupplier || detailSupplier === null) ? (
+          <ManagementDetailSection ariaLabel="Biểu mẫu nhà cung cấp">
+            <form aria-label="Thông tin nhà cung cấp" className="supplier-form" onSubmit={saveSupplier}>
+              <label>
+                Mã NCC
+                <input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} />
+              </label>
+              <label>
+                Tên NCC
+                <input
+                  required
+                  value={form.name}
+                  onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+                />
+              </label>
+              <label>
+                Điện thoại
+                <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
+              </label>
+              <label>
+                Email
+                <input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} />
+              </label>
+              <label>
+                Địa chỉ
+                <input
+                  value={form.address}
+                  onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                />
+              </label>
+              <label>
+                Mã số thuế
+                <input
+                  value={form.tax_code}
+                  onChange={(event) => setForm((current) => ({ ...current, tax_code: event.target.value }))}
+                />
+              </label>
+              <label>
+                Ghi chú
+                <textarea value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} />
+              </label>
+              <label>
+                Khách hàng liên kết
+                <select
+                  value={form.linked_customer_id ?? ''}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, linked_customer_id: event.target.value || null }))
+                  }
+                >
+                  <option value="">Không liên kết</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.code} - {customer.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Trạng thái NCC
+                <select
+                  value={form.status}
+                  onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as SupplierStatus }))}
+                >
+                  <option value="active">Đang hoạt động</option>
+                  <option value="inactive">Ngừng hoạt động</option>
+                </select>
+              </label>
+              <div className="row-actions">
+                {isEditingSupplier ? (
+                  <button className="button button-secondary" type="button" onClick={closeSupplierEdit}>
+                    <X aria-hidden="true" size={15} />
+                    Hủy chỉnh sửa
+                  </button>
+                ) : null}
+                <button className="button button-primary" disabled={saving} type="submit">
+                  <Save aria-hidden="true" size={16} />
+                  Lưu nhà cung cấp
+                </button>
+              </div>
+            </form>
+          </ManagementDetailSection>
+        ) : null}
+      </ManagementDetailPanel>
     )
   }
 
   function supplierPaymentForm() {
     if (!paymentSupplier) return null
     return (
-      <form noValidate aria-label="Thanh toán nhà cung cấp" className="supplier-form" onSubmit={saveSupplierPayment}>
-        <header>
-          <h2>Thanh toán {paymentSupplier.code}</h2>
-          <button className="button button-secondary" type="button" onClick={() => setPaymentSupplier(null)}>
-            <X aria-hidden="true" size={15} />
-            Đóng
-          </button>
-        </header>
+      <ManagementDetailPanel>
+        <ManagementDetailHeader
+          title={`Thanh toán ${paymentSupplier.code}`}
+          endAction={(
+            <button className="button button-secondary" type="button" onClick={() => setPaymentSupplier(null)}>
+              <X aria-hidden="true" size={15} />
+              Đóng
+            </button>
+          )}
+        />
+        <ManagementDetailSummary
+          ariaLabel="Tóm tắt thanh toán nhà cung cấp"
+          code={paymentSupplier.code}
+          title={paymentSupplier.name}
+        />
+        <ManagementDetailSection ariaLabel="Biểu mẫu thanh toán nhà cung cấp">
+          <form noValidate aria-label="Thanh toán nhà cung cấp" className="supplier-form" onSubmit={saveSupplierPayment}>
         {payableReceipts.length === 0 ? (
           <p>Không còn phiếu nhập posted cần trả cho NCC này.</p>
         ) : (
@@ -580,15 +836,17 @@ export function SuppliersPage({
           <WalletCards aria-hidden="true" size={16} />
           Lưu thanh toán NCC
         </button>
-      </form>
+          </form>
+        </ManagementDetailSection>
+      </ManagementDetailPanel>
     )
   }
 
-  function supplierDetailLoading(supplier: Supplier) {
+  function supplierDetailLoading(_supplier: Supplier) {
     return (
-      <section aria-label={`Đang tải ${supplier.code}`} className="management-detail-panel" role="region">
-        <p>Đang tải chi tiết nhà cung cấp...</p>
-      </section>
+      <ManagementDetailPanel>
+        <ManagementDetailInlineNote>Đang tải chi tiết nhà cung cấp...</ManagementDetailInlineNote>
+      </ManagementDetailPanel>
     )
   }
 
@@ -607,9 +865,7 @@ export function SuppliersPage({
             value={search}
             onChange={changeSupplierSearch}
           />
-          <button className="button button-secondary" type="button" onClick={() => setSupplierImportOpen(true)}>
-            Import KV
-          </button>
+          <ManagementImportButton onClick={() => setSupplierImportOpen(true)}>Import</ManagementImportButton>
         </ManagementCompactToolbar>
       }
       kpis={supplierKpis}
@@ -735,6 +991,7 @@ export function SuppliersPage({
                       headerIsCell: true,
                       cell: (supplier) => (
                         <button
+                          aria-label={supplier.code}
                           className="management-link-button"
                           type="button"
                           onClick={(event) => {
@@ -742,6 +999,7 @@ export function SuppliersPage({
                             void openSupplier(supplier)
                           }}
                         >
+                          {supplier.linked_customer ? <SupplierCustomerLinkIcon /> : null}
                           <strong>{supplier.code}</strong>
                         </button>
                       ),
@@ -756,13 +1014,7 @@ export function SuppliersPage({
                       key: 'phone',
                       header: <ManagementSortableHeader kind="text" sortKey="phone" sortState={supplierSortState} onSort={requestSupplierSort}>Điện thoại</ManagementSortableHeader>,
                       headerIsCell: true,
-                      cell: (supplier) => supplier.phone ?? '-',
-                    },
-                    {
-                      key: 'email',
-                      header: <ManagementSortableHeader kind="text" sortKey="email" sortState={supplierSortState} onSort={requestSupplierSort}>Email</ManagementSortableHeader>,
-                      headerIsCell: true,
-                      cell: (supplier) => supplier.email ?? '-',
+                      cell: (supplier) => formatPhoneDisplay(supplier.phone),
                     },
                     {
                       key: 'payable',
@@ -777,12 +1029,6 @@ export function SuppliersPage({
                       cell: (supplier) => <MoneyText value={supplier.total_purchase_amount} />,
                     },
                     {
-                      key: 'linked_customer',
-                      header: <ManagementSortableHeader kind="text" sortKey="linked_customer" sortState={supplierSortState} onSort={requestSupplierSort}>Khách hàng liên kết</ManagementSortableHeader>,
-                      headerIsCell: true,
-                      cell: (supplier) => supplier.linked_customer ? `${supplier.linked_customer.code} - ${supplier.linked_customer.name}` : '-',
-                    },
-                    {
                       key: 'status',
                       header: <ManagementSortableHeader kind="text" sortKey="status" sortState={supplierSortState} onSort={requestSupplierSort}>Trạng thái</ManagementSortableHeader>,
                       headerIsCell: true,
@@ -793,13 +1039,12 @@ export function SuppliersPage({
                       ),
                     },
                   ]}
-                  detailClassName="management-detail-panel"
                   getDetailLabel={() => 'Hồ sơ và thanh toán nhà cung cấp'}
                   getRowKey={(supplier) => supplier.id}
                   items={sortedSuppliers}
-                  selectedRowKey={editingId ?? paymentSupplier?.id ?? loadingSupplierId}
+                  selectedRowKey={loadingSupplierId ?? editingId ?? paymentSupplier?.id ?? viewingSupplier?.id}
                   renderDetail={(supplier) => {
-                    const detailForRow = editingId === supplier.id || paymentSupplier?.id === supplier.id
+                    const detailForRow = editingId === supplier.id || paymentSupplier?.id === supplier.id || viewingSupplier?.id === supplier.id
                     const loadingForRow = loadingSupplierId === supplier.id
                     if (!detailForRow && !loadingForRow) return null
                     return loadingForRow

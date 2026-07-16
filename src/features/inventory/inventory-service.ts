@@ -4,7 +4,7 @@ import { parseKiotVietProductWorkbook } from '../catalog/kiotviet-product-import
 import type {
   InventoryProduct,
   InventoryProductListResponse,
-  InventoryProductStatus,
+  InventoryProductStatusFilter,
   InventoryRollListResponse,
   InventorySheetListResponse,
   InventoryShape,
@@ -35,7 +35,7 @@ export function createInventoryService(api: InventoryApiRequester) {
   return {
     listInventoryProducts: (input: {
       search?: string
-      status?: InventoryProductStatus | 'all'
+      status?: InventoryProductStatusFilter
       inventory_shape?: InventoryShape
       page?: number
       page_size?: number

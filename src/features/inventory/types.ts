@@ -1,5 +1,6 @@
 export type InventoryShape = 'normal' | 'roll' | 'sheet'
 export type InventoryProductStatus = 'active' | 'inactive'
+export type InventoryProductStatusFilter = InventoryProductStatus | 'all' | 'deleted'
 export type StocktakeStatus = 'draft' | 'balanced' | 'cancelled'
 
 export interface InventoryProduct {

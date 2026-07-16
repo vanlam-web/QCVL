@@ -103,9 +103,11 @@ it('marks inventory nav item active on the stocktake page', () => {
 it('keeps theme toggle visible inside shell', async () => {
   renderShell()
 
-  await userEvent.click(screen.getByRole('button', { name: 'Đổi sang giao diện tối' }))
-
   expect(document.documentElement).toHaveAttribute('data-theme', 'dark')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Đổi sang giao diện sáng' }))
+
+  expect(document.documentElement).toHaveAttribute('data-theme', 'light')
 })
 
 it('keeps theme and account controls before POS in the topbar quick actions', async () => {
@@ -137,7 +139,7 @@ it('keeps theme and account controls before POS in the topbar quick actions', as
   expect(Array.from(quickActions.children).at(0)).toBe(userActions)
   expect(within(userActions).getByRole('button', { name: 'Thông báo' })).toHaveClass('management-icon-button')
   expect(within(userActions).getByRole('button', { name: 'Cài đặt' })).toHaveClass('management-icon-button')
-  expect(within(userActions).getByRole('button', { name: 'Đổi sang giao diện tối' })).toBeInTheDocument()
+  expect(within(userActions).getByRole('button', { name: 'Đổi sang giao diện sáng' })).toBeInTheDocument()
 
   await userEvent.click(within(userActions).getByRole('button', { name: 'Tài khoản' }))
   const profileItem = within(userActions).getByRole('menuitem', { name: /0947900909/ })

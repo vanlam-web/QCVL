@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Copy, FilePlus2, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -9,8 +9,10 @@ import {
   type ManagementDataTableColumn,
   ManagementDateRangeInputs,
   ManagementDetailActionFooter,
+  ManagementDetailNoteInput,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementTableFooter,
@@ -22,6 +24,7 @@ import { useManagementTableSort } from '../../components/ui-shell/management-tab
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
+import { displayPriceListName } from '../../lib/price-list-display'
 import type { SalesDocumentDetail, SalesDocumentListItem } from './types'
 import type { SalesDocumentService } from './sales-document-service'
 import type { OrderService, QuoteReopenPayload } from '../orders/order-service'
@@ -38,7 +41,6 @@ import {
   quickTimeGroups,
   quickTimeLabels,
   quickTimeRange,
-  salesDocumentsPageSize,
   sameFilterValues,
   toggleFilterValue,
   type PaymentMethodFilter,
@@ -64,6 +66,7 @@ import {
   salesDocumentStatusTone,
 } from './sales-document-presenter'
 import { SalesDocumentImportDialog } from './SalesDocumentImportDialog'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 
 type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
 
@@ -97,6 +100,7 @@ export function SalesDocumentsPage({
   onOpenQuotePrint?: (documentId: string) => void
 }) {
   const [state, setState] = useState<SalesDocumentsState | null>(null)
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [search, setSearch] = useState('')
   const [lastSearch, setLastSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(allTypeFilters)
@@ -146,7 +150,7 @@ export function SalesDocumentsPage({
     const nextFrom = input.from ?? dateFrom
     const nextTo = input.to ?? dateTo
     const nextPage = input.page ?? state?.page ?? 1
-    const nextPageSize = input.page_size ?? state?.pageSize ?? salesDocumentsPageSize
+    const nextPageSize = input.page_size ?? state?.pageSize ?? defaultPageSize
     setError(null)
     try {
       const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
@@ -205,7 +209,7 @@ export function SalesDocumentsPage({
           from: monthRange.from,
           to: monthRange.to,
           page: 1,
-          page_size: salesDocumentsPageSize,
+          page_size: defaultPageSize,
         }))
         if (!active) return
         setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
@@ -231,7 +235,7 @@ export function SalesDocumentsPage({
       ])
       if (!active) return
       setSellerOptions((users?.items ?? []).map((user) => ({ id: user.id, name: user.display_name })))
-      setPriceListOptions((priceLists?.items ?? []).filter((priceList) => priceList.is_active).map((priceList) => ({ id: priceList.id, name: priceList.name })))
+      setPriceListOptions((priceLists?.items ?? []).filter((priceList) => priceList.is_active).map((priceList) => ({ id: priceList.id, name: displayPriceListName(priceList) })))
     }
 
     void loadFilterOptions()
@@ -418,6 +422,28 @@ export function SalesDocumentsPage({
     }
   }
 
+  async function saveSelectedDocumentNote(nextNote: string) {
+    if (!selected) return
+    setDetailError(null)
+    setDetailErrorDocumentId(null)
+    try {
+      const saved = await service.updateSalesDocumentNote(selected.id, { note: nextNote.trim() || null })
+      setSelected(saved)
+      setState((current) => current
+        ? {
+            ...current,
+            items: current.items.map((item) => (
+              item.id === saved.id ? { ...item, note: saved.note } : item
+            )),
+          }
+        : current)
+    } catch (cause) {
+      setDetailError(formatApiError(cause, 'Không lưu được ghi chú hóa đơn.'))
+      setDetailErrorDocumentId(selected.id)
+      throw cause
+    }
+  }
+
   const documents = state?.items ?? []
   const {
     sortedItems: sortedDocuments,
@@ -434,7 +460,7 @@ export function SalesDocumentsPage({
   })
   const total = state?.total ?? 0
   const page = state?.page ?? 1
-  const pageSize = state?.pageSize ?? salesDocumentsPageSize
+  const pageSize = state?.pageSize ?? defaultPageSize
   const visibleDateRange = timeFilter === 'custom'
     ? { from: dateFrom, to: dateTo }
     : displayDateRangeForData({ from: dateFrom, to: dateTo }, dateRangeFromItems(documents, (document) => document.created_at))
@@ -542,10 +568,7 @@ export function SalesDocumentsPage({
             value={search}
             onChange={changeDocumentSearch}
           />
-          <button className="button button-secondary" type="button" onClick={() => setImportOpen(true)}>
-            <FilePlus2 aria-hidden="true" size={16} />
-            Import KV
-          </button>
+          <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
         </ManagementCompactToolbar>
       }
       kpis={documentKpis}
@@ -745,6 +768,7 @@ export function SalesDocumentsPage({
                       }
                       onCancel={() => setCancelOpen(true)}
                       onOpenQuotePrint={onOpenQuotePrint}
+                      onSaveNote={saveSelectedDocumentNote}
                     />
                   )}
                   selectedRowKey={selected?.id ?? detailErrorDocumentId ?? loadingDocumentId}
@@ -811,6 +835,7 @@ function SalesDocumentDetailView({
   onCancel,
   onEdit,
   onOpenQuotePrint,
+  onSaveNote,
 }: {
   document: SalesDocumentDetail | null
   editDisabled?: boolean
@@ -819,14 +844,31 @@ function SalesDocumentDetailView({
   onCancel?: () => void
   onEdit?: () => void
   onOpenQuotePrint?: (documentId: string) => void
+  onSaveNote?: (note: string) => Promise<void>
 }) {
   const [activeTab, setActiveTab] = useState<'info' | 'payment-history'>('info')
+  const [note, setNote] = useState(document?.note ?? '')
+  const [savingNote, setSavingNote] = useState(false)
   const infoTabId = `sales-document-${document?.id ?? 'loading'}-info-tab`
   const infoPanelId = `sales-document-${document?.id ?? 'loading'}-info-panel`
   const paymentTabId = `sales-document-${document?.id ?? 'loading'}-payment-tab`
   const paymentPanelId = `sales-document-${document?.id ?? 'loading'}-payment-panel`
   const hasPaymentHistory = Array.isArray(document?.payment_receipts) && document.payment_receipts.length > 0
   const selectedTab = hasPaymentHistory ? activeTab : 'info'
+
+  useEffect(() => {
+    setNote(document?.note ?? '')
+  }, [document?.id, document?.note])
+
+  async function saveNote() {
+    if (!document || !onSaveNote) return
+    setSavingNote(true)
+    try {
+      await onSaveNote(note)
+    } finally {
+      setSavingNote(false)
+    }
+  }
 
   if (error) return <p role="alert">{error}</p>
   if (loading || !document) return <p>Đang tải chi tiết...</p>
@@ -894,12 +936,12 @@ function SalesDocumentDetailView({
             {document.price_list ? (
               <div>
                 <dt>Bảng giá:</dt>
-                <dd>{document.price_list.name}</dd>
+                <dd>{displayPriceListName(document.price_list)}</dd>
               </div>
             ) : null}
           </dl>
 
-          <table aria-label="Dòng hàng" className="management-detail-table sales-document-lines-table">
+          <table aria-label="Dòng hàng" className="management-detail-table management-detail-lines-table sales-document-lines-table">
             <thead>
               <tr>
                 <th>Mã hàng</th>
@@ -930,7 +972,12 @@ function SalesDocumentDetailView({
           </table>
 
           <div className="management-detail-lower management-detail-lower-right">
-            {document.note ? <p className="management-detail-note sales-document-note">{document.note}</p> : null}
+            <ManagementDetailNoteInput
+              ariaLabel="Ghi chú hóa đơn"
+              placeholder="Ghi chú..."
+              value={note}
+              onChange={setNote}
+            />
             <dl className="management-detail-summary-box management-detail-summary-box-right">
               <div>
                 <dt>{`Tổng tiền hàng (${document.items.length})`}</dt>
@@ -993,12 +1040,12 @@ function SalesDocumentDetailView({
       )}
       <ManagementDetailActionFooter
         leftActions={[
-          { label: 'H\u1ee7y', danger: true, disabled: document.status === 'cancelled', icon: <Trash2 aria-hidden="true" size={15} />, onClick: onCancel },
+          { label: 'Hủy', danger: true, disabled: document.status === 'cancelled', icon: <Trash2 aria-hidden="true" size={15} />, onClick: onCancel },
           { label: 'Sao chép', icon: <Copy aria-hidden="true" size={15} /> },
         ]}
         rightActions={[
           { label: 'Sửa', disabled: editDisabled, icon: <Pencil aria-hidden="true" size={15} />, onClick: onEdit },
-          { label: 'Lưu', icon: <Save aria-hidden="true" size={15} /> },
+          { label: savingNote ? 'Đang lưu' : 'Lưu', disabled: savingNote || !onSaveNote, icon: <Save aria-hidden="true" size={15} />, onClick: () => void saveNote() },
           { label: 'In', icon: <Printer aria-hidden="true" size={15} /> },
         ]}
       />

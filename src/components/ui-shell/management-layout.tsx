@@ -1,6 +1,9 @@
-import { Fragment, cloneElement, isValidElement, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type SyntheticEvent } from 'react'
-import { CalendarDays, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { Fragment, cloneElement, isValidElement, useEffect, useRef, useState, type AriaRole, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref, type SyntheticEvent } from 'react'
+import { ArrowDownToLine, CalendarDays, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
+import { managementPageSizeOptions } from '../../lib/management-page-size'
+
+const managementDetailMetaGridStackedClass = 'management-detail-meta-grid-stacked'
 
 export interface ManagementSearchSuggestion {
   id: string
@@ -12,32 +15,42 @@ export interface ManagementSearchSuggestion {
 
 export function ManagementPage({
   title,
+  titlePrefix,
   actions,
   kpis,
   filter,
   filterVisible = true,
   filterCollapsedControl,
+  className,
   children,
 }: {
   title: string
+  titlePrefix?: ReactNode
   actions?: ReactNode
   kpis?: ReactNode
   filter?: ReactNode
   filterVisible?: boolean
   filterCollapsedControl?: ReactNode
+  className?: string
   children: ReactNode
 }) {
+  const hasVisibleSidebar = filterVisible && (filter || kpis)
+  const hiddenFilterClass = filterCollapsedControl ? ' management-layout-filters-hidden' : ' management-layout-filters-none'
+
   return (
-    <main className="management-page">
+    <main className={`management-page${className ? ` ${className}` : ''}`}>
       <header className="management-page-header">
-        <h1>{title}</h1>
+        <div className="management-page-title">
+          {titlePrefix}
+          <h1>{title}</h1>
+        </div>
         {actions ? <div className="management-page-actions">{actions}</div> : null}
       </header>
       <section
         aria-label={title}
-        className={`management-layout${filterVisible && (filter || kpis) ? '' : ' management-layout-filters-hidden'}`}
+        className={`management-layout${hasVisibleSidebar ? '' : hiddenFilterClass}`}
       >
-        {filterVisible && (filter || kpis) ? (
+        {hasVisibleSidebar ? (
           <div className="management-filter-column">
             {kpis ? <div className="management-kpis">{kpis}</div> : null}
             {filter}
@@ -444,17 +457,34 @@ export function ManagementCompactCreateAction({
   )
 }
 
+export function ManagementImportButton({
+  children = 'Import',
+  onClick,
+}: {
+  children?: ReactNode
+  onClick: () => void
+}) {
+  return (
+    <button className="button button-secondary management-import-action" type="button" onClick={onClick}>
+      <ArrowDownToLine aria-hidden="true" size={16} strokeWidth={2} />
+      {children}
+    </button>
+  )
+}
+
 export function ManagementCompactToolbar({
   ariaLabel,
   children,
+  className,
   onSubmit,
 }: {
   ariaLabel: string
   children: ReactNode
+  className?: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
 }) {
   return (
-    <form aria-label={ariaLabel} className="management-compact-toolbar" role="search" onSubmit={onSubmit}>
+    <form aria-label={ariaLabel} className={`management-compact-toolbar${className ? ` ${className}` : ''}`} role="search" onSubmit={onSubmit}>
       {children}
     </form>
   )
@@ -462,6 +492,7 @@ export function ManagementCompactToolbar({
 
 export function ManagementCompactSearch({
   label,
+  className,
   placeholder,
   value,
   leadingIcon,
@@ -469,10 +500,13 @@ export function ManagementCompactSearch({
   suggestions,
   suggestionsLabel,
   emptySuggestion,
+  selectFirstSuggestionOnEnter = false,
+  inputRef,
   onChange,
   onSuggestionSelect,
 }: {
   label: string
+  className?: string
   placeholder?: string
   value: string
   leadingIcon?: ReactNode
@@ -480,19 +514,27 @@ export function ManagementCompactSearch({
   suggestions?: ManagementSearchSuggestion[]
   suggestionsLabel?: string
   emptySuggestion?: ReactNode
+  selectFirstSuggestionOnEnter?: boolean
+  inputRef?: Ref<HTMLInputElement>
   onChange: (value: string) => void
   onSuggestionSelect?: (suggestion: ManagementSearchSuggestion) => void
 }) {
   const showSuggestions = suggestions !== undefined && (suggestions.length > 0 || emptySuggestion !== undefined)
   const showClearAction = value.length > 0 && isValidElement(trailingAction) && trailingAction.type === ManagementCompactCreateAction
   return (
-    <div className="management-compact-search">
+    <div className={`management-compact-search${className ? ` ${className}` : ''}`}>
       {leadingIcon ? <span className="management-compact-search-leading">{leadingIcon}</span> : null}
       <input
         aria-label={label}
         placeholder={placeholder}
+        ref={inputRef}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (!selectFirstSuggestionOnEnter || event.key !== 'Enter' || suggestions === undefined || suggestions.length === 0) return
+          event.preventDefault()
+          onSuggestionSelect?.(suggestions[0])
+        }}
       />
       {trailingAction ? (
         <span className="management-compact-search-trailing">
@@ -558,7 +600,7 @@ export function ManagementTableFooter({
   totalDetail,
   canGoPrevious,
   canGoNext,
-  pageSizeOptions = [15, 30, 50, 100],
+  pageSizeOptions = managementPageSizeOptions,
   onPageSizeChange,
   onFirst,
   onPrevious,
@@ -573,7 +615,7 @@ export function ManagementTableFooter({
   totalDetail?: string
   canGoPrevious: boolean
   canGoNext: boolean
-  pageSizeOptions?: number[]
+  pageSizeOptions?: readonly number[]
   onPageSizeChange?: (pageSize: number) => void
   onFirst?: () => void
   onPrevious: () => void
@@ -823,20 +865,195 @@ export function ManagementInlineDetailTabs({
   )
 }
 
-export function ManagementDetailInfoList({
-  items,
+export function ManagementDetailPanel({
+  children,
+  className,
 }: {
-  items: Array<{ label: ReactNode; value: ReactNode }>
+  children: ReactNode
+  className?: string
+}) {
+  return <div className={`management-detail-panel${className ? ` ${className}` : ''}`}>{children}</div>
+}
+
+export function ManagementDetailHeader({
+  title,
+  endAction,
+  children,
+}: {
+  title: ReactNode
+  endAction?: ReactNode
+  children?: ReactNode
 }) {
   return (
-    <dl>
+    <header className="management-detail-header">
+      <h2>{title}</h2>
+      {endAction}
+      {children}
+    </header>
+  )
+}
+
+export function ManagementDetailSummary({
+  ariaLabel,
+  code,
+  metaAriaLabel,
+  metaItems,
+  title,
+}: {
+  ariaLabel: string
+  code?: ReactNode
+  metaAriaLabel?: string
+  metaItems?: Array<{ label: ReactNode; value: ReactNode }>
+  title: ReactNode
+}) {
+  return (
+    <section aria-label={ariaLabel} className="management-detail-summary" role="group">
+      <div className="management-detail-summary-main">
+        <div className="management-detail-title-line">
+          <h2>{title}</h2>
+          {code ? <span>{code}</span> : null}
+        </div>
+        {metaItems && metaItems.length > 0 ? (
+          <div aria-label={metaAriaLabel} className="management-detail-meta-line">
+            {metaItems.map((item, index) => (
+              <ManagementDetailMetaText key={`${String(item.label)}-${index}`} label={item.label} value={item.value} />
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+export function ManagementDetailSection({
+  ariaLabel,
+  children,
+  className,
+  role,
+}: {
+  ariaLabel: string
+  children: ReactNode
+  className?: string
+  role?: AriaRole
+}) {
+  return (
+    <section aria-label={ariaLabel} className={`management-detail-section${className ? ` ${className}` : ''}`} role={role}>
+      {children}
+    </section>
+  )
+}
+
+export function ManagementDetailInfoList({
+  columns,
+  items,
+}: {
+  columns?: 'auto' | 'three' | 'four'
+  items: Array<{ label: ReactNode; value: ReactNode; span?: number }>
+}) {
+  const listRef = useRef<HTMLDListElement | null>(null)
+  const [stacked, setStacked] = useState(false)
+  const gridClass = columns === 'three'
+    ? 'management-detail-meta-grid management-detail-meta-grid-three'
+    : columns === 'four'
+      ? 'management-detail-meta-grid management-detail-meta-grid-four'
+      : 'management-detail-meta-grid'
+
+  useEffect(() => {
+    const list = listRef.current
+    if (!list) return undefined
+    const detailList = list
+
+    function syncLayout() {
+      const wasStacked = detailList.classList.contains(managementDetailMetaGridStackedClass)
+      if (wasStacked) detailList.classList.remove(managementDetailMetaGridStackedClass)
+
+      const nextStacked = shouldStackManagementDetailMetaGrid(detailList)
+
+      if (wasStacked) detailList.classList.add(managementDetailMetaGridStackedClass)
+      setStacked((current) => current === nextStacked ? current : nextStacked)
+    }
+
+    syncLayout()
+
+    let observer: ResizeObserver | null = null
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(syncLayout)
+      observer.observe(detailList)
+      Array.from(detailList.children).forEach((child) => {
+        if (child instanceof Element) observer?.observe(child)
+      })
+    }
+
+    window.addEventListener('resize', syncLayout)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', syncLayout)
+    }
+  }, [items])
+
+  return (
+    <dl ref={listRef} className={`${gridClass}${stacked ? ` ${managementDetailMetaGridStackedClass}` : ''}`}>
       {items.map((item, index) => (
-        <div key={`${String(item.label)}-${index}`}>
-          <dt>{item.label}</dt>
-          <dd>{item.value}</dd>
+        <div key={`${String(item.label)}-${index}`} style={item.span ? { gridColumn: `span ${item.span}` } : undefined}>
+          <dt className="management-detail-meta-label">{item.label}</dt>
+          <dd className="management-detail-meta-value">{item.value}</dd>
         </div>
       ))}
     </dl>
+  )
+}
+
+export function ManagementDetailCard({
+  ariaLabel,
+  children,
+  className,
+  title,
+}: {
+  ariaLabel: string
+  children: ReactNode
+  className?: string
+  title: ReactNode
+}) {
+  return (
+    <section aria-label={ariaLabel} className={`management-detail-card${className ? ` ${className}` : ''}`}>
+      <h3>{title}</h3>
+      <div className="management-detail-card-body">{children}</div>
+    </section>
+  )
+}
+
+function shouldStackManagementDetailMetaGrid(list: HTMLDListElement) {
+  return Array.from(list.children).some((child) => {
+    if (!(child instanceof HTMLElement)) return false
+
+    const label = child.querySelector('dt')
+    const value = child.querySelector('dd')
+    if (!(label instanceof HTMLElement) || !(value instanceof HTMLElement)) return false
+
+    const availableWidth = child.clientWidth
+    if (availableWidth <= 0) return false
+
+    const styles = window.getComputedStyle(child)
+    const gap = Number.parseFloat(styles.columnGap || styles.gap || '0')
+    const neededWidth = label.scrollWidth + value.scrollWidth + (Number.isFinite(gap) ? gap : 0)
+
+    return neededWidth > availableWidth + 1
+  })
+}
+
+export function ManagementDetailMetaText({
+  label,
+  value,
+}: {
+  label: ReactNode
+  value: ReactNode
+}) {
+  return (
+    <span>
+      <span className="management-detail-meta-label">{label}</span>{' '}
+      <span className="management-detail-meta-value">{value}</span>
+    </span>
   )
 }
 
@@ -852,6 +1069,48 @@ export function ManagementDetailInlineNote({
       {icon}
       {children}
     </p>
+  )
+}
+
+export function ManagementDetailNote({
+  icon,
+  value,
+  fallback = 'Chưa có ghi chú',
+}: {
+  icon?: ReactNode
+  value?: string | null
+  fallback?: ReactNode
+}) {
+  const noteText = value?.trim()
+
+  return <ManagementDetailInlineNote icon={icon}>{noteText || fallback}</ManagementDetailInlineNote>
+}
+
+export function ManagementDetailNoteInput({
+  ariaLabel,
+  readOnly = false,
+  value,
+  placeholder = 'Chưa có ghi chú',
+  rows = 4,
+  onChange,
+}: {
+  ariaLabel: string
+  readOnly?: boolean
+  value: string
+  placeholder?: string
+  rows?: number
+  onChange?: (value: string) => void
+}) {
+  return (
+    <textarea
+      aria-label={ariaLabel}
+      className="management-detail-note"
+      placeholder={placeholder}
+      readOnly={readOnly}
+      rows={rows}
+      value={value}
+      onChange={(event) => onChange?.(event.target.value)}
+    />
   )
 }
 

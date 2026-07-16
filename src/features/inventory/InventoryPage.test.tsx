@@ -226,8 +226,8 @@ describe('InventoryPage', () => {
     expect(await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hàng hóa' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Phiếu kiểm kho' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Tồn theo cuộn/tấm' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Khui vật tư' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tồn theo cuộn/tấm' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Khui vật tư' })).toBeDisabled()
     expect(service.listStocktakes).toHaveBeenCalledWith(defaultStocktakeQuery)
   })
 
@@ -372,6 +372,7 @@ describe('InventoryPage', () => {
     expect(within(detail).queryByText('Ngày cân bằng')).not.toBeInTheDocument()
 
     const itemsTable = within(detail).getByRole('table', { name: 'Dòng kiểm kho KK000001' })
+    expect(itemsTable).toHaveClass('management-detail-table', 'management-detail-lines-table')
     expect(within(itemsTable).getByRole('columnheader', { name: 'Mã hàng' })).toBeInTheDocument()
     expect(within(itemsTable).getByRole('columnheader', { name: 'Tên hàng' })).toBeInTheDocument()
     expect(within(itemsTable).getByRole('columnheader', { name: 'Tồn kho' })).toBeInTheDocument()
@@ -460,7 +461,7 @@ describe('InventoryPage', () => {
     expect(createAction).toHaveClass('management-compact-create-action')
     expect(createAction.closest('.management-compact-search')).not.toBeNull()
     expect(within(toolbar).queryByRole('button', { name: '+ Kiểm kho' })).not.toBeInTheDocument()
-    expect(within(toolbar).getByRole('button', { name: 'Import KV' })).toBeInTheDocument()
+    expect(within(toolbar).getByRole('button', { name: 'Import' })).toBeInTheDocument()
     expect(within(toolbar).getByRole('button', { name: 'Xuất file' })).toBeInTheDocument()
 
     const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc phiếu kiểm kho' })
@@ -665,7 +666,7 @@ describe('InventoryPage', () => {
     })
 
     await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
-    await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
     const dialog = screen.getByRole('dialog', { name: 'Import kiểm kho KiotViet' })
     await userEvent.upload(within(dialog).getByLabelText('File KiotViet'), file)
 
@@ -689,7 +690,7 @@ describe('InventoryPage', () => {
     render(<InventoryPage service={service} />)
 
     await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
-    await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }))
     const dialog = screen.getByRole('dialog', { name: 'Import kiểm kho KiotViet' })
     await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa dữ liệu cũ' }))
     const confirmDialog = within(dialog).getByRole('alertdialog', { name: 'Xác nhận xóa dữ liệu cũ' })

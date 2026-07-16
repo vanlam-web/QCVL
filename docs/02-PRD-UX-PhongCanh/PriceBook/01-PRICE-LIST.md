@@ -43,17 +43,28 @@ KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QC-
 PriceBook dùng chung khung quản trị với Customers/Suppliers:
 
 - dùng `ManagementPage`, `ManagementCompactToolbar`, `ManagementCompactSearch`, `ManagementFilterSidebar`, `ManagementTableViewport`, `ManagementDataTable`;
+- bộ lọc bảng giá dùng `ManagementChipPicker` + `useChipSelection`, không viết picker riêng trong `PriceBookPage`;
 - bảng giá không tự render `<table>` riêng trong page;
 - dữ liệu riêng của PriceBook chỉ nằm ở cấu hình cột, cell giá động theo `priceLists`, công thức preview/apply và API load;
 - không đưa lại dropdown/listbox gợi ý dưới ô tìm;
 - POS không áp dụng rule này.
 
+Bộ lọc bảng giá hiện tại:
+
+- `Giá chung` được chọn mặc định lúc đầu nhưng vẫn là một thẻ bình thường, có thể tắt.
+- Mỗi bảng giá được chọn hiển thị thành một thẻ riêng; chọn thêm bảng giá thì thêm thẻ mới và thêm cột giá tương ứng trong lưới.
+- Bấm/focus vào ô thẻ để xổ dropdown; gõ chữ trong ô để lọc nhanh danh sách bảng giá.
+- Không có nút `Áp dụng bộ lọc`, không có nút mũi tên dropdown riêng, không có nút `+N khác` để chọn thêm.
+- Bộ lọc trạng thái hàng có thêm `Đã xoá KV` để xem các mã lịch sử có hậu tố `{DEL}`. Các mã này chỉ phục vụ đối soát/lịch sử bảng giá và chứng từ cũ, không được POS hoặc luồng vận hành mới dùng làm hàng bán.
+- Cột lưới PriceBook MVP gồm `Mã hàng`, `Tên hàng`, `Giá nhập cuối`, các cột bảng giá đang chọn và `Cách bán`; không hiển thị cột `Trạng thái` hoặc `Thao tác`.
+- Pattern thẻ chọn nhiều này là UI shared cho các bộ lọc khác sau này, không gắn chặt riêng với PriceBook.
+
 | Loại | Quy tắc |
 |---|---|
-| Bảng giá chung | Luôn có đúng một bảng giá chung đang active trong mỗi xưởng |
+| Giá chung | Luôn có đúng một giá chung đang active trong mỗi xưởng |
 | Bảng giá nhóm khách | Dùng để gán cho một hoặc nhiều nhóm khách |
 
-Khách không gán nhóm dùng bảng giá chung.
+Khách không gán nhóm dùng giá chung.
 
 ---
 
@@ -63,7 +74,7 @@ Khách không gán nhóm dùng bảng giá chung.
 |---|---|
 | Mã bảng giá | Unique trong xưởng; bấm để mở chi tiết |
 | Tên bảng giá | Tên dễ hiểu cho nhân viên |
-| Loại | Bảng giá chung hoặc bảng giá nhóm |
+| Loại | Giá chung hoặc bảng giá nhóm |
 | Nhóm khách đang dùng | Danh sách nhóm khách gán bảng giá này |
 | Số sản phẩm có giá | Số dòng giá đã khai báo |
 | Trạng thái | Đang dùng hoặc Ngừng dùng |
@@ -83,7 +94,7 @@ Khách không gán nhóm dùng bảng giá chung.
 
 Quy tắc:
 
-- Không cho tắt bảng giá chung nếu đó là bảng giá chung duy nhất.
+- Không cho tắt giá chung nếu đó là giá chung duy nhất.
 - Nếu ngừng dùng một bảng giá đang được nhóm khách sử dụng, phải yêu cầu chọn bảng giá thay thế hoặc hủy thao tác.
 - Không có chiết khấu riêng ở màn này trong Phase 1.
 
@@ -93,7 +104,7 @@ Quy tắc:
 
 KiotViet `Hàng hóa > Thiết lập giá` hiển thị bảng giá theo dạng lưới hàng hóa:
 
-- chọn bảng giá ở bộ lọc bên trái, ví dụ `Bảng giá chung`
+- chọn bảng giá ở bộ lọc bên trái, ví dụ `Giá chung`
 - lọc theo nhóm hàng, tồn kho, điều kiện giá bán
 - bảng gồm mã hàng, tên hàng, giá vốn, giá nhập cuối, cột giá của bảng đang chọn
 - ô giá có thể nhập trực tiếp trên lưới
@@ -104,12 +115,18 @@ KiotViet có thể hiển thị nhiều bảng giá ngang như `BG1`, `BG2`, `BG
 
 Export KiotViet ngày `2026-07-01` có các cột bảng giá thật:
 
-- `Bảng giá chung`
+- `Bảng giá chung` trong file KV, hiển thị trong QCVL là `Giá chung`
 - `25`
 - `26`
 - `30`
 - `35`
 - `40`
+
+Quy tắc hiển thị tên bảng giá:
+
+- Import/backend vẫn được nhận tên nguồn từ KiotViet như `Bảng giá chung` hoặc tên không dấu cũ.
+- UI QCVL phải hiển thị bảng giá mặc định là `Giá chung` thông qua helper dùng chung, không so chuỗi riêng trong từng page.
+- POS, hóa đơn, báo giá in, import preview và PriceBook phải dùng cùng mapping này để không lệch nhãn.
 
 Các nhóm khách trong export Khách hàng cũng dùng đúng các nhãn `25`, `26`, `30`, `35`, `40`, nên QC-OMS có thể import/migrate ban đầu theo các bảng giá này. UI vẫn nên cho đặt tên dễ hiểu hơn nếu Owner đổi tên sau.
 
@@ -124,7 +141,7 @@ KiotViet `Khuyến mại` có dữ liệu thật dạng `Hàng hóa - Giá bán 
 
 Giá vốn trong KiotViet hiển thị để tham khảo trên lưới thiết lập giá. QC-OMS MVP hiển thị `Giá nhập cuối` trên lưới và không cho sửa giá này trực tiếp trong ô bảng giá.
 
-Export bảng giá có nhiều dòng `Bảng giá chung = 0` và một dòng giá nhóm `26 = 0`. Theo quyết định hiện tại, giá `0` là giá hợp lệ nếu được khai báo; fallback về bảng giá chung chỉ xảy ra khi dòng giá không tồn tại/để trống trong schema QC-OMS, không phải vì giá bằng `0`.
+Export bảng giá có nhiều dòng `Bảng giá chung = 0` và một dòng giá nhóm `26 = 0`. Theo quyết định hiện tại, giá `0` là giá hợp lệ nếu được khai báo; fallback về giá chung chỉ xảy ra khi dòng giá không tồn tại/để trống trong schema QC-OMS, không phải vì giá bằng `0`.
 
 Công thức giá theo nhóm hàng là hướng cần giữ cho phase PriceBook nâng cao, nhưng slice MVP đầu chưa thêm schema/filter nhóm hàng:
 
@@ -140,7 +157,7 @@ Phần giá cần tách thành 3 lớp để đúng nghiệp vụ quảng cáo:
 
 | Lớp | Ý nghĩa | Ví dụ |
 |---|---|---|
-| Giá đã lưu | Giá chính thức POS dùng khi bán | Bảng giá chung, bảng giá nhóm `25/30/35/40` |
+| Giá đã lưu | Giá chính thức POS dùng khi bán | Giá chung, bảng giá nhóm `25/30/35/40` |
 | Công thức gợi ý | Công thức tạo giá đề xuất theo bộ lọc sản phẩm | Giá nhập cuối + chi phí + lợi nhuận |
 | Lịch sử giá khách | Giá sửa tay từng bán cho khách + sản phẩm | 5 giá gần nhất để chọn lại trong POS |
 

@@ -2,6 +2,23 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PurchaseReceiptsPage } from './PurchaseReceiptsPage'
 import type { PurchaseReceiptService } from './purchase-receipt-service'
+import type { CurrentUserData } from '../../lib/api/types'
+
+const currentUser: CurrentUserData = {
+  user: { id: 'user-1', email: 'admin@qc.local', display_name: 'Nguyễn Thị Mai Phương' },
+  organization: { id: 'org-1', code: 'QCVL', name: 'QCVL' },
+  workstation: null,
+  permissions: [],
+  devices: [],
+}
+
+const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
+
+beforeEach(() => {
+  window.name = ''
+  window.sessionStorage.clear()
+  window.localStorage.clear()
+})
 
 const suppliers = [
   {
@@ -56,6 +73,18 @@ const products = [
     inventory_shape: 'roll' as const,
   },
 ]
+
+const remoteCodeProduct = {
+  id: 'product-remote-code',
+  code: 'NGD-01',
+  name: 'Nguyên liệu decal',
+  status: 'active' as const,
+  unit_name: 'm',
+  sell_method: 'quantity' as const,
+  latest_purchase_cost: 12000,
+  latest_purchase_cost_at: null,
+  inventory_shape: 'normal' as const,
+}
 
 const receipt = {
   id: 'receipt-1',
@@ -163,6 +192,7 @@ function makeService(overrides: Partial<PurchaseReceiptService> = {}): PurchaseR
     deleteImportedKiotVietPurchaseReceipts: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
     listSuppliers: vi.fn(async () => ({ items: suppliers, page: 1, page_size: 20, total: 1 })),
     listProducts: vi.fn(async () => ({ items: products, page: 1, page_size: 20, total: 2 })),
+    createProduct: vi.fn(async () => products[0]),
     listFinanceAccounts: vi.fn(async () => ({
       items: [
         {
@@ -183,16 +213,23 @@ async function openReceiptDetail(code = 'PN000673') {
   await userEvent.click(await screen.findByRole('button', { name: code }))
 }
 
+async function addProductToCreateReceipt(query: string) {
+  const productSearch = screen.getByRole('textbox', { name: 'Tìm hàng (F3)' })
+  await userEvent.clear(productSearch)
+  await userEvent.type(productSearch, query)
+  await userEvent.keyboard('{Enter}')
+}
+
 it('lists draft purchase receipts with totals and opens post action for draft detail', async () => {
   const service = makeService()
 
-  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
 
   expect(screen.getByText('Đang tải phiếu nhập...')).toBeInTheDocument()
   expect(await screen.findByText('PN000673')).toBeInTheDocument()
   const table = screen.getByRole('table')
   const headers = Array.from(table.querySelectorAll('th')).map((header) => header.textContent?.trim())
-  expect(headers).toEqual(['', '☆', 'Mã nhập hàng', 'Nhà cung cấp', 'Tổng số lượng', 'Tổng tiền hàng', 'Cần trả NCC', 'Tiền đã trả NCC'])
+  expect(headers).toEqual(['', '☆', 'Mã nhập hàng', 'Nhà cung cấp', 'Số lượng', 'Thành tiền', 'Cần trả', 'Đã trả'])
   expect(within(table).getByRole('checkbox', { name: 'Chọn tất cả phiếu nhập' })).toBeInTheDocument()
   expect(within(table).getByRole('checkbox', { name: 'Chọn phiếu nhập PN000673' })).toBeInTheDocument()
   expect(within(table).getByRole('button', { name: 'Chỉ hiện phiếu nhập ưu tiên' })).toHaveClass('finance-cashbook-star-button')
@@ -226,7 +263,9 @@ it('lists draft purchase receipts with totals and opens post action for draft de
   expect(detail).toBeInTheDocument()
   expect(detail.closest('tr')).toHaveClass('management-detail-row')
   expect(detail.closest('section[aria-label="Phiếu nhập"]')).toHaveClass('management-layout')
-  expect(detail).toHaveClass('management-detail-panel')
+  expect(detail).not.toHaveClass('management-detail-panel')
+  expect(detail.querySelector('.management-detail-panel')).not.toBeNull()
+  expect(detail.querySelector('.management-detail-header')).not.toBeNull()
   expect(screen.getByRole('button', { name: 'Hoàn thành nhập hàng' })).toBeInTheDocument()
 })
 
@@ -253,8 +292,10 @@ it('summarizes purchase receipt validation state with scan-friendly KPI cards an
   expect(summary.closest('.management-filter-column')).not.toBeNull()
   expect(summary.closest('.management-page-header')).toBeNull()
   expect(within(summary).queryByText('Tổng phiếu')).not.toBeInTheDocument()
-  expect(within(summary).getByText('Cần trả')).toBeInTheDocument()
-  expect(within(summary).getByText('Còn phải trả')).toBeInTheDocument()
+  expect(within(summary).getByText('Tổng tiền hàng')).toBeInTheDocument()
+  expect(within(summary).getByText('Tổng nợ')).toBeInTheDocument()
+  expect(within(summary).queryByText('Cần trả')).not.toBeInTheDocument()
+  expect(within(summary).queryByText('Còn phải trả')).not.toBeInTheDocument()
   expect(screen.getByRole('complementary', { name: 'Bộ lọc phiếu nhập' })).toBeInTheDocument()
   expect(screen.getByRole('region', { name: 'Danh sách phiếu nhập' })).toBeInTheDocument()
   expect(screen.queryByRole('complementary', { name: 'Chi tiết và thao tác phiếu nhập' })).not.toBeInTheDocument()
@@ -389,6 +430,131 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
   expect(within(filterSidebar).queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
 })
 
+it('opens purchase receipt create workspace from the plus action', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+
+  const workspace = await screen.findByRole('region', { name: 'Tạo phiếu nhập' })
+  expect(workspace.querySelector('.purchase-receipt-workspace-form')).not.toBeNull()
+  expect(workspace.closest('.management-list-surface')).toBeNull()
+  expect(screen.getByRole('heading', { name: 'Nhập hàng' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Quay lại danh sách phiếu nhập' })).toBeInTheDocument()
+  expect(within(workspace).queryByRole('heading', { name: 'Nhập hàng' })).not.toBeInTheDocument()
+  expect(within(workspace).queryByText('Tạo draft phiếu nhập')).not.toBeInTheDocument()
+  expect(screen.queryByRole('search', { name: 'Lọc phiếu nhập' })).not.toBeInTheDocument()
+  expect(workspace.querySelector('.purchase-receipt-workspace-header')).toBeNull()
+  expect(within(workspace).queryByRole('textbox', { name: 'Tìm hàng nhập' })).not.toBeInTheDocument()
+  expect(screen.getByRole('search', { name: 'Tìm hàng nhập' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Tạo hàng hóa' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hàng hóa' }))
+  expect(screen.getByRole('complementary', { name: 'Tạo hàng hóa' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('button', { name: 'Đóng tạo hàng hóa' }))
+
+  const productSearch = screen.getByRole('textbox', { name: 'Tìm hàng (F3)' })
+  await userEvent.keyboard('{F8}')
+  expect(productSearch).toHaveFocus()
+  await userEvent.type(productSearch, 'decal sua')
+  expect(screen.getByRole('button', { name: 'Xóa tìm kiếm' })).toBeInTheDocument()
+  expect(await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })).toHaveTextContent('SP0001 - Decal sữa')
+  await userEvent.keyboard('{Enter}')
+  expect(within(workspace).queryByLabelText('Sản phẩm dòng 1')).not.toBeInTheDocument()
+  expect(within(workspace).getByRole('list', { name: 'Dòng hàng phiếu nhập mới' })).toHaveClass('pos-cart-lines')
+  expect(within(workspace).getByLabelText('Cột dòng hàng nhập')).toHaveTextContent('STTMã hàngTên hàngĐVTSố lượngĐơn giáGiảm giáThành tiền')
+  expect(within(workspace).getByText('Decal sữa')).toBeInTheDocument()
+  expect(within(workspace).getByText('SP0001')).toBeInTheDocument()
+  expect(within(workspace).getByLabelText('Đơn vị dòng 1')).toHaveValue('m')
+  expect(within(workspace).getByLabelText('Số lượng dòng 1')).toHaveValue(1)
+  expect(within(workspace).getByLabelText('Đơn giá dòng 1')).toHaveValue(85000)
+  expect(screen.queryByRole('button', { name: 'Xóa tìm kiếm' })).not.toBeInTheDocument()
+  expect(within(workspace).queryByRole('table', { name: 'Dòng hàng phiếu nhập mới' })).not.toBeInTheDocument()
+
+  const form = within(workspace).getByRole('form', { name: 'Thông tin phiếu nhập' })
+  expect(within(form).queryByLabelText('Nhà cung cấp')).not.toBeInTheDocument()
+  expect(within(form).getByLabelText('Tài khoản')).toHaveValue('Nguyễn Thị Mai Phương')
+  expect(within(form).getByLabelText('Mã phiếu nhập')).toHaveAttribute('placeholder', 'Mã phiếu tự động')
+  expect(within(form).getByLabelText('Số hóa đơn đầu vào')).toBeInTheDocument()
+  expect(within(form).getByText('Tổng tiền hàng')).toBeInTheDocument()
+  expect(within(form).getByText('Tổng nợ')).toBeInTheDocument()
+
+  expect(within(workspace).getByRole('button', { name: 'Lưu tạm' })).toBeInTheDocument()
+  expect(within(workspace).getByRole('button', { name: 'Hoàn thành' })).toBeInTheDocument()
+  expect(within(workspace).queryByRole('button', { name: 'In' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('table', { name: 'Danh sách phiếu nhập' })).not.toBeInTheDocument()
+})
+
+it('restores the in-progress purchase receipt create workspace after remounting', async () => {
+  const service = makeService()
+
+  const { unmount } = render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  await userEvent.type(within(form).getByLabelText('Số hóa đơn đầu vào'), 'HD-DANG-NHAP')
+  await addProductToCreateReceipt('SP0001')
+  await userEvent.clear(within(form).getByLabelText('Số lượng dòng 1'))
+  await userEvent.type(within(form).getByLabelText('Số lượng dòng 1'), '3')
+
+  await waitFor(() => {
+    expect(window.localStorage.getItem(receiptCreateDraftStorageKey)).toContain('HD-DANG-NHAP')
+    expect(window.localStorage.getItem(receiptCreateDraftStorageKey)).toContain('product-1')
+  })
+
+  unmount()
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={makeService()} onOpenDashboard={vi.fn()} />)
+
+  const restoredWorkspace = await screen.findByRole('region', { name: 'Tạo phiếu nhập' })
+  const restoredForm = within(restoredWorkspace).getByRole('form', { name: 'Thông tin phiếu nhập' })
+  expect(screen.getByRole('heading', { name: 'Nhập hàng' })).toBeInTheDocument()
+  expect(screen.queryByRole('search', { name: 'Lọc phiếu nhập' })).not.toBeInTheDocument()
+  expect(within(restoredForm).getByLabelText('Số hóa đơn đầu vào')).toHaveValue('HD-DANG-NHAP')
+  expect(within(restoredForm).getByText('SP0001')).toBeInTheDocument()
+  expect(within(restoredForm).getByText('Decal sữa')).toBeInTheDocument()
+  expect(within(restoredForm).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+})
+
+it('searches remote products by code when creating purchase receipts', async () => {
+  const listProducts = vi.fn(async (input: { search?: string } = {}) => {
+    if (input.search === 'NGD-01') {
+      return { items: [remoteCodeProduct], page: 1, page_size: 20, total: 1 }
+    }
+    if (input.search) {
+      return { items: [], page: 1, page_size: 20, total: 0 }
+    }
+    return { items: products, page: 1, page_size: 20, total: 3 }
+  })
+  const service = makeService({ listProducts })
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  const createButton = document.querySelector<HTMLButtonElement>('.management-compact-create-action')
+  expect(createButton).not.toBeNull()
+  await userEvent.click(createButton as HTMLButtonElement)
+  await waitFor(() => expect(document.querySelector('.purchase-receipt-workspace')).not.toBeNull())
+  const workspace = document.querySelector<HTMLElement>('.purchase-receipt-workspace') as HTMLElement
+  const productSearch = document.querySelector<HTMLInputElement>('.purchase-receipt-product-search-toolbar input') as HTMLInputElement
+  expect(productSearch).not.toBeNull()
+
+  await userEvent.type(productSearch, 'NGD-01')
+
+  await waitFor(() => expect(listProducts).toHaveBeenCalledWith({
+    status: 'active',
+    search: 'NGD-01',
+    page: 1,
+    page_size: 20,
+  }))
+  expect(await screen.findByText(/NGD-01/)).toBeInTheDocument()
+  await userEvent.keyboard('{Enter}')
+
+  expect(within(workspace).getByText('NGD-01')).toBeInTheDocument()
+})
+
 it('creates a draft receipt for normal items with computed totals shown locally', async () => {
   const service = makeService()
 
@@ -399,11 +565,10 @@ it('creates a draft receipt for normal items with computed totals shown locally'
   const detail = await screen.findByRole('region', { name: 'Tạo phiếu nhập' })
   expect(detail).toBeInTheDocument()
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
-  await userEvent.selectOptions(within(form).getByLabelText('Nhà cung cấp'), 'supplier-1')
   await userEvent.clear(within(form).getByLabelText('Thời gian nhập'))
   await userEvent.type(within(form).getByLabelText('Thời gian nhập'), '2026-07-01T10:00')
-  await userEvent.type(within(form).getByLabelText('Số chứng từ NCC'), 'HD-NCC-001')
-  await userEvent.selectOptions(within(form).getByLabelText('Sản phẩm dòng 1'), 'product-1')
+  await userEvent.type(within(form).getByLabelText('Số hóa đơn đầu vào'), 'HD-NCC-001')
+  await addProductToCreateReceipt('SP0001')
   expect(within(form).getByLabelText('Đơn vị dòng 1')).toHaveAttribute('readonly')
   await userEvent.clear(within(form).getByLabelText('Số lượng dòng 1'))
   await userEvent.type(within(form).getByLabelText('Số lượng dòng 1'), '2')
@@ -416,11 +581,12 @@ it('creates a draft receipt for normal items with computed totals shown locally'
   await userEvent.clear(within(form).getByLabelText('Đã trả tạm'))
   await userEvent.type(within(form).getByLabelText('Đã trả tạm'), '50000')
 
-  expect(within(form).getByText('Tổng tiền hàng: 190 000')).toBeInTheDocument()
-  expect(within(form).getByText('Cần trả NCC: 180 000')).toBeInTheDocument()
-  expect(within(form).getByText('Còn phải trả: 130 000')).toBeInTheDocument()
+  expect(within(form).getByText('Tổng tiền hàng')).toBeInTheDocument()
+  expect(within(form).getByText('Tổng nợ')).toBeInTheDocument()
+  expect(within(form).getAllByText('190 000').length).toBeGreaterThan(0)
+  expect(within(form).getByText('130 000')).toBeInTheDocument()
 
-  await userEvent.click(within(form).getByRole('button', { name: 'Lưu draft phiếu nhập' }))
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
 
   expect(service.createReceipt).toHaveBeenCalledWith({
     code: '',
@@ -452,10 +618,9 @@ it('creates a roll draft line from physical roll lengths without manual object c
   await screen.findByText('PN000673')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
   const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
-  await userEvent.selectOptions(within(form).getByLabelText('Nhà cung cấp'), 'supplier-1')
   await userEvent.clear(within(form).getByLabelText('Thời gian nhập'))
   await userEvent.type(within(form).getByLabelText('Thời gian nhập'), '2026-07-01T10:00')
-  await userEvent.selectOptions(within(form).getByLabelText('Sản phẩm dòng 1'), 'product-3')
+  await addProductToCreateReceipt('SP0003')
 
   expect(within(form).queryByLabelText(/mã cuộn/i)).not.toBeInTheDocument()
   await userEvent.clear(within(form).getByLabelText('Khổ rộng cuộn dòng 1'))
@@ -465,7 +630,7 @@ it('creates a roll draft line from physical roll lengths without manual object c
   expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
   expect(within(form).getByText('3 cuộn, khổ 3.2m, tổng 464.000 m²')).toBeInTheDocument()
 
-  await userEvent.click(within(form).getByRole('button', { name: 'Lưu draft phiếu nhập' }))
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
 
   expect(service.createReceipt).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -490,10 +655,9 @@ it('creates a sheet draft line with multiple size groups', async () => {
   await screen.findByText('PN000673')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
   const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
-  await userEvent.selectOptions(within(form).getByLabelText('Nhà cung cấp'), 'supplier-1')
   await userEvent.clear(within(form).getByLabelText('Thời gian nhập'))
   await userEvent.type(within(form).getByLabelText('Thời gian nhập'), '2026-07-01T10:00')
-  await userEvent.selectOptions(within(form).getByLabelText('Sản phẩm dòng 1'), 'product-2')
+  await addProductToCreateReceipt('SP0002')
   await userEvent.clear(within(form).getByLabelText('Rộng nhóm 1 dòng 1'))
   await userEvent.type(within(form).getByLabelText('Rộng nhóm 1 dòng 1'), '1.22')
   await userEvent.clear(within(form).getByLabelText('Dài nhóm 1 dòng 1'))
@@ -508,7 +672,7 @@ it('creates a sheet draft line with multiple size groups', async () => {
   expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
   expect(within(form).getByText('3 tấm, 2 nhóm kích thước, tổng 7.954 m²')).toBeInTheDocument()
 
-  await userEvent.click(within(form).getByRole('button', { name: 'Lưu draft phiếu nhập' }))
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
 
   expect(service.createReceipt).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -554,12 +718,23 @@ it('opens posted receipts as view-only details', async () => {
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await openReceiptDetail('PN000674')
-  const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000674' })
+  const lineTable = within(detail).getByRole('table', { name: 'Dòng hàng phiếu nhập' })
+  const note = within(detail).getByRole('textbox', { name: 'Ghi chú phiếu nhập' })
 
-  expect(within(form).getByRole('heading', { name: 'Xem phiếu nhập' })).toBeInTheDocument()
-  expect(within(form).queryByRole('button', { name: 'Hoàn thành nhập hàng' })).not.toBeInTheDocument()
-  expect(within(form).queryByRole('button', { name: 'Lưu draft phiếu nhập' })).not.toBeInTheDocument()
-  expect(within(form).getByLabelText('Nhà cung cấp')).toBeDisabled()
+  expect(within(detail).queryByRole('heading', { name: 'Xem phiếu nhập' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('button', { name: 'Hoàn thành nhập hàng' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('button', { name: 'Tạo mới' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('button', { name: 'In tem nhãn' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('button', { name: 'Trả hàng nhập' })).not.toBeInTheDocument()
+  expect(within(detail).getByRole('button', { name: 'In' })).toBeInTheDocument()
+  expect(within(detail).queryByRole('form', { name: 'Thông tin phiếu nhập' })).not.toBeInTheDocument()
+  expect(note).toHaveClass('management-detail-note')
+  expect(note).toHaveAttribute('readonly')
+  expect(lineTable).toHaveClass('management-detail-table', 'management-detail-lines-table')
+  expect(within(lineTable).getByText('SP0001')).toBeInTheDocument()
+  expect(within(lineTable).getByText('Decal sữa')).toBeInTheDocument()
+  expect(within(detail).getByText('Cần trả NCC')).toBeInTheDocument()
 })
 
 it('shows supplier payment history and pays remaining amount from posted receipt detail', async () => {
@@ -571,12 +746,15 @@ it('shows supplier payment history and pays remaining amount from posted receipt
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await openReceiptDetail('PN000674')
-  const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000674' })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử thanh toán' }))
 
-  expect(within(form).getByText('Lịch sử thanh toán NCC')).toBeInTheDocument()
-  expect(within(form).getByText('PCPN000001')).toBeInTheDocument()
-  expect(within(form).getByText('50 000')).toBeInTheDocument()
-  await userEvent.click(within(form).getByRole('button', { name: 'Thanh toán NCC' }))
+  expect(within(detail).queryByRole('form', { name: 'Thông tin phiếu nhập' })).not.toBeInTheDocument()
+  expect(within(detail).getByRole('region', { name: 'Lịch sử thanh toán NCC' })).toBeInTheDocument()
+  expect(within(detail).getByText('PCPN000001')).toBeInTheDocument()
+  expect(within(detail).getByText('Đã thanh toán')).toHaveClass('status-chip', 'status-chip-success')
+  expect(within(detail).getByText('50 000')).toBeInTheDocument()
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán NCC' }))
   const paymentForm = screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })
   expect(within(paymentForm).getByText('PN000674')).toBeInTheDocument()
   expect(within(paymentForm).getByText('Còn nợ: 80 000')).toBeInTheDocument()
@@ -587,6 +765,56 @@ it('shows supplier payment history and pays remaining amount from posted receipt
     payment_method: 'cash',
     allocations: [{ purchase_receipt_id: 'receipt-posted', amount: 80000 }],
   })
+})
+
+it('shows imported paid amount as a supplier payment history row', async () => {
+  const importedPaidReceipt = {
+    ...receipt,
+    status: 'posted' as const,
+    paid_amount: 50000,
+    remaining_amount: 0,
+    supplier_payments: [],
+  }
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({ items: [importedPaidReceipt], page: 1, page_size: 15, total: 1 })),
+    getReceipt: vi.fn(async () => importedPaidReceipt),
+  })
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openReceiptDetail('PN000673')
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000673' })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử thanh toán' }))
+
+  const history = within(detail).getByRole('region', { name: 'Lịch sử thanh toán NCC' })
+  expect(within(history).queryByText('Chưa có thanh toán NCC sau nhập.')).not.toBeInTheDocument()
+  expect(within(history).getByText('PCPN000673')).toBeInTheDocument()
+  expect(within(history).getByText('Chuyển khoản')).toBeInTheDocument()
+  expect(within(history).getByText('Đã thanh toán')).toHaveClass('status-chip', 'status-chip-success')
+  expect(within(history).getByText('50 000')).toBeInTheDocument()
+})
+
+it('hides payment history tab when posted receipt has no payment history', async () => {
+  const unpaidPostedReceipt = {
+    ...receipt,
+    status: 'posted' as const,
+    paid_amount: 0,
+    remaining_amount: 180000,
+    supplier_payments: [],
+  }
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({ items: [unpaidPostedReceipt], page: 1, page_size: 15, total: 1 })),
+    getReceipt: vi.fn(async () => unpaidPostedReceipt),
+  })
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openReceiptDetail('PN000673')
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000673' })
+
+  expect(within(detail).queryByRole('tab', { name: 'Lịch sử thanh toán' })).not.toBeInTheDocument()
+  expect(within(detail).queryByRole('region', { name: 'Lịch sử thanh toán NCC' })).not.toBeInTheDocument()
+  expect(within(detail).getByRole('button', { name: 'Thanh toán NCC' })).toBeInTheDocument()
 })
 
 it('warns on low purchase cost and posts with a selected bank account', async () => {
@@ -601,13 +829,14 @@ it('warns on low purchase cost and posts with a selected bank account', async ()
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await openReceiptDetail()
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000673' })
   const form = screen.getByRole('form', { name: 'Thông tin phiếu nhập' })
 
   expect(within(form).getByText(/thấp hơn giá nhập cuối/i)).toBeInTheDocument()
   await userEvent.selectOptions(within(form).getByLabelText('Phương thức trả ngay'), 'bank_transfer')
   await screen.findByText('VCB - Vietcombank')
   await userEvent.selectOptions(within(form).getByLabelText('Tài khoản chuyển khoản'), 'bank-1')
-  await userEvent.click(within(form).getByRole('button', { name: 'Hoàn thành nhập hàng' }))
+  await userEvent.click(within(detail).getByRole('button', { name: 'Hoàn thành nhập hàng' }))
 
   expect(service.postReceipt).toHaveBeenCalledWith('receipt-1', {
     payment_method: 'bank_transfer',
@@ -621,7 +850,7 @@ it('opens KiotViet purchase receipt import and deletes old import data from the 
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await screen.findByText('PN000673')
-  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Import' }))
   const dialog = screen.getByRole('dialog', { name: 'Import nhập hàng KiotViet' })
 
   expect(dialog).toBeInTheDocument()
@@ -658,7 +887,7 @@ it('explains why purchase receipt import is disabled when supplier or product co
   render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
 
   await screen.findByText('PN000673')
-  await userEvent.click(screen.getByRole('button', { name: 'Import KV' }))
+  await userEvent.click(screen.getByRole('button', { name: 'Import' }))
   const dialog = screen.getByRole('dialog', { name: 'Import nhập hàng KiotViet' })
   const input = within(dialog).getByLabelText('File KiotViet')
   await userEvent.upload(input, file)
@@ -666,4 +895,29 @@ it('explains why purchase receipt import is disabled when supplier or product co
 
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chưa thể import vì còn thiếu 1 mã NCC và 2 mã hàng.')
   expect(within(dialog).getByRole('button', { name: 'Import' })).toBeDisabled()
+})
+
+it('uses a denser purchase receipt page size on wide management screens', async () => {
+  Object.defineProperty(window, 'innerWidth', {
+    configurable: true,
+    value: 2209,
+  })
+  const service = makeService({
+    listReceipts: vi.fn(async (input = {}) => ({
+      items: [receipt],
+      page: 1,
+      page_size: input.page_size ?? 15,
+      total: 1,
+    })),
+  })
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await waitFor(() => expect(service.listReceipts).toHaveBeenCalledWith(expect.objectContaining({
+    status: 'posted',
+    page: 1,
+    page_size: 30,
+  })))
+  const footer = await screen.findByRole('navigation', { name: 'Phân trang phiếu nhập' })
+  expect(within(footer).getByRole('combobox', { name: 'Số dòng hiển thị' })).toHaveValue('30')
 })

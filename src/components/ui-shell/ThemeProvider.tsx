@@ -4,8 +4,8 @@ import { ThemeContext, useTheme, type Theme } from './theme-context'
 const storageKey = 'qc-oms-theme'
 
 function readStoredTheme(): Theme {
-  if (typeof window === 'undefined') return 'light'
-  return window.localStorage.getItem(storageKey) === 'dark' ? 'dark' : 'light'
+  if (typeof window === 'undefined') return 'dark'
+  return window.localStorage.getItem(storageKey) === 'light' ? 'light' : 'dark'
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {

@@ -2,7 +2,10 @@ import { describe, expect, test } from 'vitest'
 import type { CashbookEntryData, FinanceAccountData } from '../server/http.js'
 import {
   cashbookEntriesFromState,
+  devMemoryProductCodeFromId,
+  flattenNamedSalePriceRows,
   financeAccountsFromState,
+  remapImportedOrderItemProductId,
   summarizeDevMemoryState,
 } from './import-dev-memory-state-to-postgres.js'
 
@@ -40,6 +43,30 @@ describe('dev-memory to PostgreSQL import helpers', () => {
     } as const
 
     expect(financeAccountsFromState(state)).toEqual([account])
+  })
+
+  test('maps legacy dev-memory product ids to PostgreSQL product ids for imported order lines', () => {
+    const idsByDevProductId = new Map([
+      ['product-ib', 'uuid-in-bat'],
+      ['product-sp000299-del', 'uuid-deleted-product'],
+    ])
+
+    expect(devMemoryProductCodeFromId('product-ib')).toBe('IB')
+    expect(devMemoryProductCodeFromId('product-sp000299-del')).toBe('SP000299')
+    expect(devMemoryProductCodeFromId('0d813d54-9bbe-4dfc-a58a-816120f168c9')).toBeNull()
+    expect(remapImportedOrderItemProductId('product-ib', idsByDevProductId)).toBe('uuid-in-bat')
+    expect(remapImportedOrderItemProductId('product-missing', idsByDevProductId)).toBe('product-missing')
+  })
+
+  test('flattens named price lists for PostgreSQL import', () => {
+    expect(flattenNamedSalePriceRows([
+      ['25', [['IB', 27000], ['DCI', 50000]]],
+      ['40', [['IB', 40000]]],
+    ])).toEqual([
+      { product_code: 'IB', price_list_name: '25', unit_price: 27000 },
+      { product_code: 'DCI', price_list_name: '25', unit_price: 50000 },
+      { product_code: 'IB', price_list_name: '40', unit_price: 40000 },
+    ])
   })
 })
 

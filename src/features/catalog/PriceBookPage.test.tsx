@@ -15,6 +15,8 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
           unit_name: 'm',
           sell_method: 'linear_m' as const,
           latest_purchase_cost: 100000,
+          default_sale_price: 150000,
+          price_list_prices: { 'pl-default': 150000, 'pl-25': 125000 },
         },
       ],
       page: 1,
@@ -85,7 +87,7 @@ it('renders the price book as a separate grid-first workspace', async () => {
   render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
 
   expect(screen.getByText('Đang tải bảng giá...')).toBeInTheDocument()
-  expect(await screen.findByRole('heading', { name: 'Bảng giá' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { level: 1, name: 'Bảng giá' })).toBeInTheDocument()
   expect(screen.getByRole('main')).toHaveClass('management-page')
   expect(screen.queryByRole('form', { name: 'Tạo hàng hóa' })).not.toBeInTheDocument()
 
@@ -97,7 +99,7 @@ it('renders the price book as a separate grid-first workspace', async () => {
   expect(filterForm.closest('.management-filter-sidebar')).not.toBeNull()
   const filterSidebar = screen.getByRole('complementary', { name: 'Bộ lọc bảng giá' })
   expect(filterForm).toHaveClass('management-filter-sidebar-form')
-  expect(within(filterSidebar).getByRole('button', { name: 'Áp dụng bộ lọc' }).closest('.management-filter-actions')).not.toBeNull()
+  expect(within(filterSidebar).queryByRole('button', { name: 'Áp dụng bộ lọc' })).not.toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: 'Phân trang bảng giá' })).toHaveTextContent('1 - 1 trong 1 hàng hóa')
   await userEvent.type(within(searchForm).getByLabelText('Tìm bảng giá'), 'MICA')
   await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({
@@ -111,13 +113,70 @@ it('renders the price book as a separate grid-first workspace', async () => {
   expect(grid).toHaveClass('management-table')
   expect(grid.closest('.management-table-viewport')).not.toBeNull()
   const header = within(grid).getByRole('row', {
-    name: 'Mã hàng Tên hàng Giá nhập cuối Chi phí Lợi nhuận Bảng giá chung 25 Cách bán Trạng thái Thao tác',
+    name: 'Mã hàng Tên hàng Giá nhập cuối Giá chung Cách bán',
   })
   expect(header).toBeInTheDocument()
-  expect(within(grid).getAllByRole('cell', { name: 'Chưa cấu hình' })).toHaveLength(2)
-  expect(within(grid).getAllByRole('cell', { name: 'Chưa xem' })).toHaveLength(2)
+  expect(within(grid).getByRole('cell', { name: '150 000' })).toBeInTheDocument()
+  expect(within(grid).queryByRole('columnheader', { name: '25' })).not.toBeInTheDocument()
   expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 15 })
   expect(service.listPriceLists).toHaveBeenCalled()
+})
+
+it('applies the status filter immediately without an apply action', async () => {
+  const service = makeService()
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByRole('table', { name: 'Lưới bảng giá' })
+
+  await userEvent.click(screen.getByLabelText('Ngưng bán'))
+
+  await waitFor(() => expect(service.listProducts).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 20,
+    search: undefined,
+    status: 'inactive',
+  }))
+
+  await userEvent.click(screen.getByLabelText('Đã xoá KV'))
+
+  await waitFor(() => expect(service.listProducts).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 20,
+    search: undefined,
+    status: 'deleted',
+  }))
+})
+
+it('adds price list columns from the reusable chip picker', async () => {
+  const service = makeService()
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const grid = await screen.findByRole('table', { name: 'Lưới bảng giá' })
+  expect(within(grid).queryByRole('columnheader', { name: '25' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Mở Chọn bảng giá' })).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('textbox', { name: 'Chọn bảng giá' }))
+  await userEvent.click(screen.getByRole('option', { name: '25' }))
+
+  expect(within(grid).getByRole('columnheader', { name: '25' })).toBeInTheDocument()
+  expect(within(grid).getByRole('cell', { name: '125 000' })).toBeInTheDocument()
+})
+
+it('starts with the default price list selected but lets users remove it', async () => {
+  const service = makeService()
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const grid = await screen.findByRole('table', { name: 'Lưới bảng giá' })
+  expect(within(grid).getByRole('columnheader', { name: 'Giá chung' })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Bỏ Giá chung' }))
+
+  expect(within(grid).queryByRole('columnheader', { name: 'Giá chung' })).not.toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('textbox', { name: 'Chọn bảng giá' }))
+  await userEvent.click(screen.getByRole('option', { name: 'Giá chung' }))
+
+  expect(within(grid).getByRole('columnheader', { name: 'Giá chung' })).toBeInTheDocument()
 })
 
 it('sorts price book rows from shared column headers', async () => {
@@ -141,6 +200,8 @@ it('sorts price book rows from shared column headers', async () => {
           unit_name: 'm',
           sell_method: 'linear_m' as const,
           latest_purchase_cost: 100000,
+          default_sale_price: 150000,
+          price_list_prices: { 'pl-default': 150000, 'pl-25': 125000 },
         },
       ],
       page: 1,
@@ -161,11 +222,66 @@ it('sorts price book rows from shared column headers', async () => {
   expect(within(grid).getByRole('columnheader', { name: 'Giá nhập cuối' })).toHaveAttribute('aria-sort', 'descending')
 })
 
+it('sorts price book rows by latest created or updated time by default', async () => {
+  const service = makeService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-old',
+          code: 'OLD',
+          name: 'Hàng cũ',
+          status: 'active' as const,
+          unit_name: 'cái',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 10000,
+          created_at: '2026-07-01T08:00:00.000Z',
+          updated_at: '2026-07-01T08:00:00.000Z',
+        },
+        {
+          id: 'p-created',
+          code: 'NEW',
+          name: 'Hàng mới tạo',
+          status: 'active' as const,
+          unit_name: 'cái',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 20000,
+          created_at: '2026-07-15T08:00:00.000Z',
+          updated_at: null,
+        },
+        {
+          id: 'p-updated',
+          code: 'EDIT',
+          name: 'Hàng mới sửa',
+          status: 'active' as const,
+          unit_name: 'cái',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 30000,
+          created_at: '2026-07-02T08:00:00.000Z',
+          updated_at: '2026-07-16T08:00:00.000Z',
+        },
+      ],
+      page: 1,
+      page_size: 20,
+      total: 3,
+    })),
+  })
+
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const grid = await screen.findByRole('table', { name: 'Lưới bảng giá' })
+  const rows = within(grid).getAllByRole('row')
+  expect(rows[1]).toHaveTextContent('EDIT')
+  expect(rows[2]).toHaveTextContent('NEW')
+  expect(rows[3]).toHaveTextContent('OLD')
+})
+
 it('previews and applies formula results in the price book grid', async () => {
   const service = makeService()
   render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
 
-  expect(await screen.findByText('Bảng giá chung')).toBeInTheDocument()
+  expect(await screen.findByRole('columnheader', { name: 'Giá chung' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('textbox', { name: 'Chọn bảng giá' }))
+  await userEvent.click(screen.getByRole('option', { name: '25' }))
 
   await userEvent.click(screen.getByRole('button', { name: 'Tạo công thức cho bộ lọc này' }))
   await userEvent.type(screen.getByLabelText('Tên công thức'), 'Fomex')
@@ -179,8 +295,8 @@ it('previews and applies formula results in the price book grid', async () => {
   await userEvent.selectOptions(screen.getByLabelText('Điều kiện lợi nhuận'), '>')
   await userEvent.type(screen.getByLabelText('Mốc giá nhập'), '100000')
   await userEvent.type(screen.getByLabelText('Lợi nhuận tier'), '25000')
-  await userEvent.selectOptions(screen.getByLabelText('Điều chỉnh Bảng giá chung'), 'amount')
-  await userEvent.type(screen.getByLabelText('Giá trị điều chỉnh Bảng giá chung'), '20000')
+  await userEvent.selectOptions(screen.getByLabelText('Điều chỉnh Giá chung'), 'amount')
+  await userEvent.type(screen.getByLabelText('Giá trị điều chỉnh Giá chung'), '20000')
   await userEvent.click(screen.getByRole('button', { name: 'Xem trước' }))
 
   expect(await screen.findAllByText('150 000')).toHaveLength(2)
@@ -201,4 +317,47 @@ it('previews and applies formula results in the price book grid', async () => {
       { product_id: 'p-1', price_list_id: 'pl-25' },
     ],
   })
+})
+
+it('opens KiotViet price import from the price book toolbar', async () => {
+  const service = makeService({
+    previewKiotVietProductImport: vi.fn(async () => ({
+      summary: {
+        total_rows: 3,
+        valid_rows: 3,
+        invalid_rows: 0,
+        create_rows: 0,
+        update_rows: 3,
+        unit_review_rows: 0,
+        price_rows: 5,
+        price_skipped_rows: 0,
+        provisional_stock_rows: 2,
+        provisional_stock_skipped_rows: 1,
+        bom_rows: 0,
+        bom_skipped_rows: 3,
+        price_list_name: 'Bảng giá chung',
+        cleanup_demo_requested: false,
+        ignored_columns: [],
+        deferred_columns: [],
+      },
+      invalid_rows: [],
+    })),
+    importKiotVietProducts: vi.fn(async () => ({
+      summary: { created_rows: 0, updated_rows: 3, cleanup_deleted_rows: 0, cleanup_blocked_rows: 0 },
+      invalid_rows: [],
+    })),
+  })
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const toolbar = await screen.findByRole('search', { name: 'Tìm bảng giá' })
+  await userEvent.click(within(toolbar).getByRole('button', { name: 'Import' }))
+
+  const dialog = screen.getByRole('dialog', { name: 'Import bảng giá KiotViet' })
+  const file = new File(['dummy'], 'BangGia_KV.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  await userEvent.upload(within(dialog).getByLabelText('File KiotViet'), file)
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Xem trước' }))
+  await userEvent.click(await within(dialog).findByRole('button', { name: 'Import' }))
+
+  expect(service.previewKiotVietProductImport).toHaveBeenCalledWith({ file, cleanup_demo: false })
+  expect(service.importKiotVietProducts).toHaveBeenCalledWith({ file, cleanup_demo: false })
 })

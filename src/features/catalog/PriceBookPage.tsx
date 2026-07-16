@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
+import { displayPriceListName } from '../../lib/price-list-display'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -10,15 +11,20 @@ import {
   type ManagementDataTableColumn,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
+import { ManagementChipPicker } from '../../components/ui-shell/ManagementChipPicker'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { useChipSelection } from '../../components/ui-shell/use-chip-selection'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
+import { ProductImportDialog } from './ProductImportDialog'
 import type {
   PriceFormulaInput,
   PriceFormulaPreview,
@@ -26,7 +32,7 @@ import type {
   PriceFormulaPreviewPrice,
   PriceList,
   Product,
-  ProductStatus,
+  ProductStatusFilter,
   SellMethod,
 } from './types'
 
@@ -38,8 +44,6 @@ interface PriceBookState {
   total: number
 }
 
-const priceBookPageSize = 15
-
 const sellMethodLabels: Record<SellMethod, string> = {
   quantity: 'Số lượng',
   area_m2: 'm²',
@@ -50,6 +54,21 @@ const sellMethodLabels: Record<SellMethod, string> = {
 
 type AdjustmentMode = 'none' | 'amount' | 'percent'
 
+function productActivityTime(product: Pick<Product, 'created_at' | 'updated_at'>) {
+  const createdAt = Date.parse(product.created_at ?? '')
+  const updatedAt = Date.parse(product.updated_at ?? '')
+  const validCreatedAt = Number.isFinite(createdAt) ? createdAt : 0
+  const validUpdatedAt = Number.isFinite(updatedAt) ? updatedAt : 0
+  return Math.max(validCreatedAt, validUpdatedAt)
+}
+
+function newestPriceBookProductsFirst(products: readonly Product[]) {
+  return [...products].sort((left, right) => {
+    const compared = productActivityTime(right) - productActivityTime(left)
+    return compared === 0 ? left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' }) : compared
+  })
+}
+
 export function PriceBookPage({
   service,
 }: {
@@ -59,16 +78,18 @@ export function PriceBookPage({
   const [state, setState] = useState<PriceBookState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [formulaOpen, setFormulaOpen] = useState(false)
+  const [priceImportOpen, setPriceImportOpen] = useState(false)
   const [previewingFormula, setPreviewingFormula] = useState(false)
   const [applyingFormula, setApplyingFormula] = useState(false)
   const [formulaPreview, setFormulaPreview] = useState<PriceFormulaPreview | null>(null)
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState('')
   const [lastSearch, setLastSearch] = useState('')
-  const [status, setStatus] = useState<ProductStatus | 'all'>('active')
-  const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
+  const [status, setStatus] = useState<ProductStatusFilter>('active')
+  const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(priceBookPageSize)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [formulaForm, setFormulaForm] = useState({
     name: '',
     codeContains: '',
@@ -84,7 +105,7 @@ export function PriceBookPage({
     tierAmount: '',
     adjustments: {} as Record<string, { mode: AdjustmentMode; value: string }>,
   })
-  async function load(filters: { search?: string; status?: ProductStatus | 'all'; page?: number; page_size?: number } = {}) {
+  async function load(filters: { search?: string; status?: ProductStatusFilter; page?: number; page_size?: number } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextStatus = filters.status ?? lastStatus
     const nextPage = filters.page ?? page
@@ -120,7 +141,7 @@ export function PriceBookPage({
         setError(null)
         try {
         const [result, priceListResult] = await Promise.all([
-          service.listProducts({ page: 1, page_size: priceBookPageSize, status: 'active' }),
+          service.listProducts({ page: 1, page_size: defaultPageSize, status: 'active' }),
           service.listPriceLists(),
         ])
         if (!active) return
@@ -143,7 +164,7 @@ export function PriceBookPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [defaultPageSize, service])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyProductSearch(search))
@@ -251,7 +272,12 @@ export function PriceBookPage({
   }
 
   function renderPriceListCell(product: Product, priceList: PriceList): string {
-    if (formulaPreview === null) return 'Chưa xem'
+    if (formulaPreview === null) {
+      const unitPrice = priceList.is_default
+        ? product.default_sale_price
+        : product.price_list_prices?.[priceList.id]
+      return formatMoney(unitPrice ?? 0)
+    }
 
     const previewItem = findPreviewItem(product.id)
     const previewPrice = findPreviewPrice(previewItem, priceList.id)
@@ -284,21 +310,9 @@ export function PriceBookPage({
         headerIsCell: true,
         cell: (product) => formatMoney(product.latest_purchase_cost ?? 0),
       },
-      {
-        key: 'cost',
-        header: <ManagementSortableHeader kind="text" sortKey="cost" sortState={priceBookSortState} onSort={requestPriceBookSort}>Chi phí</ManagementSortableHeader>,
-        headerIsCell: true,
-        cell: () => 'Chưa cấu hình',
-      },
-      {
-        key: 'profit',
-        header: <ManagementSortableHeader kind="text" sortKey="profit" sortState={priceBookSortState} onSort={requestPriceBookSort}>Lợi nhuận</ManagementSortableHeader>,
-        headerIsCell: true,
-        cell: () => 'Chưa cấu hình',
-      },
       ...priceLists.map((priceList) => ({
         key: `price-list-${priceList.id}`,
-        header: <ManagementSortableHeader kind="text" sortKey={`price-list-${priceList.id}`} sortState={priceBookSortState} onSort={requestPriceBookSort}>{priceList.name}</ManagementSortableHeader>,
+        header: <ManagementSortableHeader kind="text" sortKey={`price-list-${priceList.id}`} sortState={priceBookSortState} onSort={requestPriceBookSort}>{displayPriceListName(priceList)}</ManagementSortableHeader>,
         headerIsCell: true,
         cell: (product: Product) => renderPriceListCell(product, priceList),
       })),
@@ -308,40 +322,56 @@ export function PriceBookPage({
         headerIsCell: true,
         cell: (product) => sellMethodLabels[product.sell_method],
       },
-      {
-        key: 'status',
-        header: <ManagementSortableHeader kind="text" sortKey="status" sortState={priceBookSortState} onSort={requestPriceBookSort}>Trạng thái</ManagementSortableHeader>,
-        headerIsCell: true,
-        cell: (product) => (product.status === 'active' ? 'Đang bán' : 'Ngưng bán'),
-      },
-      { key: 'actions', header: 'Thao tác', cell: () => '-' },
     ]
   }
 
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = lastStatus === 'active'
-      ? 'Đang bán'
-      : lastStatus === 'inactive'
-        ? 'Trạng thái: Ngưng bán'
+  const activeFilterSummary = status === 'active'
+    ? 'Đang bán'
+    : status === 'inactive'
+      ? 'Trạng thái: Ngưng bán'
+      : status === 'deleted'
+        ? 'Trạng thái: Đã xoá KV'
         : 'Trạng thái: Tất cả'
+  const priceListOptions = useMemo(() => (state?.priceLists ?? []).map((priceList) => ({
+    id: priceList.id,
+    label: displayPriceListName(priceList),
+  })), [state?.priceLists])
+  const defaultPriceListIds = useMemo(() => {
+    const defaultIds = (state?.priceLists ?? []).filter((priceList) => priceList.is_default).map((priceList) => priceList.id)
+    return defaultIds.length > 0 ? defaultIds : (state?.priceLists[0]?.id ? [state.priceLists[0].id] : [])
+  }, [state?.priceLists])
+  const {
+    selectedOptions: selectedPriceListOptions,
+    unselectedOptions: unselectedPriceListOptions,
+    addChip: addPriceListColumn,
+    removeChip: removePriceListColumn,
+  } = useChipSelection({
+    options: priceListOptions,
+    initialSelectedIds: defaultPriceListIds,
+  })
+  const selectedPriceLists = useMemo(() => {
+    const priceListById = new Map((state?.priceLists ?? []).map((priceList) => [priceList.id, priceList]))
+    return selectedPriceListOptions.flatMap((option) => {
+      const priceList = priceListById.get(option.id)
+      return priceList ? [priceList] : []
+    })
+  }, [selectedPriceListOptions, state?.priceLists])
   const {
     sortedItems: sortedPriceBookProducts,
     sortState: priceBookSortState,
     requestSort: requestPriceBookSort,
-  } = useManagementTableSort<Product, string>(state?.products ?? [], {
+  } = useManagementTableSort<Product, string>(newestPriceBookProductsFirst(state?.products ?? []), {
     code: { kind: 'text', value: (product) => product.code },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
-    cost: { kind: 'text', value: () => null },
-    profit: { kind: 'text', value: () => null },
-    ...(state?.priceLists ?? []).reduce<Record<string, { kind: 'text'; value: (product: Product) => string }>>((columns, priceList) => {
+    ...selectedPriceLists.reduce<Record<string, { kind: 'text'; value: (product: Product) => string }>>((columns, priceList) => {
       columns[`price-list-${priceList.id}`] = { kind: 'text', value: (product) => renderPriceListCell(product, priceList) }
       return columns
     }, {}),
     sell_method: { kind: 'text', value: (product) => sellMethodLabels[product.sell_method] },
-    status: { kind: 'text', value: (product) => product.status },
   })
 
   return (
@@ -362,17 +392,11 @@ export function PriceBookPage({
             value={search}
             onChange={changeProductSearch}
           />
+          <ManagementImportButton onClick={() => setPriceImportOpen(true)} />
         </ManagementCompactToolbar>
       }
       filter={
-        <ManagementFilterSidebar
-          activeSummary={activeFilterSummary}
-          ariaLabel="Bộ lọc bảng giá"
-          title="Bộ lọc"
-          actions={
-            <button className="button button-primary" form="price-book-filter-form" type="submit">Áp dụng bộ lọc</button>
-          }
-        >
+        <ManagementFilterSidebar activeSummary={activeFilterSummary} ariaLabel="Bộ lọc bảng giá" title="Bộ lọc">
           <button
             aria-label="Ẩn bộ lọc bảng giá"
             className="management-filter-collapse-button"
@@ -385,7 +409,15 @@ export function PriceBookPage({
           <form id="price-book-filter-form" aria-label="Lọc bảng giá" className="management-filter-sidebar-form" onSubmit={filterProducts}>
             <ManagementFilterGroup title="Trạng thái">
               <label>
-                <input checked={status === 'active'} name="price-book-status" type="radio" onChange={() => setStatus('active')} />
+                <input
+                  checked={status === 'active'}
+                  name="price-book-status"
+                  type="radio"
+                  onChange={() => {
+                    setStatus('active')
+                    void load({ status: 'active', page: 1 })
+                  }}
+                />
                 Đang bán
               </label>
               <label>
@@ -393,14 +425,48 @@ export function PriceBookPage({
                   checked={status === 'inactive'}
                   name="price-book-status"
                   type="radio"
-                  onChange={() => setStatus('inactive')}
+                  onChange={() => {
+                    setStatus('inactive')
+                    void load({ status: 'inactive', page: 1 })
+                  }}
                 />
                 Ngưng bán
               </label>
               <label>
-                <input checked={status === 'all'} name="price-book-status" type="radio" onChange={() => setStatus('all')} />
+                <input
+                  checked={status === 'all'}
+                  name="price-book-status"
+                  type="radio"
+                  onChange={() => {
+                    setStatus('all')
+                    void load({ status: 'all', page: 1 })
+                  }}
+                />
                 Tất cả
               </label>
+              <label>
+                <input
+                  checked={status === 'deleted'}
+                  name="price-book-status"
+                  type="radio"
+                  onChange={() => {
+                    setStatus('deleted')
+                    void load({ status: 'deleted', page: 1 })
+                  }}
+                />
+                Đã xoá KV
+              </label>
+            </ManagementFilterGroup>
+            <ManagementFilterGroup title="Bảng giá">
+              <ManagementChipPicker
+                addLabel="Chọn bảng giá"
+                ariaLabel="Chọn cột bảng giá"
+                options={priceListOptions}
+                selectedOptions={selectedPriceListOptions}
+                unselectedOptions={unselectedPriceListOptions}
+                onAdd={addPriceListColumn}
+                onRemove={removePriceListColumn}
+              />
             </ManagementFilterGroup>
           </form>
         </ManagementFilterSidebar>
@@ -553,7 +619,7 @@ export function PriceBookPage({
             {state?.priceLists.map((priceList) => (
               <div className="catalog-adjustment" key={priceList.id}>
                 <label>
-                  Điều chỉnh {priceList.name}
+                  Điều chỉnh {displayPriceListName(priceList)}
                   <select
                     value={formulaForm.adjustments[priceList.id]?.mode ?? 'none'}
                     onChange={(event) =>
@@ -575,7 +641,7 @@ export function PriceBookPage({
                   </select>
                 </label>
                 <label>
-                  Giá trị điều chỉnh {priceList.name}
+                  Giá trị điều chỉnh {displayPriceListName(priceList)}
                   <input
                     inputMode="decimal"
                     value={formulaForm.adjustments[priceList.id]?.value ?? ''}
@@ -626,7 +692,7 @@ export function PriceBookPage({
                     <tr key={`${item.product_id}-${price.price_list_id}`}>
                       <td>{item.product_code}</td>
                       <td>{item.product_name}</td>
-                      <td>{price.price_list_name}</td>
+                      <td>{displayPriceListName({ name: price.price_list_name })}</td>
                       <td>{formatMoney(price.computed_unit_price)}</td>
                       <td>{price.delta === null ? 'Mới' : formatMoney(price.delta)}</td>
                     </tr>
@@ -642,7 +708,7 @@ export function PriceBookPage({
             <ManagementTableViewport>
               <ManagementDataTable
                 ariaLabel="Lưới bảng giá"
-                columns={buildPriceBookColumns(state.priceLists)}
+                columns={buildPriceBookColumns(selectedPriceLists)}
                 getRowKey={(product) => product.id}
                 items={sortedPriceBookProducts}
               />
@@ -664,6 +730,19 @@ export function PriceBookPage({
           </>
         ) : null}
       </ManagementListSurface>
+      <ProductImportDialog
+        open={priceImportOpen}
+        service={service}
+        title="Import bảng giá KiotViet"
+        onClose={() => setPriceImportOpen(false)}
+        onImported={() => {
+          setPriceImportOpen(false)
+          void load({ page: 1 })
+          void service.listPriceLists().then((priceListResult) => {
+            setState((current) => current ? { ...current, priceLists: priceListResult.items } : current)
+          })
+        }}
+      />
     </ManagementPage>
   )
 }

@@ -22,12 +22,12 @@ Phạm vi bán hàng là **bán đứt**. Báo giá nếu có chỉ là bản gi
 | Chi tiết chứng từ | Readonly detail, hiển thị snapshot dòng hàng, lịch sử thanh toán từ phiếu thu liên quan, công nợ và stock movements nếu có |
 | Mở lại báo giá | Mở `BG...` active vào POS draft local, giữ snapshot và cảnh báo lệch |
 | In/xem báo giá | Mẫu báo giá mặc định, frontend-only print view |
-| In lại bill hóa đơn | Ngoài phạm vi hiện tại; chỉ bật sau khi Bill Preview/print flow được chốt và implement |
-| Sửa hóa đơn | Chỉ bật sau khi có transaction an toàn và rule đảo dữ liệu rõ |
-| Hủy hóa đơn | Chỉ bật sau khi có transaction an toàn và rule đảo kho/tiền/công nợ rõ |
+| In hóa đơn | Có nút trong footer chi tiết; dùng flow in hiện có/được nối sau theo implementation |
+| Sửa hóa đơn | Có nút trong footer chi tiết; nghiệp vụ đảo dữ liệu sâu vẫn phải đi qua transaction an toàn khi bật đầy đủ |
+| Hủy hóa đơn | Có nút trong footer chi tiết; thao tác phải giữ lịch sử và đảo kho/tiền/công nợ theo API an toàn |
 | Đảo kho/tiền/công nợ | Không làm bằng thao tác UI rời rạc; phải đi qua nghiệp vụ sửa/hủy an toàn |
 
-SalesDocuments hiện vẫn không phải module quản lý đầy đủ. Nó giúp tra cứu chứng từ đã phát sinh và mở lại báo giá; sửa/hủy hóa đơn, đảo kho/tiền/công nợ và in bill nâng cao nằm ngoài phạm vi hiện tại.
+SalesDocuments hiện vẫn không phải module quản lý đầy đủ. Nó giúp tra cứu chứng từ đã phát sinh và mở lại báo giá; footer chi tiết có `Hủy`, `Sao chép`, `Sửa`, `Lưu`, `In`, nhưng V1 không làm `Trả hàng` hoặc `Tạo QR`.
 
 ---
 
@@ -36,7 +36,7 @@ SalesDocuments hiện vẫn không phải module quản lý đầy đủ. Nó gi
 | File | Nội dung |
 |---|---|
 | [01-SALES-DOCUMENT-LIST.md](./01-SALES-DOCUMENT-LIST.md) | Danh sách báo giá/hóa đơn, bộ lọc, cột, thao tác nhanh |
-| [02-SALES-DOCUMENT-DETAIL.md](./02-SALES-DOCUMENT-DETAIL.md) | Chi tiết chứng từ readonly hiện tại; mô tả sửa/hủy/in lại là ngoài phạm vi hiện tại |
+| [02-SALES-DOCUMENT-DETAIL.md](./02-SALES-DOCUMENT-DETAIL.md) | Chi tiết chứng từ hiện tại; footer có `Hủy`, `Sao chép`, `Sửa`, `Lưu`, `In`; không có `Trả hàng`/`Tạo QR` trong V1 |
 | [04-QUOTE-PRINT-PHASE-3B.md](./04-QUOTE-PRINT-PHASE-3B.md) | Source of Truth cho in/xem báo giá đơn giản đã merge |
 
 ---

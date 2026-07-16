@@ -354,6 +354,7 @@ function deletedProductRow(row: KiotVietInvoiceImportRow): ProductImportUpsertRo
     status: 'inactive',
     unit_conversions: [],
     sale_price: row.unit_price,
+    price_list_prices: [],
     provisional_stock: null,
     bom_text: null,
     expected_out_of_stock_text: null,

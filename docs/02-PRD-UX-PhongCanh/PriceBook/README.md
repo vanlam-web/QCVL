@@ -1,8 +1,8 @@
-# PriceBook — Quản Lý Bảng Giá
+﻿# PriceBook — Quản Lý Bảng Giá
 
 > Index cho đặc tả UI PriceBook. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
 >
-> Phạm vi: bảng giá chung, bảng giá theo nhóm khách và giá sản phẩm trong từng bảng.
+> Phạm vi: giá chung, bảng giá theo nhóm khách và giá sản phẩm trong từng bảng.
 
 ---
 

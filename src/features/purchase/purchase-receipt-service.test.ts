@@ -26,6 +26,21 @@ it('builds purchase receipt list filters from existing purchase fields', async (
   ])
 })
 
+it('builds purchase product search requests with search params', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+
+  await service.listProducts({ search: 'SP0001', page: 1, page_size: 20 })
+
+  expect(calls).toEqual([
+    ['/api/v1/products?status=active&search=SP0001&page=1&page_size=20', undefined],
+  ])
+})
+
 it('calls KiotViet purchase receipt import endpoints', async () => {
   const calls: Array<[string, RequestInit | undefined]> = []
   const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

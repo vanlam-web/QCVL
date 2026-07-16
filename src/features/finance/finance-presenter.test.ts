@@ -6,6 +6,7 @@ import {
   bankAccountTriggerText,
   cashbookDetailPrimaryStatusText,
   cashbookDetailPrimaryStatusTone,
+  cashbookDetailPaymentMethodText,
   cashbookLinkedDocumentCode,
   cashbookLinkedDocumentMessage,
   cashbookLinkedDocumentRows,
@@ -35,7 +36,7 @@ const receiptEntry = {
   status: 'posted',
   direction: 'in',
   amount_delta: 300000,
-  finance_account: { id: 'bank-1', code: 'VCB', name: 'Vietcombank', account_type: 'bank' },
+  finance_account: { id: 'bank-1', code: '0947900909', name: 'MBBank', account_type: 'bank', account_number: '0947900909', account_holder: 'VAN VIET PHUONG LAM' },
   is_business_accounted: true,
   source_type: 'payment_receipt_method',
   created_at: '2026-07-09T03:00:00Z',
@@ -86,6 +87,11 @@ describe('finance presenter', () => {
     expect(sourceTypeText('kiotviet_cashbook')).toBe('Sổ quỹ KV')
     expect(financeDateText('bad-date')).toBe('Chưa có')
     expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
+  })
+
+  it('shows the concrete bank and account number for bank cashbook payment method', () => {
+    expect(cashbookDetailPaymentMethodText(receiptEntry)).toBe('MBBank: 0947900909')
+    expect(cashbookDetailPaymentMethodText({ ...receiptEntry, payment_method: 'cash', finance_account: { ...receiptEntry.finance_account, account_type: 'cash' } })).toBe('Tiền mặt')
   })
 
   it('builds linked document display rows from allocations', () => {

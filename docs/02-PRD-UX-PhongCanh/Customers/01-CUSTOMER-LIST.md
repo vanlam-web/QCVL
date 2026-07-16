@@ -79,7 +79,7 @@ Export KiotViet ngày `2026-07-01` có `528` khách hàng:
 - các nhóm khách đang dùng là `25`, `26`, `30`, `35`, `40`
 - `78` khách có nợ hiện tại, tổng nợ khoảng `225,781,565`
 
-Các số này củng cố quyết định: SĐT không bắt buộc; nếu có thì dùng để tìm/phân biệt nhưng không làm khóa import chính. Nhóm khách chỉ quyết định bảng giá khi đã có cấu hình map bảng giá riêng; khách không nhóm hoặc nhóm chưa map dùng bảng giá chung.
+Các số này củng cố quyết định: SĐT không bắt buộc; nếu có thì dùng để tìm/phân biệt nhưng không làm khóa import chính. Nhóm khách chỉ quyết định bảng giá khi đã có cấu hình map bảng giá riêng; khách không nhóm hoặc nhóm chưa map dùng giá chung.
 
 Export KiotViet ngày `2026-07-11` file `DanhSachKhachHang_KV11072026-234256-524.xlsx` có `531` khách hàng:
 
@@ -118,7 +118,7 @@ Quyết định Owner ngày `2026-07-03`:
 - SĐT không bắt buộc. Nếu có, dùng để tìm và phân biệt khách; import không chặn dữ liệu vì KiotViet có thể có nhiều hồ sơ cần giữ nguyên.
 - Hồ sơ khách MVP có trường `MST` để phục vụ khách công ty/tổ chức.
 - Các trường bổ sung khác của KiotViet nằm ngoài MVP nếu chưa phục vụ bán hàng, áp giá hoặc công nợ.
-- Nếu khách không có nhóm khách, hệ thống áp dụng `Bảng giá chung`.
+- Nếu khách không có nhóm khách, hệ thống áp dụng `Giá chung`.
 - Chi tiết khách tham khảo KiotViet nhưng chỉ giữ phần cần vận hành: thông tin chính, bảng giá áp dụng, lịch sử bán nếu có API đúng, và nợ cần thu.
 
 QC-OMS MVP lược bỏ:
@@ -141,7 +141,7 @@ V1 hiện tại hiển thị các cột phục vụ bán hàng, áp giá và thu
 | Cột | Mô tả |
 |---|---|
 | Checkbox | Dùng pattern checkbox chung; hiện chọn dòng/chọn tất cả, thao tác hàng loạt để sau |
-| Mã khách hàng | Bắt buộc, unique; bấm để mở chi tiết |
+| Mã khách hàng | Bắt buộc, unique; bấm để mở chi tiết. Nếu khách có liên kết NCC, hiển thị icon liên kết màu cam ngay trước mã khách hàng; không thêm cột riêng. |
 | Tên khách hàng | Bắt buộc |
 | SĐT | Có thể trống; chuẩn hóa để tìm/phân biệt khách, import không chặn trùng nếu nguồn KV cần giữ |
 | Nhóm khách | Dùng phân nhóm khách; chỉ quyết định bảng giá khi có cấu hình map bảng giá riêng |
@@ -152,7 +152,7 @@ Ngoài phạm vi V1:
 
 | Cột | Mô tả |
 |---|---|
-| Bảng giá áp dụng | Bảng giá nhóm hoặc Bảng giá chung |
+| Bảng giá áp dụng | Bảng giá nhóm hoặc Giá chung |
 | Ngày giao dịch cuối | Lần bán gần nhất |
 | Trạng thái | Không hiển thị ở bảng ngoài trong lát hiện tại; giữ cho bộ lọc/chi tiết khi cần nghiệp vụ trạng thái |
 | Ghi chú | Ghi chú nội bộ |
@@ -188,7 +188,7 @@ Khi tạo khách:
 - Địa chỉ không bắt buộc, chỉ nhập một dòng text.
 - Tên khách được phép trùng khách khác trong cùng tổ chức; `Mã khách hàng` mới là khóa chuẩn.
 - Nếu có SĐT, hệ thống chuẩn hóa để tìm kiếm và phân biệt khách; không dùng SĐT làm khóa import chính.
-- Nếu có nhóm khách và nhóm đó đã được cấu hình bảng giá riêng thì lần bán sau dùng bảng giá của nhóm; nếu chưa có cấu hình thì dùng bảng giá chung. Không tự sinh bảng giá mới chỉ vì tên nhóm là `35`, `40`, ...
+- Nếu có nhóm khách và nhóm đó đã được cấu hình bảng giá riêng thì lần bán sau dùng bảng giá của nhóm; nếu chưa có cấu hình thì dùng giá chung. Không tự sinh bảng giá mới chỉ vì tên nhóm là `35`, `40`, ...
 - Modal tạo khách chỉ giữ các trường cần nhập nhanh: tên khách, mã khách, SĐT, MST, địa chỉ một dòng. Import KiotViet lưu thêm `Loại khách`, `Công ty`, `Nhóm khách`, `Ghi chú`, `Phường/Xã`, `Khu vực giao hàng`, ngày tạo, giao dịch cuối và số liệu tham chiếu KV; không đưa các trường phụ như giới tính, sinh nhật, Facebook, email, CCCD/CMND, hộ chiếu, ngân hàng vào UI tạo nhanh.
 
 Tìm theo mã khách chính xác phải mở được khách dù bộ lọc ngày tạo/trạng thái hiện tại đang che kết quả. Nếu khách bị ngừng hoạt động, UI hiển thị rõ trạng thái thay vì báo không tìm thấy.

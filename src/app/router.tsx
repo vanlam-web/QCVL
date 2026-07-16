@@ -290,7 +290,7 @@ function PurchaseReceiptsRoute() {
 
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
-      <PurchaseReceiptsPage service={service} onOpenDashboard={() => navigate(appRoutes.dashboard)} />
+      <PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={() => navigate(appRoutes.dashboard)} />
     </AppShell>
   )
 }

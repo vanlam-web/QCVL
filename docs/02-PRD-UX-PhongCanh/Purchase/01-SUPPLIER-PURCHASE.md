@@ -59,15 +59,17 @@ Vai trò trong tồn vận hành:
 
 | Cột | Ghi chú |
 |---|---|
-| Mã NCC | Click mở chi tiết |
+| Mã NCC | Click mở chi tiết. Nếu NCC có khách hàng liên kết, hiển thị icon liên kết màu cam ngay trước mã NCC; không thêm cột riêng. |
 | Tên NCC | Bắt buộc |
 | Điện thoại | Có thể trống |
-| Email | Có thể trống |
 | Nợ cần trả hiện tại | Tổng hợp từ công nợ NCC |
 | Tổng mua | Tổng phiếu nhập posted |
+| Nhóm NCC | Không hiện ở bảng chính; giữ field chuẩn bị cho chi tiết sau này nếu cần |
 | Trạng thái | Active/inactive |
 
-Không cần nhóm NCC ở lát cắt đầu tiên nếu chưa có nghiệp vụ phân nhóm rõ.
+Email không hiện ở bảng chính; chỉ hiển thị trong form/chi tiết khi cần xem hồ sơ.
+
+Nhóm NCC không hiện ở bảng chính. Nếu sau này cần hiển thị ở detail, dùng field chuẩn bị dữ liệu; còn hiện tại import/file chưa có nhóm thật thì để trống, không dựng nhóm giả.
 
 Nếu `Nợ cần trả hiện tại < 0`, UI không mặc định hiểu là trả trước NCC. Trong nghiệp vụ QC-OMS, NCC có thể đồng thời là khách hàng; số âm là tín hiệu cần đối soát với hồ sơ khách hàng liên kết.
 
@@ -85,7 +87,11 @@ Tab tối thiểu:
 
 Không có tab hóa đơn điện tử/thuế.
 
-Nếu NCC cũng là khách hàng, tab Thông tin hiển thị liên kết tới hồ sơ khách hàng tương ứng. MVP chỉ cần liên kết thủ công/chọn khách hàng có sẵn; không bắt buộc tự động gộp theo số điện thoại.
+Chi tiết NCC và chi tiết phiếu nhập dùng shared shell `ManagementDetailPanel`, `ManagementDetailHeader`, `ManagementDetailSummary`, `ManagementDetailSection`, `ManagementInlineDetailTabs`, `ManagementDetailInfoList`, `ManagementDetailCard`, `ManagementDetailNote`, `ManagementDetailInlineNote`. Chi tiết NCC giữ tab shell `Thông tin`, `Lịch sử nhập/trả hàng`, `Nợ cần trả nhà cung cấp`; nội dung tab chỉ dùng dữ liệu QCVL thật. Nếu tab chưa có API chi tiết thì hiển thị empty note rõ, không dựng bảng giả. Chi tiết phiếu nhập luôn có tab `Thông tin`; tab `Lịch sử thanh toán` chỉ hiện khi có dòng thanh toán NCC thật hoặc dòng đối chiếu read-only từ phiếu KV đã trả.
+
+Chi tiết NCC trên `3202` dùng summary tên + mã NCC, dòng phụ `Người tạo`, `Ngày tạo`; field `Nhóm nhà cung cấp` chỉ giữ ở data model chuẩn bị, không hiện ở bảng chính. Tab `Thông tin` dùng `ManagementDetailInfoList` 3 cột cho `Điện thoại`, `Email`, `MST`; `Địa chỉ` là một dòng full width. Ghi chú NCC dùng `ManagementDetailNote` với icon và fallback `Chưa có ghi chú`.
+
+Nếu NCC cũng là khách hàng, bảng chính không hiển thị cột `Khách hàng liên kết`; cột `Mã NCC` hiển thị icon liên kết trước mã để nhận biết nhanh, còn tab `Thông tin` hiển thị card `Khách hàng đồng thời là Nhà cung cấp` với mã/tên khách hàng tương ứng. MVP chỉ cần liên kết thủ công/chọn khách hàng có sẵn; không bắt buộc tự động gộp theo số điện thoại.
 
 ---
 
@@ -107,6 +113,7 @@ Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm
 - nhập tới đâu lọc danh sách chính tới đó; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
 - bấm Enter lọc lại theo nội dung đang nhập
 - không có kết quả thì hiện `Không có kết quả phù hợp`
+- ô `Tìm phiếu/NCC` ở danh sách dùng vị trí header/layout chung như các trang quản trị khác; không kéo sát tiêu đề. Chỉ ô tìm hàng trong màn tạo phiếu mới nằm sát chữ `Nhập hàng`.
 
 ### Cột mặc định
 
@@ -127,21 +134,24 @@ Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm
 
 ### Header
 
-- chọn/tạo nhanh nhà cung cấp
-- thời gian nhập
-- kho mặc định trong MVP; chưa cần chọn nhiều kho
-- mã phiếu tự sinh, cho sửa trước khi posted nếu cần
-- số chứng từ/hóa đơn NCC dạng text
-- ghi chú
+- Khi bấm `Tạo phiếu nhập`, trang chuyển sang màn `Nhập hàng` trong cùng route, có nút mũi tên trái quay lại danh sách phiếu nhập.
+- Header màn tạo phiếu có thanh `Tìm hàng (F3)` nằm ngay bên phải chữ `Nhập hàng`, dùng visual/cơ chế giống thanh tìm hàng POS nhưng chỉ tìm theo mã hàng và tên hàng, không tìm combo.
+- Thanh tìm hàng phải gọi search từ catalog khi gõ để bắt được mã ngoài cache nạp sẵn; gợi ý merge cache + remote, ưu tiên khớp mã hàng/tên hàng giống POS.
+- Gõ mã/tên hàng rồi Enter hoặc bấm một gợi ý sẽ thêm hàng đó vào phiếu ở vùng dòng hàng bên dưới.
+- Khi ô tìm hàng rỗng, nút `+` trong ô là `Tạo hàng hóa`; khi có nội dung, nút này đổi thành `Xóa tìm kiếm`.
+- Nếu chưa chọn hàng nào, vùng dòng hàng không hiện row `1` rỗng; chỉ hiện empty state yêu cầu chọn hàng từ thanh tìm kiếm.
+- Không cho lưu phiếu nhập rỗng; phải có ít nhất một dòng hàng.
+- Khối thông tin phiếu nằm bên phải, dùng phong cách `ManagementFilterSidebar`: chọn nhà cung cấp, mã phiếu, thời gian nhập, số hóa đơn đầu vào, giảm giá phiếu, đã trả tạm, tổng tiền hàng, tổng nợ, ghi chú.
+- Kho mặc định trong MVP; chưa cần chọn nhiều kho.
 
 ### Dòng hàng thường
 
-- tìm/chọn sản phẩm
-- đơn vị mua
-- số lượng
-- đơn giá
-- giảm giá dòng nếu có
-- thành tiền
+- Dòng hàng sau khi chọn từ search hiển thị dạng card/list giống dòng hàng POS, không dùng bảng/dropdown chọn sản phẩm trong màn tạo mới.
+- Card có header: `STT`, `Tên hàng`, `SL`, `ĐV`, `Đơn giá`, `Giảm`, `Thành tiền`.
+- Tên hàng hiển thị tên + mã hàng.
+- Cho sửa số lượng, đơn giá, giảm giá; đơn vị mua readonly theo hàng đã chọn.
+- Nút `×` trên card xóa dòng hàng.
+- Thành tiền tính realtime từ số lượng, đơn giá, giảm giá dòng.
 
 ### Dòng hàng cuộn
 
@@ -154,6 +164,8 @@ Với sản phẩm `inventory_shape = roll`, UI phải yêu cầu nhập vật l
 
 Nếu nhiều cuộn cùng thông số, cho nhập nhanh `số cuộn x chiều dài`. Nếu khác chiều dài, cho bung danh sách từng cuộn.
 
+Trên màn tạo phiếu hiện tại, phần nhập vật lý của cuộn nằm ngay trong card dòng hàng sau khi chọn sản phẩm cuộn, không mở bảng phụ riêng.
+
 ### Dòng hàng tấm
 
 Với sản phẩm `inventory_shape = sheet`, UI phải yêu cầu:
@@ -164,6 +176,8 @@ Với sản phẩm `inventory_shape = sheet`, UI phải yêu cầu:
 
 Nếu cùng kích thước, cho nhập theo lô. Nếu khác kích thước, tách dòng hoặc bung danh sách.
 
+Trên màn tạo phiếu hiện tại, phần nhập nhiều nhóm kích thước của tấm nằm ngay trong card dòng hàng sau khi chọn sản phẩm tấm.
+
 ---
 
 ## 6. Thanh toán trên phiếu nhập
@@ -172,9 +186,8 @@ Form hiển thị:
 
 - tổng tiền hàng
 - giảm giá phiếu nếu dùng
-- cần trả NCC
 - đã trả ngay
-- còn phải trả
+- tổng nợ/còn phải trả
 - phương thức trả: tiền mặt hoặc chuyển khoản/tài khoản
 
 MVP ưu tiên một phương thức thanh toán cho một lần trả để thao tác gọn.
@@ -223,8 +236,10 @@ Không hiển thị menu/chức năng trong lát cắt đầu tiên:
 | P1 Supplier foundation | Danh sách NCC, tạo/sửa NCC, liên kết khách hàng | Đã merge |
 | P2 Purchase draft/list/detail | Danh sách phiếu nhập, tạo/sửa draft hàng thường | Đã merge |
 | P3 Post normal receipt | Nút Hoàn thành cho hàng thường, cập nhật giá nhập cuối | Đã merge cho hàng thường |
-| P4 Roll/sheet purchase | Form nhập cuộn/tấm vật lý | Sửa posted nâng cao |
-| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | Đã merge; trả nhiều tài khoản trong một lần để sau |
+| P4 Roll/sheet purchase | Form tạo draft đã nhập được cuộn/tấm vật lý trong card dòng hàng | Post object vật lý/sửa posted nâng cao |
+| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | Đã merge; chi tiết phiếu nhập đã tách tab lịch sử thanh toán bằng dữ liệu `supplier_payments`; trả nhiều tài khoản trong một lần để sau |
+
+Lưu ý UI: tab NCC được giữ để đúng bố cục KiotViet/QCVL, nhưng khi backend chưa có lịch sử nhập/trả hàng hoặc danh sách công nợ chi tiết đầy đủ, frontend chỉ hiển thị empty note rõ và không dựng dữ liệu giả.
 
 Quy tắc chung: UI không hiển thị nút chức năng chưa chạy được như thể đã chạy được. Nếu cần giữ vị trí, dùng disabled state kèm tooltip ngắn.
 
@@ -266,10 +281,10 @@ File `DanhSachNhaCungCap_KV12072026-131429-622.xlsx` có 44 dòng. Các cột im
 - Công ty.
 - Người tạo, Ngày tạo.
 
-Cột bỏ qua trong lát cắt hiện tại:
+Cột chưa nhập dữ liệu thật trong lát cắt hiện tại:
 
 - Số CMND/CCCD.
-- Nhóm nhà cung cấp.
+- Nhóm nhà cung cấp: giữ field chuẩn bị cho sau này trong data model; file import hiện tại chưa có nhóm thật nên để trống/`Chưa có`, không dựng nhóm giả.
 
 Quy tắc:
 
@@ -292,7 +307,7 @@ Current decision 2026-07-12:
 
 Current decision 2026-07-12:
 
-- Trang `Nhap hang` dung chung shell da co: toolbar search, `Import KV`, shared list/detail/table, inline confirm `Xoa du lieu cu`.
+- Trang `Nhap hang` dung chung shell da co: toolbar search, nut `Import` mo luong import KiotViet, shared list/detail/table, inline confirm `Xoa du lieu cu`.
 - File import dung cho slice nay la `DanhSachChiTietNhapHang_KV...xlsx`, khong phai file `DanhSachNhaCungCap_KV...xlsx`.
 - Import gom dong theo `Ma nhap hang`; moi dong chi tiet map `Ma nha cung cap` sang NCC va `Ma hang` sang Hang hoa.
 - Ma co hau to `{DEL}`, `{DEL1}`, `{DEL2}` la hau to KV trong chung tu lich su, khong mac dinh la phieu cu da xoa; QCVL doi chieu bang ma goc neu ma goc dang co trong QCVL.
@@ -306,13 +321,15 @@ Current decision 2026-07-12:
 
 ### 9.2. Purchase draft P2
 
-P2 đã merge cho hàng thường. Phạm vi:
+P2 đã merge. Phạm vi:
 
 - form tạo phiếu nhập draft
 - chọn NCC
-- tìm hàng theo mã/tên
+- tìm hàng theo mã/tên bằng thanh `Tìm hàng (F3)` giống POS
+- chọn hàng từ search để tạo card dòng hàng; không có row rỗng mặc định và không dùng dropdown chọn sản phẩm trong màn tạo mới
 - dòng hàng thường: số lượng, đơn giá, giảm giá, thành tiền
-- tổng tiền hàng, giảm giá phiếu, cần trả, đã trả tạm, còn phải trả
+- dòng hàng cuộn/tấm: nhập payload vật lý trong card dòng hàng để lưu draft
+- tổng tiền hàng, giảm giá phiếu, đã trả tạm, tổng nợ/còn phải trả
 - lưu draft, sửa draft
 
 Draft chỉ là dữ liệu nháp server; không post tồn/kế toán cho tới khi người dùng hoàn thành phiếu.

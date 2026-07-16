@@ -27,7 +27,7 @@
 
 | Thành phần | Mô tả |
 |---|---|
-| **Lưới 3 cột** | Hiển thị sản phẩm/dịch vụ đang bật bán trên POS |
+| **Lưới sản phẩm co giãn** | Hiển thị sản phẩm/dịch vụ đang bật bán trên POS; số cột tự co giãn theo chiều rộng màn hình và nội dung ô |
 | **Ô sản phẩm** | Chứa tên sản phẩm, đơn giá và ĐVT. Ảnh sản phẩm không bắt buộc |
 | **Phân trang** | `[< 1 / 13 >]` = Trang hiện tại / Tổng số trang |
 | **Nút điều hướng trang** | `[‹]` trang trước, `[›]` trang sau |
@@ -53,7 +53,7 @@
 | **Format** | `[< 1 / 13 >]` |
 | **Nút `[‹]`** | Quay về trang trước (disabled nếu đang trang 1) |
 | **Nút `[›]`** | Tiến đến trang sau (disabled nếu đang trang cuối) |
-| **Mỗi trang** | Hiển thị tối đa 12 sản phẩm (4 hàng × 3 cột) |
+| **Mỗi trang** | Hiển thị số thẻ theo kích thước lưới thực; màn hẹp về 2 cột, màn rộng lên 3 cột, card tự giãn theo nội dung và không khóa cố định 3 cột |
 
 ---
 
@@ -62,12 +62,14 @@
 - K03-C chỉ hiển thị sản phẩm/dịch vụ đang bật bán trên POS.
 - Sắp xếp mặc định: sản phẩm hay dùng lên trước.
 - "Hay dùng" lấy từ bảng server `pos_product_usage`, không lấy từ cache trình duyệt hay `localStorage`, nên đổi máy POS vẫn giữ đúng thứ tự.
+- Riêng local `3202` chạy dev-memory: thứ tự "hay dùng" derive từ `salesDocuments.items` đã lưu/import, để khớp lịch sử bán/báo giá trong `logs/dev-memory-state.json`.
 - Khi lưu báo giá hoặc tạo hóa đơn thành công, backend cộng lượt dùng cho từng `product_id` xuất hiện trong dòng hàng.
 - POS gọi `GET /api/v1/products?status=active&sort=pos_usage` để lấy danh sách nhanh; server sắp theo `usage_count desc`, sau đó fallback theo dữ liệu sản phẩm.
+- Lưới `Sản phẩm nhanh` không khóa 12 thẻ hay 3 cột cố định; số thẻ mỗi trang phụ thuộc chiều cao lưới còn lại sau topbar/khách hàng/queue, và số cột đổi giữa 2 hoặc 3 theo bề rộng vùng hiển thị.
 - Không có tùy chọn sắp xếp khác trong POS để giữ thao tác nhanh và đơn giản.
 - Nếu đã chọn khách ở K03-A, giá hiển thị theo bảng giá đang áp dụng của khách.
-- Nếu chưa chọn khách, giá hiển thị theo Bảng giá chung.
-- Nếu sản phẩm không có giá trong bảng giá của khách, dùng giá từ Bảng giá chung.
+- Nếu chưa chọn khách, giá hiển thị theo Giá chung.
+- Nếu sản phẩm không có giá trong bảng giá của khách, dùng giá từ Giá chung.
 - Ô tìm kiếm sản phẩm dùng chung với `F3` tại K01; K03-C chỉ đóng vai trò lưới chọn nhanh.
 
 ---

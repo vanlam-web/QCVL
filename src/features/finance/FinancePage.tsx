@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useState, type MouseEvent } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
   ManagementDateRangeInputs,
@@ -42,6 +43,7 @@ import {
   bankAccountDisplayParts,
   businessAccountedText,
   bankAccountTriggerText,
+  cashbookCounterpartyHasName,
   cashbookCounterpartyDisplayName,
   cashbookCounterpartyLabel,
   cashbookEntryNeedsCounterpartyHydration,
@@ -81,7 +83,6 @@ import { FinanceFiltersPanel } from './FinanceFiltersPanel'
 import { FinanceDetailPanel } from './FinanceDetailPanel'
 import { CashbookImportDialog } from './CashbookImportDialog'
 
-const pageSizeDefault = 15
 const showAuxiliaryFinanceSections = false
 const defaultCashbookColumns: CashbookColumnKey[] = [
   'code',
@@ -112,19 +113,20 @@ function cashbookColumnLabel(column: CashbookColumnKey) {
 }
 
 export function FinancePage({ service }: { service: FinanceService }) {
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [balances, setBalances] = useState<CashbookBalance[]>([])
   const [debts, setDebts] = useState<CustomerDebtSummary[] | null>(null)
   const [debtTotal, setDebtTotal] = useState(0)
   const [debtPage, setDebtPage] = useState(1)
-  const [debtPageSize, setDebtPageSize] = useState(pageSizeDefault)
+  const [debtPageSize, setDebtPageSize] = useState(defaultPageSize)
   const [lastDebtSearch, setLastDebtSearch] = useState('')
   const [selectedDebt, setSelectedDebt] = useState<CustomerDebtSummary | null>(null)
   const [debtDetail, setDebtDetail] = useState<CustomerDebtDetail | null>(null)
   const [cashbookEntries, setCashbookEntries] = useState<CashbookEntry[] | null>(null)
   const [cashbookTotal, setCashbookTotal] = useState(0)
   const [cashbookPage, setCashbookPage] = useState(1)
-  const [cashbookPageSize, setCashbookPageSize] = useState(pageSizeDefault)
+  const [cashbookPageSize, setCashbookPageSize] = useState(defaultPageSize)
   const [cashbookSearch, setCashbookSearch] = useState('')
   const [lastCashbookSearch, setLastCashbookSearch] = useState('')
   const [cashbookSearchScope] = useState<CashbookSearchScope>('all')
@@ -334,18 +336,18 @@ export function FinancePage({ service }: { service: FinanceService }) {
     if (targets.length === 0) return
     const details = await Promise.all(targets.map(async (entry) => {
       try {
-        return await service.getCashbookEntry(entry.id)
+        return await hydrateCashbookDetail(await service.getCashbookEntry(entry.id))
       } catch {
         return null
       }
     }))
     const detailById = new Map(details
-      .filter((detail): detail is CashbookEntryDetail => detail?.counterparty.name != null)
+      .filter((detail): detail is CashbookEntryDetail => detail != null && cashbookCounterpartyHasName(detail.counterparty))
       .map((detail) => [detail.id, detail]))
     if (detailById.size === 0) return
     setCashbookEntries((current) => current?.map((item) => {
       const detail = detailById.get(item.id)
-      if (detail === undefined || item.counterparty?.name != null) return item
+      if (detail === undefined || cashbookCounterpartyHasName(item.counterparty)) return item
       return { ...item, counterparty: detail.counterparty }
     }) ?? current)
   }, [service])
@@ -451,14 +453,14 @@ export function FinancePage({ service }: { service: FinanceService }) {
         const [balanceResult, voucherResult, debtResult, cashbookResult] = await Promise.all([
           service.listCashbookBalances(),
           service.listCashbookVouchers(),
-          service.listCustomerDebts({ page: 1, page_size: pageSizeDefault }),
+          service.listCustomerDebts({ page: 1, page_size: defaultPageSize }),
           service.listCashbookEntries({
             from: currentMonthRange().from,
             to: currentMonthRange().to,
             direction: 'all',
             status: 'posted',
             page: 1,
-            page_size: pageSizeDefault,
+            page_size: defaultPageSize,
           }),
         ])
         if (!active) return
@@ -683,7 +685,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     setCashbookDetail(null)
     setError(null)
     try {
-      const detail = await hydrateCashbookDetailAllocations(await service.getCashbookEntry(entry.id))
+      const detail = await hydrateCashbookDetail(await service.getCashbookEntry(entry.id))
       setCashbookDetail(detail)
       setCashbookEntries((current) => current?.map((item) => (item.id === detail.id ? { ...item, ...detail } : item)) ?? current)
     } catch (cause) {
@@ -691,24 +693,39 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
   }
 
-  async function hydrateCashbookDetailAllocations(detail: CashbookEntryDetail): Promise<CashbookEntryDetail> {
-    if (detail.allocations.length > 0 || detail.direction !== 'in') return detail
+  async function hydrateCashbookDetail(detail: CashbookEntryDetail): Promise<CashbookEntryDetail> {
+    if (detail.direction !== 'in') return detail
     const documentCode = cashbookLinkedDocumentCode(detail)
     if (documentCode === null || !documentCode.startsWith('HD')) return detail
+    const needsAllocationHydration = detail.allocations.length === 0
+    const needsCounterpartyHydration = !cashbookCounterpartyHasName(detail.counterparty)
+    if (!needsAllocationHydration && !needsCounterpartyHydration) return detail
     const salesDocument = await service.getSalesDocumentByCode(documentCode)
     if (salesDocument === null) return detail
     const allocatedAmount = Math.abs(detail.amount_delta)
+    const salesDocumentCustomer = salesDocument.customer?.name.trim()
+      ? {
+          type: 'customer' as const,
+          name: salesDocument.customer.name,
+          phone: salesDocument.customer.phone,
+        }
+      : null
     return {
       ...detail,
+      counterparty: needsCounterpartyHydration && salesDocumentCustomer !== null
+        ? salesDocumentCustomer
+        : detail.counterparty,
       source: { ...detail.source, order_code: salesDocument.code },
-      allocations: [{
-        order_id: salesDocument.id,
-        order_code: salesDocument.code,
-        order_total_amount: salesDocument.total_amount,
-        collected_before: Math.max(salesDocument.paid_amount - allocatedAmount, 0),
-        allocated_amount: allocatedAmount,
-        remaining_after: Math.max(salesDocument.debt_amount, 0),
-      }],
+      allocations: needsAllocationHydration
+        ? [{
+            order_id: salesDocument.id,
+            order_code: salesDocument.code,
+            order_total_amount: salesDocument.total_amount,
+            collected_before: Math.max(salesDocument.paid_amount - allocatedAmount, 0),
+            allocated_amount: allocatedAmount,
+            remaining_after: Math.max(salesDocument.debt_amount, 0),
+          }]
+        : detail.allocations,
     }
   }
 
@@ -757,9 +774,10 @@ export function FinancePage({ service }: { service: FinanceService }) {
     if (column === 'finance_account') return entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '-'
     if (column === 'source_type') return entry.source?.category_name ?? sourceTypeText(entry.source_type)
     if (column === 'counterparty') {
-      if (entry.counterparty?.name == null) return '-'
+      if (!cashbookCounterpartyHasName(entry.counterparty)) return '-'
       const label = cashbookCounterpartyLabel(entry)
-      const displayName = cashbookCounterpartyDisplayName(entry.counterparty.name)
+      const counterpartyName = entry.counterparty?.name ?? ''
+      const displayName = cashbookCounterpartyDisplayName(counterpartyName)
       return (
         <button
           aria-label={`Mở chi tiết ${entry.code} từ ${label} ${displayName}`}

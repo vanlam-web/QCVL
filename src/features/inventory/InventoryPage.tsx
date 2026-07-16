@@ -8,10 +8,12 @@ import {
   ManagementCompactToolbar,
   ManagementConfirmDialog,
   ManagementDetailActionFooter,
+  ManagementDetailNoteInput,
   ManagementDateRangeInputs,
   ManagementDetailRow,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementRowActionButton,
@@ -23,7 +25,8 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
-import type { InventoryProduct, InventoryProductStatus, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
 import {
   dateText,
@@ -38,7 +41,6 @@ import {
 import { StocktakeImportDialog } from './StocktakeImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 
-const pageSizeDefault = 15
 type InventoryView = 'products' | 'stocktakes' | 'objects'
 type StocktakeDateFilter = QuickDateRangePreset | 'custom'
 type StocktakeSortKey = 'code' | 'created_at' | 'product_code' | 'product_name' | 'product_system_qty' | 'product_actual_qty' | 'product_difference_qty' | 'status'
@@ -88,18 +90,19 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [products, setProducts] = useState<InventoryProduct[] | null>(null)
   const [total, setTotal] = useState(0)
   const [productSummary, setProductSummary] = useState<{ total_qty: number; negative_count: number } | null>(null)
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(pageSizeDefault)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [search, setSearch] = useState('')
   const [lastSearch, setLastSearch] = useState('')
-  const [status, setStatus] = useState<InventoryProductStatus | 'all'>('active')
+  const [status, setStatus] = useState<InventoryProductStatusFilter>('active')
   const [shape, setShape] = useState<InventoryShape | 'all'>('all')
   const [detail, setDetail] = useState<InventoryProduct | null>(null)
   const [movements, setMovements] = useState<StockMovement[]>([])
   const [stocktakes, setStocktakes] = useState<Stocktake[]>([])
   const [stocktakeTotal, setStocktakeTotal] = useState(0)
   const [stocktakePage, setStocktakePage] = useState(1)
-  const [stocktakePageSize, setStocktakePageSize] = useState(pageSizeDefault)
+  const [stocktakePageSize, setStocktakePageSize] = useState(defaultPageSize)
   const [stocktakeSearch, setStocktakeSearch] = useState('')
   const [stocktakeLastSearch, setStocktakeLastSearch] = useState('')
   const [stocktakeDateFilter, setStocktakeDateFilter] = useState<StocktakeDateFilter>('year')
@@ -169,7 +172,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
 
   async function loadProducts(input: {
     search?: string
-    status?: InventoryProductStatus | 'all'
+    status?: InventoryProductStatusFilter
     shape?: InventoryShape | 'all'
     page?: number
     page_size?: number
@@ -356,7 +359,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
             from: range.from,
             to: range.to,
             page: 1,
-            page_size: pageSizeDefault,
+            page_size: defaultPageSize,
           })
           if (!active) return
           setStocktakes(result.items)
@@ -368,15 +371,15 @@ export function InventoryPage({ service }: { service: InventoryService }) {
         }
         if (view === 'objects') {
           const [rollResult, sheetResult] = await Promise.all([
-            service.listInventoryRolls({ page: 1, page_size: pageSizeDefault }),
-            service.listInventorySheets({ page: 1, page_size: pageSizeDefault }),
+            service.listInventoryRolls({ page: 1, page_size: defaultPageSize }),
+            service.listInventorySheets({ page: 1, page_size: defaultPageSize }),
           ])
           if (!active) return
           setRolls(rollResult.items)
           setSheets(sheetResult.items)
           return
         }
-        const productResult = await service.listInventoryProducts({ status: 'active', page: 1, page_size: pageSizeDefault })
+        const productResult = await service.listInventoryProducts({ status: 'active', page: 1, page_size: defaultPageSize })
         if (!active) return
         setProducts(productResult.items)
         setProductSummary(productResult.summary ?? null)
@@ -391,7 +394,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     return () => {
       active = false
     }
-  }, [service, view])
+  }, [defaultPageSize, service, view])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyFilters(search))
@@ -587,7 +590,9 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo phiếu kiểm kho" onClick={() => undefined} />}
                 onChange={changeStocktakeSearch}
               />
-              <button className="button button-secondary" type="button" onClick={() => setStocktakeImportOpen(true)}>Import KV</button>
+              <button className="button button-secondary" disabled type="button">Tồn theo cuộn/tấm</button>
+              <button className="button button-secondary" disabled type="button">Khui vật tư</button>
+              <ManagementImportButton onClick={() => setStocktakeImportOpen(true)}>Import</ManagementImportButton>
               <button className="button button-secondary" type="button">Xuất file</button>
             </ManagementCompactToolbar>
           ) : (
@@ -617,11 +622,12 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 aria-label="Trạng thái hàng hóa"
                 className="management-filter-select"
                 value={status}
-                onChange={(event) => setStatus(event.target.value as InventoryProductStatus | 'all')}
+                onChange={(event) => setStatus(event.target.value as InventoryProductStatusFilter)}
               >
                 <option value="active">{statusText('active')}</option>
                 <option value="inactive">{statusText('inactive')}</option>
                 <option value="all">{statusText('all')}</option>
+                <option value="deleted">{statusText('deleted')}</option>
               </select>
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Loại hàng">
@@ -1270,7 +1276,7 @@ function StocktakeInlineDetail({
           </div>
         </dl>
 
-        <table aria-label={`Dòng kiểm kho ${detail.code}`} className="management-detail-table">
+        <table aria-label={`Dòng kiểm kho ${detail.code}`} className="management-detail-table management-detail-lines-table">
             <thead>
               <tr>
                 <th>Mã hàng</th>
@@ -1299,13 +1305,11 @@ function StocktakeInlineDetail({
         </table>
 
         <div className="management-detail-lower management-detail-lower-right">
-          <textarea
-            aria-label="Ghi chú phiếu kiểm kho"
-            className="management-detail-note"
+          <ManagementDetailNoteInput
+            ariaLabel="Ghi chú phiếu kiểm kho"
             placeholder="Chưa có ghi chú"
-            rows={4}
             value={note}
-            onChange={(event) => setNote(event.target.value)}
+            onChange={setNote}
           />
           <dl className="management-detail-summary-box management-detail-summary-box-right">
             <div>

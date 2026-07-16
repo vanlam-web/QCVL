@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Search, Upload, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
@@ -13,6 +13,7 @@ import {
   ManagementDateRangeInputs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
   ManagementTableCheckboxControl,
@@ -23,8 +24,9 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
-import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStockMovement, SellMethod } from './types'
+import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStatusFilter, ProductStockMovement, SellMethod } from './types'
 import {
   catalogDateTimeText,
   catalogInventoryShapeLabel,
@@ -44,7 +46,6 @@ interface CatalogState {
   totalAll?: number
 }
 
-const productPageSize = 15
 const stockMovementPageSize = 15
 type ProductKindFilter = ProductKind | 'all'
 type ProductGroupFilter = string | 'all'
@@ -127,10 +128,28 @@ const productCreatedDateLabels: Record<ProductCreatedDateFilter, string> = {
   custom: 'Tùy chỉnh',
 }
 
+function productActivityTime(product: Pick<Product, 'created_at' | 'updated_at'>) {
+  const createdAt = Date.parse(product.created_at ?? '')
+  const updatedAt = Date.parse(product.updated_at ?? '')
+  const validCreatedAt = Number.isFinite(createdAt) ? createdAt : 0
+  const validUpdatedAt = Number.isFinite(updatedAt) ? updatedAt : 0
+  return Math.max(validCreatedAt, validUpdatedAt)
+}
+
+function newestCatalogProductsFirst(products: readonly Product[]) {
+  return [...products].sort((left, right) => {
+    const compared = productActivityTime(right) - productActivityTime(left)
+    return compared === 0 ? left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' }) : compared
+  })
+}
+
 const movementTypeLabels: Record<string, string> = {
+  sale: 'Bán hàng',
   sale_deduction: 'Bán hàng',
+  purchase: 'Nhập hàng',
   purchase_receipt: 'Nhập hàng',
   stocktake_adjustment: 'Kiểm kho',
+  stocktake_balance: 'Cân bằng kiểm kho',
   manual_adjustment: 'Điều chỉnh',
   material_opening: 'Khui vật tư',
 }
@@ -147,6 +166,9 @@ const detailTabs: Array<{ key: ProductDetailTab; label: string }> = [
 function catalogProductInventoryText(product: Product) {
   if (product.operating_stock) {
     return `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}`
+  }
+  if (product.kiotviet_provisional_stock) {
+    return `${catalogQuantityText(product.kiotviet_provisional_stock.quantity)} ${product.kiotviet_provisional_stock.unit_name}`
   }
   return 'Chưa có'
 }
@@ -184,8 +206,8 @@ export function CatalogPage({
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
   const [search, setSearch] = useState('')
   const [lastSearch, setLastSearch] = useState('')
-  const [status, setStatus] = useState<ProductStatus | 'all'>('active')
-  const [lastStatus, setLastStatus] = useState<ProductStatus | 'all'>('active')
+  const [status, setStatus] = useState<ProductStatusFilter>('active')
+  const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
   const [productKindFilter, setProductKindFilter] = useState<ProductKindFilter>('all')
   const [lastProductKindFilter, setLastProductKindFilter] = useState<ProductKindFilter>('all')
   const [productGroupFilter, setProductGroupFilter] = useState<ProductGroupFilter>('all')
@@ -198,8 +220,9 @@ export function CatalogPage({
   const [productCreatedQuickTimeOpen, setProductCreatedQuickTimeOpen] = useState(false)
   const [lastProductCreatedDateFrom, setLastProductCreatedDateFrom] = useState('')
   const [lastProductCreatedDateTo, setLastProductCreatedDateTo] = useState('')
+  const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(productPageSize)
+  const [pageSize, setPageSize] = useState(defaultPageSize)
   const [form, setForm] = useState<{
     code: string
     name: string
@@ -221,7 +244,7 @@ export function CatalogPage({
   })
   async function load(filters: {
     search?: string
-    status?: ProductStatus | 'all'
+    status?: ProductStatusFilter
     product_kind?: ProductKindFilter
     product_group_id?: ProductGroupFilter
     inventory_shape?: ProductInventoryShapeFilter
@@ -276,7 +299,7 @@ export function CatalogPage({
       setError(null)
       try {
         const [result, groupResult] = await Promise.all([
-          service.listProducts({ page: 1, page_size: productPageSize, status: 'active' }),
+          service.listProducts({ page: 1, page_size: defaultPageSize, status: 'active' }),
           service.listProductGroups(),
         ])
         if (!active) return
@@ -294,7 +317,7 @@ export function CatalogPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [defaultPageSize, service])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyProductSearch(search))
@@ -326,7 +349,7 @@ export function CatalogPage({
   }
 
   async function applySidebarFilters(nextFilters: Partial<{
-    status: ProductStatus | 'all'
+    status: ProductStatusFilter
     product_kind: ProductKindFilter
     product_group_id: ProductGroupFilter
     inventory_shape: ProductInventoryShapeFilter
@@ -679,7 +702,7 @@ export function CatalogPage({
     sortedItems: sortedProducts,
     sortState: productSortState,
     requestSort: requestProductSort,
-  } = useManagementTableSort<Product, ProductSortKey>(visibleProducts, {
+  } = useManagementTableSort<Product, ProductSortKey>(newestCatalogProductsFirst(visibleProducts), {
     code: { kind: 'text', value: (product) => product.code },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
@@ -767,7 +790,7 @@ export function CatalogPage({
     },
     {
       key: 'operating-stock',
-      header: <ManagementSortableHeader kind="number" sortKey="operating_stock" sortState={productSortState} onSort={requestProductSort}>Tồn QCVL</ManagementSortableHeader>,
+      header: <ManagementSortableHeader kind="number" sortKey="operating_stock" sortState={productSortState} onSort={requestProductSort}>Tồn kho</ManagementSortableHeader>,
       headerIsCell: true,
       cell: (product) => catalogProductInventoryText(product),
     },
@@ -800,10 +823,7 @@ export function CatalogPage({
             value={search}
             onChange={changeProductSearch}
           />
-          <button className="button button-secondary" type="button" onClick={() => setProductImportOpen(true)}>
-            <Upload aria-hidden="true" size={16} />
-            Import
-          </button>
+          <ManagementImportButton onClick={() => setProductImportOpen(true)} />
         </ManagementCompactToolbar>
       }
       filter={
@@ -923,10 +943,11 @@ export function CatalogPage({
                 aria-label="Trạng thái hàng hóa"
                 className="management-filter-select"
                 value={status}
-                onChange={(event) => void applySidebarFilters({ status: event.target.value as ProductStatus | 'all' })}
+                onChange={(event) => void applySidebarFilters({ status: event.target.value as ProductStatusFilter })}
               >
                 <option value="active">Hàng đang kinh doanh</option>
                 <option value="inactive">Hàng ngừng kinh doanh</option>
+                <option value="deleted">Đã xoá KV</option>
                 <option value="all">Tất cả</option>
               </select>
             </label>

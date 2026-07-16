@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { KiotVietImportDialog, type KiotVietImportSummaryItem } from '../../components/ui-shell/KiotVietImportDialog'
 import { formatApiError } from '../../lib/api/error-message'
+import { displayPriceListName } from '../../lib/price-list-display'
 import type { CatalogService } from './catalog-service'
 import type { KiotVietProductImportPreview } from './types'
 
@@ -10,12 +11,14 @@ export function ProductImportDialog({
   onClose,
   onOldDataDeleted,
   onImported,
+  title = 'Import hàng hóa KiotViet',
 }: {
   open: boolean
   service: Pick<CatalogService, 'previewKiotVietProductImport' | 'importKiotVietProducts' | 'deleteImportedKiotVietProducts'>
   onClose: () => void
   onOldDataDeleted?: () => void
   onImported: () => void
+  title?: string
 }) {
   const [file, setFile] = useState<File | null>(null)
   const [preview, setPreview] = useState<KiotVietProductImportPreview | null>(null)
@@ -34,7 +37,7 @@ export function ProductImportDialog({
     { label: 'Giá bán', value: `${preview.summary.price_rows ?? 0} dòng giá bán` },
     { label: 'Tồn tạm', value: `${preview.summary.provisional_stock_rows ?? 0} dòng tồn tạm` },
     { label: 'BOM nháp', value: `${preview.summary.bom_rows ?? 0} dòng BOM nháp` },
-    { label: 'Bảng giá', value: preview.summary.price_list_name ?? 'Chưa có bảng giá mặc định' },
+    { label: 'Bảng giá', value: preview.summary.price_list_name ? displayPriceListName({ name: preview.summary.price_list_name }) : 'Chưa có bảng giá mặc định' },
   ] : []
 
   const notes = preview ? (
@@ -101,7 +104,7 @@ export function ProductImportDialog({
       open={open}
       preview={Boolean(preview)}
       summaryItems={summaryItems}
-      title="Import hàng hóa KiotViet"
+      title={title}
       canImport={Boolean(file && preview && preview.invalid_rows.length === 0)}
       deleteOldDataConfirmMessage="Xóa toàn bộ dữ liệu cũ của lần import KiotViet trên trang Hàng hóa?"
       onClose={onClose}

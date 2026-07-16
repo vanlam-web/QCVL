@@ -1,4 +1,4 @@
-# 02-SALES-DOCUMENT-DETAIL — Chi tiết chứng từ bán hàng
+﻿# 02-SALES-DOCUMENT-DETAIL — Chi tiết chứng từ bán hàng
 
 > **Phase hiện tại:** Readonly detail cho `HD...`/`BG...`; báo giá active mở lại được vào POS draft
 
@@ -37,27 +37,28 @@ Hiện tại đã đọc dữ liệu đã có:
 - stock movements liên quan nếu Backend trả về
 - thao tác mở lại báo giá active vào POS draft local
 - tab `Thông tin` và `Lịch sử thanh toán` hiển thị ngay trong inline detail; tab lịch sử thanh toán không gọi API riêng mà dùng dữ liệu đã có trong response detail
+- footer chi tiết hiện tại giữ các nút `Hủy`, `Sao chép`, `Sửa`, `Lưu`, `In`; chỉ không làm/không hiển thị `Trả hàng` và `Tạo QR` trong V1
+- ghi chú đơn nằm trong ô nhập dùng chung `ManagementDetailNoteInput`/`management-detail-note`; bấm `Lưu` lưu nhanh ghi chú chứng từ và cập nhật lại dòng danh sách
 
 Shared management detail:
 
 - chi tiết chứng từ nằm trong detail row của `ManagementDataTable`;
-- detail dùng shared `management-*` shell, tab, note, detail table và footer action;
+- detail dùng shared `management-*` shell, tab, `ManagementDetailNoteInput`, detail table và footer action;
 - action theo nghiệp vụ chứng từ vẫn khai báo riêng ở SalesDocuments;
 - click trong vùng detail không được bubble làm đóng/mở lại row.
 
-Ngoài phạm vi hiện tại:
+Không làm trong V1:
 
-- nút sửa hóa đơn
-- nút hủy hóa đơn
-- in lại bill hóa đơn nếu Bill Preview/print flow chưa sẵn sàng
-- transaction đảo kho/tiền/công nợ
+- nút `Trả hàng`
+- nút `Tạo QR`
+- transaction đảo kho/tiền/công nợ rời rạc ngoài API nghiệp vụ an toàn
 - API lịch sử thanh toán riêng cho detail; hiện không cần nếu `payment_receipts` trong detail đã đủ
 
 Đã có ở lát quote print:
 
 - in/xem báo giá mẫu mặc định cho `BG...`
 
-Các phần bên dưới có nhãn **Ngoài phạm vi hiện tại** là hướng thiết kế sau, không phải cam kết đã có trong implementation hiện tại.
+Các phần bên dưới về nghiệp vụ sửa/hủy/in là hướng thiết kế cần API transaction an toàn, không phải cam kết đã hoàn thiện toàn bộ hành vi sâu trong implementation hiện tại.
 
 ---
 
@@ -85,7 +86,7 @@ Hiển thị:
 - Người bán: tài khoản tạo/chốt chứng từ. QC-OMS hiện tại không tách riêng `người tạo` và `người bán`.
 - Bảng giá đã áp dụng.
 - Chi nhánh không hiển thị trong MVP vì hiện chỉ có một chi nhánh ngầm; chỉ bổ sung nếu sau này thật sự vận hành nhiều chi nhánh/kho.
-- Ghi chú đơn.
+- Ghi chú đơn có thể sửa trực tiếp trong detail; lưu qua `PATCH /api/v1/sales-documents/{id}` body `{ "note": "..." }`.
 - Tổng tiền hàng, giảm giá, khách cần trả, khách đã trả, còn nợ hoặc tiền thừa đã trả lại.
 
 Nếu chứng từ là bản sửa:
@@ -111,7 +112,7 @@ Mỗi dòng hiển thị dữ liệu snapshot tại thời điểm lưu:
 - Kích thước, mét tới hoặc m2 nếu có.
 - Số lượng quy đổi tính tiền nếu dòng hàng phát sinh từ kích thước, ví dụ `2.5m x 3.3m x 1 = 8.25m2`.
 - Đơn giá đã áp dụng.
-- Nguồn giá: bảng giá chung, bảng giá nhóm, fallback hoặc giá sửa tay.
+- Nguồn giá: giá chung, bảng giá nhóm, fallback hoặc giá sửa tay.
 - Thành tiền.
 - Ghi chú dòng.
 
@@ -174,13 +175,13 @@ Ghi lại timeline:
 
 Mỗi dòng lịch sử có thời gian, nhân viên, hành động và ghi chú.
 
-Hiện tại chỉ hiển thị phần lịch sử đã có dữ liệu readonly. Mở lại báo giá đã có ở mức draft local; in/sửa/hủy/đảo nằm ngoài phạm vi hiện tại nếu chưa có transaction tương ứng.
+Hiện tại chỉ hiển thị phần lịch sử đã có dữ liệu readonly. Mở lại báo giá đã có ở mức draft local; in/sửa/hủy có nút trong footer, nhưng phần đảo dữ liệu sâu vẫn phải đi qua transaction tương ứng.
 
 ---
 
-## 8. Thao tác ngoài phạm vi hiện tại
+## 8. Thao tác cần API an toàn
 
-Các thao tác trong mục này chỉ bật sau khi có rule nghiệp vụ rõ, API transaction an toàn nếu có tác động liên bảng, và kiểm thử đủ.
+Các thao tác trong mục này phải có rule nghiệp vụ rõ, API transaction an toàn nếu có tác động liên bảng, và kiểm thử đủ.
 
 ### 8.1. Mở lại báo giá
 

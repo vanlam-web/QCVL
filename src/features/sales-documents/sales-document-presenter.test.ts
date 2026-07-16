@@ -49,6 +49,7 @@ describe('sales document presenter', () => {
     expect(salesDocumentPaymentSettlementStatus(invoice)).toBe('partial')
     expect(salesDocumentStatusLabel(invoice)).toBe('Thanh toán 1 phần')
     expect(salesDocumentStatusTone(invoice)).toBe('warning')
+    expect(salesDocumentStatusTone({ ...invoice, payment_status: 'unpaid' })).toBe('danger')
 
     expect(salesDocumentStatusLabel({ ...invoice, order_type: 'quote', status: 'active', payment_status: 'not_applicable' })).toBe('Đang hiệu lực')
     expect(salesDocumentStatusLabel({ ...invoice, status: 'cancelled' })).toBe('Đã hủy')
@@ -97,13 +98,8 @@ describe('sales document presenter', () => {
     expect(salesDocumentDateTimeText('bad-date', '2026-07-09T03:00:00Z')).not.toBe('-')
   })
 
-  it('formats POS-created invoices in local time but keeps KiotViet source clock unchanged', () => {
+  it('formats sales document created time from source clock text', () => {
     expect(salesDocumentCreatedDateTimeText({
-      code: 'HD-POS-021-37F1D9E6',
-      created_at: '2026-07-12T17:20:00.000Z',
-    })).toBe('13/07/2026 00:20')
-    expect(salesDocumentCreatedDateTimeText({
-      code: 'HD011143',
       created_at: '2026-07-12T17:20:00.000Z',
     })).toBe('12/07/2026 17:20')
   })

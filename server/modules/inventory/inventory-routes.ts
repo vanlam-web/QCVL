@@ -32,7 +32,7 @@ export function handleInventoryRoute(context: InventoryRouteContext, handlers: I
 
   if (method === 'GET' && pathname === '/api/v1/inventory/products') return handlers.listProducts()
   if (method === 'GET' && /^\/api\/v1\/inventory\/products\/[^/]+$/.test(pathname)) return handlers.getProduct()
-  if (method === 'PATCH' && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(pathname)) return handlers.adjustStock()
+  if ((method === 'POST' || method === 'PATCH') && /^\/api\/v1\/inventory\/products\/[^/]+\/adjust-stock$/.test(pathname)) return handlers.adjustStock()
   if (method === 'GET' && pathname === '/api/v1/inventory/stock-movements') return handlers.stockMovements()
   if (method === 'GET' && pathname === '/api/v1/inventory/stocktakes') return handlers.stocktakes()
   if (method === 'GET' && /^\/api\/v1\/inventory\/stocktakes\/[^/]+$/.test(pathname)) return handlers.getStocktake()

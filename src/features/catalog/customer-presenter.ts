@@ -1,12 +1,14 @@
 import type { SalesDocumentListItem } from '../sales-documents/sales-document-service'
 import type { Customer } from './types'
-import { formatKvDateTime } from '../../lib/date-format'
+import { formatKvDate, formatKvDateTime } from '../../lib/date-format'
 
 export function customerSalesDocumentStatusText(document: SalesDocumentListItem) {
   if (document.order_type === 'invoice') {
     if (document.status === 'cancelled') return 'Đã hủy'
+    if (document.payment_status === 'paid') return 'Hoàn tất'
     if (document.payment_status === 'unpaid' || (document.debt_amount > 0 && document.paid_amount <= 0)) return 'Nợ'
-    if (document.payment_status === 'partial' || document.debt_amount > 0) return 'Nợ 1 phần'
+    if (document.payment_status === 'partial') return 'Nợ 1 phần'
+    if (document.debt_amount > 0) return 'Nợ 1 phần'
     return 'Hoàn tất'
   }
 
@@ -17,6 +19,10 @@ export function customerSalesDocumentStatusText(document: SalesDocumentListItem)
 
 export function customerDateTime(value: string | null | undefined) {
   return formatKvDateTime(value, 'Chưa có dữ liệu')
+}
+
+export function customerDate(value: string | null | undefined) {
+  return formatKvDate(value, 'Chưa có dữ liệu')
 }
 
 export function customerVisibleSummary(customers: Array<Pick<Customer, 'total_debt_amount' | 'total_sales_amount'>>) {

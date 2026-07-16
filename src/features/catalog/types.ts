@@ -1,4 +1,5 @@
 export type ProductStatus = 'active' | 'inactive'
+export type ProductStatusFilter = ProductStatus | 'all' | 'deleted'
 export type SellMethod = 'quantity' | 'area_m2' | 'linear_m' | 'sheet' | 'combo'
 export type ProductKind = 'goods' | 'service' | 'auxiliary_material' | 'roll' | 'sheet' | 'combo'
 
@@ -13,7 +14,9 @@ export interface Product {
   latest_purchase_cost?: number | null
   latest_purchase_cost_at?: string | null
   created_at?: string | null
+  updated_at?: string | null
   default_sale_price?: number | null
+  price_list_prices?: Record<string, number>
   product_group_id?: string | null
   product_group?: { id: string; code: string; name: string } | null
   inventory_shape?: 'normal' | 'roll' | 'sheet'
@@ -265,6 +268,7 @@ export interface Customer {
   status?: string | null
   total_sales_amount?: number
   total_debt_amount?: number
+  linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
 }
 
 export interface CustomerListResponse {

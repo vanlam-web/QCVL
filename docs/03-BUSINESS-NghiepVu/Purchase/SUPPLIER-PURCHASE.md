@@ -36,6 +36,8 @@ Số điện thoại NCC không chốt unique trong MVP. Nếu sau này cần ch
 
 NCC và khách hàng là hai vai trò nghiệp vụ khác nhau nhưng có thể liên kết cùng một đối tác. MVP không tự gộp hồ sơ theo số điện thoại/tên để tránh sai dữ liệu; người dùng chọn liên kết thủ công khi biết chắc đó là cùng một bên.
 
+Khi NCC có `linked_customer_id`, danh sách NCC hiển thị icon liên kết màu cam ngay trước mã NCC để nhân viên nhận biết đối tác vừa là NCC vừa là khách hàng. Icon là tín hiệu nhận diện nhanh, không thay thế card liên kết trong chi tiết và không tạo thêm cột danh sách.
+
 ### BR-PUR-02: Tổng mua và công nợ NCC
 
 Danh sách NCC cần hiển thị tối thiểu:
@@ -225,7 +227,7 @@ Quyết định Owner 2026-07-02 cho P5:
 Tham khảo KiotViet 2026-07-02:
 
 - Lịch sử công nợ NCC hiển thị giao dịch thanh toán với mã dạng `PCPN000673`, đi cặp với phiếu nhập `PN000673`.
-- Trong chi tiết phiếu nhập, tab `Lịch sử thanh toán` hiển thị `Mã phiếu`, `Thời gian`, `Người tạo`, `Phương thức`, `Trạng thái`, `Tiền chi`.
+- Trong chi tiết phiếu nhập, chỉ hiện tab `Lịch sử thanh toán` khi phiếu đã có ít nhất một dòng thanh toán NCC. Tab này hiển thị `Mã phiếu`, `Thời gian`, `Người tạo`, `Phương thức`, `Trạng thái`, `Tiền chi`.
 - Trong chi tiết NCC, tab `Nợ cần trả nhà cung cấp` hiển thị lịch sử `Nhập hàng`/`Thanh toán` và có action `Thanh toán`.
 - Sổ quỹ là module quản lý `Phiếu thu`/`Phiếu chi`, có filter quỹ tiền `Tiền mặt`/`Ngân hàng` và cột `Số tài khoản` khi dùng ngân hàng.
 
@@ -233,7 +235,8 @@ Quyết định QC-OMS cho P5:
 
 - Mã chứng từ trả NCC dùng prefix `PCPN` để bám sát KiotViet và dễ đối chiếu với `PN...`.
 - UI P5 nên hỗ trợ thao tác từ chi tiết NCC và từ chi tiết phiếu nhập posted còn nợ. Cả hai đường đều mở cùng một form trả NCC và bắt buộc chọn phiếu nhập cụ thể.
-- Chi tiết phiếu nhập posted cần có phần/lịch sử thanh toán NCC tối thiểu để xem các `PCPN...` đã chi cho phiếu đó.
+- Chi tiết phiếu nhập posted cần có lịch sử thanh toán NCC để xem các `PCPN...` đã chi cho phiếu đó. Nếu chưa có thanh toán, không hiện tab `Lịch sử thanh toán`; action `Thanh toán NCC` nằm ở footer tab `Thông tin`.
+- Với phiếu nhập KiotViet đã có `Tiền đã trả NCC` nhưng không có dòng `supplier_payments` riêng, UI được phép dựng một dòng lịch sử đọc-only mã `PC` + mã phiếu nhập để đối chiếu, ví dụ `PCPN000684`.
 
 ---
 
@@ -294,26 +297,30 @@ Acceptance:
 
 ### Slice P2 — Purchase receipt draft/list/detail
 
-Đã merge cho hàng thường. Phạm vi:
+Đã merge. Phạm vi hiện tại:
 
 - tạo phiếu nhập `draft`
 - sửa draft
 - danh sách phiếu nhập
 - chi tiết phiếu nhập readonly/edit draft
+- tìm hàng trong màn tạo bằng thanh `Tìm hàng (F3)` giống POS, chỉ theo mã hàng/tên hàng
+- chọn hàng từ search để thêm card dòng hàng; không có row rỗng mặc định và không dùng bảng/dropdown chọn sản phẩm
 - dòng hàng thường với quantity/unit_cost/discount/line_total
+- dòng hàng roll/sheet lưu được `physical_payload` trong draft; post object vật lý vẫn thuộc P4
 - số chứng từ NCC dạng text
 
 Không gồm:
 
 - post tăng tồn
 - thanh toán thật
-- roll/sheet object vật lý đầy đủ
+- post roll/sheet object vật lý đầy đủ
 
 Acceptance:
 
 - draft không tạo stock movement, cashbook, payable
 - tìm exact mã `PN...` không bị mất do filter tháng hiện tại
-- tính tổng tiền hàng/giảm giá/cần trả/còn phải trả từ dòng hàng
+- tính tổng tiền hàng/giảm giá/tổng nợ hoặc còn phải trả từ dòng hàng
+- không cho lưu phiếu nhập khi chưa có dòng hàng
 
 ### Slice P3 — Post receipt cho hàng thường
 
@@ -345,7 +352,9 @@ Acceptance:
 
 ### Slice P4 — Roll/sheet purchase objects
 
-Candidate tiếp theo sau khi khớp lại code hiện tại. Phạm vi:
+Candidate tiếp theo sau khi khớp lại code hiện tại. Form draft đã có UI nhập payload vật lý trong card dòng hàng; P4 còn phạm vi post object vật lý và sửa posted an toàn.
+
+Phạm vi:
 
 - nhập cuộn/tấm theo vật lý
 - tạo roll/sheet object hoặc lot theo Inventory schema hiện có

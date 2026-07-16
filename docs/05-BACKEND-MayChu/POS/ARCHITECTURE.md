@@ -1,193 +1,193 @@
-﻿# ARCHITECTURE â€” Kiáº¿n trÃºc State Manager & Data Safety
+# ARCHITECTURE — Kiến trúc State Manager & Data Safety
 
-> **Nguá»“n:** Di chuyá»ƒn tá»« `02-PRD-UX-PhongCanh/POS/01-POS-LAYOUT.md` (Section V) vÃ  `02-PRD-UX-PhongCanh/POS/K01/01c-K01-ARCH-SAFETY.md` (Section V.1â€“V.3)
+> **Nguồn:** Di chuyển từ `02-PRD-UX-PhongCanh/POS/01-POS-LAYOUT.md` (Section V) và `02-PRD-UX-PhongCanh/POS/K01/01c-K01-ARCH-SAFETY.md` (Section V.1–V.3)
 
 ---
 
-## 1. KIáº¾N TRÃšC STATE MANAGER (POS STORE)
+## 1. KIẾN TRÚC STATE MANAGER (POS STORE)
 
-### 1.1. NguyÃªn táº¯c cá»‘t lÃµi
+### 1.1. Nguyên tắc cốt lõi
 
-UI component **chá»‰ lÃ m 2 viá»‡c:**
-1. Hiá»ƒn thá»‹ state tá»« Store (qua selector / derived).
-2. PhÃ¡t lá»‡nh báº±ng cÃ¡ch gá»i Action tá»« Store â€” khÃ´ng tá»± tÃ­nh, khÃ´ng tá»± gá»i API.
+UI component **chỉ làm 2 việc:**
+1. Hiển thị state từ Store (qua selector / derived).
+2. Phát lệnh bằng cách gọi Action từ Store — không tự tính, không tự gọi API.
 
-Component UI **TUYá»†T Äá»I KHÃ”NG** viáº¿t trá»±c tiáº¿p trong `.tsx` / `.svelte`:
+Component UI **TUYỆT ĐỐI KHÔNG** viết trực tiếp trong `.tsx` / `.svelte`:
 
-- TÃ­nh toÃ¡n nghiá»‡p vá»¥: `mÂ² = R Ã— D Ã— SL`, `ThÃ nh tiá»n = mÂ² Ã— ÄÆ¡n giÃ¡`
-- Thao tÃ¡c máº£ng giá» hÃ ng: `cart.push()`, `cart.find()`, `cart.reduce()`
-- Gá»i dá»¯ liá»‡u nghiá»‡p vá»¥ trá»±c tiáº¿p: `direct database access`, `direct database access`
-- ÄÄƒng kÃ½ Realtime trá»±c tiáº¿p trong component thay vÃ¬ qua lá»›p `lib/realtime`
-- Sinh bill text: template Zalo, format tiá»n
-- Validation: check SÄT rá»—ng, check giá» rá»—ng trÆ°á»›c thanh toÃ¡n
+- Tính toán nghiệp vụ: `m² = R × D × SL`, `Thành tiền = m² × Đơn giá`
+- Thao tác mảng giỏ hàng: `cart.push()`, `cart.find()`, `cart.reduce()`
+- Gọi dữ liệu nghiệp vụ trực tiếp: `direct database access`, `direct database access`
+- Đăng ký Realtime trực tiếp trong component thay vì qua lớp `lib/realtime`
+- Sinh bill text: template Zalo, format tiền
+- Validation: check SĐT rỗng, check giỏ rỗng trước thanh toán
 
-### 1.2. State táº­p trung trong Store
+### 1.2. State tập trung trong Store
 
-| VÃ¹ng state | Vai trÃ² | Action Ä‘i kÃ¨m |
+| Vùng state | Vai trò | Action đi kèm |
 |---|---|---|
-| **Tabs** | Danh sÃ¡ch tab Ä‘ang má»Ÿ, tab active, cuá»™n ngang | `addTab()`, `closeTab(id)`, `setActiveTab(id)`, `scrollTabs(dir)` |
-| **Cart** | Máº£ng dÃ²ng sáº£n pháº©m tá»«ng tab, focus row | `addRow()`, `updateRow()`, `removeRow()`, `selectRow()` |
-| **Order note** | Ghi chÃº tá»•ng tab active | `setNote(text)` |
-| **Customer** | KH Ä‘ang chá»n, báº£ng giÃ¡, % chiáº¿t kháº¥u | `setCustomer(id)`, `clearCustomer()`, `setPriceList(id)` |
-| **Toast** | Tráº¡ng thÃ¡i hiá»ƒn thá»‹ Toast | `showMissingPhoneToast()`, `hideToast()` |
-| **Production queue** | Danh sÃ¡ch file mÃ¡y sáº£n xuáº¥t Ä‘ang chá» K02-D | `enqueueFile()`, `removeFromQueue()` |
+| **Tabs** | Danh sách tab đang mở, tab active, cuộn ngang | `addTab()`, `closeTab(id)`, `setActiveTab(id)`, `scrollTabs(dir)` |
+| **Cart** | Mảng dòng sản phẩm từng tab, focus row | `addRow()`, `updateRow()`, `removeRow()`, `selectRow()` |
+| **Order note** | Ghi chú tổng tab active | `setNote(text)` |
+| **Customer** | KH đang chọn, bảng giá, % chiết khấu | `setCustomer(id)`, `clearCustomer()`, `setPriceList(id)` |
+| **Toast** | Trạng thái hiển thị Toast | `showMissingPhoneToast()`, `hideToast()` |
+| **Production queue** | Danh sách file máy sản xuất đang chờ K02-D | `enqueueFile()`, `removeFromQueue()` |
 | **Connection** | Realtime: Connected / Connecting / Disconnected | `setConnection(state)` |
-| **Active user** | Há»“ sÆ¡ nhÃ¢n viÃªn Ä‘ang Ä‘Äƒng nháº­p + `user_id` session | `setUser(profile)` |
+| **Active user** | Hồ sơ nhân viên đang đăng nhập + `user_id` session | `setUser(profile)` |
 
-### 1.3. Pattern chuáº©n
+### 1.3. Pattern chuẩn
 
-**Hiá»ƒn thá»‹:**
+**Hiển thị:**
 
 ```ts
-// SAI â€” logic náº·ng inline trong component
+// SAI — logic nặng inline trong component
 function K02A_Row({ row }) {
   const total = row.r * row.d * row.sl
-  return <div>{total} mÂ²</div>
+  return <div>{total} m²</div>
 }
 
-// ÄÃšNG â€” UI chá»‰ Ä‘á»c state Ä‘Ã£ Ä‘Æ°á»£c Store tÃ­nh sáºµn
+// ĐÚNG — UI chỉ đọc state đã được Store tính sẵn
 function K02A_Row({ row }) {
-  return <div>{row.totalArea} mÂ²</div>
+  return <div>{row.totalArea} m²</div>
 }
 ```
 
-**TÆ°Æ¡ng tÃ¡c:**
+**Tương tác:**
 
 ```ts
-// SAI â€” component tá»± mutate state
+// SAI — component tự mutate state
 <input onChange={e => cart.push({ ...row, sl: e.target.value })} />
 
-// ÄÃšNG â€” component phÃ¡t action, Store lo tÃ­nh toÃ¡n
+// ĐÚNG — component phát action, Store lo tính toán
 <input onChange={e => posStore.updateRow(row.id, { sl: e.target.value })} />
 ```
 
-### 1.4. RÃ ng buá»™c
+### 1.4. Ràng buộc
 
-| RÃ ng buá»™c | Chi tiáº¿t |
+| Ràng buộc | Chi tiết |
 |---|---|
-| Component â‰¤ 200 dÃ²ng | Trá»« K02-A cÃ³ nhiá»u row |
-| KhÃ´ng import QCVL Node API data client trong UI | Dá»¯ liá»‡u nghiá»‡p vá»¥ chá»‰ Ä‘i qua API Client; QCVL Node API SDK chá»‰ dÃ¹ng táº¡i lá»›p Auth/Realtime |
-| CÃ´ng thá»©c tÃ­nh Ä‘áº·t táº¡i `lib/pos/calc.ts` | `mÂ²`, `ThÃ nh tiá»n`, `Tiá»n thá»«a` |
-| Action trong Store pháº£i **pure** | Hoáº·c cÃ³ doc rÃµ side-effect |
+| Component ≤ 200 dòng | Trừ K02-A có nhiều row |
+| Không import QCVL Node API data client trong UI | Dữ liệu nghiệp vụ chỉ đi qua API Client; QCVL Node API SDK chỉ dùng tại lớp Auth/Realtime |
+| Công thức tính đặt tại `lib/pos/calc.ts` | `m²`, `Thành tiền`, `Tiền thừa` |
+| Action trong Store phải **pure** | Hoặc có doc rõ side-effect |
 
-### 1.5. Cáº¥u trÃºc thÆ° má»¥c
+### 1.5. Cấu trúc thư mục
 
 ```
 src/
-â”œâ”€â”€ stores/
-â”‚   â””â”€â”€ posStore.ts          â† State táº­p trung + Actions
-â”œâ”€â”€ lib/pos/
-â”‚   â”œâ”€â”€ calc.ts              â† CÃ´ng thá»©c tÃ­nh (mÂ², tiá»n, bill)
-â”‚   â”œâ”€â”€ api.ts               â† API Client gá»i /api/v1
-â”‚   â”œâ”€â”€ realtime.ts          â† QCVL Node API Realtime subscriptions
-â”‚   â””â”€â”€ types.ts             â† TypeScript types cho Row, Tab, Customer
-â”œâ”€â”€ lib/auth/
-â”‚   â””â”€â”€ QCVL Node API.ts          â† QCVL Node API Auth client
-â””â”€â”€ components/pos/
-    â”œâ”€â”€ K01/
-    â”œâ”€â”€ K02/
-    â””â”€â”€ K03/
+├── stores/
+│   └── posStore.ts          ← State tập trung + Actions
+├── lib/pos/
+│   ├── calc.ts              ← Công thức tính (m², tiền, bill)
+│   ├── api.ts               ← API Client gọi /api/v1
+│   ├── realtime.ts          ← QCVL Node API Realtime subscriptions
+│   └── types.ts             ← TypeScript types cho Row, Tab, Customer
+├── lib/auth/
+│   └── QCVL Node API.ts          ← QCVL Node API Auth client
+└── components/pos/
+    ├── K01/
+    ├── K02/
+    └── K03/
 ```
 
 ---
 
-## 2. PERSISTENCE â€” LÆ¯U TRá»® LOCAL (CHá»NG Sáº¬P NGUá»’N)
+## 2. PERSISTENCE — LƯU TRỮ LOCAL (CHỐNG SẬP NGUỒN)
 
-### 2.1. Pháº¡m vi lÆ°u trá»¯ LocalStorage
+### 2.1. Phạm vi lưu trữ LocalStorage
 
 > Database reference: `04-DATABASE/Sales/POS-TABLES.md`
 
-Khi Store thay Ä‘á»•i (debounce 300ms), ghi xuá»‘ng LocalStorage (key: `pos.session.v1`):
+Khi Store thay đổi (debounce 300ms), ghi xuống LocalStorage (key: `qc-oms.pos.invoice-tabs.v1`):
 
-| VÃ¹ng dá»¯ liá»‡u | Ghi chÃº |
+| Vùng dữ liệu | Ghi chú |
 |---|---|
-| Danh sÃ¡ch tab Ä‘ang má»Ÿ | KÃ¨m thá»© tá»±, tab active |
-| Tráº¡ng thÃ¡i tá»«ng tab | `Active` / `Dirty` (Ä‘Ã£ cÃ³ hÃ ng chÆ°a thanh toÃ¡n) |
-| ToÃ n bá»™ dÃ²ng sáº£n pháº©m trong giá» tá»«ng tab | Rá»™ng / DÃ i / SL / ÄÆ¡n giÃ¡ / ThÃ nh tiá»n |
-| Ghi chÃº Ä‘Æ¡n hÃ ng (K02-B) | Theo tá»«ng tab |
-| Äá»‘i tÃ¡c Ä‘ang chá»n + báº£ng giÃ¡ (K03-A) | Theo tá»«ng tab |
+| Danh sách tab đang mở | Kèm thứ tự, tab active |
+| Trạng thái từng tab | `Active` / `Dirty` (đã có hàng chưa thanh toán) |
+| Toàn bộ dòng sản phẩm trong giỏ từng tab | Rộng / Dài / SL / Đơn giá / Thành tiền |
+| Ghi chú đơn hàng (K02-B) | Theo từng tab |
+| Đối tác đang chọn + bảng giá (K03-A) | Theo từng tab |
 
-### 2.2. VÃ²ng Ä‘á»i dá»¯ liá»‡u
+### 2.2. Vòng đời dữ liệu
 
 ```
-Báº¥t ká»³ thay Ä‘á»•i nÃ o trong Store (addRow, setNote, setCustomer...)
-    â†“ (Debounce 300ms)
-Ghi xuá»‘ng LocalStorage (key: pos.session.v1)
-    â†“
-Sáº­p nguá»“n / F5 / ÄÃ³ng tab trÃ¬nh duyá»‡t â†’ Dá»¯ liá»‡u váº«n cÃ²n nguyÃªn
-    â†“
-Khá»Ÿi Ä‘á»™ng láº¡i POS â†’ Äá»c LocalStorage â†’ Dá»±ng láº¡i nguyÃªn tráº¡ng thÃ¡i lÃ m viá»‡c
-    â†“
-Dá»¯ liá»‡u CHá»ˆ bá»‹ xÃ³a sáº¡ch khá»i LocalStorage khi:
-    (a) Báº¥m [Thanh toÃ¡n] thÃ nh cÃ´ng (F9), HOáº¶C
-    (b) NhÃ¢n viÃªn chá»§ Ä‘á»™ng báº¥m [X] Ä‘Ã³ng tab
+Bất kỳ thay đổi nào trong Store (addRow, setNote, setCustomer...)
+    ↓ (Debounce 300ms)
+Ghi xuống LocalStorage (key: `qc-oms.pos.invoice-tabs.v1`)
+    ↓
+Sập nguồn / F5 / Đóng tab trình duyệt → Dữ liệu vẫn còn nguyên
+    ↓
+Khởi động lại POS → Đọc LocalStorage → Dựng lại nguyên trạng thái làm việc; dòng hàng hydrate lại sản phẩm từ catalog hiện tại để cập nhật đơn vị quy đổi/giá trị sản phẩm mới nhất
+    ↓
+Dữ liệu CHỈ bị xóa sạch khỏi LocalStorage khi:
+    (a) Bấm [Thanh toán] thành công (F9), HOẶC
+    (b) Nhân viên chủ động bấm [X] đóng tab
 ```
 
-### 2.3. LÆ°u Ã½ an toÃ n
+### 2.3. Lưu ý an toàn
 
-- KhÃ´ng lÆ°u thÃ´ng tin nháº¡y cáº£m (máº­t kháº©u, token bÃ­ máº­t) â€” chá»‰ lÆ°u state lÃ m viá»‡c.
-- Khi version schema thay Ä‘á»•i, Ã©p key `pos.session.v1` â†’ `v2` Ä‘á»ƒ trÃ¡nh crash do dá»¯ liá»‡u cÅ©.
+- Không lưu thông tin nhạy cảm (mật khẩu, token bí mật) — chỉ lưu state làm việc.
+- Khi version schema thay đổi, tăng suffix key `qc-oms.pos.invoice-tabs.v1` → `v2` để tránh crash do dữ liệu cũ.
 
 ---
 
-## 3. CONCURRENCY LOCK â€” KHÃ“A ÄÆ N TRANH CHáº¤P
+## 3. CONCURRENCY LOCK — KHÓA ĐƠN TRANH CHẤP
 
 ### 3.1. Trigger
 
-Khi nhÃ¢n viÃªn má»Ÿ Ä‘Æ¡n hÃ ng cÅ© Ä‘á»ƒ cáº­p nháº­t (`Update_HD010664`) â€” Tab khá»Ÿi táº¡o thÃ nh cÃ´ng â†’ **ngay láº­p tá»©c** gá»i RPC.
+Khi nhân viên mở đơn hàng cũ để cập nhật (`Update_HD010664`) — Tab khởi tạo thành công → **ngay lập tức** gọi RPC.
 
 ### 3.2. Workflow
 
 ```
-NhÃ¢n viÃªn click [Sá»­a] HD010664
-    â†“
-Tab má»›i Ä‘Æ°á»£c sinh ra trÃªn POS
-    â†“
-Ngay láº­p tá»©c gá»i: POST /api/v1/orders/HD010664/lock
-    â†“
-Server ghi cá» locked_by + locked_at vÃ o báº£ng orders
-    â†“
-Realtime push xuá»‘ng mÃ n hÃ¬nh/mÃ¡y sáº£n xuáº¥t liÃªn quan
-    â†“
-MÃ n hÃ¬nh xÆ°á»Ÿng hiá»ƒn thá»‹: [ðŸ”’ Äang thanh toÃ¡n táº¡i quáº§y]
-    â†“
-ToÃ n bá»™ nÃºt báº¥m chá»‰nh sá»­a cá»§a thá»£ in/cáº¯t bá»‹ vÃ´ hiá»‡u hÃ³a
+Nhân viên click [Sửa] HD010664
+    ↓
+Tab mới được sinh ra trên POS
+    ↓
+Ngay lập tức gọi: POST /api/v1/orders/HD010664/lock
+    ↓
+Server ghi cờ locked_by + locked_at vào bảng orders
+    ↓
+Realtime push xuống màn hình/máy sản xuất liên quan
+    ↓
+Màn hình xưởng hiển thị: [🔒 Đang thanh toán tại quầy]
+    ↓
+Toàn bộ nút bấm chỉnh sửa của thợ in/cắt bị vô hiệu hóa
 ```
 
-### 3.3. Giáº£i phÃ³ng khÃ³a
+### 3.3. Giải phóng khóa
 
-| TÃ¬nh huá»‘ng | HÃ nh Ä‘á»™ng |
+| Tình huống | Hành động |
 |---|---|
-| ÄÆ¡n hoÃ n thÃ nh (báº¥m [Thanh toÃ¡n] thÃ nh cÃ´ng) | Gá»i RPC `unlock_order(order_id)` |
-| Tab POS bá»‹ Ä‘Ã³ng (báº¥m [X] trÃªn tab) | Gá»i RPC `unlock_order(order_id)` |
-| Tab POS bá»‹ Ä‘Ã³ng do refresh/timeout | TTL lock tá»± háº¿t háº¡n â€” **30 phÃºt** |
+| Đơn hoàn thành (bấm [Thanh toán] thành công) | Gọi RPC `unlock_order(order_id)` |
+| Tab POS bị đóng (bấm [X] trên tab) | Gọi RPC `unlock_order(order_id)` |
+| Tab POS bị đóng do refresh/timeout | TTL lock tự hết hạn — **30 phút** |
 
-### 3.4. RÃ ng buá»™c
+### 3.4. Ràng buộc
 
-Trong suá»‘t thá»i gian giá»¯ khÃ³a, há»‡ thá»‘ng pháº£i kiá»ƒm tra lock cÃ²n hiá»‡u lá»±c trÆ°á»›c khi cho lÆ°u. Náº¿u máº¥t khÃ³a giá»¯a chá»«ng (do tab khÃ¡c giÃ nh quyá»n), hiá»ƒn thá»‹ cáº£nh bÃ¡o vÃ  tá»« chá»‘i ghi.
+Trong suốt thời gian giữ khóa, hệ thống phải kiểm tra lock còn hiệu lực trước khi cho lưu. Nếu mất khóa giữa chừng (do tab khác giành quyền), hiển thị cảnh báo và từ chối ghi.
 
 ---
 
-## 4. TAB OVERFLOW â€” Xá»¬ LÃ TRÃ€N Dáº¢I TAB
+## 4. TAB OVERFLOW — XỬ LÝ TRÀN DẢI TAB
 
-### 4.1. PhÃ¡t hiá»‡n trÃ n
+### 4.1. Phát hiện tràn
 
-Khi tá»•ng chiá»u rá»™ng cÃ¡c tab `>` chiá»u rá»™ng vÃ¹ng hiá»ƒn thá»‹ kháº£ dá»¥ng â†’ kÃ­ch hoáº¡t cháº¿ Ä‘á»™ cuá»™n ngang.
+Khi tổng chiều rộng các tab `>` chiều rộng vùng hiển thị khả dụng → kích hoạt chế độ cuộn ngang.
 
-### 4.2. CÆ¡ cháº¿ Ä‘iá»u phá»‘i
+### 4.2. Cơ chế điều phối
 
-| ThÃ nh pháº§n | Vá»‹ trÃ­ | HÃ nh vi |
+| Thành phần | Vị trí | Hành vi |
 |---|---|---|
-| NÃºt `[â—€]` | Äáº§u trÃ¡i dáº£i tab | Click â†’ cuá»™n sang trÃ¡i 1 tab (snap). áº¨n/má» 50% + disabled náº¿u Ä‘Ã£ á»Ÿ Ä‘áº§u |
-| NÃºt `[â–¶]` | Cuá»‘i pháº£i dáº£i tab | Click â†’ cuá»™n sang pháº£i 1 tab (snap). áº¨n/má» 50% + disabled náº¿u Ä‘Ã£ á»Ÿ cuá»‘i |
-| Cuá»™n chuá»™t | RÃª chuá»™t vÃ o dáº£i tab | `wheel` â†’ cuá»™n ngang (deltaY mapped sang scrollLeft) |
-| Auto-scroll | Tá»± Ä‘á»™ng | Tab Active (hoáº·c tab vá»«a táº¡o) luÃ´n Ä‘Æ°á»£c cuá»™n vÃ o vÃ¹ng nhÃ¬n tháº¥y |
+| Nút `[◀]` | Đầu trái dải tab | Click → cuộn sang trái 1 tab (snap). Ẩn/mờ 50% + disabled nếu đã ở đầu |
+| Nút `[▶]` | Cuối phải dải tab | Click → cuộn sang phải 1 tab (snap). Ẩn/mờ 50% + disabled nếu đã ở cuối |
+| Cuộn chuột | Rê chuột vào dải tab | `wheel` → cuộn ngang (deltaY mapped sang scrollLeft) |
+| Auto-scroll | Tự động | Tab Active (hoặc tab vừa tạo) luôn được cuộn vào vùng nhìn thấy |
 
-### 4.3. Quy táº¯c lÆ°u trá»¯
+### 4.3. Quy tắc lưu trữ
 
-- Vá»‹ trÃ­ cuá»™n hiá»‡n táº¡i cá»§a dáº£i tab **khÃ´ng cáº§n lÆ°u** vÃ o LocalStorage (khÃ´ng cÃ³ key trong Â§2) â€” khi khá»Ÿi Ä‘á»™ng láº¡i POS, tab active sáº½ Ä‘Æ°á»£c auto-scroll vÃ o view.
-- NÃºt `[+]` **luÃ´n hiá»ƒn thá»‹** á»Ÿ cuá»‘i dáº£i, khÃ´ng bá»‹ che bá»Ÿi nÃºt `[â–¶]`.
+- Vị trí cuộn hiện tại của dải tab **không cần lưu** vào LocalStorage (không có key trong §2) — khi khởi động lại POS, tab active sẽ được auto-scroll vào view.
+- Nút `[+]` **luôn hiển thị** ở cuối dải, không bị che bởi nút `[▶]`.
 
 ---
 
-â† [Quay vá» POS README](./README.md)
+← [Quay về POS README](./README.md)

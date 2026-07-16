@@ -3,8 +3,6 @@ import { currentMonthRange, localDateString, quickDateRange, type QuickDateRange
 
 export { currentMonthRange, localDateString }
 
-export const salesDocumentsPageSize = 15
-
 export type TimeFilter =
   | QuickDateRangePreset
   | 'custom'

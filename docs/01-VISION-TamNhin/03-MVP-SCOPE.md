@@ -1,4 +1,4 @@
-# MVP SCOPE - Pham vi QC-OMS hien tai
+﻿# MVP SCOPE - Pham vi QC-OMS hien tai
 
 > Trang thai: Da chot dinh huong theo Owner - 2026-07-01
 > Source of Truth: pham vi san pham hien tai de tranh copy du KiotViet.
@@ -27,7 +27,7 @@ Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/onl
 | Hang doi may san xuat | May san xuat gui thong bao vao POS de nhan vien tao hoa don nhap; thong bao nay chi la dau vao thao tac, chua phai ton kho/doanh thu |
 | Chung tu ban hang | Bao gia `BG...`, hoa don `HD...`, hoa don sua dang `MaCu.01`, chung tu da huy |
 | Khach hang | Ma khach, ten khach, SĐT tuy chon/unique neu co, nhom khach, bang gia, lich su ban, cong no |
-| Bang gia | Bang gia chung, bang gia theo nhom khach, gia sua tay luu lich su theo khach + san pham |
+| Bang gia | Gia chung, bang gia theo nhom khach, gia sua tay luu lich su theo khach + san pham |
 | Hang hoa/kho | San pham dang ban/ngung ban, ton vat ly cuon/tam/tam lo, quy doi don vi, tru kho khi luu hoa don |
 | Kiem kho | Phieu tam, can bang kho, huy phieu, phieu tu dong khi sua ton hang thuong |
 | Dieu chinh ton | Dieu chinh/huy vat tu toi gian; khong tao module Xuat huy/Xuat dung noi bo rieng |

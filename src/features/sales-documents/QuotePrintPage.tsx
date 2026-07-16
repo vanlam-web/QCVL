@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatApiError } from '../../lib/api/error-message'
+import { displayPriceListName } from '../../lib/price-list-display'
 import type { SalesDocumentService } from './sales-document-service'
 import type { SalesDocumentDetail } from './types'
 import {
@@ -120,7 +121,7 @@ export function QuotePrintPage({
             </div>
             <div>
               <dt>Bảng giá</dt>
-              <dd>{document.price_list?.name ?? '-'}</dd>
+              <dd>{displayPriceListName(document.price_list)}</dd>
             </div>
           </dl>
         </section>

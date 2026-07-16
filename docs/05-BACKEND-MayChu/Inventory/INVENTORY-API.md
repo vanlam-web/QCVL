@@ -10,6 +10,13 @@
 
 TÃ i liá»‡u nÃ y lÃ  Source of Truth cho Backend API Inventory MVP:
 
+V1 freeze 2026-07-14:
+
+- V1 UI only exposes stocktake list/detail, product operating stock, stock movement evidence, and manual stock adjustment needed to correct stock.
+- V1 may show disabled/dormant entry points for material opening and roll/sheet object inventory, but does not activate those workflows or selling by a selected roll/sheet.
+- Backend/API notes for material opening and roll/sheet remain long-term design notes unless explicitly marked as V1-ready.
+- V1 acceptance: app runs, core pages open, PostgreSQL stock writers cover import PN, import/created HD, manual adjustment, and product-vs-movement mismatch remains 0.
+
 - Ä‘á»c tá»“n kho theo sáº£n pháº©m
 - quáº£n lÃ½ cáº¥u hÃ¬nh tá»“n kho cá»§a sáº£n pháº©m
 - quáº£n lÃ½ cuá»™n váº­t lÃ½
@@ -649,6 +656,7 @@ Backend chá»‰ cho Ä‘á»c. Táº¡o stock movement pháº£i Ä‘i qua
       "document_type": "sale_invoice",
       "transaction_price": 300000,
       "cost_price": 107751.2,
+      "ending_qty": 18.344,
       "partner_name": "KhÃ¡ch láº»"
     }
   ],
@@ -669,6 +677,17 @@ Tab `Tháº» kho` trong chi tiáº¿t hÃ ng hÃ³a dÃ¹ng response nÃ y Ä
 API chÆ°a tráº£ `balance_after`, nÃªn `Tá»“n cuá»‘i` trong UI váº«n hiá»‡n `ChÆ°a cÃ³`. Khi cáº§n Ä‘Ãºng nhÆ° KiotViet, nÃªn lÆ°u snapshot tá»“n sau má»—i stock movement hoáº·c bá»• sung query tÃ­nh running balance á»•n Ä‘á»‹nh á»Ÿ backend.
 
 ---
+
+PostgreSQL current note 2026-07-14:
+
+- `stock_movements` is the read source for `GET /inventory/stock-movements`.
+- `GET /products` hydrates `operating_stock` from the latest movement of each product.
+- `ending_qty` is returned when a movement stores the balance after the transaction. If it is null, UI shows `Chua co`.
+- PostgreSQL now writes `stock_movements` for imported KiotViet purchase receipts (`purchase_receipt`) and invoices (`sale_invoice`). Re-import deletes old movements for the same document, inserts the new rows, then recomputes `ending_qty` for affected products.
+- PostgreSQL `saveSalesDocument` writes `sale_deduction` movements for completed POS invoices and removes invoice movements when the saved document is not a completed invoice.
+- PostgreSQL manual stock adjustment (`POST/PATCH /inventory/products/{id}/adjust-stock`) creates a balanced QCVL stocktake, one stocktake item, and one `stocktake_balance` movement. Delta is `actual_qty - latest ending_qty`, then affected product balances are recomputed.
+- PostgreSQL normal material opening writes `inventory_material_openings` and one `material_opening` movement. Delta is `opened_qty * conversion_factor - old_remaining_qty`, then affected product balances are recomputed.
+- Remaining movement writers: roll/sheet material opening after inventory object tables exist, and any future opening checkpoint flow that is separate from manual stock adjustment.
 
 ## 9. Stocktake
 

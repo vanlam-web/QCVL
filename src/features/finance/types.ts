@@ -120,7 +120,14 @@ export interface CashbookEntry {
   status: CashbookStatus
   direction: CashbookDirection
   amount_delta: number
-  finance_account: { id: string; code: string; name: string; account_type: FinanceAccountType }
+  finance_account: {
+    id: string
+    code: string
+    name: string
+    account_type: FinanceAccountType
+    account_number?: string | null
+    account_holder?: string | null
+  }
   is_business_accounted: boolean
   source_type: CashbookSourceType
   created_at: string
@@ -169,6 +176,7 @@ export interface FinanceSalesDocumentSummary {
   paid_amount: number
   debt_amount: number
   payment_status: 'not_applicable' | 'unpaid' | 'partial' | 'paid'
+  customer?: { id: string | null; code: string | null; name: string; phone: string | null }
 }
 
 export interface CashbookEntryDetail extends CashbookEntry {

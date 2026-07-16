@@ -1,4 +1,4 @@
-# 02-SALES-REPORT — Báo cáo bán hàng
+﻿# 02-SALES-REPORT — Báo cáo bán hàng
 
 > **Tham khảo:** KiotViet `Báo cáo > Bán hàng`, `Báo cáo > Nhân viên`, đã lược bỏ kênh bán/VAT/trả hàng/HR
 
@@ -20,7 +20,7 @@ QC-OMS chỉ dùng luồng bán đứt qua POS/checkout, nên báo cáo không c
 | Khách hàng | Tìm theo mã/tên/SĐT nếu có |
 | Nhân viên bán | Người chốt hóa đơn |
 | Người tạo | Người tạo chứng từ |
-| Bảng giá | Bảng giá chung hoặc bảng giá nhóm |
+| Bảng giá | Giá chung hoặc bảng giá nhóm |
 | Trạng thái | Hoàn thành, Đã hủy, Sửa từ chứng từ cũ |
 
 Không có bộ lọc kênh bán, giao hàng, COD, VAT/HĐĐT hoặc trả hàng.

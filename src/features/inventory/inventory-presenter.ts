@@ -1,4 +1,4 @@
-import type { InventoryProduct, InventoryProductStatus, InventoryShape, Stocktake } from './types'
+import type { InventoryProduct, InventoryProductStatusFilter, InventoryShape, Stocktake } from './types'
 import { formatKvDateTime } from '../../lib/date-format'
 
 export function shapeText(shape: InventoryShape | 'all') {
@@ -8,9 +8,10 @@ export function shapeText(shape: InventoryShape | 'all') {
   return 'Tất cả'
 }
 
-export function statusText(status: InventoryProductStatus | 'all') {
+export function statusText(status: InventoryProductStatusFilter) {
   if (status === 'active') return 'Đang kinh doanh'
   if (status === 'inactive') return 'Ngừng bán'
+  if (status === 'deleted') return 'Đã xoá KV'
   return 'Tất cả'
 }
 

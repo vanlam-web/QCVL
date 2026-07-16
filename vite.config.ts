@@ -43,6 +43,9 @@ export default defineConfig({
     ...(process.env.VITE_ENABLE_PWA === 'true' ? [VitePWA(pwaOptions)] : []),
   ],
   server: {
+    watch: {
+      ignored: ['**/backups/**', '**/logs/**'],
+    },
     proxy: {
       '/api': {
         target: process.env.VITE_DEV_API_PROXY_TARGET ?? 'http://127.0.0.1:3100',

@@ -494,3 +494,34 @@ Priority order now:
 - [x] Purchase: đã chuyển danh sách phiếu nhập sang `ManagementDataTable`, giữ sort header, row click, detail shell và form nghiệp vụ nhập hàng.
 - [ ] Finance: chưa chuyển sang layout/table chung.
 - [ ] POS: loại trừ, không đồng bộ theo management layout.
+
+## Update 2026-07-14
+
+- [x] Shared date filter rollout: Hang hoa, Khach hang, Hoa don, Kiem kho, Phieu nhap va So quy dung `ManagementDateRangeInputs`. Khong con radio `Tuy chinh`; hai o tu ngay/den ngay luon hien, icon lich mo popup chung, preset hien tai khong vuot qua hom nay, `Toan thoi gian` hien min/max du lieu khi co.
+- [x] Shared search rollout ngoai POS: Hang hoa, Khach hang, Nha cung cap, Bang gia, Hoa don, Nhap hang, So quy, Quan tri va Kiem kho dung compact search chung.
+- [x] Shared table sticky scope: header sticky chi ap dung table cap 1 `.management-table-viewport > table > thead th`; detail/nested table giu header static de khong chong khi cuon. Da kiem tra cac trang chinh: Hoa don, So quy, Khach hang, Kiem kho, Nhap hang, Hang hoa, Bang gia, Nha cung cap.
+- [ ] Table/detail shell rollout van con la viec nen lam theo nhu cau, nhung khong phai muc tieu san pham tiep theo neu khong chan luong Hang hoa/ton kho.
+- [ ] Muc tieu san pham tiep theo: quay ve `Hang hoa` va ton kho van hanh dung, tiep tuc tu opening checkpoint + stock movements sau checkpoint.
+
+## Update 2026-07-14b
+
+- [x] Products/PostgreSQL stock read path: `GET /products` hydrate `operating_stock` tu `stock_movements`, va `GET /inventory/stock-movements` doc bang `stock_movements` thay vi roi ve fixture demo.
+- [x] PostgreSQL import writer cho `stock_movements`: KiotViet purchase receipt sinh `purchase_receipt`, KiotViet invoice sinh `sale_deduction`; re-import xoa movement cu theo chung tu va recompute `ending_qty` cho san pham bi anh huong.
+- [x] PostgreSQL POS writer parity: `saveSalesDocument` sinh `sale_deduction` cho HD POS hoan tat, xoa movement cu neu document khong con la HD hoan tat.
+- [x] PostgreSQL manual stock adjustment: `/inventory/products/{id}/adjust-stock` nhan POST/PATCH, tao stocktake QCVL balanced + `stocktake_balance` movement, delta = ton thuc te - ton hien tai.
+- [x] PostgreSQL normal material opening groundwork: backend co writer va test, nhung UI khui vat tu khong dua vao V1.
+- [ ] Deferred after V1: roll/sheet material opening, inventory object tables, opening checkpoint rieng neu can khac manual adjustment.
+
+## V1 scope freeze 2026-07-14
+
+Goal: ship a V1 that can run reliably before adding advanced inventory flows.
+
+In V1:
+
+- Keep: import KV data, customers, suppliers, products, invoices, purchase receipts, cashbook, stocktake list/detail, product operating stock from `stock_movements`.
+- Keep: Bảng giá import from KiotViet `BangGia_KV*.xlsx`; price columns after `Giá nhập cuối` create/update `price_lists` + `price_list_items`. KV column `Bảng giá chung` writes the default list; QCVL UI shows it as `Giá chung`. Numeric columns like `25/26/30/35/40` create named price lists.
+- Keep: POS price resolve reads real `price_list_items`; customer group name selects the matching price list, missing customer-group price falls back to `Giá chung`, and products with no price in every list resolve to `0`.
+- Keep: stock writers needed for correct operating stock: purchase receipt in, invoice/POS out, manual stock adjustment.
+- Keep UI simple: `Khui vat tu` and `Ton theo cuon/tam` may be visible as disabled/dormant entry points, but must not activate workflows in V1.
+- Defer: khui vat tu workflow, roll/sheet inventory objects, selling by specific roll/sheet, roll/sheet material opening.
+- Rule: backend groundwork may stay if already tested, but V1 acceptance is based on visible workflows above and mismatch check = 0.

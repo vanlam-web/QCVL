@@ -20,7 +20,7 @@
 
 | Ná»™i dung | Chi tiáº¿t |
 |---|---|
-| LocalStorage persistence, debounce 300ms, key `pos.session.v1` | [â†’ ARCHITECTURE.md Â§2](../../../05-BACKEND-MayChu/POS/ARCHITECTURE.md#2-persistence--lÆ°u-trá»¯-local-chá»‘ng-sáº­p-nguá»“n) |
+| LocalStorage persistence, debounce 300ms, key `qc-oms.pos.invoice-tabs.v1` | [â†’ ARCHITECTURE.md Â§2](../../../05-BACKEND-MayChu/POS/ARCHITECTURE.md#2-persistence--lÆ°u-trá»¯-local-chá»‘ng-sáº­p-nguá»“n) |
 | KhÃ³a tranh cháº¥p khi nhiá»u ngÆ°á»i cÃ¹ng sá»­a Ä‘Æ¡n | [â†’ ARCHITECTURE.md Â§3](../../../05-BACKEND-MayChu/POS/ARCHITECTURE.md#3-concurrency-lock--khÃ³a-Ä‘Æ¡n-tranh-cháº¥p) |
 | Tab scroll, quy táº¯c khÃ´ng lÆ°u scroll position | [â†’ ARCHITECTURE.md Â§4](../../../05-BACKEND-MayChu/POS/ARCHITECTURE.md#4-tab-overflow--xá»­-lÃ½-trÃ n-dáº£i-tab) |
 

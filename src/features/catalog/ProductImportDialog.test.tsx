@@ -44,7 +44,7 @@ it('previews a KiotViet product file before importing', async () => {
   expect(screen.getByText('620 dòng giá bán')).toBeInTheDocument()
   expect(screen.getByText('517 dòng tồn tạm')).toBeInTheDocument()
   expect(screen.getByText('189 dòng BOM nháp')).toBeInTheDocument()
-  expect(screen.getByText('Bảng giá lẻ')).toBeInTheDocument()
+  expect(screen.getByText('Giá chung')).toBeInTheDocument()
   expect(screen.getByText('11 dòng thiếu ĐVT sẽ gán tạm: Cần cập nhật')).toBeInTheDocument()
   expect(screen.getByText('Bỏ qua: Thương hiệu, Vị trí')).toBeInTheDocument()
 })
