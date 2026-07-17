@@ -1587,6 +1587,107 @@ function makeOrderFromCheckout(body: {
   }
 }
 
+type PosCartValidationLine = {
+  client_line_id?: string
+  product_id?: string
+  sell_method?: string
+  quantity?: number
+  width_m?: number | null
+  height_m?: number | null
+  linear_m?: number | null
+  unit_price?: number
+  price_source?: string
+}
+
+type PosCartValidationError = {
+  client_line_id?: string
+  product_id?: string
+  field: string
+  code: string
+  message: string
+}
+
+const allowedCartSellMethods = new Set(['quantity', 'area_m2', 'linear_m', 'sheet', 'combo'])
+
+function finiteNumber(value: unknown) {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+async function validatePosCart(repository: ServerRepository, organizationId: string, body: { items?: PosCartValidationLine[] }) {
+  const items = Array.isArray(body.items) ? body.items : []
+  const catalog = await repository.listProducts?.({
+    organizationId,
+    url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
+  }) ?? products
+  const productsById = new Map(catalog.map((product) => [product.id, product]))
+  const errors: PosCartValidationError[] = []
+  const normalizedItems = items.map((item) => {
+    const productId = typeof item.product_id === 'string' ? item.product_id.trim() : ''
+    const product = productId ? productsById.get(productId) : undefined
+    const clientLineId = typeof item.client_line_id === 'string' ? item.client_line_id : undefined
+    const errorBase = { client_line_id: clientLineId, product_id: productId || undefined }
+    const quantity = finiteNumber(item.quantity)
+    const unitPrice = finiteNumber(item.unit_price)
+    const sellMethod = typeof item.sell_method === 'string' && item.sell_method.trim() !== ''
+      ? item.sell_method.trim()
+      : product?.sell_method
+    const width = finiteNumber(item.width_m)
+    const height = finiteNumber(item.height_m)
+    const linear = finiteNumber(item.linear_m)
+
+    if (!product || product.status !== 'active') {
+      errors.push({ ...errorBase, field: 'product_id', code: 'PRODUCT_MISSING', message: 'Product does not exist or is inactive.' })
+    }
+    if (quantity === null || quantity <= 0) {
+      errors.push({ ...errorBase, field: 'quantity', code: 'INVALID_QUANTITY', message: 'quantity must be greater than 0.' })
+    }
+    if (unitPrice === null || unitPrice < 0) {
+      errors.push({ ...errorBase, field: 'unit_price', code: 'INVALID_UNIT_PRICE', message: 'unit_price must be greater than or equal to 0.' })
+    }
+    if (!sellMethod || !allowedCartSellMethods.has(sellMethod)) {
+      errors.push({ ...errorBase, field: 'sell_method', code: 'INVALID_SELL_METHOD', message: 'sell_method is not supported.' })
+    }
+    if (sellMethod === 'area_m2') {
+      if (width === null || width <= 0) {
+        errors.push({ ...errorBase, field: 'width_m', code: 'MEASUREMENT_REQUIRED', message: 'width_m must be greater than 0 for area_m2.' })
+      }
+      if (height === null || height <= 0) {
+        errors.push({ ...errorBase, field: 'height_m', code: 'MEASUREMENT_REQUIRED', message: 'height_m must be greater than 0 for area_m2.' })
+      }
+    }
+    if (sellMethod === 'linear_m' && (linear === null || linear <= 0)) {
+      errors.push({ ...errorBase, field: 'linear_m', code: 'MEASUREMENT_REQUIRED', message: 'linear_m must be greater than 0 for linear_m.' })
+    }
+
+    const safeQuantity = quantity ?? 0
+    const safeUnitPrice = unitPrice ?? 0
+    const lineTotal =
+      sellMethod === 'area_m2'
+        ? safeQuantity * (width ?? 0) * (height ?? 0) * safeUnitPrice
+        : sellMethod === 'linear_m'
+          ? safeQuantity * (linear ?? 0) * safeUnitPrice
+          : safeQuantity * safeUnitPrice
+
+    return {
+      client_line_id: clientLineId,
+      product_id: productId,
+      quantity: safeQuantity,
+      width_m: width ?? undefined,
+      height_m: height ?? undefined,
+      linear_m: linear ?? undefined,
+      unit_price: safeUnitPrice,
+      line_total: lineTotal,
+      price_source: typeof item.price_source === 'string' && item.price_source.trim() !== '' ? item.price_source : 'manual',
+    }
+  })
+  const subtotal = errors.length > 0 ? 0 : normalizedItems.reduce((sum, item) => sum + item.line_total, 0)
+
+  return errors.length > 0
+    ? { valid: false, errors, items: normalizedItems, subtotal_amount: subtotal, total_amount: subtotal }
+    : { valid: true, items: normalizedItems, subtotal_amount: subtotal, total_amount: subtotal }
+}
+
 function addCustomerDebtFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>) {
   if (order.order_type !== 'invoice' || order.debt_amount <= 0) return
 
@@ -2587,7 +2688,10 @@ async function getDevApiResponse(
   const salesRoute = await handleSalesRoute(
     { request, url, currentUser, repository },
     {
-      validateCart: async () => ({ found: true, data: { valid: true } }),
+      validateCart: async () => {
+        const body = await readJson(request) as { items?: PosCartValidationLine[] }
+        return { found: true, data: await validatePosCart(repository, currentUser.organization.id, body) }
+      },
       checkout: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
         const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)

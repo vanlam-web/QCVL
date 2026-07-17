@@ -38,18 +38,21 @@ Issue khÃ´ng thay tháº¿ PR comments, implementation plan, hoáº·c Source 
 
 ## Issue Äang Má»Ÿ
 
-### `REV-2026-07-08-001` â€” `/pos/cart/validate` documented and called by frontend but not routed in QCVL Node API API
+### `REV-2026-07-08-001` - `/pos/cart/validate` documented and called by frontend but had fake validation
 
-- TÃ¬nh tráº¡ng: `Waiting for Implement`
+- TÃ¬nh tráº¡ng: `Ready for Re-check`
 - Báº±ng chá»©ng:
   - `src/features/orders/order-service.ts` gá»i `POST /api/v1/pos/cart/validate`.
   - `docs/05-BACKEND-MayChu/POS/ORDER-API.md` Ä‘á»‹nh nghÄ©a `POST /pos/cart/validate`.
-  - `server/http.ts` handles API routing; re-check current route map before changing `/pos/cart/validate`.
-  - `server/http.ts` currently has no confirmed legacy route file for `/pos/cart/validate`.
-- Viá»‡c cáº§n lÃ m: Implement route/use-case tÆ°Æ¡ng á»©ng hoáº·c sá»­a frontend/spec náº¿u endpoint khÃ´ng cÃ²n dÃ¹ng; Æ°u tiÃªn giá»¯ Source of Truth backend docs vÃ  thÃªm route Ä‘á»ƒ trÃ¡nh 404 khi UI gá»i `validateCart`.
+  - `server/modules/sales/sales-routes.ts` routes `POST /api/v1/pos/cart/validate`.
+  - `server/http.ts` previously returned `{ valid: true }` without checking lines.
+- Viá»‡c Ä‘Ã£ lÃ m: Implement real cart validation in `server/http.ts`: product exists/active, quantity, unit price, sell method, area dimensions, linear length, manual price source, and normalized totals.
 - Lá»‡nh re-check:
-  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate" src server docs/05-BACKEND-MayChu/POS/ORDER-API.md`  - `npm test`
-- Luá»“ng phá»¥ trÃ¡ch: Implement
+  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate|validateCart|cart/validate" src server docs/05-BACKEND-MayChu/POS/ORDER-API.md`
+  - `npm test -- server/http.test.ts -t "validates POS cart|normalizes valid POS cart"`
+  - `npm run verify:local`
+  - `npm run verify:nas-build`
+- Luá»“ng phá»¥ trÃ¡ch: Review
 
 ---
 

@@ -3032,6 +3032,77 @@ describe('createHttpHandler', () => {
     expect(customerBody.data.items[0].total_sales_amount).toBe(4000000)
   })
 
+  test('validates POS cart product existence and measurement fields before checkout', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/pos/cart/validate', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          items: [
+            { client_line_id: 'missing-product', product_id: 'product-missing', sell_method: 'quantity', quantity: 1, unit_price: 100000, price_source: 'manual' },
+            { client_line_id: 'bad-area', product_id: 'product-002', sell_method: 'area_m2', quantity: 1, width_m: 1.2, unit_price: 120000, price_source: 'manual' },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.valid).toBe(false)
+    expect(body.data.errors).toEqual([
+      { client_line_id: 'missing-product', product_id: 'product-missing', field: 'product_id', code: 'PRODUCT_MISSING', message: 'Product does not exist or is inactive.' },
+      { client_line_id: 'bad-area', product_id: 'product-002', field: 'height_m', code: 'MEASUREMENT_REQUIRED', message: 'height_m must be greater than 0 for area_m2.' },
+    ])
+  })
+
+  test('normalizes valid POS cart totals including manual linear pricing', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/pos/cart/validate', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: null,
+          items: [
+            { client_line_id: 'sheet-line', product_id: 'product-001', sell_method: 'sheet', quantity: 2, unit_price: 600000, price_source: 'default_price_list' },
+            { client_line_id: 'linear-line', product_id: 'product-002', sell_method: 'linear_m', quantity: 1, linear_m: 1.5, unit_price: 120000, price_source: 'manual' },
+          ],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data).toMatchObject({
+      valid: true,
+      subtotal_amount: 1380000,
+      total_amount: 1380000,
+      items: [
+        { client_line_id: 'sheet-line', product_id: 'product-001', quantity: 2, unit_price: 600000, line_total: 1200000, price_source: 'default_price_list' },
+        { client_line_id: 'linear-line', product_id: 'product-002', quantity: 1, linear_m: 1.5, unit_price: 120000, line_total: 180000, price_source: 'manual' },
+      ],
+    })
+  })
+
   test('creates POS invoice code with KiotViet-style HD sequence', async () => {
     const repo = persistentRepository(await hashPassword('ChangeMe123!'))
     const handler = createHttpHandler({ repository: repo })

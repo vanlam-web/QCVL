@@ -22,9 +22,9 @@ Quy trÃ¬nh phá»‘i há»£p:
 | Backend dev/staging | QCVL Node API + PostgreSQL tren NAS |
 | Local backend | QCVL Node API chay tu server/ khi can dev local |
 | Active coordination board | CÃ³ item `COORD-2026-07-07-PRODUCT-INVENTORY-POS` Ä‘ang má»Ÿ trong [PROJECT-COORDINATION.md](./PROJECT-COORDINATION.md) |
-| Review issue cÃ²n má»Ÿ | CÃ³ `REV-2026-07-08-001` trong [REVIEW-ISSUES.md](./REVIEW-ISSUES.md) |
+| Review issue cÃ²n má»Ÿ | `REV-2026-07-08-001` Ä‘Ã£ implement, Ä‘ang `Ready for Re-check` trong [REVIEW-ISSUES.md](./REVIEW-ISSUES.md) |
 | Docs cleanup | ÄÃ£ chuáº©n hoÃ¡ index/metadata; checklist nÃ y lÃ  nguá»“n xem tráº¡ng thÃ¡i sá»‘ng |
-| Current product/inventory/POS direction | V1 ưu tiên chạy được: Hàng hóa/PriceBook/POS đã dùng dữ liệu import chính; `Tồn QCVL` fallback hiển thị tồn KV tạm khi chưa có stock movement. Roll/sheet object-level deduction, khui vật tư nâng cao và `/pos/cart/validate` còn pending |
+| Current product/inventory/POS direction | V1 ưu tiên chạy được: Hàng hóa/PriceBook/POS đã dùng dữ liệu import chính; `Tồn QCVL` fallback hiển thị tồn KV tạm khi chưa có stock movement. `/pos/cart/validate` Ä‘Ã£ validate thÃ¢t; roll/sheet object-level deduction vÃ  khui váº­t tÆ° nÃ¢ng cao cÃ²n pending |
 
 Local status 2026-07-12:
 
@@ -58,7 +58,7 @@ Current status 2026-07-14:
 - Local `3202` UI hardening progress: chi tiet hang/dong hang trong expanded detail da on theo shared `management-detail-lines-table`; So quy detail da on theo shared finance detail/table layout, hydrate duoc nguoi nop/nhan cho `TTHD...`, bo dong `Tu quy` trung, hien tai khoan cu the trong phuong thuc thanh toan, va bang chung tu lien ket dung `management-detail-linked-table`. Tiep tuc lam tren `3202` truoc, chi sync `3200` sau khi tung slice duoc xac nhan.
 - Local `3202` data cleanup ngay `2026-07-14`: Owner da duyet `A+B`, da xoa 5 dong So quy KV ngay `2026-07-13` khong co chung tu goc va 7 hoa don POS/test `HD-POS-021...` cung dong hang tuong ung. Backup truoc xoa: `backups/dev-memory-state-before-delete-approved-fake-data-2026-07-14T15-44-30-303Z.json`. Sau xoa con `cashbookEntries=6899`, `salesDocuments=12355`, `salesDocumentItems=12355`. Ho so khach `Test KH` chua xoa vi khong nam trong pham vi duyet.
 - Next V1 fixes must be done and verified on local `3202` first. After each step is confirmed, sync only that finished step to NAS `3200`.
-- Still open for V1 hardening: missing edit/delete/add buttons across some modules, full filter coverage, KV-vs-QCVL reconciliation by filter, and route drift `REV-2026-07-08-001` for `/pos/cart/validate`.
+- Still open for V1 hardening: missing edit/delete/add buttons across some modules, full filter coverage, KV-vs-QCVL reconciliation by filter, and review re-check for `REV-2026-07-08-001`.
 
 Current status 2026-07-15:
 
@@ -124,7 +124,7 @@ Chá»‰ má»Ÿ khi Owner chá»n vÃ  Spec xÃ¡c nháº­n Source of Trut
 | Viá»‡c | Má»©c sáºµn sÃ ng | Ghi chÃº |
 |---|---|---|
 | Purchase P4 â€” nháº­p cuá»™n/táº¥m váº­t lÃ½ | Trung bÃ¬nh | Cáº§n khá»›p vá»›i model kho cuá»™n/táº¥m hiá»‡n táº¡i trÆ°á»›c khi implement |
-| Product/Inventory/POS completion | Đang mở | V1 đang chạy được với dữ liệu import + fallback tồn KV tạm; chi tiet hang/dong hang va So quy detail da on tren `3202`; phan con lai la detail cac module chua ra, POS roll/sheet object-level deduction, route drift `/pos/cart/validate`, va doi chieu KV/QCVL theo bo loc |
+| Product/Inventory/POS completion | Đang mở | V1 đang chạy được với dữ liệu import + fallback tồn KV tạm; chi tiet hang/dong hang va So quy detail da on tren `3202`; `/pos/cart/validate` da implement; phan con lai la detail cac module chua ra, POS roll/sheet object-level deduction, va doi chieu KV/QCVL theo bo loc |
 | V1 functional gaps | Đang mở | Làm trên local `3202` trước, xong từng bước mới đẩy `3200`: 1) tiep tuc ra soat UI detail con lai khi cham module; 2) cac nut them/sua/xoa con thieu; 3) filter con thieu hoac chua dung shared controls; 4) bao cao doi chieu du lieu theo tung module truoc khi coi V1 on dinh |
 | PriceBook product groups/filter | Trung bÃ¬nh | Cáº§n schema/UI filter nhÃ³m hÃ ng náº¿u Owner cáº§n |
 | Sales Documents edit/cancel/reversal | Cáº§n chá»‘t thÃªm | Cháº¡m kho/tiá»n/cÃ´ng ná»£, pháº£i cÃ³ spec Ä‘áº£o nghiá»‡p vá»¥ |
