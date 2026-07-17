@@ -1,6 +1,16 @@
 # QCVL NAS Dev Runbook
 
-> Cập nhật: 2026-07-16.
+> Cap nhat: 2026-07-17.
+
+## Latest NAS Deploy - 2026-07-17 POS Cart Validation
+
+Da build/copy fix `/pos/cart/validate` len NAS `3200`.
+
+- Lenh dung: `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas`.
+- `build:nas` pass, `verify:nas-bundle` pass: bundle dung `100.84.228.125:3200` va khong goi `100.84.228.125:3100`.
+- `db:migrate` pass, khong co migration moi (`migrated: []`, `baseline_stamped: []`).
+- `health:nas` pass sau deploy: `persistence: "postgres"`, trace `b8d7fc33-7f95-4e34-8533-0e1e0794ddce`.
+- Khong restart `qcvl-app` trong deploy nay vi owner se reset NAS; backend runtime chi chac chan nap code moi sau reset/restart.
 
 ## Latest NAS Deploy - 2026-07-16 POS Grid And Purchase/Supplier Batch
 
