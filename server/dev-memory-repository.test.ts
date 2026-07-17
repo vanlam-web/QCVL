@@ -483,6 +483,18 @@ describe('createDevMemoryRepository persistence', () => {
     }
   })
 
+  it('dedupes product groups with equivalent KiotViet paths for filter display', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.upsertProductGroupsByName?.({
+      organizationId: 'org-dev-memory',
+      names: ['Mica>>CNC', 'Mica >> CNC', 'Mica >> Vật tư'],
+    })
+    const groups = await repository.listProductGroups?.({ organizationId: 'org-dev-memory' })
+
+    expect(groups?.map((group) => group.name)).toEqual(['Mica >> CNC', 'Mica >> Vật tư'])
+  })
+
   it('persists imported price lists and deletes imported products without crashing', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
     const stateFile = join(dir, 'state.json')

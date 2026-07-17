@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
-import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
+import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
 const defaultPriceList = { id: 'pl-dev-default', name: 'Bang gia le' }
@@ -329,13 +329,41 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       await persist()
       return updated
     },
+    async listProductGroups() {
+      return uniqueProductGroups([...groupNamesById.entries()]
+        .map(([id, name]): ProductGroupListData => ({
+          id,
+          code: slug(name).toUpperCase(),
+          name,
+          is_default: name === 'Gia chung' || name === 'Giá chung',
+          is_active: true,
+        }))
+        .sort((left, right) => Number(right.is_default) - Number(left.is_default) || left.name.localeCompare(right.name, 'vi')))
+    },
+    async updateProductGroup(input) {
+      const currentName = groupNamesById.get(input.id)
+      if (!currentName) return null
+      const nextName = input.name.trim()
+      if (!nextName) return null
+      groupNamesById.set(input.id, nextName)
+      groupIds.delete(currentName)
+      groupIds.set(nextName, input.id)
+      await persist()
+      return {
+        id: input.id,
+        code: slug(nextName).toUpperCase(),
+        name: nextName,
+        is_default: nextName === 'Gia chung' || nextName === 'GiÃ¡ chung',
+        is_active: true,
+      }
+    },
     async listProducts(input) {
       const search = normalize(input.url.searchParams.get('search') ?? '')
       const status = input.url.searchParams.get('status')
       const sellMethod = input.url.searchParams.get('sell_method')
       const inventoryShape = input.url.searchParams.get('inventory_shape')
       const productKind = input.url.searchParams.get('product_kind')
-      const productGroupId = input.url.searchParams.get('product_group_id')
+      const productGroupIds = input.url.searchParams.getAll('product_group_id')
       const createdFrom = input.url.searchParams.get('created_from')
       const createdTo = input.url.searchParams.get('created_to')
 
@@ -349,7 +377,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         if (sellMethod && product.sell_method !== sellMethod) return false
         if (inventoryShape && product.inventory_shape !== inventoryShape) return false
         if (productKind && product.product_kind !== productKind) return false
-        if (productGroupId && product.product_group_id !== productGroupId) return false
+        if (productGroupIds.length > 0 && !productGroupIds.includes(product.product_group_id ?? '')) return false
         if (!dateRangeMatches(product.created_at, createdFrom, createdTo)) return false
       if (search && !normalize(`${product.code} ${product.name}`).includes(search)) return false
       return true
@@ -2396,6 +2424,23 @@ function slug(value: string) {
 
 function priceListKey(value: string) {
   return normalize(value).replace(/\s+/g, ' ').trim()
+}
+
+function productGroupKey(value: string) {
+  return normalize(value)
+    .replace(/\s*>>\s*/g, '>>')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function uniqueProductGroups(groups: ProductGroupListData[]) {
+  const byKey = new Map<string, ProductGroupListData>()
+  for (const group of groups) {
+    const key = productGroupKey(group.name)
+    const current = byKey.get(key)
+    if (!current || (!current.is_default && group.is_default)) byKey.set(key, group)
+  }
+  return [...byKey.values()]
 }
 
 function isDefaultSalePriceListName(value: string) {

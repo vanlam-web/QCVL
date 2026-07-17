@@ -59,6 +59,20 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
         { id: 'pg-vat-tu', code: 'VAT-TU', name: 'Vật tư', is_default: false, is_active: true },
       ],
     })),
+    createProductGroup: vi.fn(async (input: { name: string }) => ({
+      id: `pg-${input.name.toLowerCase().replace(/\s+/g, '-')}`,
+      code: input.name.toUpperCase(),
+      name: input.name,
+      is_default: false,
+      is_active: true,
+    })),
+    updateProductGroup: vi.fn(async (input: { id: string; name: string }) => ({
+      id: input.id,
+      code: input.name.toUpperCase(),
+      name: input.name,
+      is_default: false,
+      is_active: true,
+    })),
     previewKiotVietProductImport: vi.fn(async () => ({
       summary: {
         total_rows: 1,
@@ -402,7 +416,8 @@ it('filters by status and toggles product active state', async () => {
   expect(within(sidebar).getByRole('combobox', { name: 'Loại hàng' })).toHaveValue('all')
   expect(within(sidebar).getByRole('option', { name: 'Dịch vụ' })).toBeInTheDocument()
   expect(within(sidebar).getByRole('option', { name: 'Vật tư phụ' })).toBeInTheDocument()
-  expect(within(sidebar).getByRole('combobox', { name: 'Nhóm hàng' })).toHaveValue('all')
+  expect(within(sidebar).queryByRole('combobox', { name: 'Nhóm hàng' })).not.toBeInTheDocument()
+  expect(within(sidebar).getByRole('textbox', { name: 'Chọn nhóm hàng' })).toHaveValue('')
   expect(within(sidebar).getByRole('combobox', { name: 'Tồn kho' })).toHaveValue('all')
   expect(within(sidebar).queryByRole('combobox', { name: 'Cách tính bán' })).not.toBeInTheDocument()
   expect(within(sidebar).getByRole('combobox', { name: 'Trạng thái hàng hóa' })).toHaveValue('active')
@@ -481,6 +496,10 @@ it('reactively filters products by existing product fields in the shared sidebar
   expect(createdAtRegion.compareDocumentPosition(kindRegion) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
 
   expect(within(createdAtRegion).getByRole('button', { name: 'Toàn thời gian' })).toBeInTheDocument()
+  await userEvent.click(within(createdAtRegion).getByRole('button', { name: 'Toàn thời gian' }))
+  expect(within(createdAtRegion).getByRole('region', { name: 'Chọn nhanh thời gian' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('textbox', { name: 'Tìm hàng hóa' }))
+  expect(within(createdAtRegion).queryByRole('region', { name: 'Chọn nhanh thời gian' })).not.toBeInTheDocument()
   expect(within(createdAtRegion).queryByRole('radio', { name: 'Tùy chỉnh' })).not.toBeInTheDocument()
   await userEvent.clear(within(createdAtRegion).getByLabelText('Từ ngày'))
   await userEvent.type(within(createdAtRegion).getByLabelText('Từ ngày'), '01/07/2026')
@@ -519,7 +538,10 @@ it('reactively filters products by existing product fields in the shared sidebar
     product_kind: 'service',
   })
 
-  await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Nhóm hàng' }), 'pg-vat-tu')
+  await userEvent.click(within(groupRegion).getByRole('textbox', { name: 'Chọn nhóm hàng' }))
+  const groupPicker = screen.getByRole('dialog', { name: 'Chọn nhóm hàng' })
+  await userEvent.click(within(groupPicker).getByRole('checkbox', { name: 'Vật tư' }))
+  await userEvent.click(within(groupPicker).getByRole('button', { name: 'Áp dụng' }))
   expect(service.listProducts).toHaveBeenLastCalledWith({
     page: 1,
     page_size: 15,
@@ -529,7 +551,7 @@ it('reactively filters products by existing product fields in the shared sidebar
     created_to: '2026-07-31',
     inventory_shape: 'roll',
     product_kind: 'service',
-    product_group_id: 'pg-vat-tu',
+    product_group_id: ['pg-vat-tu'],
   })
 })
 

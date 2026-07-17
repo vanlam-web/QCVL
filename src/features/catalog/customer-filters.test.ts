@@ -12,6 +12,7 @@ describe('customer filters', () => {
   it('builds list filters without all/empty values', () => {
     expect(buildCustomerListFilters({
       search: 'KH001',
+      status: 'all',
       page: 2,
       page_size: 30,
       customerGroupId: 'all',

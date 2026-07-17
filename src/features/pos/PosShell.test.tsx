@@ -31,6 +31,8 @@ function makeCatalogService(overrides: Partial<CatalogService> = {}): CatalogSer
     getProductBom: vi.fn(async () => null),
     saveProductBom: vi.fn(),
     listProductGroups: vi.fn(async () => ({ items: [] })),
+    createProductGroup: vi.fn(),
+    updateProductGroup: vi.fn(),
     previewKiotVietProductImport: vi.fn(),
     importKiotVietProducts: vi.fn(),
     deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),

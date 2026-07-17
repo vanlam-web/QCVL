@@ -10,6 +10,8 @@ export interface CatalogRouteContext {
 
 export interface CatalogRouteHandlers {
   productGroups(): RouteResult
+  createProductGroup(): RouteResult
+  updateProductGroup(): RouteResult
   listProducts(): RouteResult
   previewKiotVietProductImport(): RouteResult
   importKiotVietProducts(): RouteResult
@@ -36,6 +38,8 @@ export function handleCatalogRoute(context: CatalogRouteContext, handlers: Catal
   const { pathname } = context.url
 
   if (method === 'GET' && pathname === '/api/v1/product-groups') return handlers.productGroups()
+  if (method === 'POST' && pathname === '/api/v1/product-groups') return handlers.createProductGroup()
+  if (method === 'PATCH' && /^\/api\/v1\/product-groups\/[^/]+$/.test(pathname)) return handlers.updateProductGroup()
   if (method === 'GET' && pathname === '/api/v1/products') return handlers.listProducts()
   if (method === 'POST' && pathname === '/api/v1/products/import/kiotviet/preview') return handlers.previewKiotVietProductImport()
   if (method === 'POST' && pathname === '/api/v1/products/import/kiotviet') return handlers.importKiotVietProducts()

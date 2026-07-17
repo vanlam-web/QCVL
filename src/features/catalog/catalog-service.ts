@@ -34,6 +34,7 @@ export interface CatalogApiRequester {
 
 export interface CustomerListFilters {
   search?: string
+  status?: 'active' | 'inactive' | 'all'
   customer_group_id?: string
   created_from?: string
   created_to?: string
@@ -54,7 +55,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       sell_method?: SellMethod
       inventory_shape?: Product['inventory_shape']
       product_kind?: ProductKind
-      product_group_id?: string
+      product_group_id?: string | string[]
       created_from?: string
       created_to?: string
       page?: number
@@ -67,7 +68,9 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.sell_method) params.set('sell_method', input.sell_method)
       if (input.inventory_shape) params.set('inventory_shape', input.inventory_shape)
       if (input.product_kind) params.set('product_kind', input.product_kind)
-      if (input.product_group_id) params.set('product_group_id', input.product_group_id)
+      if (Array.isArray(input.product_group_id)) {
+        input.product_group_id.forEach((groupId) => params.append('product_group_id', groupId))
+      } else if (input.product_group_id) params.set('product_group_id', input.product_group_id)
       if (input.created_from) params.set('created_from', input.created_from)
       if (input.created_to) params.set('created_to', input.created_to)
       if (input.page) params.set('page', String(input.page))
@@ -77,6 +80,16 @@ export function createCatalogService(api: CatalogApiRequester) {
       return api.request<ProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
     },
     listProductGroups: () => api.request<{ items: ProductGroup[] }>('/api/v1/product-groups'),
+    createProductGroup: (input: { name: string }) =>
+      api.request<ProductGroup>('/api/v1/product-groups', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    updateProductGroup: (input: { id: string; name: string }) =>
+      api.request<ProductGroup>(`/api/v1/product-groups/${encodeURIComponent(input.id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: input.name }),
+      }),
     previewKiotVietProductImport: async (input: { file: File; cleanup_demo: boolean }) =>
       api.request<KiotVietProductImportPreview>('/api/v1/products/import/kiotviet/preview', {
         method: 'POST',
@@ -170,6 +183,7 @@ export function createCatalogService(api: CatalogApiRequester) {
     listCustomers: (input: CustomerListFilters = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
+      if (input.status) params.set('status', input.status)
       if (input.customer_group_id) params.set('customer_group_id', input.customer_group_id)
       if (input.created_from) params.set('created_from', input.created_from)
       if (input.created_to) params.set('created_to', input.created_to)

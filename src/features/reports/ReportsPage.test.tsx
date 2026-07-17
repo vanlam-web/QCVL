@@ -146,4 +146,15 @@ describe('ReportsPage', () => {
     expect(within(sidebar).getByRole('button', { name: 'Xem báo cáo' }).closest('.management-filter-actions')).not.toBeNull()
     expect(within(sidebar).queryByRole('button', { name: 'Hôm nay' })).not.toBeInTheDocument()
   })
+
+  it('uses the shared management date range inputs in the report filter', async () => {
+    const service = makeService()
+    render(<ReportsPage service={service} />)
+
+    await screen.findAllByText('HD0001')
+
+    const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc báo cáo' })
+    expect(within(sidebar).getByLabelText('Từ ngày').closest('.management-filter-date-range')).not.toBeNull()
+    expect(within(sidebar).getByRole('button', { name: 'Mở lịch Từ ngày' })).toBeInTheDocument()
+  })
 })

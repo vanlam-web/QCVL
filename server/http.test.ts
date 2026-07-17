@@ -751,6 +751,103 @@ describe('createHttpHandler', () => {
     expect(body.data.items.map((item: { document_code: string }) => item.document_code).join(',')).toMatch(/DEV20-(PN|HD)-/)
   })
 
+  test('lists product groups from repository instead of static demo groups', async () => {
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      listProductGroups: vi.fn(async () => [
+        { id: 'pg-alu', code: 'ALU', name: 'Alu>>Vật tư', is_default: false, is_active: true },
+        { id: 'pg-fomex', code: 'FOMEX', name: 'Fomex', is_default: false, is_active: true },
+      ]),
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/product-groups', {
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(testRepository.listProductGroups).toHaveBeenCalledWith({ organizationId: 'org-1' })
+    expect(body.data.items.map((item: { name: string }) => item.name)).toEqual(['Alu>>Vật tư', 'Fomex'])
+  })
+
+  test('creates a product group through repository upsert', async () => {
+    const upsertProductGroupsByName = vi.fn(async () => new Map([['Mica >> Cắt laser', 'pg-mica-cat-laser']]))
+    const listProductGroups = vi.fn(async () => [
+      { id: 'pg-mica-cat-laser', code: 'MICA-CAT-LASER', name: 'Mica >> Cắt laser', is_default: false, is_active: true },
+    ])
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      upsertProductGroupsByName,
+      listProductGroups,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/product-groups', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+        body: JSON.stringify({ name: 'Mica >> Cắt laser' }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(201)
+    expect(upsertProductGroupsByName).toHaveBeenCalledWith({ organizationId: 'org-1', names: ['Mica >> Cắt laser'] })
+    expect(body.data).toEqual({ id: 'pg-mica-cat-laser', code: 'MICA-CAT-LASER', name: 'Mica >> Cắt laser', is_default: false, is_active: true })
+  })
+
+  test('renames a product group through repository update', async () => {
+    const updateProductGroup = vi.fn(async () => ({
+      id: 'pg-co-khi',
+      code: 'KV-CO-KHI-MOI',
+      name: 'Cơ khí mới',
+      is_default: false,
+      is_active: true,
+    }))
+    const testRepository: ServerRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      updateProductGroup,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/product-groups/pg-co-khi', {
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+        body: JSON.stringify({ name: 'Cơ khí mới' }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(updateProductGroup).toHaveBeenCalledWith({ organizationId: 'org-1', id: 'pg-co-khi', name: 'Cơ khí mới' })
+    expect(body.data).toEqual({ id: 'pg-co-khi', code: 'KV-CO-KHI-MOI', name: 'Cơ khí mới', is_default: false, is_active: true })
+  })
+
   test('filters demo products by product kind and group', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

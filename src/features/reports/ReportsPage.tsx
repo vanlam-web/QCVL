@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { quickDateRange } from '../../lib/date-ranges'
+import { quickDateRange, toDisplayDateInput } from '../../lib/date-ranges'
 import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
 import {
+  ManagementDateRangeInputs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -163,16 +163,14 @@ export function ReportsPage({ service }: { service: ReportService }) {
         >
           <form id="reports-filter-form" aria-label="Lọc báo cáo" className="management-filter-sidebar-form" onSubmit={filterReports}>
             <ManagementFilterGroup title="Thời gian">
-              <label>
-                <span className="management-compact-search-leading"><CalendarDays aria-hidden="true" size={16} /></span>
-                Từ ngày
-                <input aria-label="Từ ngày" type="date" value={from} onChange={(event) => setFrom(event.target.value)} />
-              </label>
-              <label>
-                <span className="management-compact-search-leading"><CalendarDays aria-hidden="true" size={16} /></span>
-                Đến ngày
-                <input aria-label="Đến ngày" type="date" value={to} onChange={(event) => setTo(event.target.value)} />
-              </label>
+              <ManagementDateRangeInputs
+                displayFrom={toDisplayDateInput(from)}
+                displayTo={toDisplayDateInput(to)}
+                from={from}
+                to={to}
+                onFromChange={setFrom}
+                onToChange={setTo}
+              />
             </ManagementFilterGroup>
           </form>
         </ManagementFilterSidebar>

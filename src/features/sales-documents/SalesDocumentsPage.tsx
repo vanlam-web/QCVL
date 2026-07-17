@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -587,7 +587,7 @@ export function SalesDocumentsPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Thời gian">
             <div className="management-filter-time-options">

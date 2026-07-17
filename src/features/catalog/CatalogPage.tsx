@@ -1,5 +1,5 @@
-import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { ChevronRight, Search, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
@@ -26,6 +26,8 @@ import { ManagementSortableHeader } from '../../components/ui-shell/management-s
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
+import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
+import { ProductGroupTreeSelect } from './ProductGroupTreeSelect'
 import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStatusFilter, ProductStockMovement, SellMethod } from './types'
 import {
   catalogDateTimeText,
@@ -48,7 +50,7 @@ interface CatalogState {
 
 const stockMovementPageSize = 15
 type ProductKindFilter = ProductKind | 'all'
-type ProductGroupFilter = string | 'all'
+type ProductGroupFilter = string[]
 type ProductInventoryShapeFilter = NonNullable<Product['inventory_shape']> | 'all'
 type ProductCreatedDateFilter = QuickDateRangePreset | 'custom'
 type ProductCreateKind = ProductKind
@@ -197,6 +199,10 @@ export function CatalogPage({
   const [showFavoriteProductsOnly, setShowFavoriteProductsOnly] = useState(false)
   const [componentProducts, setComponentProducts] = useState<Product[]>([])
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([])
+  const [productGroupCreateOpen, setProductGroupCreateOpen] = useState(false)
+  const [productGroupCreateName, setProductGroupCreateName] = useState('')
+  const [productGroupCreateParentId, setProductGroupCreateParentId] = useState('')
+  const [creatingProductGroup, setCreatingProductGroup] = useState(false)
   const [bomByProductId, setBomByProductId] = useState<Record<string, ProductBom | null>>({})
   const [bomForms, setBomForms] = useState<Record<string, BomFormLine[]>>({})
   const [stockMovementsByProductId, setStockMovementsByProductId] = useState<Record<string, StockMovementState>>({})
@@ -210,14 +216,15 @@ export function CatalogPage({
   const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
   const [productKindFilter, setProductKindFilter] = useState<ProductKindFilter>('all')
   const [lastProductKindFilter, setLastProductKindFilter] = useState<ProductKindFilter>('all')
-  const [productGroupFilter, setProductGroupFilter] = useState<ProductGroupFilter>('all')
-  const [lastProductGroupFilter, setLastProductGroupFilter] = useState<ProductGroupFilter>('all')
+  const [productGroupFilter, setProductGroupFilter] = useState<ProductGroupFilter>([])
+  const [lastProductGroupFilter, setLastProductGroupFilter] = useState<ProductGroupFilter>([])
   const [inventoryShapeFilter, setInventoryShapeFilter] = useState<ProductInventoryShapeFilter>('all')
   const [lastInventoryShapeFilter, setLastInventoryShapeFilter] = useState<ProductInventoryShapeFilter>('all')
   const [productCreatedDateFilter, setProductCreatedDateFilter] = useState<ProductCreatedDateFilter>('all')
   const [productCreatedDateFrom, setProductCreatedDateFrom] = useState('')
   const [productCreatedDateTo, setProductCreatedDateTo] = useState('')
   const [productCreatedQuickTimeOpen, setProductCreatedQuickTimeOpen] = useState(false)
+  const productCreatedQuickTimeRef = useRef<HTMLDivElement | null>(null)
   const [lastProductCreatedDateFrom, setLastProductCreatedDateFrom] = useState('')
   const [lastProductCreatedDateTo, setLastProductCreatedDateTo] = useState('')
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
@@ -270,7 +277,7 @@ export function CatalogPage({
         search: nextSearch || undefined,
         status: nextStatus,
         ...(nextProductKind === 'all' ? {} : { product_kind: nextProductKind }),
-        ...(nextProductGroup === 'all' ? {} : { product_group_id: nextProductGroup }),
+        ...(nextProductGroup.length > 0 ? { product_group_id: nextProductGroup } : {}),
         ...(nextInventoryShape === 'all' ? {} : { inventory_shape: nextInventoryShape }),
         ...(nextCreatedFrom ? { created_from: nextCreatedFrom } : {}),
         ...(nextCreatedTo ? { created_to: nextCreatedTo } : {}),
@@ -318,6 +325,21 @@ export function CatalogPage({
       active = false
     }
   }, [defaultPageSize, service])
+
+  useEffect(() => {
+    if (!productCreatedQuickTimeOpen) return undefined
+
+    function closeWhenOutside(event: PointerEvent) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (productCreatedQuickTimeRef.current?.contains(target)) return
+      if (target instanceof Element && target.closest('.management-filter-quick-time-menu')) return
+      setProductCreatedQuickTimeOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeWhenOutside, true)
+    return () => document.removeEventListener('pointerdown', closeWhenOutside, true)
+  }, [productCreatedQuickTimeOpen])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyProductSearch(search))
@@ -379,6 +401,47 @@ export function CatalogPage({
       created_to: nextCreatedTo,
       page: 1,
     })
+  }
+
+  function openProductGroupCreateDialog() {
+    setProductGroupCreateName('')
+    setProductGroupCreateParentId('')
+    setProductGroupCreateOpen(true)
+  }
+
+  function closeProductGroupCreateDialog() {
+    if (creatingProductGroup) return
+    setProductGroupCreateOpen(false)
+    setProductGroupCreateName('')
+    setProductGroupCreateParentId('')
+  }
+
+  async function saveProductGroup(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const name = productGroupCreateName.trim()
+    if (!name) return
+    const parentGroup = productGroups.find((group) => group.id === productGroupCreateParentId)
+    const fullName = parentGroup ? `${parentGroup.name} >> ${name}` : name
+    setCreatingProductGroup(true)
+    setError(null)
+    try {
+      await service.createProductGroup({ name: fullName })
+      const groupResult = await service.listProductGroups()
+      setProductGroups(groupResult.items)
+      setProductGroupCreateOpen(false)
+      setProductGroupCreateName('')
+      setProductGroupCreateParentId('')
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không tạo được nhóm hàng.'))
+    } finally {
+      setCreatingProductGroup(false)
+    }
+  }
+
+  async function renameProductGroup(group: ProductGroup, name: string) {
+    await service.updateProductGroup({ id: group.id, name })
+    const groupResult = await service.listProductGroups()
+    setProductGroups(groupResult.items)
   }
 
   function productDisplayDate(value: string) {
@@ -841,23 +904,28 @@ export function CatalogPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
-          <ManagementFilterGroup title="Nhóm hàng">
-            <label>
-              <span className="sr-only">Nhóm hàng</span>
-              <select
-                aria-label="Nhóm hàng"
-                className="management-filter-select"
-                value={productGroupFilter}
-                onChange={(event) => void applySidebarFilters({ product_group_id: event.target.value as ProductGroupFilter })}
+          <ManagementFilterGroup
+            title="Nhóm hàng"
+            action={
+              <button
+                aria-label="Tạo mới nhóm hàng"
+                className="management-filter-group-header-action"
+                type="button"
+                onClick={openProductGroupCreateDialog}
               >
-                <option value="all">Chọn nhóm hàng</option>
-                {productGroups.map((group) => (
-                  <option key={group.id} value={group.id}>{group.name}</option>
-                ))}
-              </select>
-            </label>
+                + Tạo mới
+              </button>
+            }
+          >
+            <ProductGroupFilterPicker
+              collapsedLabel="Chọn nhóm hàng"
+              groups={productGroups}
+              value={productGroupFilter}
+              onRename={(group, name) => renameProductGroup(group, name)}
+              onChange={(value) => void applySidebarFilters({ product_group_id: value })}
+            />
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Tồn kho">
             <label>
@@ -876,7 +944,7 @@ export function CatalogPage({
             </label>
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Thời gian tạo">
-            <div className="management-filter-time-options">
+            <div ref={productCreatedQuickTimeRef} className="management-filter-time-options">
               <button
                 aria-expanded={productCreatedQuickTimeOpen}
                 className="management-filter-choice management-filter-time-trigger"
@@ -1699,6 +1767,49 @@ export function CatalogPage({
                   Lưu & tạo thêm
                 </button>
                 <button className="button button-primary" disabled={saving} type="submit">Lưu</button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      ) : null}
+      {productGroupCreateOpen ? (
+        <div className="management-modal-backdrop management-modal-backdrop-top">
+          <section aria-label="Tạo nhóm hàng" aria-modal="true" className="management-modal-dialog management-modal-dialog-compact catalog-product-group-dialog" role="dialog">
+            <header className="management-modal-header">
+              <h2>Tạo nhóm hàng</h2>
+              <button aria-label="Đóng tạo nhóm hàng" className="management-icon-button" disabled={creatingProductGroup} type="button" onClick={closeProductGroupCreateDialog}>
+                <X aria-hidden="true" size={18} />
+              </button>
+            </header>
+            <form aria-label="Tạo nhóm hàng" className="management-modal-form" onSubmit={(event) => void saveProductGroup(event)}>
+              <div className="management-modal-form-stack">
+                <label>
+                  Tên nhóm
+                  <input
+                    autoFocus
+                    aria-label="Tên nhóm"
+                    disabled={creatingProductGroup}
+                    value={productGroupCreateName}
+                    onChange={(event) => setProductGroupCreateName(event.target.value)}
+                  />
+                </label>
+                <div className="management-modal-field">
+                  <span>Nhóm cha</span>
+                  <ProductGroupTreeSelect
+                    groups={productGroups}
+                    placeholder="Chọn nhóm hàng"
+                    value={productGroupCreateParentId}
+                    onChange={setProductGroupCreateParentId}
+                  />
+                </div>
+              </div>
+              <footer className="management-modal-footer">
+                <button className="button button-secondary" disabled={creatingProductGroup} type="button" onClick={closeProductGroupCreateDialog}>
+                  Bỏ qua
+                </button>
+                <button className="button button-primary" disabled={creatingProductGroup || productGroupCreateName.trim() === ''} type="submit">
+                  {creatingProductGroup ? 'Đang lưu' : 'Lưu'}
+                </button>
               </footer>
             </form>
           </section>

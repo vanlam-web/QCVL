@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ChevronLeft, ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
+import { ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
@@ -898,7 +898,7 @@ export function SuppliersPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Tổng mua">
             <label>

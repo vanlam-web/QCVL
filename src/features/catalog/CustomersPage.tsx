@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
+import { BarChart3, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
 import { MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
@@ -63,6 +63,7 @@ type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerHistoryPageSize = 10
 type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
+type CustomerStatusFilter = 'active' | 'inactive' | 'all'
 const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
   { title: 'Theo ngày', presets: ['today', 'yesterday'] },
   { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
@@ -144,6 +145,7 @@ export function CustomersPage({
   const [search, setSearch] = useState('')
   const [lastSearch, setLastSearch] = useState('')
   const [customerGroupId, setCustomerGroupId] = useState('all')
+  const [status, setStatus] = useState<CustomerStatusFilter>('active')
   const [createdFrom, setCreatedFrom] = useState('')
   const [createdTo, setCreatedTo] = useState('')
   const [createdDateFilter, setCreatedDateFilter] = useState<CustomerCreatedDateFilter>('all')
@@ -154,6 +156,7 @@ export function CustomersPage({
   const [totalDebtMin, setTotalDebtMin] = useState('')
   const [totalDebtMax, setTotalDebtMax] = useState('')
   const [lastCustomerGroupId, setLastCustomerGroupId] = useState('all')
+  const [lastStatus, setLastStatus] = useState<CustomerStatusFilter>('active')
   const [lastCreatedFrom, setLastCreatedFrom] = useState('')
   const [lastCreatedTo, setLastCreatedTo] = useState('')
   const [lastCreatedBy, setLastCreatedBy] = useState('all')
@@ -174,6 +177,7 @@ export function CustomersPage({
 
   async function load(filters: CustomerListFilters & {
     customerGroupIdValue?: string
+    statusValue?: CustomerStatusFilter
     createdFromValue?: string
     createdToValue?: string
     createdByValue?: string
@@ -184,6 +188,7 @@ export function CustomersPage({
   } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextCustomerGroupId = filters.customerGroupIdValue ?? lastCustomerGroupId
+    const nextStatus = filters.statusValue ?? lastStatus
     const nextCreatedFrom = filters.createdFromValue ?? lastCreatedFrom
     const nextCreatedTo = filters.createdToValue ?? lastCreatedTo
     const nextCreatedBy = filters.createdByValue ?? lastCreatedBy
@@ -197,6 +202,7 @@ export function CustomersPage({
     try {
       const result = await service.listCustomers(buildCustomerListFilters({
         search: nextSearch,
+        status: nextStatus,
         page: nextPage,
         page_size: nextPageSize,
         customerGroupId: nextCustomerGroupId,
@@ -211,6 +217,7 @@ export function CustomersPage({
       setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       setLastSearch(nextSearch)
       setLastCustomerGroupId(nextCustomerGroupId)
+      setLastStatus(nextStatus)
       setLastCreatedFrom(nextCreatedFrom)
       setLastCreatedTo(nextCreatedTo)
       setLastCreatedBy(nextCreatedBy)
@@ -232,7 +239,7 @@ export function CustomersPage({
     async function loadInitialCustomers() {
       setError(null)
       try {
-        const result = await service.listCustomers({ page: 1, page_size: defaultPageSize })
+        const result = await service.listCustomers({ page: 1, page_size: defaultPageSize, status: 'active' })
         if (!active) return
         setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
         setPage(result.page)
@@ -275,6 +282,7 @@ export function CustomersPage({
     return load({
       search: nextSearch,
       customerGroupIdValue: customerGroupId,
+      statusValue: status,
       createdFromValue: createdFrom,
       createdToValue: createdTo,
       createdByValue: createdBy,
@@ -296,6 +304,7 @@ export function CustomersPage({
 
   async function applySidebarFilters(nextFilters: Partial<{
     customerGroupId: string
+    status: CustomerStatusFilter
     createdFrom: string
     createdTo: string
     createdBy: string
@@ -305,6 +314,7 @@ export function CustomersPage({
     totalDebtMax: string
   }>) {
     const nextCustomerGroupId = nextFilters.customerGroupId ?? customerGroupId
+    const nextStatus = nextFilters.status ?? status
     const nextCreatedFrom = nextFilters.createdFrom ?? createdFrom
     const nextCreatedTo = nextFilters.createdTo ?? createdTo
     const nextCreatedBy = nextFilters.createdBy ?? createdBy
@@ -313,6 +323,7 @@ export function CustomersPage({
     const nextTotalDebtMin = nextFilters.totalDebtMin ?? totalDebtMin
     const nextTotalDebtMax = nextFilters.totalDebtMax ?? totalDebtMax
     setCustomerGroupId(nextCustomerGroupId)
+    setStatus(nextStatus)
     setCreatedFrom(nextCreatedFrom)
     setCreatedTo(nextCreatedTo)
     setCreatedBy(nextCreatedBy)
@@ -324,6 +335,7 @@ export function CustomersPage({
     await load({
       search: search.trim(),
       customerGroupIdValue: nextCustomerGroupId,
+      statusValue: nextStatus,
       createdFromValue: nextCreatedFrom,
       createdToValue: nextCreatedTo,
       createdByValue: nextCreatedBy,
@@ -448,6 +460,11 @@ export function CustomersPage({
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
+  const statusFilterSummary = lastStatus === 'active'
+    ? 'Đang hoạt động'
+    : lastStatus === 'inactive'
+      ? 'Trạng thái: Ngừng hoạt động'
+      : 'Trạng thái: Tất cả'
   const activeFilterSummary = lastCustomerGroupId === 'all' &&
         lastCreatedFrom === '' &&
         lastCreatedTo === '' &&
@@ -456,7 +473,7 @@ export function CustomersPage({
         lastTotalSalesMax === '' &&
         lastTotalDebtMin === '' &&
         lastTotalDebtMax === ''
-      ? 'Đang hoạt động'
+      ? statusFilterSummary
       : 'Bộ lọc khách hàng'
   const creatorOptions = Array.from(
     new Map(
@@ -528,7 +545,7 @@ export function CustomersPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Nhóm khách">
             <ManagementFilterSelectField
@@ -543,6 +560,23 @@ export function CustomersPage({
                 </option>
               ))}
             </ManagementFilterSelectField>
+          </ManagementFilterGroup>
+          <ManagementFilterGroup title={'Tr\u1ea1ng th\u00e1i'}>
+            {[
+              { value: 'all', label: 'T\u1ea5t c\u1ea3' },
+              { value: 'active', label: '\u0110ang ho\u1ea1t \u0111\u1ed9ng' },
+              { value: 'inactive', label: 'Ng\u1eebng ho\u1ea1t \u0111\u1ed9ng' },
+            ].map((option) => (
+              <label className={`management-filter-choice${status === option.value ? ' management-filter-choice-active' : ''}`} key={option.value}>
+                <input
+                  checked={status === option.value}
+                  name="customer-status"
+                  type="radio"
+                  onChange={() => void applySidebarFilters({ status: option.value as CustomerStatusFilter })}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
           </ManagementFilterGroup>
           <ManagementFilterGroup title="Ngày tạo">
             <div className="management-filter-time-options">

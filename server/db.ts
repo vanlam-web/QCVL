@@ -8,6 +8,7 @@ import type {
   CustomerDebtSummaryData,
   CustomerListData,
   FinanceAccountData,
+  ProductGroupListData,
   ProductListData,
   PurchaseReceiptData,
   SalesDocumentData,
@@ -397,6 +398,39 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return new Set(result.rows.map((row) => String(row.code)))
     },
 
+    async listProductGroups(input) {
+      const result = await pool.query<ProductGroupListData>(
+        `
+          select id::text, code, name, is_default, is_active
+          from product_groups
+          where organization_id = $1
+            and is_active = true
+          order by is_default desc, name asc
+        `,
+        [input.organizationId],
+      )
+      return uniqueProductGroups(result.rows)
+    },
+
+    async updateProductGroup(input) {
+      const name = input.name.trim()
+      if (!name) return null
+      const result = await pool.query<ProductGroupListData>(
+        `
+          update product_groups
+          set name = $3,
+              code = $4,
+              updated_at = now()
+          where organization_id = $1
+            and id = $2
+            and is_active = true
+          returning id::text, code, name, is_default, is_active
+        `,
+        [input.organizationId, input.id, name, productGroupImportCode(name)],
+      )
+      return result.rows[0] ?? null
+    },
+
     async listProducts(input) {
       await ensureStockMovementsTable(pool)
       const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
@@ -404,7 +438,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const sellMethod = input.url.searchParams.get('sell_method')
       const inventoryShape = input.url.searchParams.get('inventory_shape')
       const productKind = input.url.searchParams.get('product_kind')
-      const productGroupId = input.url.searchParams.get('product_group_id')
+      const productGroupIds = input.url.searchParams.getAll('product_group_id')
       const createdFrom = input.url.searchParams.get('created_from')
       const createdTo = input.url.searchParams.get('created_to')
       const clauses = ['p.organization_id = $1']
@@ -428,9 +462,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         values.push(productKind)
         clauses.push(`p.product_kind = $${values.length}`)
       }
-      if (productGroupId) {
-        values.push(productGroupId)
-        clauses.push(`p.product_group_id = $${values.length}::uuid`)
+      if (productGroupIds.length > 0) {
+        values.push(productGroupIds)
+        clauses.push(`p.product_group_id = any($${values.length}::uuid[])`)
       }
       if (createdFrom) {
         values.push(createdFrom)
@@ -5079,6 +5113,23 @@ function bankAccount(accountId?: string | null) {
     name: 'Vietcombank',
     account_type: 'bank',
   }
+}
+
+function productGroupKey(value: string) {
+  return normalizeSearchText(value)
+    .replace(/\s*>>\s*/g, '>>')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function uniqueProductGroups(groups: ProductGroupListData[]) {
+  const byKey = new Map<string, ProductGroupListData>()
+  for (const group of groups) {
+    const key = productGroupKey(group.name)
+    const current = byKey.get(key)
+    if (!current || (!current.is_default && group.is_default)) byKey.set(key, group)
+  }
+  return [...byKey.values()]
 }
 
 function productGroupImportCode(name: string) {

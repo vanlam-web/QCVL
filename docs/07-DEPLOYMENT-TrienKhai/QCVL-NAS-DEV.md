@@ -2,6 +2,17 @@
 
 > Cap nhat: 2026-07-17.
 
+## Latest NAS Deploy - 2026-07-17 Product Filters And Sidebar Collapse
+
+Da build/copy batch bo loc hang hoa va collapse sidebar len NAS `3200`.
+
+- Lenh dung: `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas`.
+- `verify:local` pass truoc deploy: lint, typecheck, `79` test files / `556` tests, va `build:all`.
+- `build:nas` pass, `verify:nas-bundle` pass: bundle dung `100.84.228.125:3200` va khong goi `100.84.228.125:3100`.
+- `db:migrate` pass, khong co migration moi (`migrated: []`, `baseline_stamped: []`).
+- `health:nas` pass sau deploy: `persistence: "postgres"`, trace `96c33eeb-d8d8-4060-b9e3-fe38ddb368c5`.
+- Khong restart `qcvl-app` trong deploy nay (`QCVL_NAS_RESTART=false`); owner can reset/restart NAS de backend runtime nap code moi neu can.
+
 ## Latest NAS Deploy - 2026-07-17 POS Cart Validation
 
 Da build/copy fix `/pos/cart/validate` len NAS `3200`.

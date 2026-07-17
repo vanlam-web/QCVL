@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
 import { displayPriceListName } from '../../lib/price-list-display'
@@ -25,6 +25,7 @@ import { useChipSelection } from '../../components/ui-shell/use-chip-selection'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
 import { ProductImportDialog } from './ProductImportDialog'
+import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
 import type {
   PriceFormulaInput,
   PriceFormulaPreview,
@@ -35,9 +36,11 @@ import type {
   ProductStatusFilter,
   SellMethod,
 } from './types'
+import type { ProductGroup } from './types'
 
 interface PriceBookState {
   products: Product[]
+  productGroups: ProductGroup[]
   priceLists: PriceList[]
   page: number
   pageSize: number
@@ -87,6 +90,8 @@ export function PriceBookPage({
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatusFilter>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
+  const [productGroup, setProductGroup] = useState<string[]>([])
+  const [lastProductGroup, setLastProductGroup] = useState<string[]>([])
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
@@ -105,9 +110,10 @@ export function PriceBookPage({
     tierAmount: '',
     adjustments: {} as Record<string, { mode: AdjustmentMode; value: string }>,
   })
-  async function load(filters: { search?: string; status?: ProductStatusFilter; page?: number; page_size?: number } = {}) {
+  async function load(filters: { search?: string; status?: ProductStatusFilter; product_group_id?: string[]; page?: number; page_size?: number } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextStatus = filters.status ?? lastStatus
+    const nextProductGroup = filters.product_group_id ?? lastProductGroup
     const nextPage = filters.page ?? page
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
@@ -115,11 +121,13 @@ export function PriceBookPage({
       const result = await service.listProducts({
         page: nextPage,
         page_size: nextPageSize,
+        ...(nextProductGroup.length > 0 ? { product_group_id: nextProductGroup } : {}),
         search: nextSearch || undefined,
         status: nextStatus,
       })
       setState((current) => ({
         products: result.items,
+        productGroups: current?.productGroups ?? [],
         priceLists: current?.priceLists ?? [],
         page: result.page,
         pageSize: result.page_size,
@@ -127,6 +135,7 @@ export function PriceBookPage({
       }))
       setLastSearch(nextSearch)
       setLastStatus(nextStatus)
+      setLastProductGroup(nextProductGroup)
       setPage(result.page)
       setPageSize(result.page_size)
     } catch (cause) {
@@ -140,13 +149,15 @@ export function PriceBookPage({
     async function loadInitialPriceBook() {
         setError(null)
         try {
-        const [result, priceListResult] = await Promise.all([
+        const [result, priceListResult, productGroupResult] = await Promise.all([
           service.listProducts({ page: 1, page_size: defaultPageSize, status: 'active' }),
           service.listPriceLists(),
+          service.listProductGroups(),
         ])
         if (!active) return
         setState({
           products: result.items,
+          productGroups: productGroupResult.items,
           priceLists: priceListResult.items,
           page: result.page,
           pageSize: result.page_size,
@@ -173,6 +184,12 @@ export function PriceBookPage({
   function applyProductSearch(nextSearch: string) {
     setPage(1)
     return load({ search: nextSearch, status, page: 1 })
+  }
+
+  function applyProductGroupFilter(nextProductGroup: string[]) {
+    setProductGroup(nextProductGroup)
+    setPage(1)
+    return load({ product_group_id: nextProductGroup, status, page: 1 })
   }
 
   function changeProductSearch(nextSearch: string) {
@@ -328,13 +345,17 @@ export function PriceBookPage({
   const totalPages = Math.max(1, Math.ceil((state?.total ?? 0) / pageSize))
   const canGoPrevious = page > 1
   const canGoNext = page < totalPages
-  const activeFilterSummary = status === 'active'
-    ? 'Đang bán'
+  const statusSummary = status === 'active'
+    ? '\u0110ang b\u00e1n'
     : status === 'inactive'
-      ? 'Trạng thái: Ngưng bán'
+      ? 'Tr\u1ea1ng th\u00e1i: Ng\u01b0ng b\u00e1n'
       : status === 'deleted'
-        ? 'Trạng thái: Đã xoá KV'
-        : 'Trạng thái: Tất cả'
+        ? 'Tr\u1ea1ng th\u00e1i: \u0110\u00e3 xo\u00e1 KV'
+        : 'Tr\u1ea1ng th\u00e1i: T\u1ea5t c\u1ea3'
+  const selectedProductGroupNames = productGroup
+    .map((groupId) => state?.productGroups.find((group) => group.id === groupId)?.name)
+    .filter((name): name is string => Boolean(name))
+  const activeFilterSummary = selectedProductGroupNames.length > 0 ? `${statusSummary} - ${selectedProductGroupNames.join(', ')}` : statusSummary
   const priceListOptions = useMemo(() => (state?.priceLists ?? []).map((priceList) => ({
     id: priceList.id,
     label: displayPriceListName(priceList),
@@ -404,7 +425,7 @@ export function PriceBookPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
           <form id="price-book-filter-form" aria-label="Lọc bảng giá" className="management-filter-sidebar-form" onSubmit={filterProducts}>
             <ManagementFilterGroup title="Trạng thái">
@@ -456,6 +477,14 @@ export function PriceBookPage({
                 />
                 Đã xoá KV
               </label>
+            </ManagementFilterGroup>
+            <ManagementFilterGroup title={'Nh\u00f3m h\u00e0ng'}>
+              <ProductGroupFilterPicker
+                collapsedLabel="Tất cả nhóm hàng"
+                groups={state?.productGroups ?? []}
+                value={productGroup}
+                onChange={(value) => void applyProductGroupFilter(value)}
+              />
             </ManagementFilterGroup>
             <ManagementFilterGroup title="Bảng giá">
               <ManagementChipPicker

@@ -13,6 +13,8 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     getProductBom: vi.fn(async () => null),
     saveProductBom: vi.fn(),
     listProductGroups: vi.fn(async () => ({ items: [] })),
+    createProductGroup: vi.fn(),
+    updateProductGroup: vi.fn(),
     previewKiotVietProductImport: vi.fn(),
     importKiotVietProducts: vi.fn(),
     deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
@@ -278,7 +280,7 @@ it('uses the shared pagination footer to move between customer pages', async () 
   expect(await screen.findByText('KH000222')).toBeInTheDocument()
   expect(footer).toContainElement(screen.getByText('16 - 30 trong 45 khách hàng'))
   expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('2')
-  expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 2, page_size: 15, search: undefined })
+  expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 2, page_size: 15, search: undefined, status: 'active' })
 })
 
 it('uses the shared management filter hide and show controls', async () => {
@@ -304,7 +306,7 @@ it('searches and creates a customer from the search action', async () => {
   expect(searchForm.closest('.management-page-header')).not.toBeNull()
   expect(within(searchForm).getByLabelText('Tìm khách hàng').closest('.management-compact-search')).not.toBeNull()
   await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), 'Phong')
-  await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'Phong' }))
+  await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'Phong', status: 'active' }))
   expect(screen.queryByText('Tìm: Phong')).not.toBeInTheDocument()
 
   expect(screen.queryByRole('dialog', { name: 'Tạo khách hàng' })).not.toBeInTheDocument()
@@ -404,7 +406,7 @@ it('reactively filters customers by existing customer fields in the shared sideb
   expect(within(sidebar).getByRole('region', { name: 'Công nợ' })).toBeInTheDocument()
   expect(within(sidebar).queryByRole('region', { name: 'Giới tính' })).not.toBeInTheDocument()
   expect(within(sidebar).queryByRole('region', { name: 'Sinh nhật' })).not.toBeInTheDocument()
-  expect(within(sidebar).queryByRole('region', { name: 'Trạng thái' })).not.toBeInTheDocument()
+  expect(within(sidebar).getByRole('region', { name: /Tr\u1ea1ng th\u00e1i/ })).toBeInTheDocument()
 
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Nhóm khách' }), 'cg-1')
   expect(service.listCustomers).toHaveBeenLastCalledWith({
@@ -412,6 +414,7 @@ it('reactively filters customers by existing customer fields in the shared sideb
     page_size: 15,
     search: undefined,
     customer_group_id: 'cg-1',
+    status: 'active',
   })
 
   await userEvent.clear(within(sidebar).getByLabelText('Từ ngày'))
@@ -429,7 +432,30 @@ it('reactively filters customers by existing customer fields in the shared sideb
     created_by: 'user-admin',
     total_sales_min: 500000,
     total_debt_max: 300000,
+    status: 'active',
   })
+})
+
+it('filters customers by status from the shared sidebar', async () => {
+  const service = makeService()
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH000123')
+
+  const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc khách hàng' })
+  const statusGroup = within(sidebar).getByRole('region', { name: 'Trạng thái' })
+  expect(within(statusGroup).queryByRole('combobox', { name: 'Trạng thái' })).not.toBeInTheDocument()
+  expect(within(statusGroup).getByRole('radio', { name: 'Đang hoạt động' })).toBeChecked()
+  expect(service.listCustomers).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }))
+
+  await userEvent.click(within(statusGroup).getByRole('radio', { name: 'Ngừng hoạt động' }))
+
+  await waitFor(() => expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    status: 'inactive',
+  }))
 })
 
 it('shows customer create errors inside the modal', async () => {

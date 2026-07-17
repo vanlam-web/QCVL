@@ -107,10 +107,13 @@ export function ManagementFilterActionBar({ children }: { children: ReactNode })
   return <div className="management-filter-actions">{children}</div>
 }
 
-export function ManagementFilterGroup({ title, children }: { title: string; children: ReactNode }) {
+export function ManagementFilterGroup({ title, action, children }: { title: string; action?: ReactNode; children: ReactNode }) {
   return (
     <section aria-label={title} className="management-filter-group">
-      <h2>{title}</h2>
+      <div className="management-filter-group-header">
+        <h2>{title}</h2>
+        {action}
+      </div>
       <div className="management-filter-options">{children}</div>
     </section>
   )

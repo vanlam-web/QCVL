@@ -2295,7 +2295,7 @@ export function PurchaseReceiptsPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronLeft aria-hidden="true" size={16} />
+            <ChevronRight aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Trạng thái">
             <select

@@ -174,6 +174,15 @@ export interface ProductListData {
   created_at: string
   updated_at: string
 }
+
+export interface ProductGroupListData {
+  id: string
+  code: string
+  name: string
+  is_default: boolean
+  is_active: boolean
+}
+
 export interface CustomerListData {
   id: string
   code: string
@@ -365,6 +374,8 @@ export interface ServerRepository {
   getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
   recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
   listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
+  listProductGroups?(input: { organizationId: string }): Promise<ProductGroupListData[]>
+  updateProductGroup?(input: { organizationId: string; id: string; name: string }): Promise<ProductGroupListData | null>
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
   listPriceLists?(input: { organizationId: string }): Promise<Array<{ id: string; code: string; name: string; is_default: boolean; is_active: boolean }>>
@@ -913,6 +924,14 @@ function normalizeSearchText(value: string) {
     .replace(/đ/g, 'd')
 }
 
+function productGroupCode(name: string) {
+  return normalizeSearchText(name)
+    .replace(/\s*>>\s*/g, '-')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase() || 'GROUP'
+}
+
 function normalizeCreatorIdentity(value: string | null | undefined) {
   return normalizeSearchText(String(value ?? '').replace(/\{DEL\}$/i, ''))
     .replace(/\s+/g, ' ')
@@ -1037,7 +1056,7 @@ function filterProducts(url: URL) {
   const sellMethod = url.searchParams.get('sell_method')
   const inventoryShape = url.searchParams.get('inventory_shape')
   const productKind = url.searchParams.get('product_kind')
-  const productGroupId = url.searchParams.get('product_group_id')
+  const productGroupIds = url.searchParams.getAll('product_group_id')
   const createdFrom = url.searchParams.get('created_from')
   const createdTo = url.searchParams.get('created_to')
 
@@ -1050,7 +1069,7 @@ function filterProducts(url: URL) {
     if (sellMethod && product.sell_method !== sellMethod) return false
     if (inventoryShape && product.inventory_shape !== inventoryShape) return false
     if (productKind && product.product_kind !== productKind) return false
-    if (productGroupId && product.product_group_id !== productGroupId) return false
+    if (productGroupIds.length > 0 && !productGroupIds.includes(product.product_group_id ?? '')) return false
     if (!dateRangeMatches(product.created_at ?? '', createdFrom, createdTo)) return false
     if (search) {
       const haystack = normalizeSearchText(`${product.code} ${product.name}`)
@@ -2221,7 +2240,37 @@ async function getDevApiResponse(
   const catalogRoute = await handleCatalogRoute(
     { request, url, currentUser, repository },
     {
-      productGroups: async () => ({ found: true, data: { items: productGroups } }),
+      productGroups: async () => ({
+        found: true,
+        data: { items: await repository.listProductGroups?.({ organizationId: currentUser.organization.id }) ?? productGroups },
+      }),
+      createProductGroup: async () => {
+        const body = await readJson(request)
+        const name = requiredString(body.name, 'name').replace(/\s*>>\s*/g, ' >> ')
+        const groupIds = await repository.upsertProductGroupsByName?.({ organizationId: currentUser.organization.id, names: [name] })
+        const items = await repository.listProductGroups?.({ organizationId: currentUser.organization.id })
+        const created = items?.find((group) => group.name === name)
+          ?? productGroups.find((group) => group.name === name)
+          ?? {
+            id: groupIds?.get(name) ?? randomUUID(),
+            code: productGroupCode(name),
+            name,
+            is_default: false,
+            is_active: true,
+        }
+        return { found: true, data: created, status: 201 }
+      },
+      updateProductGroup: async () => {
+        const body = await readJson(request)
+        const id = getIdFromPath(path) ?? ''
+        const name = requiredString(body.name, 'name').replace(/\s*>>\s*/g, ' >> ')
+        const updated = await repository.updateProductGroup?.({ organizationId: currentUser.organization.id, id, name })
+        if (updated) return { found: true, data: updated }
+        const fallback = productGroups.find((group) => group.id === id)
+        if (!fallback) return { found: true, data: { message: 'Product group not found' }, status: 404 }
+        const renamed = { ...fallback, code: productGroupCode(name), name }
+        return { found: true, data: renamed }
+      },
       listProducts: async () => {
         const items = await listProductsForRequest(url, repository, currentUser.organization.id)
         return {

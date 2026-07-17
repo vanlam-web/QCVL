@@ -4,6 +4,7 @@ export type CustomerHistoryType = 'invoice' | 'quote'
 
 export interface CustomerFilterState {
   search: string
+  status: 'active' | 'inactive' | 'all'
   page: number
   page_size: number
   customerGroupId: string
@@ -33,6 +34,7 @@ export function buildCustomerListFilters(input: CustomerFilterState): CustomerLi
 
   return {
     search: input.search || undefined,
+    ...(input.status === 'all' ? {} : { status: input.status }),
     page: input.page,
     page_size: input.page_size,
     ...(input.customerGroupId === 'all' ? {} : { customer_group_id: input.customerGroupId }),

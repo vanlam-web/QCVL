@@ -28,6 +28,8 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     getProductBom: vi.fn(async () => null),
     saveProductBom: vi.fn(),
     listProductGroups: vi.fn(async () => ({ items: [] })),
+    createProductGroup: vi.fn(),
+    updateProductGroup: vi.fn(),
     previewKiotVietProductImport: vi.fn(),
     importKiotVietProducts: vi.fn(),
     deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
@@ -144,6 +146,40 @@ it('applies the status filter immediately without an apply action', async () => 
     page_size: 20,
     search: undefined,
     status: 'deleted',
+  }))
+})
+
+it('filters the price book by product group from a KV-style checkbox picker', async () => {
+  const service = makeService({
+    listProductGroups: vi.fn(async () => ({
+      items: [
+        { id: 'pg-mica', code: 'MICA', name: 'Mica', is_default: false, is_active: true },
+        { id: 'pg-decal', code: 'DECAL', name: 'Decal', is_default: false, is_active: true },
+      ],
+    })),
+  })
+  render(<PriceBookPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByRole('table', { name: 'Lưới bảng giá' })
+
+  const filterSidebar = screen.getByRole('complementary', { name: 'Bộ lọc bảng giá' })
+  expect(within(filterSidebar).queryByRole('combobox', { name: 'Nhóm hàng' })).not.toBeInTheDocument()
+  await userEvent.click(within(filterSidebar).getByRole('textbox', { name: 'Tất cả nhóm hàng' }))
+  const picker = within(filterSidebar).getByRole('dialog', { name: 'Chọn nhóm hàng' })
+  expect(picker).toHaveClass('management-filter-product-group-popover')
+  await userEvent.type(within(picker).getByRole('textbox', { name: 'Tìm nhóm hàng' }), 'mica')
+  expect(within(picker).queryByRole('checkbox', { name: 'Decal' })).not.toBeInTheDocument()
+  await userEvent.click(within(picker).getByRole('checkbox', { name: 'Mica' }))
+  expect(within(picker).getByRole('button', { name: 'Chọn tất cả' })).toBeInTheDocument()
+  await userEvent.click(within(picker).getByRole('button', { name: 'Áp dụng' }))
+  expect(within(filterSidebar).getByText('Mica')).toHaveClass('management-chip-picker-chip')
+
+  await waitFor(() => expect(service.listProducts).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 20,
+    product_group_id: ['pg-mica'],
+    search: undefined,
+    status: 'active',
   }))
 })
 
