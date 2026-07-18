@@ -137,7 +137,10 @@ describe('createPgRepository product units', () => {
     const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
     expect(sqlCalls.some((sql) => sql.includes('update payment_receipts') && sql.includes("code = $4 or code like $4 || '-%'"))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('update payment_receipt_methods') && sql.includes('payment_receipt_id in'))).toBe(true)
-    expect(sqlCalls.some((sql) => sql.includes('update cashbook_entries') && sql.includes("code = $4 or code like $4 || '-%'"))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('update cashbook_entries') && sql.includes("code = $3 or code like $3 || '-%'"))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('alter table payment_receipts add column if not exists created_at'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('alter table payment_receipt_methods add column if not exists created_at'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('alter table cashbook_entries add column if not exists source'))).toBe(true)
   })
 
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {

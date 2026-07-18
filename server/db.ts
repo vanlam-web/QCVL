@@ -3277,16 +3277,18 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               )
           `,
           [input.organizationId, orderId, input.created_at, sameSaleReceiptBaseCode],
-        )
+        ).catch((error: unknown) => {
+          if (isMissingGuardRelationError(error)) return
+          throw error
+        })
         await pool.query(
           `
             update cashbook_entries
-            set created_at = $3::timestamptz
+            set created_at = $2::timestamptz
             where organization_id = $1
-              and source->>'order_code' = $5
-              and (code = $4 or code like $4 || '-%')
+              and (code = $3 or code like $3 || '-%')
           `,
-          [input.organizationId, orderId, input.created_at, sameSaleReceiptBaseCode, orderCode],
+          [input.organizationId, input.created_at, sameSaleReceiptBaseCode],
         )
       }
       return this.getSalesDocument?.({ organizationId: input.organizationId, id: String(orderId) }) ?? null
@@ -5000,6 +5002,7 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
       unique (organization_id, code)
     )
   `)
+  await pool.query('alter table payment_receipts add column if not exists created_at timestamptz not null default now()')
   await pool.query(`
     create table if not exists payment_receipt_methods (
       id text primary key default gen_random_uuid()::text,
@@ -5014,6 +5017,9 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
       created_at timestamptz not null default now()
     )
   `)
+  await pool.query('alter table payment_receipt_methods add column if not exists payment_receipt_id text')
+  await pool.query('alter table payment_receipt_methods add column if not exists order_id text')
+  await pool.query('alter table payment_receipt_methods add column if not exists created_at timestamptz not null default now()')
   await pool.query(`
     create table if not exists customer_debt_entries (
       id text primary key default gen_random_uuid()::text,
@@ -5052,6 +5058,9 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
     )
   `)
   await pool.query('alter table cashbook_entries add column if not exists created_by jsonb null')
+  await pool.query('alter table cashbook_entries add column if not exists source jsonb not null default \'{}\'::jsonb')
+  await pool.query('alter table cashbook_entries add column if not exists allocations jsonb not null default \'[]\'::jsonb')
+  await pool.query('alter table cashbook_entries add column if not exists created_at timestamptz not null default now()')
   await pool.query('create index if not exists cashbook_entries_org_created_idx on cashbook_entries (organization_id, created_at desc)')
   await migrateLegacyPosFinanceCodes(pool)
   })
