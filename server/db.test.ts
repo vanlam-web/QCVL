@@ -120,6 +120,26 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('update product_unit_conversions'))).toBe(false)
   })
 
+  test('moves same-sale cashbook timestamps when sales document time changes', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('update orders')) return { rows: [{ id: 'order-1', code: 'HD010985' }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.updateSalesDocumentNote?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      id: 'HD010985',
+      created_at: '2026-07-18T04:15:00.000Z',
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('update payment_receipts') && sql.includes("code = $4 or code like $4 || '-%'"))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('update payment_receipt_methods') && sql.includes('payment_receipt_id in'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('update cashbook_entries') && sql.includes("code = $4 or code like $4 || '-%'"))).toBe(true)
+  })
+
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockResolvedValue({

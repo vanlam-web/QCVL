@@ -1918,9 +1918,19 @@ function checkoutPaymentReceiptCode(orderCode: string, index: number, accountTyp
   return `${baseCode}-${accountType === 'bank' ? 'NH' : 'TM'}`
 }
 
+function sameSalePaymentReceiptBaseCode(orderCode: string) {
+  const match = /^HD(\d{6}(?:\.\d+)?)$/i.exec(orderCode)
+  return match ? `TTHD${match[1]}` : null
+}
+
+function isSameSalePaymentReceiptCode(code: string, orderCode: string) {
+  const baseCode = sameSalePaymentReceiptBaseCode(orderCode)
+  return baseCode ? code === baseCode || code.startsWith(`${baseCode}-`) : false
+}
+
 function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}, createdBy = order.seller) {
   const entries: CashbookEntryData[] = []
-  const createdAt = runtimeIso()
+  const createdAt = order.created_at
   const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
   const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
   let collectedBefore = 0
@@ -3166,10 +3176,14 @@ async function getDevApiResponse(
           }
           salesDocuments[index] = updatedDocument
           if (createdAt !== undefined) {
+            const sameSaleReceiptBase = sameSalePaymentReceiptBaseCode(updatedDocument.code)
             for (const entry of cashbookEntries) {
               const matchesOrder = entry.source?.order_code === updatedDocument.code
                 || (entry.allocations ?? []).some((allocation) => allocation.order_id === updatedDocument.id || allocation.order_code === updatedDocument.code)
-              if (matchesOrder) entry.created_at = createdAt
+              const isSameSaleReceipt = sameSaleReceiptBase
+                ? isSameSalePaymentReceiptCode(entry.code, updatedDocument.code)
+                : false
+              if (matchesOrder && isSameSaleReceipt) entry.created_at = createdAt
             }
           }
           return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }

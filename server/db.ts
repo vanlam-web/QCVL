@@ -3251,33 +3251,42 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const orderId = result.rows[0]?.id
       const orderCode = result.rows[0]?.code
       if (!orderId) return null
-      if (input.created_at !== undefined) {
+      const sameSaleReceiptBaseCode = salesDocumentSameSaleReceiptBaseCode(orderCode)
+      if (input.created_at !== undefined && sameSaleReceiptBaseCode) {
         await pool.query(
           `
             update payment_receipts
             set created_at = $3::timestamptz
             where organization_id = $1
               and order_id = $2
+              and (code = $4 or code like $4 || '-%')
           `,
-          [input.organizationId, orderId, input.created_at],
+          [input.organizationId, orderId, input.created_at, sameSaleReceiptBaseCode],
         )
         await pool.query(
           `
             update payment_receipt_methods
             set created_at = $3::timestamptz
             where organization_id = $1
-              and order_id = $2
+              and payment_receipt_id in (
+                select id
+                from payment_receipts
+                where organization_id = $1
+                  and order_id = $2
+                  and (code = $4 or code like $4 || '-%')
+              )
           `,
-          [input.organizationId, orderId, input.created_at],
+          [input.organizationId, orderId, input.created_at, sameSaleReceiptBaseCode],
         )
         await pool.query(
           `
             update cashbook_entries
             set created_at = $3::timestamptz
             where organization_id = $1
-              and source->>'order_code' = $4
+              and source->>'order_code' = $5
+              and (code = $4 or code like $4 || '-%')
           `,
-          [input.organizationId, orderId, input.created_at, orderCode],
+          [input.organizationId, orderId, input.created_at, sameSaleReceiptBaseCode, orderCode],
         )
       }
       return this.getSalesDocument?.({ organizationId: input.organizationId, id: String(orderId) }) ?? null
@@ -5464,6 +5473,11 @@ function cashbookFinanceAccountSnapshot(account: FinanceAccountData): CashbookEn
 
 function cashbookNoteOrderCode(note: string | null | undefined) {
   return note?.match(/\bHD(?:-[A-Z0-9]+)+\b|\bHD\d+(?:\.\d+)?\b/i)?.[0].toUpperCase() ?? null
+}
+
+function salesDocumentSameSaleReceiptBaseCode(orderCode: string | null | undefined) {
+  const match = orderCode?.match(/^HD(\d{6}(?:\.\d+)?)$/i)
+  return match ? `TTHD${match[1]}` : null
 }
 
 function cashbookEntryHasLinkedOrder(entry: CashbookEntryData) {

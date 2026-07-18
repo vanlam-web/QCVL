@@ -90,6 +90,7 @@ Hỗ trợ 2 thao tác riêng:
 
 - Lưu ghi chú nhanh trong detail: `{ "note": "Ghi chú mới" }`. Chuỗi rỗng lưu về `null`/rỗng tùy storage, response trả detail giống `GET /sales-documents/{id}`.
 - Hủy chứng từ: `{ "status": "cancelled" }`. Không gửi kèm `note` trong cùng request.
+- Đổi `created_at` của chứng từ chỉ đồng bộ dòng quỹ sinh cùng lần bán đó (`TTHD...`/`TTHD...-NH`/`TTHD...-TM`) và `payment_receipts`/`payment_receipt_methods` của chính hóa đơn này. Dòng thu nợ sau (`TT...`) giữ thời gian thu thật, không kéo theo ngày bán.
 
 ### Mapping rules
 

@@ -108,6 +108,16 @@ function persistentRepository(passwordHash: string, displayName = 'Admin'): Serv
     return true
   }
 
+  function sameSalePaymentReceiptBaseCode(orderCode: string) {
+    const match = /^HD(\d{6}(?:\.\d+)?)$/i.exec(orderCode)
+    return match ? `TTHD${match[1]}` : null
+  }
+
+  function isSameSalePaymentReceiptCode(code: string, orderCode: string) {
+    const baseCode = sameSalePaymentReceiptBaseCode(orderCode)
+    return baseCode ? code === baseCode || code.startsWith(`${baseCode}-`) : false
+  }
+
   return {
     ...base,
     async saveSalesDocument(input) {
@@ -126,7 +136,11 @@ function persistentRepository(passwordHash: string, displayName = 'Admin'): Serv
       if (input.note !== undefined) document.note = input.note ?? ''
       if (input.created_at !== undefined) {
         document.created_at = input.created_at
-        for (const entry of cashbook) entry.created_at = input.created_at
+        for (const entry of cashbook) {
+          const matchesOrder = entry.source?.order_code === document.code
+            || (entry.allocations ?? []).some((allocation) => allocation.order_id === document.id || allocation.order_code === document.code)
+          if (matchesOrder && isSameSalePaymentReceiptCode(entry.code, document.code)) entry.created_at = input.created_at
+        }
       }
       return document
     },
@@ -3238,7 +3252,6 @@ describe('createHttpHandler', () => {
     )
     const checkoutBody = await checkout.json()
     const orderCode = checkoutBody.data.order.code
-
     const documents = await handler(
       new Request(`http://api.local/api/v1/sales-documents?search=${orderCode}&page=1&page_size=10`, {
         headers: { authorization },
@@ -4473,6 +4486,7 @@ describe('createHttpHandler', () => {
     )
     const checkoutBody = await checkout.json()
     const orderCode = checkoutBody.data.order.code
+    const saleReceiptCode = checkoutBody.data.payment_receipt.code
 
     const collection = await firstHandler(
       new Request('http://api.local/api/v1/finance/debt-collections', {
@@ -4488,6 +4502,20 @@ describe('createHttpHandler', () => {
     )
     const collectionBody = await collection.json()
 
+    const update = await firstHandler(
+      new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
+        method: 'PATCH',
+        headers: { authorization },
+        body: JSON.stringify({ created_at: '2026-07-18T04:15:00.000Z' }),
+      }),
+    )
+    const updatedCashbook = await firstHandler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${saleReceiptCode}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const debtCashbook = await firstHandler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${collectionBody.data.payment_receipt_id}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+
     vi.resetModules()
     const restartedModule = await import('./http')
     const restartedHandler = restartedModule.createHttpHandler({ repository: sharedRepository })
@@ -4502,11 +4530,18 @@ describe('createHttpHandler', () => {
     )
     const debtBody = await debt.json()
     const cashbookBody = await cashbook.json()
+    const updatedCashbookBody = await updatedCashbook.json()
+    const debtCashbookBody = await debtCashbook.json()
     const customerListBody = await customerList.json()
+    const updatedCashbookItem = updatedCashbookBody.data.items.find((item: { code: string; created_at: string }) => item.code === saleReceiptCode)
+    const debtCashbookItem = debtCashbookBody.data.items.find((item: { code: string; created_at: string }) => item.code === collectionBody.data.payment_receipt_id)
 
     expect(collection.status).toBe(201)
     expect(collectionBody.data.payment_receipt_id).toMatch(/^TT\d{6}$/)
     expect(collectionBody.data.allocated_amount).toBe(100000)
+    expect(update.status).toBe(200)
+    expect(updatedCashbookItem?.created_at).toBe('2026-07-18T04:15:00.000Z')
+    expect(debtCashbookItem?.created_at).not.toBe('2026-07-18T04:15:00.000Z')
     expect(debtBody.data.total_debt).toBe(200000)
     expect(debtBody.data.invoices).toEqual(expect.arrayContaining([
       expect.objectContaining({
