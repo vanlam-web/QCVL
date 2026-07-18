@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SalesDocumentsPage } from './SalesDocumentsPage'
-import type { SalesDocumentDetail, SalesDocumentService } from './sales-document-service'
+import type { SalesDocumentDetail, SalesDocumentListResponse, SalesDocumentService } from './sales-document-service'
 import type { OrderService, QuoteReopenPayload } from '../orders/order-service'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { FoundationService } from '../users/foundation-service'
@@ -454,13 +454,12 @@ it('opens a single linked invoice from route query and searches full history', a
 it('loads route-open invoice detail by code without waiting for the list id lookup', async () => {
   const originalUrl = window.location.href
   window.history.pushState({}, '', '/sales-documents?open=HD010985&type=invoice')
+  let resolveList: (value: SalesDocumentListResponse) => void = () => {}
+  const listPromise = new Promise<SalesDocumentListResponse>((resolve) => {
+    resolveList = resolve
+  })
   const service = makeService({
-    listSalesDocuments: vi.fn(async () => ({
-      items: [listItem],
-      page: 1,
-      page_size: 15,
-      total: 1,
-    })),
+    listSalesDocuments: vi.fn(async () => listPromise),
     getSalesDocument: vi.fn(async () => detail),
   })
 
@@ -469,6 +468,12 @@ it('loads route-open invoice detail by code without waiting for the list id look
 
     await waitFor(() => expect(service.getSalesDocument).toHaveBeenCalledWith('HD010985'))
     expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
+    resolveList({
+      items: [listItem],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })
   } finally {
     window.history.pushState({}, '', originalUrl)
   }

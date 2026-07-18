@@ -280,14 +280,37 @@ export function SalesDocumentsPage({
   useEffect(() => {
     let active = true
 
-    async function loadInitialDocuments() {
-      setError(null)
-      try {
-        const openDetailPromise = routeFilters.open ? service.getSalesDocument(routeFilters.open) : null
-        const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
-          search: routeFilters.search || routeFilters.open,
-          type: routeFilters.type,
-          status: defaultStatusFilters,
+  async function loadInitialDocuments() {
+    setError(null)
+    try {
+      const openDetailPromise = routeFilters.open ? service.getSalesDocument(routeFilters.open) : null
+      let openDetailSettled = false
+      if (openDetailPromise) {
+        openDetailPromise
+          .then((detail) => {
+            if (!active) return
+            setSelected(detail)
+            setState((current) => current ?? {
+              items: [detail],
+              total: 1,
+              page: 1,
+              pageSize: defaultPageSize,
+              summary: {
+                total_amount: detail.total_amount,
+                debt_amount: detail.debt_amount,
+              },
+            })
+            openDetailSettled = true
+          })
+          .catch((cause) => {
+            if (!active) return
+            setDetailError(formatApiError(cause, 'Không tải được chi tiết chứng từ.'))
+          })
+      }
+      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
+        search: routeFilters.search || routeFilters.open,
+        type: routeFilters.type,
+        status: defaultStatusFilters,
           paymentStatus: allPaymentStatusFilters,
           paymentMethod: 'all',
           seller: 'all',
@@ -297,24 +320,25 @@ export function SalesDocumentsPage({
           to: routeFilters.to,
           page: 1,
           page_size: defaultPageSize,
-        }))
-        if (!active) return
-        setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
-        if (routeFilters.open && openDetailPromise) {
-          const openDocument = result.items.find((document) => document.code === routeFilters.open)
-          if (openDocument) setLoadingDocumentId(openDocument.id)
-          try {
+      }))
+      if (!active) return
+      setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
+      if (routeFilters.open && openDetailPromise) {
+        const openDocument = result.items.find((document) => document.code === routeFilters.open)
+        if (openDocument) setLoadingDocumentId(openDocument.id)
+        try {
+          if (!openDetailSettled) {
             const detail = await openDetailPromise
             if (!active) return
             setSelected(detail)
-          } catch (cause) {
-            if (!active) return
-            setDetailError(formatApiError(cause, 'Không tải được chi tiết chứng từ.'))
-            if (openDocument) setDetailErrorDocumentId(openDocument.id)
-          } finally {
-            if (active) setLoadingDocumentId(null)
           }
-        } else if (routeFilters.shouldOpenSingleResult && result.items.length === 1) {
+        } catch {
+          if (!active) return
+          if (openDocument) setDetailErrorDocumentId(openDocument.id)
+        } finally {
+          if (active) setLoadingDocumentId(null)
+        }
+      } else if (routeFilters.shouldOpenSingleResult && result.items.length === 1) {
           const [singleDocument] = result.items
           setLoadingDocumentId(singleDocument.id)
           try {
