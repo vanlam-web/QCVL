@@ -29,6 +29,8 @@ Then state scope in chat:
 - page/API
 - target environment
 
+Also update `Y:\TeamAI\WORKER-NOW.md` with the scope you took before changing files.
+
 ## Conflict Rule
 
 - Do not edit the same module/file from both workers at once.

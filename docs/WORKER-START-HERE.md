@@ -11,6 +11,7 @@ This is the first file for any Codex worker. Keep it short and current.
   - inside-LAN worker: direct LAN/NAS work
 - Shared branch: `main`.
 - Shared Source of Truth: `origin/main`.
+- Shared live coordination board: `Y:\TeamAI\WORKER-NOW.md`.
 - Dev surface: `http://127.0.0.1:3202`.
 - NAS surface: `http://100.84.228.125:3200`.
 - Runtime data source: PostgreSQL on NAS.
@@ -32,10 +33,11 @@ Then state:
 ## Read Order
 
 1. `AI_TEAM_RULES.md`
-2. `docs/PROJECT-COORDINATION.md`
-3. `docs/CURRENT-DATA-SOURCE.md`
-4. feature docs for touched page/API
-5. current code
+2. `docs/AI/README.md`
+3. `docs/PROJECT-COORDINATION.md`
+4. `docs/CURRENT-DATA-SOURCE.md`
+5. feature docs for touched page/API
+6. current code
 
 Old plans under `docs/superpowers/plans/` are historical context only unless Owner explicitly says to follow one.
 
