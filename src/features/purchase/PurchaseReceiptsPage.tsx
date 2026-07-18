@@ -2280,8 +2280,8 @@ function clearReceiptCreateDraft() {
               </button>
               <div className="purchase-receipt-workspace-side-body">
                 <div className="purchase-receipt-workspace-side-top-row">
-                  <div className="purchase-receipt-workspace-account-field">
-                    <input aria-label="Tài khoản" readOnly value={accountDisplayName(currentUser)} />
+                  <div className="purchase-receipt-workspace-account-field" aria-label="Tài khoản">
+                    <div className="purchase-receipt-workspace-account-display">{accountDisplayName(currentUser)}</div>
                   </div>
                   <div className="purchase-receipt-workspace-time-field">
                     <input

@@ -640,6 +640,8 @@ it('keeps purchase receipt workspace side panel aligned with shared filter width
   expect(cssRule('.purchase-receipt-workspace-side.management-filter-sidebar')).toContain('border-radius: var(--radius-md)')
   expect(cssRule('.purchase-receipt-workspace-side-body')).toContain('gap: var(--space-4)')
   expect(cssRule('.purchase-receipt-workspace-side-top-row')).toContain('grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.9fr)')
+  expect(cssRule('.purchase-receipt-workspace-account-display')).toContain('border: 0')
+  expect(cssRule('.purchase-receipt-workspace-account-display')).toContain('background: transparent')
   expect(cssRule('.purchase-receipt-workspace-side label')).toContain('gap: var(--space-2)')
   expect(cssRule('.purchase-receipt-workspace-side label')).toContain('color: #fff')
   expect(cssRule('.purchase-receipt-workspace-side label')).toContain('font-weight: 400')

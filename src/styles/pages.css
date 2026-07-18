@@ -1506,6 +1506,18 @@ td:has(.money-text) {
   align-items: end;
 }
 
+.purchase-receipt-workspace-account-display {
+  min-height: 2.15rem;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 400;
+  padding: 0.35rem 0;
+}
+
 .purchase-receipt-workspace-side-rail {
   border-left: 1px solid var(--color-border-muted);
   background: var(--color-surface);
