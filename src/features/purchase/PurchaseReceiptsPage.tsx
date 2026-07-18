@@ -85,6 +85,34 @@ const blankForm: PurchaseReceiptInput = {
   items: [],
 }
 
+function formatReceiptDateTimeInput(value: string) {
+  return formatKvDateTime(value, '')
+}
+
+function parseReceiptDateTimeInput(value: string) {
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  const kvMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/)
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+  const year = kvMatch?.[3] ?? isoMatch?.[1]
+  const month = kvMatch?.[2] ?? isoMatch?.[2]
+  const day = kvMatch?.[1] ?? isoMatch?.[3]
+  const hour = kvMatch?.[4] ?? isoMatch?.[4]
+  const minute = kvMatch?.[5] ?? isoMatch?.[5]
+  if (!year || !month || !day || !hour || !minute) return null
+  const localDate = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+  if (
+    localDate.getFullYear() !== Number(year)
+    || localDate.getMonth() !== Number(month) - 1
+    || localDate.getDate() !== Number(day)
+    || localDate.getHours() !== Number(hour)
+    || localDate.getMinutes() !== Number(minute)
+  ) {
+    return null
+  }
+  return `${year}-${month}-${day}T${hour}:${minute}`
+}
+
 const receiptProductSearchPageSize = 20
 const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
 const receiptCreateDraftWindowNamePrefix = 'qc-oms.purchase-receipt-create-draft='
@@ -336,6 +364,7 @@ export function PurchaseReceiptsPage({
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null)
   const [receiptDetailTab, setReceiptDetailTab] = useState<ReceiptDetailTab>('info')
   const [form, setForm] = useState<PurchaseReceiptInput>(blankForm)
+  const [receiptReceivedAtText, setReceiptReceivedAtText] = useState(() => formatReceiptDateTimeInput(blankForm.received_at))
   const [receiptProductSearch, setReceiptProductSearch] = useState('')
   const [receiptWorkspaceSideCollapsed, setReceiptWorkspaceSideCollapsed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -442,6 +471,18 @@ export function PurchaseReceiptsPage({
     return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
   }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
   const receiptWorkspaceLookupLoading = isCreatingReceipt && (!suppliersLoaded || !productsLoaded)
+
+  useEffect(() => {
+    setReceiptReceivedAtText(formatReceiptDateTimeInput(form.received_at))
+  }, [form.received_at])
+
+  function updateReceiptReceivedAtText(value: string) {
+    setReceiptReceivedAtText(value)
+    const normalized = parseReceiptDateTimeInput(value)
+    if (normalized && normalized !== form.received_at) {
+      setForm((current) => ({ ...current, received_at: normalized }))
+    }
+  }
 
   useEffect(() => {
     if (!isCreatingReceipt) return undefined
@@ -661,6 +702,7 @@ export function PurchaseReceiptsPage({
           ...receiptCreateDraft.form,
           supplier_id: receiptCreateDraft.form.supplier_id || defaultReceiptSupplierId(lookups.suppliers),
         })
+        setReceiptReceivedAtText(formatReceiptDateTimeInput(receiptCreateDraft.form.received_at))
         setPaymentMethod(receiptCreateDraft.paymentMethod)
         setFinanceAccountId(receiptCreateDraft.financeAccountId)
         setRollLengthTexts(receiptCreateDraft.rollLengthTexts)
@@ -878,13 +920,19 @@ function clearReceiptCreateDraft() {
       setError('Chọn ít nhất 1 hàng hóa trước khi lưu phiếu nhập.')
       return
     }
+    const normalizedReceivedAt = parseReceiptDateTimeInput(receiptReceivedAtText)
+    if (normalizedReceivedAt === null) {
+      setError('Nhập ngày giờ dạng DD/MM/YYYY HH:mm.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
+      const nextForm = { ...form, received_at: normalizedReceivedAt || form.received_at }
       if (editingId === null) {
-        await service.createReceipt(form)
+        await service.createReceipt(nextForm)
       } else {
-        await service.updateReceipt(editingId, form)
+        await service.updateReceipt(editingId, nextForm)
       }
       if (editingId === null) clearReceiptCreateDraft()
       if (editingId === null && createMode && onCloseCreateReceipt) {
@@ -1084,6 +1132,7 @@ function clearReceiptCreateDraft() {
     setForm(blankForm)
     setPaymentMethod('cash')
     setFinanceAccountId('')
+    setReceiptReceivedAtText(formatReceiptDateTimeInput(blankForm.received_at))
     setSupplierPaymentOpen(false)
     setSupplierPaymentAmount(0)
     setSupplierPaymentMethod('cash')
@@ -1610,9 +1659,9 @@ function clearReceiptCreateDraft() {
             <input
               required
               disabled={isReadOnly}
-              type="datetime-local"
-              value={form.received_at}
-              onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
+              type="text"
+              value={receiptReceivedAtText}
+              onChange={(event) => updateReceiptReceivedAtText(event.target.value)}
             />
           </label>
           <label>
@@ -2238,9 +2287,9 @@ function clearReceiptCreateDraft() {
                     <input
                       aria-label="Thời gian nhập"
                       required
-                      type="datetime-local"
-                      value={form.received_at}
-                      onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
+                      type="text"
+                      value={receiptReceivedAtText}
+                      onChange={(event) => updateReceiptReceivedAtText(event.target.value)}
                     />
                   </div>
                 </div>
