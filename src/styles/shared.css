@@ -593,18 +593,25 @@
 
 .management-filter-sidebar {
   position: relative;
+  align-self: stretch;
   display: grid;
   align-content: start;
   align-items: start;
   gap: 0;
+  height: 100%;
   min-height: 0;
+  overflow: visible;
 }
 
 .management-filter-rail {
+  position: relative;
+  align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
   min-height: 0;
+  overflow: visible;
 }
 
 .management-filter-collapse-button,
