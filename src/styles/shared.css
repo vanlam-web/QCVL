@@ -2814,6 +2814,25 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   text-decoration: none;
 }
 
+.management-detail-inline-input {
+  min-width: 9.5rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.2rem 0.45rem;
+}
+
+.management-detail-inline-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 36%, transparent);
+}
+
 .management-record-link {
   display: inline-flex;
   align-items: center;

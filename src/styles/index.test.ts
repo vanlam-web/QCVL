@@ -567,6 +567,14 @@ it('keeps management detail buttons styled as regular table text', () => {
   expect(cssRule('.management-link-button:focus-visible')).toContain('text-decoration: none')
 })
 
+it('keeps inline detail edit inputs visibly framed while editing', () => {
+  expect(cssRule('.management-detail-inline-input')).toContain('border: 1px solid var(--color-primary)')
+  expect(cssRule('.management-detail-inline-input')).toContain('box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent)')
+  expect(cssRule('.management-detail-inline-input')).toContain('border-radius: var(--radius-sm)')
+  expect(cssRule('.management-detail-inline-input:focus')).toContain('outline: none')
+  expect(cssRule('.management-detail-inline-input:focus')).toContain('border-color: var(--color-primary)')
+})
+
 it('keeps feature data tables on the shared management table geometry', () => {
   expect(cssRule('.sales-documents-management-table')).toBe('')
   expect(cssRule('.customer-management-table')).toBe('')
