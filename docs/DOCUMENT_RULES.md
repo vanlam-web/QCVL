@@ -1,79 +1,79 @@
-# Quy tắc quản lý tài liệu QC-OMS
+# Document Rules
 
-## 1. Phạm vi
+Updated: 2026-07-18
 
-File này quy định cách tổ chức, tạo, sửa, audit và bảo trì tài liệu trong `docs/`.
+This file governs `docs/`. Keep docs useful for future AI work: short, current-first, linked to deeper sources.
 
-Quyền hạn AI và workflow được quy định tại [AI_TEAM_RULES.md](../AI_TEAM_RULES.md). Phân loại nội dung theo tầng được quy định tại [ARCHITECTURE.md](./ARCHITECTURE.md).
+## Priority Order
 
-## 2. Thứ tự ưu tiên
+When sources disagree, use this order:
 
-Khi có mâu thuẫn, áp dụng theo thứ tự:
+1. Latest Owner decision in chat.
+2. `AI_TEAM_RULES.md`.
+3. `docs/WORKER-START-HERE.md`.
+4. This file.
+5. `docs/ARCHITECTURE.md` and layer `_RULES.md`.
+6. Feature docs.
+7. Old plans/history.
 
-1. Quyết định nghiệp vụ mới nhất của Owner.
-2. [AI_TEAM_RULES.md](../AI_TEAM_RULES.md) — quyền hạn và workflow AI.
-3. [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) — quản trị tài liệu chung.
-4. [ARCHITECTURE.md](./ARCHITECTURE.md) — phân tầng nội dung.
-5. `_RULES.md` của tầng — phạm vi cục bộ.
-6. `*_CONVENTIONS.md` — tiêu chuẩn kỹ thuật của tầng.
-7. `README.md` và tài liệu cụ thể.
+Old plans under `docs/superpowers/plans/` are historical unless Owner explicitly says to follow one.
 
-Luật cấp dưới không được ghi đè luật cấp trên.
+## Required Shape
 
-## 3. Quy trình làm việc
+Every living doc should start with:
 
-Trước khi sửa tài liệu, Codex phải:
+- purpose
+- updated date
+- current rule/status first
+- links to deeper files instead of repeated history
 
-1. Đọc các luật liên quan và file hiện tại.
-2. Xác định loại thông tin và Source of Truth.
-3. Kiểm tra liên kết, nội dung trùng và ảnh hưởng liên tầng.
-4. Chỉ thay đổi trong phạm vi yêu cầu.
-5. Kiểm tra `git diff`, file tạm và lỗi định dạng sau khi sửa.
+Keep long timelines out of first-read docs. If history matters, summarize the latest fact and link to the original evidence.
 
-Các luồng Codex phải làm việc theo vai trò hiện tại trong `AI_TEAM_RULES.md`: Spec giữ Source of Truth, Implement thi công code/test/PR, Review kiểm tra và ghi nhận issue.
+## Editing Rule
 
-## 4. Source of Truth
+Before changing docs:
 
-- Một thông tin chỉ có một nơi gốc.
-- Tài liệu khác chỉ tóm tắt ở mức cần thiết và liên kết đến nơi gốc.
-- Không sao chép nguyên khối quy tắc giữa nhiều tầng.
-- Khi nội dung vừa thuộc UI vừa thuộc nghiệp vụ, PRD mô tả hành vi người dùng và tham chiếu Business cho quy tắc cốt lõi.
+```powershell
+npm run preflight
+```
 
-## 5. Phạm vi chỉnh sửa
+Then:
 
-- Sửa đúng yêu cầu, tránh refactor không liên quan.
-- Codex được tạo, sửa, đổi tên hoặc di chuyển file khi yêu cầu đã được Owner chấp thuận và việc đó cần thiết để hoàn thành task.
-- Thay đổi Business Rule, phạm vi sản phẩm hoặc workflow vận hành phải được Owner quyết định.
-- Thay đổi kỹ thuật và cách tổ chức tài liệu do Codex quyết định, nhưng phải báo rủi ro quan trọng.
-- Không tự tách file chỉ vì vượt ngưỡng dòng nếu việc tách làm thay đổi Source of Truth hoặc điều hướng; phải đánh giá ảnh hưởng trước.
+- read the current file
+- read directly linked rule/source files
+- update only the scope Owner asked for
+- keep one source of truth for each fact
+- check links and `git diff`
 
-## 6. Audit và xử lý lỗi
+## What Goes Where
 
-- Nếu Owner chỉ yêu cầu audit/review: chỉ báo cáo, không sửa.
-- Nếu Owner yêu cầu xử lý/fix: Codex được sửa các lỗi đã xác nhận trong phạm vi.
-- Mỗi issue phải có file, vị trí, mức độ, tác động và khuyến nghị.
-- Mâu thuẫn nghiệp vụ phải chuyển Owner quyết định.
-- Mâu thuẫn kỹ thuật hoặc tài liệu do Codex quyết định.
+| Content | File area |
+| --- | --- |
+| AI working rules | `AI_TEAM_RULES.md` |
+| short worker entry | `docs/WORKER-START-HERE.md` |
+| two-machine coordination | `docs/PROJECT-COORDINATION.md` |
+| runtime data truth | `docs/CURRENT-DATA-SOURCE.md` |
+| UI/UX behavior | `docs/02-PRD-UX-PhongCanh/` |
+| business rules | `docs/03-BUSINESS-NghiepVu/` |
+| schema | `docs/04-DATABASE/` and `database/migrations/` |
+| API/server behavior | `docs/05-BACKEND-MayChu/` |
+| deploy/ops | `docs/07-DEPLOYMENT-TrienKhai/` |
 
-## 7. Độ dài và cấu trúc
+## Do Not
 
-- Khuyến nghị 150–300 dòng cho tài liệu thông thường.
-- Trên 400 dòng: đánh giá khả năng tách, không bắt buộc tách.
-- File luật nên ngắn, ưu tiên liên kết thay vì lặp nội dung.
-- `_RULES.md` chỉ nên chứa: mục đích, được ghi, không được ghi và ranh giới đặc biệt.
-- `*_CONVENTIONS.md` chỉ chứa tiêu chuẩn kỹ thuật riêng của tầng.
+- Do not copy huge old logs into first-read docs.
+- Do not use fake links like `http://FILE.md`.
+- Do not put runtime secrets, DB dumps, backups, or temp logs in docs.
+- Do not document a business behavior that code does not support unless marked as planned.
+- Do not let a lower-level doc override Owner decision or `AI_TEAM_RULES.md`.
 
-## 8. Ranh giới nội dung dùng chung
+## Verification
 
-- Backend và Integration định nghĩa log/metric mà thành phần của mình phát ra.
-- Deployment định nghĩa thu thập, lưu giữ, dashboard, cảnh báo và vận hành log/metric.
-- Queue kết nối hệ thống ngoài thuộc Integration.
-- Queue xử lý nghiệp vụ nội bộ thuộc Backend.
-- Cấu hình hạ tầng queue thuộc Deployment.
+For doc-only changes, run:
 
-## 9. Liên kết
+```powershell
+npm run preflight
+npx vitest run scripts/preflight.test.mjs scripts/test-script-scope.test.mjs
+```
 
-- Dùng đường dẫn Markdown tương đối thật cho file tồn tại.
-- Không dùng link giả dạng `http://FILENAME.md`.
-- Tên file mang tính ví dụ phải dùng code inline, ví dụ `README.md`.
-- Sau khi đổi tên hoặc di chuyển file phải kiểm tra liên kết đến file đó.
+If Vietnamese text changed, also scan changed files for mojibake.

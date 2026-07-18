@@ -2,6 +2,15 @@
 
 > Cap nhat: 2026-07-18. File nay la quy tac bat buoc de tranh lam nham cach luu du lieu cu.
 
+## AI Quick Read
+
+- Runtime source of truth: Node API + PostgreSQL on NAS.
+- Dev UI: `127.0.0.1:3202`; NAS runtime: `100.84.228.125:3200`.
+- Do not revive Supabase, RAM-only sales/finance, or demo fixture storage for runtime.
+- Do not copy `logs/dev-memory-state.json` to NAS.
+- If behavior touches money, debt, invoice lifecycle, inventory, import, permissions, or users, read the matching feature doc before editing.
+- Long dated notes below are evidence/history. Use the latest matching fact, not old timelines, when they conflict.
+
 ## Ket Luan Hien Tai
 
 QCVL dung **Node API + PostgreSQL tren NAS** lam runtime chinh.
