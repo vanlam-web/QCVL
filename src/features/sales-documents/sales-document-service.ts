@@ -46,7 +46,7 @@ export function createSalesDocumentService(api: SalesDocumentApiRequester) {
         method: 'PATCH',
         body: JSON.stringify({ status: 'cancelled' }),
       }),
-    updateSalesDocumentNote: (id: string, input: { note: string | null }) =>
+    updateSalesDocumentNote: (id: string, input: { note?: string | null; created_at?: string }) =>
       api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`, {
         method: 'PATCH',
         body: JSON.stringify(input),

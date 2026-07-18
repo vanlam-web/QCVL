@@ -5,7 +5,7 @@ import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
 import { formatMoney } from '../../lib/number-format'
 import type { Product, ResolvedPrice } from '../catalog/types'
-import { maxInvoiceTabs, invoiceTabLabel, type PosInvoiceTab } from './pos-core'
+import { displaySaleUnitName, maxInvoiceTabs, invoiceTabLabel, type PosInvoiceTab } from './pos-core'
 import { ProfileMenu } from './ProfileMenu'
 
 interface PosTopbarProps {
@@ -111,7 +111,7 @@ export function PosTopbar({
                       onClick={() => onProductSelect(product)}
                     >
                       <strong>{product.code} {product.name}</strong>
-                      <span>{product.unit_name}</span>
+                      <span>{displaySaleUnitName(product.unit_name)}</span>
                       <span>{formatMoney(price)}</span>
                     </button>
                   </li>

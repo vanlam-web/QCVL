@@ -237,6 +237,46 @@ it('lists customers in the shared management layout', async () => {
   expect(footer.closest('.management-table-viewport')).toBeNull()
 })
 
+it('leaves missing customer list values blank instead of showing hyphen placeholders', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-empty',
+          code: 'KHEMPTY',
+          name: 'Missing fields',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: null,
+          customer_group: null,
+          customer_type: 'individual',
+          created_by: null,
+          created_at: '2026-07-01T00:00:00Z',
+          note: null,
+          status: 'active',
+          total_sales_amount: undefined,
+          total_debt_amount: undefined,
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  const row = await screen.findByRole('row', { name: /KHEMPTY Missing fields/ })
+  const cells = Array.from(row.querySelectorAll('td'))
+
+  expect(cells[3]).toHaveTextContent('')
+  expect(cells[4]).toHaveTextContent('')
+  expect(cells[5]).toHaveTextContent('')
+  expect(cells[6]).toHaveTextContent('')
+  expect(row).not.toHaveTextContent('-')
+})
+
 it('does not open customer detail when clicking the row checkbox', async () => {
   render(<CustomersPage service={makeService()} orderService={makeOrderService()} />)
 
@@ -631,7 +671,7 @@ it('does not repeat customer group or price list in customer detail', async () =
   await userEvent.click(await screen.findByText('KH000124'))
   const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000124' })
   const detailSummary = within(detail).getByRole('group', { name: 'Tóm tắt khách hàng KH000124' })
-  expect(within(detailSummary).getByText('Nhóm khách:').parentElement).toHaveTextContent('Nhóm khách: Chưa có')
+  expect(within(detailSummary).getByText('Nhóm khách:').parentElement).toHaveTextContent('Nhóm khách:')
   const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
   expect(within(infoPanel).queryByText('Bảng giá chung')).not.toBeInTheDocument()
   expect(within(infoPanel).queryByText('Bảng giá áp dụng')).not.toBeInTheDocument()
@@ -845,10 +885,10 @@ it('opens customer detail when legacy cloud data has no created timestamp', asyn
   await userEvent.click(await screen.findByText('KHLEGACY'))
   const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KHLEGACY' })
   const detailSummary = within(detail).getByRole('group', { name: 'Tóm tắt khách hàng KHLEGACY' })
-  expect(within(detailSummary).getByText('Người tạo:').parentElement).toHaveTextContent('Người tạo: Chưa có dữ liệu')
-  expect(within(detailSummary).getByText('Ngày tạo:').parentElement).toHaveTextContent('Ngày tạo: Chưa có dữ liệu')
+  expect(within(detailSummary).getByText('Người tạo:').parentElement).toHaveTextContent('Người tạo:')
+  expect(within(detailSummary).getByText('Ngày tạo:').parentElement).toHaveTextContent('Ngày tạo:')
   const infoPanel = within(detail).getByRole('tabpanel', { name: 'Thông tin khách hàng' })
-  expect(within(infoPanel).getAllByText('Chưa có dữ liệu').length).toBeGreaterThanOrEqual(1)
+  expect(within(infoPanel).queryByText('Chưa có dữ liệu')).not.toBeInTheDocument()
 })
 
 it('uses a denser customer page size on wide management screens', async () => {

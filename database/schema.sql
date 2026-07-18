@@ -100,6 +100,13 @@ create table if not exists orders (
   payment_status text not null,
   note text not null default '',
   source_quote_id text references orders(id) on delete set null,
+  base_code text,
+  revision_no integer not null default 0,
+  revised_from_order_id text references orders(id) on delete set null,
+  replaced_by_order_id text references orders(id) on delete set null,
+  cancel_reason_type text,
+  revision_reason_code text,
+  revision_reason_note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (organization_id, code)

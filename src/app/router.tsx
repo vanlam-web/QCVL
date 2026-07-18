@@ -12,6 +12,8 @@ import { createBrowserSalesDocumentService } from '../features/sales-documents/s
 import { createBrowserInventoryService } from '../features/inventory/inventory-service'
 import { createBrowserFinanceService } from '../features/finance/finance-service'
 import { createBrowserReportService } from '../features/reports/report-service'
+import { createBrowserDashboardService } from '../features/dashboard/dashboard-service'
+import { saveInvoiceRevisionHandoffPayload } from '../features/pos/invoice-revision-handoff'
 import { saveQuoteReopenPayload } from '../features/pos/quote-draft-handoff'
 import { AppShell } from '../components/ui-shell/AppShell'
 import { appRoutes, quotePrintPath } from './routes'
@@ -101,8 +103,9 @@ function LoginRoute() {
 }
 
 function DashboardRoute() {
-  const { currentUser, initialized, signOut } = useAuth()
+  const { currentUser, initialized, getAccessToken, signOut } = useAuth()
   const navigate = useNavigate()
+  const dashboardService = useMemo(() => createBrowserDashboardService(getAccessToken), [getAccessToken])
 
   if (!initialized) return <BootstrapScreen />
   if (!currentUser) return <Navigate to={appRoutes.login} replace />
@@ -111,6 +114,7 @@ function DashboardRoute() {
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
       <DashboardPage
         currentUser={currentUser}
+        service={dashboardService}
         onOpenPos={() => navigate(appRoutes.pos)}
         onOpenAdmin={() => navigate(appRoutes.admin)}
         onOpenPriceBook={() => navigate(appRoutes.priceBook)}
@@ -377,6 +381,10 @@ function SalesDocumentsRoute() {
         onOpenDashboard={() => navigate(appRoutes.dashboard)}
         onOpenQuoteInPos={(payload) => {
           saveQuoteReopenPayload(payload)
+          navigate(appRoutes.pos)
+        }}
+        onOpenInvoiceRevisionInPos={(payload) => {
+          saveInvoiceRevisionHandoffPayload(payload)
           navigate(appRoutes.pos)
         }}
         onOpenQuotePrint={(documentId) => navigate(quotePrintPath(documentId))}

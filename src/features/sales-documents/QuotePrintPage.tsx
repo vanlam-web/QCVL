@@ -113,7 +113,7 @@ export function QuotePrintPage({
             </div>
             <div>
               <dt>Điện thoại</dt>
-              <dd>{document.customer.phone ?? '-'}</dd>
+              <dd>{document.customer.phone ?? ''}</dd>
             </div>
             <div>
               <dt>Nhân viên</dt>
@@ -152,7 +152,7 @@ export function QuotePrintPage({
                 <td>{item.product.unit_name}</td>
                 <td>{salesDocumentMeasureText(item.quantity)}</td>
                 <td>{salesDocumentMoneyText(item.unit_price)}</td>
-                <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : '-'}</td>
+                <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
                 <td>{salesDocumentMoneyText(item.line_total)}</td>
               </tr>
             ))}

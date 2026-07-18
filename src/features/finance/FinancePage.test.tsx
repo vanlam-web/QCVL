@@ -316,6 +316,19 @@ describe('FinancePage', () => {
     })
   })
 
+  it('does not load hidden balance and voucher sections during initial finance load', async () => {
+    const service = makeService()
+
+    render(<FinancePage service={service} />)
+
+    await screen.findByText('Sổ quỹ')
+    expect(service.listAccounts).toHaveBeenCalledTimes(1)
+    expect(service.listCustomerDebts).toHaveBeenCalledTimes(1)
+    expect(service.listCashbookEntries).toHaveBeenCalledTimes(1)
+    expect(service.listCashbookBalances).not.toHaveBeenCalled()
+    expect(service.listCashbookVouchers).not.toHaveBeenCalled()
+  })
+
   it('uses a denser cashbook page size on wide management screens', async () => {
     Object.defineProperty(window, 'innerWidth', {
       configurable: true,
@@ -1063,6 +1076,12 @@ describe('FinancePage', () => {
     expect(within(linkedDocumentsTable).getByRole('columnheader', { name: 'Tổng sau giảm' })).toBeInTheDocument()
     expect(within(linkedDocumentsTable).queryByRole('columnheader', { name: 'Giá trị phiếu' })).not.toBeInTheDocument()
     expect(within(linkedDocumentsTable).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
+    const linkedInvoice = within(linkedDocumentsTable).getByRole('link', { name: 'HD0001' })
+    expect(linkedInvoice).toHaveClass('finance-cashbook-linked-document-link')
+    expect(linkedInvoice).toHaveAttribute(
+      'href',
+      '/sales-documents?open=HD0001&type=invoice',
+    )
     expect(within(detail).getByText('Thu nợ')).toBeInTheDocument()
     expect(within(detail).getByText('Hoàn tất')).toHaveClass('status-chip', 'status-chip-success')
     expect(within(detail).getByRole('button', { name: 'Xóa phiếu PT0001' })).toBeEnabled()
@@ -1070,6 +1089,12 @@ describe('FinancePage', () => {
     expect(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' })).toBeEnabled()
     expect(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' })).toHaveClass('button-secondary')
     expect(within(detail).queryByRole('button', { name: 'Chỉnh sửa phiếu PT0001' })).not.toBeInTheDocument()
+    await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' }))
+    const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PT0001' })
+    expect(within(editDialog).getByRole('heading', { name: 'Sửa phiếu PT0001' })).toBeInTheDocument()
+    expect(within(editDialog).getByRole('button', { name: 'Lưu' })).toBeDisabled()
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Đóng popup sửa phiếu PT0001' }))
+    expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument()
     expect(within(detail).getByRole('button', { name: 'In phiếu PT0001' })).toBeEnabled()
     expect(within(detail).getAllByText('HD0001').length).toBeGreaterThan(0)
     expect(service.getCashbookEntry).toHaveBeenCalledWith('entry-1')
@@ -1120,6 +1145,10 @@ describe('FinancePage', () => {
     expect(within(detail).getByText('Phương thức thanh toán')).toBeInTheDocument()
     expect(within(detail).getByText('MB Bank: MB01')).toBeInTheDocument()
     expect(within(detail).getByText('Phiếu chi tự động được gắn với phiếu nhập hàng PN000679.')).toBeInTheDocument()
+    const linkedDocumentsTable = within(detail).getByRole('table', { name: 'Chứng từ liên kết' })
+    const linkedReceipt = within(linkedDocumentsTable).getByRole('link', { name: 'PN000679' })
+    expect(linkedReceipt).toHaveClass('finance-cashbook-linked-document-link')
+    expect(linkedReceipt).toHaveAttribute('href', '/purchase/receipts?open=PN000679')
     expect(within(detail).getByText('Đã trả trước')).toBeInTheDocument()
     expect(within(detail).getByText('Giá trị chi')).toBeInTheDocument()
   })
@@ -1214,7 +1243,7 @@ describe('FinancePage', () => {
     expect(within(row as HTMLTableRowElement).queryByText('Hoàn tất')).not.toBeInTheDocument()
     expect(within(row as HTMLTableRowElement).queryByText('Đã thanh toán')).not.toBeInTheDocument()
     expect(within(detail).queryByText('Checkout HD000015')).not.toBeInTheDocument()
-    expect(within(detail).getByText('Chưa có ghi chú')).toBeInTheDocument()
+    expect(within(detail).queryByText('Chưa có ghi chú')).not.toBeInTheDocument()
   })
 
   it('shows invoice payment state from linked allocation totals', async () => {

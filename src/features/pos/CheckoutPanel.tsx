@@ -24,6 +24,7 @@ export function CheckoutPanel({
   quoteBlockedReason = null,
   sellerName = '',
   orderCreatedAt,
+  revisionSource,
   onCheckoutSuccess,
 }: {
   cartLines: CheckoutCartLine[]
@@ -33,6 +34,7 @@ export function CheckoutPanel({
   quoteBlockedReason?: string | null
   sellerName?: string
   orderCreatedAt?: string
+  revisionSource?: { id: string; code: string }
   onCheckoutSuccess?: () => void
 }) {
   const [cashAmountOverride, setCashAmountOverride] = useState<number | null>(null)
@@ -54,6 +56,8 @@ export function CheckoutPanel({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CheckoutResult | null>(null)
   const [quoteResult, setQuoteResult] = useState<QuoteSummary | null>(null)
+  const [invoiceDate, setInvoiceDate] = useState(() => checkoutDateInputValue(orderCreatedAt))
+  const [invoiceTime, setInvoiceTime] = useState(() => formatCheckoutDateTime(orderCreatedAt).time)
 
   const {
     subtotal,
@@ -125,6 +129,11 @@ export function CheckoutPanel({
     }
   }, [orderService, selectedCustomer])
 
+  useEffect(() => {
+    setInvoiceDate(checkoutDateInputValue(orderCreatedAt))
+    setInvoiceTime(formatCheckoutDateTime(orderCreatedAt).time)
+  }, [orderCreatedAt])
+
   async function submitCheckout() {
     setError(null)
     setResult(null)
@@ -150,6 +159,7 @@ export function CheckoutPanel({
     try {
       const checkout = await orderService.checkout({
         customer_id: selectedCustomer?.id,
+        created_at: checkoutCreatedAt(orderCreatedAt, invoiceDate, invoiceTime),
         note: orderNote.trim() || undefined,
         retail_debt_note: selectedCustomer === null ? retailDebtNote.trim() || undefined : undefined,
         items: linesToCheckoutItems(cartLines, checkoutDiscountAmount),
@@ -165,6 +175,55 @@ export function CheckoutPanel({
       onCheckoutSuccess?.()
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được hóa đơn.'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function submitInvoiceRevision() {
+    if (revisionSource === undefined) return
+    setError(null)
+    setResult(null)
+    setQuoteResult(null)
+    if (cartLines.length === 0) {
+      setError('Chưa có dòng hàng để lưu hóa đơn sửa.')
+      return
+    }
+    if (quoteBlockedReason !== null) {
+      setError(quoteBlockedReason)
+      return
+    }
+    if (bankAmount > 0 && selectedBankAccountId === '') {
+      setError('Chọn tài khoản nhận chuyển khoản.')
+      return
+    }
+    if (selectedCustomer === null && debt > 0 && retailDebtNote.trim() === '') {
+      setError('Nhập ghi chú nợ khách lẻ.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      const revised = await orderService.reviseInvoice(revisionSource.id, {
+        customer_id: selectedCustomer?.id,
+        created_at: checkoutCreatedAt(orderCreatedAt, invoiceDate, invoiceTime),
+        note: orderNote.trim() || undefined,
+        retail_debt_note: selectedCustomer === null ? retailDebtNote.trim() || undefined : undefined,
+        revision_reason_code: 'other',
+        revision_reason_note: 'Sửa hóa đơn từ POS',
+        items: linesToCheckoutItems(cartLines, checkoutDiscountAmount),
+        payment: {
+          cash_amount: grossCashAmount,
+          bank_amount: bankAmount,
+          bank_account_id: bankAmount > 0 ? selectedBankAccountId : null,
+          old_debt_payment_amount: oldDebtPayment,
+          change_returned_amount: surplusMode === 'return' ? surplus : 0,
+        },
+      })
+      setResult(revised)
+      onCheckoutSuccess?.()
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không lưu được hóa đơn sửa.'))
     } finally {
       setSubmitting(false)
     }
@@ -187,6 +246,7 @@ export function CheckoutPanel({
     try {
       const payload = {
         customer_id: selectedCustomer?.id,
+        created_at: checkoutCreatedAt(orderCreatedAt, invoiceDate, invoiceTime),
         note: orderNote.trim() || undefined,
         retail_debt_note: selectedCustomer === null ? retailDebtNote.trim() || undefined : undefined,
         items: linesToCheckoutItems(cartLines, checkoutDiscountAmount),
@@ -235,16 +295,27 @@ export function CheckoutPanel({
     })
   }
 
-  const headerMeta = formatCheckoutDateTime(orderCreatedAt)
   const displaySellerName = sellerName.trim() || 'Nhân viên bán'
 
   return (
     <section aria-label="Thanh toán" className="checkout-panel">
       <header className="checkout-panel-header">
         <div aria-label="Thông tin hóa đơn" className="checkout-panel-meta" role="group">
-          <strong title={displaySellerName}>{displaySellerName}</strong>
-          <span>{headerMeta.time}</span>
-          <span>{headerMeta.date}</span>
+          <strong aria-label="Tên hiển thị" title={displaySellerName}>{displaySellerName}</strong>
+          <input
+            aria-label="Ngày hóa đơn"
+            className="checkout-panel-date-input"
+            type="date"
+            value={invoiceDate}
+            onChange={(event) => setInvoiceDate(event.target.value)}
+          />
+          <input
+            aria-label="Thời gian hóa đơn"
+            className="checkout-panel-time-input"
+            type="time"
+            value={invoiceTime}
+            onChange={(event) => setInvoiceTime(event.target.value)}
+          />
         </div>
         <div className="checkout-customer-line">
           <strong>{selectedCustomer?.name ?? 'Khách lẻ'}</strong>
@@ -500,21 +571,23 @@ export function CheckoutPanel({
       {error ? <p role="alert">{error}</p> : null}
       {quoteBlockedReason ? <p role="status">{quoteBlockedReason}</p> : null}
       <div aria-label="Thao tác cuối đơn" className="checkout-action-row">
-        <button
-          className="button button-secondary"
-          disabled={submitting || cartLines.length === 0 || quoteBlockedReason !== null}
-          type="button"
-          onClick={() => void saveQuote()}
-        >
-          Báo giá
-        </button>
+        {revisionSource === undefined ? (
+          <button
+            className="button button-secondary"
+            disabled={submitting || cartLines.length === 0 || quoteBlockedReason !== null}
+            type="button"
+            onClick={() => void saveQuote()}
+          >
+            Báo giá
+          </button>
+        ) : null}
         <button
           className="button button-primary"
           disabled={submitting || quoteBlockedReason !== null}
           type="button"
-          onClick={() => void submitCheckout()}
+          onClick={() => void (revisionSource === undefined ? submitCheckout() : submitInvoiceRevision())}
         >
-          Tạo hóa đơn
+          {revisionSource === undefined ? 'Tạo hóa đơn' : 'Lưu sửa hóa đơn'}
         </button>
       </div>
 
@@ -585,6 +658,20 @@ function formatCheckoutDateTime(value: string | undefined) {
     date,
     time,
   }
+}
+
+function checkoutDateInputValue(value: string | undefined) {
+  const source = value ?? new Date().toISOString()
+  const date = source.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
+  if (date) return date
+  const parsed = new Date(source)
+  return Number.isNaN(parsed.getTime()) ? new Date().toISOString().slice(0, 10) : parsed.toISOString().slice(0, 10)
+}
+
+function checkoutCreatedAt(orderCreatedAt: string | undefined, invoiceDate: string, invoiceTime: string) {
+  const source = orderCreatedAt ?? new Date().toISOString()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) || !/^\d{2}:\d{2}$/.test(invoiceTime)) return source
+  return `${invoiceDate}T${invoiceTime}:00.000Z`
 }
 
 function readMoney(value: string): number {

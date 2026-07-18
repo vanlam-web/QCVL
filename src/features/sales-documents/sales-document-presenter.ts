@@ -46,7 +46,7 @@ export function paymentMethodFilterLabel(value: PaymentMethodFilter) {
 
 export function paymentReceiptMethodLabel(receipt: SalesDocumentDetail['payment_receipts'][number]) {
   const labels = paymentReceiptMethods(receipt).map((method) => (method.method_type === 'cash' ? 'Tiền mặt' : 'Chuyển khoản'))
-  return Array.from(new Set(labels)).join(', ') || '-'
+  return Array.from(new Set(labels)).join(', ')
 }
 
 export function paymentReceiptMethodTotal(receipt: SalesDocumentDetail['payment_receipts'][number]) {
@@ -62,7 +62,7 @@ export function paymentReceiptCreatorLabel(
   receipt: SalesDocumentDetail['payment_receipts'][number],
   seller: SalesDocumentDetail['seller'],
 ) {
-  return receipt.created_by?.name || receipt.created_by?.id || seller.name || seller.id || 'Chưa có dữ liệu'
+  return receipt.created_by?.name || receipt.created_by?.id || seller.name || seller.id || ''
 }
 
 export function paymentReceiptMethods(receipt: SalesDocumentDetail['payment_receipts'][number]) {
@@ -82,7 +82,28 @@ export function salesDocumentLineSellPrice(item: Pick<SalesDocumentDetail['items
 }
 
 export function salesDocumentDateTimeText(value: string | null | undefined, fallback?: string | null): string {
-  return formatKvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '-')
+  return formatKvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '')
+}
+
+export function salesDocumentDateTimeInputText(value: string | null | undefined): string {
+  return formatKvDateTime(value)
+}
+
+export function parseSalesDocumentDateTimeInputText(value: string | null | undefined) {
+  const normalized = value?.trim()
+  if (!normalized) return null
+  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+  const [, day, month, year, hour, minute] = match
+  const dayNumber = Number(day)
+  const monthNumber = Number(month)
+  const hourNumber = Number(hour)
+  const minuteNumber = Number(minute)
+  if (monthNumber < 1 || monthNumber > 12) return null
+  if (dayNumber < 1 || dayNumber > 31) return null
+  if (hourNumber < 0 || hourNumber > 23) return null
+  if (minuteNumber < 0 || minuteNumber > 59) return null
+  return `${year}-${month}-${day}T${String(hourNumber).padStart(2, '0')}:${minute}:00.000Z`
 }
 
 export function salesDocumentCreatedDateTimeText(document: Pick<SalesDocumentDetail, 'created_at'>): string {
@@ -97,8 +118,18 @@ export function salesDocumentMeasureText(value: number) {
   return formatMeasure(value)
 }
 
+export function salesDocumentUnitNameText(value: string | null | undefined) {
+  const normalized = (value ?? '').trim()
+  if (normalized === '') return ''
+  const folded = normalized
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  return folded === 'can cap nhat' ? '' : normalized
+}
+
 export function salesDocumentQuoteDateText(value: string) {
-  return formatKvDate(value, '-')
+  return formatKvDate(value)
 }
 
 export function salesDocumentQuoteLineDimensionText(item: Pick<SalesDocumentDetail['items'][number], 'width_m' | 'height_m' | 'linear_m' | 'product'>) {

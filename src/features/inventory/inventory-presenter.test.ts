@@ -20,8 +20,8 @@ describe('inventory presenter', () => {
     expect(stocktakeStatusText('balanced')).toBe('Đã cân bằng')
     expect(numberText(12.3456)).toBe('12,346')
     expect(moneyText(1200000)).toBe('1 200 000')
-    expect(moneyText(null)).toBe('Chưa có')
-    expect(dateText(null)).toBe('Chưa có')
+    expect(moneyText(null)).toBe('')
+    expect(dateText(null)).toBe('')
   })
   it('summarizes inventory list outside the page', () => {
     expect(inventoryListSummary([
@@ -33,7 +33,7 @@ describe('inventory presenter', () => {
 
   it('formats KiotViet stocktake values without timezone shift or rounding decimals', () => {
     expect(stocktakeDateTimeText('2026-06-05T07:52:12.640Z')).toBe('05/06/2026 07:52')
-    expect(stocktakeDateTimeText(null)).toBe('Chưa có')
+    expect(stocktakeDateTimeText(null)).toBe('')
     expect(stocktakeQuantityText(1.5)).toBe('1.5')
     expect(stocktakeQuantityText(-15.678)).toBe('-15.678')
     expect(stocktakeMoneyText(313550)).toBe('313,550')

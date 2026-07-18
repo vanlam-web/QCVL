@@ -1,5 +1,5 @@
 import type { Product } from './types'
-import { formatKvDateTime } from '../../lib/date-format'
+import { formatKvDate, formatKvDateTime } from '../../lib/date-format'
 
 export interface CatalogBomFormLine {
   component_product_id: string
@@ -16,7 +16,21 @@ export function catalogStockCardMoneyText(value: number) {
 }
 
 export function catalogDateTimeText(value: string) {
-  return formatKvDateTime(value, value)
+  return formatKvDateTime(value)
+}
+
+export function catalogDateText(value: string | null | undefined) {
+  return formatKvDate(value)
+}
+
+export function catalogUnitNameDisplay(value: string | null | undefined) {
+  const unitName = value?.trim() ?? ''
+  const normalized = unitName
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  if (normalized === '' || normalized === 'can cap nhat') return null
+  return unitName
 }
 
 export function catalogInventoryShapeLabel(shape: NonNullable<Product['inventory_shape']>) {

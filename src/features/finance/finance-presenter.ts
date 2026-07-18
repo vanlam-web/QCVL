@@ -91,7 +91,7 @@ export function cashbookDetailCounterpartyTypeLabel(entry: CashbookEntryDetail) 
   if (entry.counterparty.type === 'supplier') return 'Nhà cung cấp'
   if (entry.counterparty.type === 'employee') return 'Nhân viên'
   if (entry.counterparty.type === 'other') return 'Khác'
-  return 'Không có'
+  return ''
 }
 
 export function cashbookDetailCounterpartyLabel(entry: CashbookEntryDetail) {
@@ -112,7 +112,7 @@ export function cashbookDetailAccountLabel(entry: CashbookEntryDetail) {
 }
 
 export function cashbookDetailCreatorText(entry: CashbookEntryDetail) {
-  return entry.source.source_creator_name ?? entry.created_by?.name ?? '-'
+  return entry.source.source_creator_name ?? entry.created_by?.name ?? ''
 }
 
 export function cashbookDetailCategoryText(entry: CashbookEntryDetail) {
@@ -124,7 +124,7 @@ export function cashbookDetailCounterpartyText(entry: CashbookEntryDetail) {
     entry.counterparty?.name,
     entry.counterparty?.phone,
     entry.source.counterparty_address,
-  ].filter((value) => value != null && value.trim().length > 0).join(', ') || '-'
+  ].filter((value) => value != null && value.trim().length > 0).join(', ')
 }
 
 export function cashbookDetailAccountText(entry: CashbookEntryDetail) {
@@ -240,10 +240,10 @@ export function cashbookLinkedDocumentRows(entry: CashbookEntryDetail) {
 }
 
 export function cashbookDetailNoteText(entry: CashbookEntryDetail) {
-  if (entry.note?.match(/^Checkout\s+HD\d+(?:\.\d+)?$/i)) return 'Chưa có ghi chú'
+  if (entry.note?.match(/^Checkout\s+HD\d+(?:\.\d+)?$/i)) return ''
   if (entry.source.source_note) return entry.source.source_note
   if (entry.source.transfer_content) return entry.source.transfer_content
-  return entry.note ?? 'Chưa có ghi chú'
+  return entry.note ?? ''
 }
 
 export function businessAccountedText(value: CashbookBusinessAccountedFilter) {

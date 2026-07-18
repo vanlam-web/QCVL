@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { Product, ResolvedPrice } from '../catalog/types'
 import { formatMoney } from '../../lib/number-format'
+import { posPriceWithUnitText } from './pos-core'
 
 const fallbackGridMetrics = { columns: 2, rows: 5, pageSize: 10 }
 const minProductCardHeightRem = 4.9
@@ -84,16 +85,17 @@ export function ProductGrid({
       <div className="product-grid" ref={gridRef} style={gridStyle}>
         {visibleProducts.map((product) => {
           const price = prices[product.id]?.unit_price ?? 0
+          const priceText = posPriceWithUnitText(formatMoney(price), product.unit_name)
           return (
             <button
               key={product.id}
               type="button"
-              aria-label={`${product.code} ${product.name} ${formatMoney(price)}/${product.unit_name}`}
+              aria-label={`${product.code} ${product.name} ${priceText}`}
               onClick={() => onSelectProduct(product)}
             >
               <small>{product.code}</small>
               <strong>{product.name}</strong>
-              <span>{formatMoney(price)}/{product.unit_name}</span>
+              <span>{priceText}</span>
             </button>
           )
         })}

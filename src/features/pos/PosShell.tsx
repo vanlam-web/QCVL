@@ -26,6 +26,7 @@ import { PosCartPanel } from './PosCartPanel'
 import { PosPaymentPanel } from './PosPaymentPanel'
 import { PosTopbar } from './PosTopbar'
 import { ProductionQueuePanel } from './ProductionQueuePanel'
+import { consumeInvoiceRevisionHandoffPayload } from './invoice-revision-handoff'
 import { consumeQuoteReopenPayload } from './quote-draft-handoff'
 import { permissions } from '../users/permissions'
 import {
@@ -35,7 +36,9 @@ import {
   cartLineDiscountPercent,
   clampLineDiscount,
   draftLineQuantity,
+  displaySaleUnitName,
   initialQuotePayloadToTabs,
+  initialInvoiceRevisionPayloadToTabs,
   isAreaLine,
   isInvoiceTabDirty,
   lineInputDraftKey,
@@ -120,8 +123,13 @@ export function PosShell({
 }) {
   const [products, setProducts] = useState<Product[]>([])
   const [prices, setPrices] = useState<Record<string, ResolvedPrice>>({})
+  const [initialRevisionPayload] = useState(() => consumeInvoiceRevisionHandoffPayload())
   const [initialQuotePayload] = useState(() => consumeQuoteReopenPayload())
-  const [initialTabs] = useState(() => initialQuotePayloadToTabs(initialQuotePayload))
+  const [initialTabs] = useState(() =>
+    initialRevisionPayload === null
+      ? initialQuotePayloadToTabs(initialQuotePayload)
+      : initialInvoiceRevisionPayloadToTabs(initialRevisionPayload),
+  )
   const [tabs, setTabs] = useState<PosInvoiceTab[]>(initialTabs)
   const [activeTabId, setActiveTabId] = useState(initialTabs[0]?.id ?? makeInvoiceTab(1).id)
   const [loadingProducts, setLoadingProducts] = useState(true)
@@ -952,7 +960,7 @@ export function PosShell({
         </select>
       )
     }
-    return <strong className="pos-cart-line-unit">{product.unit_name}</strong>
+    return <strong className="pos-cart-line-unit">{displaySaleUnitName(product.unit_name)}</strong>
   }
 
   return (
@@ -1397,6 +1405,7 @@ export function PosShell({
             orderNote={activeTab.orderNote}
             sellerName={currentUser.user.display_name}
             orderCreatedAt={activeTab.createdAt}
+            revisionSource={activeTab.sourceRevision}
             quoteBlockedReason={quoteBlockedReason(cartLines)}
             onCheckoutSuccess={() => {
               setCheckoutOpen(false)
@@ -1745,8 +1754,8 @@ function unitColumnWidthCh(line: CheckoutCartLine) {
   }
 
   const unitText = isAreaLine(line)
-    ? `${formatMeasure(line.quantity)} ${line.product.unit_name}`
-    : line.product.unit_name
+    ? `${formatMeasure(line.quantity)} ${displaySaleUnitName(line.product.unit_name)}`.trim()
+    : displaySaleUnitName(line.product.unit_name)
   return Math.min(Math.max(unitText.length * 0.75 + 0.5, 2.25), 8)
 }
 

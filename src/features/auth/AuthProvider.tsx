@@ -98,6 +98,8 @@ export function AuthProvider({
         if (!active) return
         if (!token) {
           writeCachedCurrentUser(null)
+          setCurrentUser(null)
+          setAccessConnection('disconnected')
           setInitialized(true)
           return
         }
@@ -106,7 +108,10 @@ export function AuthProvider({
         if (cachedCurrentUser !== null) {
           setCurrentUser(cachedCurrentUser.data)
           setInitialized(true)
-          if (cachedCurrentUser.fresh) return
+          if (cachedCurrentUser.fresh) {
+            void withTimeout(refreshMe(), bootstrapTimeoutMs).catch(() => undefined)
+            return
+          }
         }
         await withTimeout(refreshMe(), bootstrapTimeoutMs)
       })
@@ -159,7 +164,7 @@ export function AuthProvider({
 function readCachedCurrentUser(): { data: CurrentUserData; fresh: boolean } | null {
   try {
     const raw = window.sessionStorage.getItem(currentUserCacheKey)
-    if (raw === null) return readFallbackCurrentUser()
+    if (raw === null) return null
     const parsed = JSON.parse(raw) as CurrentUserData | { data?: CurrentUserData; cached_at?: number }
     if (isCachedCurrentUser(parsed)) {
       return {

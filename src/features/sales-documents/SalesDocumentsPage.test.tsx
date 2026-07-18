@@ -202,7 +202,7 @@ function makeService(overrides: Partial<SalesDocumentService> = {}): SalesDocume
     })),
     deleteImportedKiotVietInvoices: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
     cancelSalesDocument: vi.fn(async () => ({ ...detail, status: 'cancelled' as const })),
-    updateSalesDocumentNote: vi.fn(async (_id: string, input: { note: string | null }) => ({ ...detail, note: input.note ?? '' })),
+    updateSalesDocumentNote: vi.fn(async (_id: string, input: { note?: string | null; created_at?: string }) => ({ ...detail, note: input.note ?? '', created_at: input.created_at ?? detail.created_at })),
     ...overrides,
   }
 }
@@ -415,6 +415,65 @@ it('searches by document code and keeps filtered empty state clear', async () =>
   expect(screen.getByText('Hãy thử mở rộng thời gian hoặc bỏ bớt bộ lọc.')).toBeInTheDocument()
 })
 
+it('opens a single linked invoice from route query and searches full history', async () => {
+  const originalUrl = window.location.href
+  window.history.pushState({}, '', '/sales-documents?search=HD010985&type=invoice')
+  const service = makeService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [listItem],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+    getSalesDocument: vi.fn(async () => detail),
+  })
+
+  try {
+    render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+    await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
+      page: 1,
+      page_size: 15,
+      search: 'HD010985',
+      type: 'invoice',
+    })))
+    const listCalls = vi.mocked(service.listSalesDocuments).mock.calls
+    const initialRequest = listCalls[listCalls.length - 1]?.[0]
+    expect(initialRequest).not.toHaveProperty('from')
+    expect(initialRequest).not.toHaveProperty('to')
+    expect(screen.getByLabelText('Tìm chứng từ')).toHaveValue('HD010985')
+    expect(screen.getByRole('checkbox', { name: 'Hóa đơn' })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: 'Báo giá' })).not.toBeChecked()
+    expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
+    expect(service.getSalesDocument).toHaveBeenCalledWith('order-1')
+  } finally {
+    window.history.pushState({}, '', originalUrl)
+  }
+})
+
+it('loads route-open invoice detail by code without waiting for the list id lookup', async () => {
+  const originalUrl = window.location.href
+  window.history.pushState({}, '', '/sales-documents?open=HD010985&type=invoice')
+  const service = makeService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [listItem],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+    getSalesDocument: vi.fn(async () => detail),
+  })
+
+  try {
+    render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+    await waitFor(() => expect(service.getSalesDocument).toHaveBeenCalledWith('HD010985'))
+    expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
+  } finally {
+    window.history.pushState({}, '', originalUrl)
+  }
+})
+
 it('filters matching sales documents while typing without accents and without suggestions', async () => {
   const service = makeService({
     listSalesDocuments: vi.fn(async (input = {}) => ({
@@ -465,9 +524,10 @@ it('cancels an invoice after confirmation', async () => {
 })
 
 it('saves invoice note from the shared detail textarea', async () => {
-  const updateSalesDocumentNote = vi.fn(async (_id: string, input: { note: string | null }) => ({
+  const updateSalesDocumentNote = vi.fn(async (_id: string, input: { note?: string | null; created_at?: string }) => ({
     ...detail,
     note: input.note ?? '',
+    created_at: input.created_at ?? detail.created_at,
   }))
   const service = makeService({ updateSalesDocumentNote })
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
@@ -483,8 +543,60 @@ it('saves invoice note from the shared detail textarea', async () => {
   await userEvent.type(noteInput, 'Ghi chú mới')
   await userEvent.click(within(detailRegion).getByRole('button', { name: /L.u/ }))
 
-  await waitFor(() => expect(updateSalesDocumentNote).toHaveBeenCalledWith('order-1', { note: 'Ghi chú mới' }))
+  await waitFor(() => expect(updateSalesDocumentNote).toHaveBeenCalledWith('order-1', {
+    note: 'Ghi chú mới',
+    created_at: '2026-06-30T17:08:00.000Z',
+  }))
   expect(noteInput).toHaveValue('Ghi chú mới')
+})
+
+it('saves invoice created time from the quick detail field', async () => {
+  const updateSalesDocumentNote = vi.fn(async (_id: string, input: { note?: string | null; created_at?: string }) => ({
+    ...detail,
+    note: input.note ?? '',
+    created_at: input.created_at ?? detail.created_at,
+  }))
+  const service = makeService({ updateSalesDocumentNote })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await clickDocumentRow('HD010985')
+  const detailRegion = await screen.findByRole('region', { name: /HD010985/ })
+  await userEvent.click(within(detailRegion).getByText('30/06/2026 17:08'))
+  const createdAtInput = detailRegion.querySelector('input.management-detail-inline-input')
+
+  expect(createdAtInput).not.toBeNull()
+  expect(createdAtInput).toHaveValue('30/06/2026 17:08')
+
+  fireEvent.change(createdAtInput as HTMLInputElement, { target: { value: '18/07/2026 04:15' } })
+  await userEvent.click(within(detailRegion).getByRole('button', { name: /L.u/ }))
+
+  await waitFor(() => expect(updateSalesDocumentNote).toHaveBeenCalledWith('order-1', expect.objectContaining({
+    created_at: '2026-07-18T04:15:00.000Z',
+  })))
+  expect(within(detailRegion).getByText('18/07/2026 04:15')).toBeInTheDocument()
+})
+
+it('leaves the sales document unit cell empty when the product has no unit', async () => {
+  const service = makeService({
+    getSalesDocument: vi.fn(async () => ({
+      ...detail,
+      items: [{
+        ...detail.items[0],
+        product: {
+          ...detail.items[0].product,
+          unit_name: 'Cần cập nhật',
+        },
+      }],
+    })),
+  })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await clickDocumentRow('HD010985')
+  const lineTable = await screen.findByRole('table', { name: 'Dòng hàng' })
+  const row = within(lineTable).getByText('DECAL-PP').closest('tr') as HTMLTableRowElement
+
+  expect(row.cells[3]).toHaveTextContent('')
+  expect(within(lineTable).queryByText('Cần cập nhật')).not.toBeInTheDocument()
 })
 
 it('uses 15-row pagination range and navigates pages through the list footer', async () => {
@@ -746,6 +858,53 @@ it('stores reopen payload through callback when editing an active quote', async 
   expect(onOpenQuoteInPos).toHaveBeenCalledWith(quoteReopenPayload)
 })
 
+it('opens a completed invoice in POS as an invoice revision draft', async () => {
+  const onOpenInvoiceRevisionInPos = vi.fn()
+  const service = makeService()
+
+  render(
+    <SalesDocumentsPage
+      service={service}
+      orderService={makeOrderService()}
+      onOpenDashboard={vi.fn()}
+      onOpenInvoiceRevisionInPos={onOpenInvoiceRevisionInPos}
+    />,
+  )
+
+  await clickDocumentRow('HD010985')
+  await userEvent.click(await screen.findByRole('button', { name: 'Sửa' }))
+
+  expect(onOpenInvoiceRevisionInPos).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mode: 'invoice-revision',
+      original_order: { id: 'order-1', code: 'HD010985' },
+      customer: {
+        customer_id: 'cus-1',
+        snapshot: { code: 'KH001', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      },
+      items: [
+        expect.objectContaining({
+          order_item_id: 'item-1',
+          product_id: 'product-1',
+          product_snapshot: {
+            code: 'DECAL-PP',
+            name: 'Decal PP',
+            unit_name: 'm²',
+            sell_method: 'area_m2',
+          },
+          quantity: 8.25,
+          unit_price: 20000,
+          discount_amount: 15000,
+          price_source: 'manual',
+        }),
+      ],
+      summary: { subtotal_amount: 180000, discount_amount: 30000, total_amount: 150000 },
+      note: 'Khách lấy sau',
+    }),
+  )
+  expect(service.getSalesDocument).toHaveBeenCalledWith('order-1')
+})
+
 it('shows quote reopen failures inside the row-level shared detail area', async () => {
   const service = makeService({
     listSalesDocuments: vi.fn(async () => ({
@@ -854,13 +1013,17 @@ it('opens invoice detail with item, price list, debt and stock snapshots', async
   expect(within(lineTable).getByRole('columnheader', { name: 'Mã hàng' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Tên hàng' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Số lượng' })).toBeInTheDocument()
+  expect(within(lineTable).getByRole('columnheader', { name: 'Đơn vị' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Đơn giá' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Giảm giá' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Giá bán' })).toBeInTheDocument()
   expect(within(lineTable).getByRole('columnheader', { name: 'Thành tiền' })).toBeInTheDocument()
   expect(within(lineTable).getByText('DECAL-PP')).toBeInTheDocument()
   expect(within(lineTable).getByText('Decal PP')).toBeInTheDocument()
-  expect(within(lineTable).getByText('8.25 m²')).toBeInTheDocument()
+  const itemRow = within(lineTable).getByText('DECAL-PP').closest('tr') as HTMLElement
+  expect(within(itemRow).getByText('8.25')).toBeInTheDocument()
+  expect(within(itemRow).getByText('m²')).toBeInTheDocument()
+  expect(within(lineTable).queryByText('8.25 m²')).not.toBeInTheDocument()
   expect(within(lineTable).getByText('20 000')).toBeInTheDocument()
   expect(within(lineTable).getByText('15 000')).toBeInTheDocument()
   expect(within(lineTable).getByText('18 182')).toBeInTheDocument()
@@ -1016,7 +1179,9 @@ it('keeps payment history visible when receipt data misses optional nested field
   expect(within(paymentHistory).getByText('30/06/2026 17:08')).toBeInTheDocument()
   expect(within(paymentHistory).getByText('Admin')).toBeInTheDocument()
   expect(within(paymentHistory).queryByText('Chưa có dữ liệu')).not.toBeInTheDocument()
-  expect(within(paymentHistory).getAllByText('-')).toHaveLength(1)
+  expect(within(paymentHistory).queryByText('-')).not.toBeInTheDocument()
+  const paymentCells = Array.from(paymentHistory.querySelectorAll('tbody tr:first-child td'))
+  expect(paymentCells[4]).toHaveTextContent('')
 })
 
 it('shows invoice detail actions except return and QR flows', async () => {

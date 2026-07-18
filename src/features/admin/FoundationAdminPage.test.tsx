@@ -304,6 +304,27 @@ it('creates a user when optional email is empty', async () => {
   })
 })
 
+it('includes admin panel access when creating an admin role user', async () => {
+  const service = makeService()
+  render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('admin')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo người dùng' }))
+  const createUserForm = screen.getByRole('form', { name: 'Tạo người dùng' })
+
+  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Tên hiển thị' }), 'Admin 2')
+  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Điện thoại' }), '0900000001')
+  await userEvent.type(within(createUserForm).getByRole('textbox', { name: 'Tên đăng nhập' }), 'admin-2')
+  await userEvent.type(createUserForm.querySelector('input[type="password"]') as HTMLInputElement, 'Password123!')
+  await userEvent.type(within(createUserForm).getByLabelText('Nhập lại mật khẩu'), 'Password123!')
+  await userEvent.selectOptions(within(createUserForm).getByRole('combobox', { name: 'Vai trò' }), 'admin')
+  await userEvent.click(within(createUserForm).getByRole('button', { name: 'Lưu' }))
+
+  expect(service.createUser).toHaveBeenCalledWith(expect.objectContaining({
+    permissions: expect.arrayContaining(['perm.access_admin_panel', 'perm.manage_users']),
+  }))
+})
+
 it('opens the account form from the edit action and saves profile changes without requiring a password', async () => {
   const service = makeService()
   render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
@@ -338,6 +359,41 @@ it('opens the account form from the edit action and saves profile changes withou
     display_name: 'Admin Updated',
   })
   expect(service.replaceUserPermissions).toHaveBeenCalledWith('u-1', ['perm.manage_finance'])
+  expect(screen.queryByRole('dialog', { name: 'Sửa tài khoản' })).not.toBeInTheDocument()
+})
+
+it('saves display name edits for existing users with an empty phone number', async () => {
+  const service = makeService({
+    listUsers: vi.fn(async () => ({
+      total: 1,
+      items: [
+        {
+          id: 'u-1',
+          email: 'admin@qc-oms.local',
+          username: 'admin',
+          phone: null,
+          display_name: 'Admin',
+          status: 'active' as const,
+          permissions: ['perm.manage_users' as const],
+        },
+      ],
+    })),
+  })
+  render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('admin')
+  await userEvent.click(screen.getByRole('button', { name: 'Sửa Admin' }))
+  const editUserForm = screen.getByRole('form', { name: 'Sửa người dùng' })
+
+  await userEvent.clear(within(editUserForm).getByRole('textbox', { name: 'Tên hiển thị' }))
+  await userEvent.type(within(editUserForm).getByRole('textbox', { name: 'Tên hiển thị' }), 'Phạm Nhật Linh')
+  await userEvent.click(within(editUserForm).getByRole('button', { name: 'Lưu' }))
+
+  expect(service.updateUser).toHaveBeenCalledWith('u-1', expect.objectContaining({
+    display_name: 'Phạm Nhật Linh',
+    phone: null,
+  }))
+  expect(screen.queryByText('SĐT là bắt buộc.')).not.toBeInTheDocument()
   expect(screen.queryByRole('dialog', { name: 'Sửa tài khoản' })).not.toBeInTheDocument()
 })
 

@@ -258,7 +258,7 @@ it('sorts price book rows from shared column headers', async () => {
   expect(within(grid).getByRole('columnheader', { name: 'Giá nhập cuối' })).toHaveAttribute('aria-sort', 'descending')
 })
 
-it('sorts price book rows by latest created or updated time by default', async () => {
+it('sorts price book rows by code by default instead of latest edit time', async () => {
   const service = makeService({
     listProducts: vi.fn(async () => ({
       items: [

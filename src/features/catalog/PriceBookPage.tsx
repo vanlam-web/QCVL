@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
 import { displayPriceListName } from '../../lib/price-list-display'
@@ -57,18 +57,11 @@ const sellMethodLabels: Record<SellMethod, string> = {
 
 type AdjustmentMode = 'none' | 'amount' | 'percent'
 
-function productActivityTime(product: Pick<Product, 'created_at' | 'updated_at'>) {
-  const createdAt = Date.parse(product.created_at ?? '')
-  const updatedAt = Date.parse(product.updated_at ?? '')
-  const validCreatedAt = Number.isFinite(createdAt) ? createdAt : 0
-  const validUpdatedAt = Number.isFinite(updatedAt) ? updatedAt : 0
-  return Math.max(validCreatedAt, validUpdatedAt)
-}
-
-function newestPriceBookProductsFirst(products: readonly Product[]) {
+function defaultPriceBookProductOrder(products: readonly Product[]) {
   return [...products].sort((left, right) => {
-    const compared = productActivityTime(right) - productActivityTime(left)
-    return compared === 0 ? left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' }) : compared
+    const codeCompared = left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' })
+    if (codeCompared !== 0) return codeCompared
+    return left.name.localeCompare(right.name, 'vi', { numeric: true, sensitivity: 'base' })
   })
 }
 
@@ -384,7 +377,7 @@ export function PriceBookPage({
     sortedItems: sortedPriceBookProducts,
     sortState: priceBookSortState,
     requestSort: requestPriceBookSort,
-  } = useManagementTableSort<Product, string>(newestPriceBookProductsFirst(state?.products ?? []), {
+  } = useManagementTableSort<Product, string>(defaultPriceBookProductOrder(state?.products ?? []), {
     code: { kind: 'text', value: (product) => product.code },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
@@ -425,7 +418,7 @@ export function PriceBookPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <form id="price-book-filter-form" aria-label="Lọc bảng giá" className="management-filter-sidebar-form" onSubmit={filterProducts}>
             <ManagementFilterGroup title="Trạng thái">

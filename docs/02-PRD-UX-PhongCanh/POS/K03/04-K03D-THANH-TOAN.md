@@ -105,6 +105,8 @@ Nhân viên bấm [THANH TOÁN] (F9) trong khối K03 Panel
 
 Layout thanh toán trên POS tham khảo cách gom nhóm của KiotViet nhưng chỉ giữ nghiệp vụ QCVL:
 
+- Header thông tin hóa đơn hiển thị **tên hiển thị** của user đang đăng nhập, không dùng email/login account.
+- Ngày và giờ hóa đơn trong header là hai ô `date` và `time` có thể sửa. Khi tạo hóa đơn hoặc lưu báo giá, POS gửi `created_at` theo ngày và giờ đã sửa.
 - Panel nằm ở cột/phần bên phải khi nhân viên bấm **Thanh toán**, trình bày theo thẻ dọc để nhìn nhanh.
 - Nhóm thông tin trên cùng hiển thị khách đang chọn; nếu chưa chọn khách thì là **Khách lẻ**.
 - Nhóm dòng tiền hiển thị **Tổng tiền hàng**, **Chiết khấu**, **Khách cần trả** nổi bật, và **Tiền thừa / Còn nợ**.

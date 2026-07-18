@@ -9,7 +9,7 @@ describe('formatPhoneDisplay', () => {
   })
 
   it('keeps input-free fallback behavior for empty values', () => {
-    expect(formatPhoneDisplay(null)).toBe('-')
+    expect(formatPhoneDisplay(null)).toBe('')
     expect(formatPhoneDisplay('', 'Chưa có')).toBe('Chưa có')
   })
 })

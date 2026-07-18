@@ -13,6 +13,64 @@ type DevMemoryRepositoryWithHelpers = DevMemoryRepository & {
 }
 
 describe('createDevMemoryRepository persistence', () => {
+  it('prefers an exact username over another user phone with the same value', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.updateUser?.({
+      organizationId: 'org-dev-memory',
+      id: 'user-dev-admin',
+      phone: '0947900909',
+    })
+    await repository.createUser?.({
+      organizationId: 'org-dev-memory',
+      email: 'vanvietphuonglam@example.test',
+      username: '0947900909',
+      phone: '0947900000',
+      birthday: null,
+      region: null,
+      ward: null,
+      address: null,
+      note: null,
+      passwordHash: 'hash',
+      displayName: 'Văn Viết Phương Lâm',
+      permissions: ['perm.manage_users'],
+    })
+
+    const user = await repository.findUserByLogin?.('0947900909')
+
+    expect(user?.id).toBe('user-dev-0947900909-2')
+  })
+
+  it('keeps admin session permissions complete when stored user permissions are stale', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.replaceUserPermissions?.({
+      organizationId: 'org-dev-memory',
+      id: 'user-dev-admin',
+      permissions: ['perm.manage_users'],
+    })
+
+    const currentUser = await repository.getSessionUser('dev-token')
+
+    expect(currentUser?.permissions).toContain('perm.manage_users')
+    expect(currentUser?.permissions).toContain('perm.create_order')
+    expect(currentUser?.permissions).toContain('perm.manage_finance')
+  })
+
+  it('returns edited admin display name for the current session user', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.updateUser?.({
+      organizationId: 'org-dev-memory',
+      id: 'user-dev-admin',
+      displayName: 'Phạm Nhật Linh',
+    })
+
+    const currentUser = await repository.getSessionUser('dev-token')
+
+    expect(currentUser?.user.display_name).toBe('Phạm Nhật Linh')
+  })
+
   it('filters sales documents by the displayed source date instead of shifting UTC into local date', async () => {
     const repository = await createDevMemoryRepository()
 
@@ -44,6 +102,118 @@ describe('createDevMemoryRepository persistence', () => {
     })
 
     expect(julyDocuments?.map((document) => document.code)).not.toContain('HD010985')
+  })
+
+  it('returns current display names for saved sales and cashbook user snapshots', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: {
+        id: 'order-display-user',
+        code: 'HD-DISPLAY-USER',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-13T08:00:00.000Z',
+        customer: { id: 'customer-display-user', code: 'KHTEST', name: 'Khach test', phone: null },
+        seller: { id: 'user-dev-admin', name: 'Admin' },
+        subtotal_amount: 100000,
+        discount_amount: 0,
+        total_amount: 100000,
+        paid_amount: 100000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [],
+      },
+      cashbookEntries: [{
+        id: 'cashbook-display-user',
+        code: 'TTHD-DISPLAY-USER',
+        status: 'posted',
+        direction: 'in',
+        amount_delta: 100000,
+        finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
+        is_business_accounted: true,
+        source_type: 'payment_receipt_method',
+        created_at: '2026-07-13T08:00:00.000Z',
+        note: null,
+        counterparty: { type: 'customer', name: 'Khach test', phone: null },
+        created_by: { id: 'user-dev-admin', name: 'Admin' },
+        source: { type: 'payment_receipt', id: 'receipt-display-user', code: 'TTHD-DISPLAY-USER', order_code: 'HD-DISPLAY-USER' },
+        allocations: [],
+      }],
+    })
+    await repository.updateUser?.({
+      organizationId: 'org-dev-memory',
+      id: 'user-dev-admin',
+      displayName: 'Phạm Nhật Linh',
+    })
+
+    const documents = await repository.listSalesDocuments?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/sales-documents?search=HD-DISPLAY-USER'),
+    })
+    const document = await repository.getSalesDocument?.({ organizationId: 'org-dev-memory', id: 'order-display-user' })
+    const cashbook = await repository.getCashbookEntry?.({ organizationId: 'org-dev-memory', id: 'cashbook-display-user' })
+
+    expect(documents?.[0]?.seller.name).toBe('Phạm Nhật Linh')
+    expect(document?.seller.name).toBe('Phạm Nhật Linh')
+    expect(document?.payment_receipts[0]?.created_by.name).toBe('Phạm Nhật Linh')
+    expect(cashbook?.created_by?.name).toBe('Phạm Nhật Linh')
+  })
+
+  it('keeps linked payment receipt and cashbook time in sync with edited sales document time', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: {
+        id: 'order-linked-time',
+        code: 'HD-LINKED-TIME',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-13T08:00:00.000Z',
+        customer: { id: 'customer-linked-time', code: 'KHTEST', name: 'Khach test', phone: null },
+        seller: { id: 'user-dev-admin', name: 'Admin' },
+        subtotal_amount: 100000,
+        discount_amount: 0,
+        total_amount: 100000,
+        paid_amount: 100000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [],
+      },
+      cashbookEntries: [{
+        id: 'cashbook-linked-time',
+        code: 'TTHD-LINKED-TIME',
+        status: 'posted',
+        direction: 'in',
+        amount_delta: 100000,
+        finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
+        is_business_accounted: true,
+        source_type: 'payment_receipt_method',
+        created_at: '2026-07-13T08:00:00.000Z',
+        note: null,
+        counterparty: { type: 'customer', name: 'Khach test', phone: null },
+        created_by: { id: 'user-dev-admin', name: 'Admin' },
+        source: { type: 'payment_receipt', id: 'receipt-linked-time', code: 'TTHD-LINKED-TIME', order_code: 'HD-LINKED-TIME' },
+        allocations: [],
+      }],
+    })
+
+    await repository.updateSalesDocumentNote?.({
+      organizationId: 'org-dev-memory',
+      id: 'order-linked-time',
+      created_at: '2026-07-18T04:15:00.000Z',
+    })
+
+    const document = await repository.getSalesDocument?.({ organizationId: 'org-dev-memory', id: 'order-linked-time' })
+    const cashbook = await repository.getCashbookEntry?.({ organizationId: 'org-dev-memory', id: 'cashbook-linked-time' })
+
+    expect(document?.created_at).toBe('2026-07-18T04:15:00.000Z')
+    expect(document?.payment_receipts[0]?.created_at).toBe('2026-07-18T04:15:00.000Z')
+    expect(cashbook?.created_at).toBe('2026-07-18T04:15:00.000Z')
   })
 
   it('filters cashbook entries by finance account id and account type', async () => {
@@ -122,6 +292,66 @@ describe('createDevMemoryRepository persistence', () => {
 
     expect(bankAEntries?.map((entry) => entry.code)).toEqual(['PT-BANK-A'])
     expect(bankEntries?.map((entry) => entry.code).sort()).toEqual(['PT-BANK-A', 'PT-BANK-B'])
+  })
+
+  it('hydrates sales document payment history from linked cashbook entries', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: {
+        id: 'order-hd-011137',
+        code: 'HD011137',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-10T09:00:00.000Z',
+        customer: { id: 'customer-kl4', code: 'KH-KL4', name: 'kl4', phone: null },
+        seller: { id: 'seller-kv', name: 'KiotViet' },
+        subtotal_amount: 3000000,
+        discount_amount: 0,
+        total_amount: 3000000,
+        paid_amount: 1000000,
+        debt_amount: 2000000,
+        payment_status: 'partial',
+        note: null,
+        items: [],
+      },
+      cashbookEntries: [
+        {
+          id: 'cashbook-tthd-011137',
+          code: 'TTHD011137',
+          status: 'posted',
+          direction: 'in',
+          amount_delta: 1000000,
+          finance_account: { id: 'bank-kv-0947900909', code: '0947900909', name: 'MBBank', account_type: 'bank', account_number: '0947900909' },
+          is_business_accounted: true,
+          source_type: 'kiotviet_cashbook',
+          created_at: '2026-07-10T09:01:00.000Z',
+          note: 'Thanh toan HD011137',
+          counterparty: { type: 'customer', name: 'kl4', phone: null },
+          source: { type: 'payment_receipt', id: 'cashbook-tthd-011137', code: 'TTHD011137', order_code: 'HD011137' },
+          allocations: [{
+            order_id: 'order-hd-011137',
+            order_code: 'HD011137',
+            order_total_amount: 3000000,
+            collected_before: 0,
+            allocated_amount: 1000000,
+            remaining_after: 2000000,
+          }],
+        },
+      ],
+    })
+
+    const detail = await repository.getSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      id: 'HD011137',
+    })
+
+    expect(detail?.payment_receipts?.map((receipt) => receipt.code)).toEqual(['TTHD011137'])
+    expect(detail?.payment_receipts?.[0]).toEqual(expect.objectContaining({
+      total_received_amount: 1000000,
+      methods: [expect.objectContaining({ method_type: 'bank_transfer', amount: 1000000 })],
+    }))
   })
 
   it('hydrates cashbook finance account from the current bank account record', async () => {

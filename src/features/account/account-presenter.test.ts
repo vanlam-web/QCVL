@@ -21,14 +21,14 @@ describe('account presenter', () => {
   it('maps account role and fallback text outside the page', () => {
     expect(accountRole(currentUser)).toBe('Admin')
     expect(accountRole({ ...currentUser, permissions: [] })).toBe('Nhân viên')
-    expect(accountValueOrFallback('')).toBe('Chưa có')
+    expect(accountValueOrFallback('')).toBe('')
     expect(accountValueOrFallback('abc')).toBe('abc')
   })
 
   it('formats device display outside the page', () => {
     expect(deviceSummaryText({ browser_name: 'Chrome', os_name: 'Windows', ip_address: '127.0.0.1' })).toBe('Chrome • Windows • 127.0.0.1')
     expect(deviceSummaryText({ browser_name: null, os_name: null, ip_address: null })).toBe('Chưa có thông tin thiết bị')
-    expect(deviceSeenAtText('bad-date')).toBe('Chưa có')
+    expect(deviceSeenAtText('bad-date')).toBe('')
     expect(deviceSeenAtText('2026-07-06T14:00:00Z')).toBe('06/07/2026 14:00')
   })
 

@@ -52,4 +52,23 @@ describe('createAuthService', () => {
     )
     await expect(service.getAccessToken()).resolves.toBeNull()
   })
+
+  test('does not reuse the memory token fallback when localStorage is available but empty', async () => {
+    const fetcher = vi.fn(async () => {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: { access_token: 'token-memory' },
+          trace_id: 'trace-1',
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )
+    })
+    const service = createAuthService({ baseUrl: 'http://nas:3100', fetch: fetcher })
+
+    await service.signIn('admin', 'password-1')
+    window.localStorage.clear()
+
+    await expect(service.getAccessToken()).resolves.toBeNull()
+  })
 })

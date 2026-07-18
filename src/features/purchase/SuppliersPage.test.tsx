@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { afterEach } from 'vitest'
 import { SuppliersPage } from './SuppliersPage'
 import type { SupplierService } from './supplier-service'
 
@@ -93,6 +94,10 @@ const supplierReceipts = [
   },
 ]
 
+afterEach(() => {
+  window.history.pushState({}, '', '/suppliers')
+})
+
 function makeService(overrides: Partial<SupplierService> = {}): SupplierService {
   return {
     listSuppliers: vi.fn(async () => ({ items: [supplier], page: 1, page_size: 15, total: 1 })),
@@ -149,7 +154,7 @@ it('lists suppliers with payable and purchase totals without a linked customer l
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
   expect(screen.getByText('Đang tải nhà cung cấp...').closest('.management-main')).not.toBeNull()
-  expect(await screen.findByText('NCC000031')).toBeInTheDocument()
+  expect(await screen.findByRole('button', { name: 'NCC000031' })).toBeInTheDocument()
   expect(screen.getByRole('main')).toHaveClass('management-page')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
   expect(sidebar).toHaveClass('management-filter-sidebar')
@@ -186,12 +191,24 @@ it('lists suppliers with payable and purchase totals without a linked customer l
   expect(service.listFinanceAccounts).not.toHaveBeenCalled()
 })
 
+it('opens supplier detail directly from record link query without using visible search', async () => {
+  window.history.pushState({}, '', '/suppliers?open=NCC000031')
+  const service = makeService()
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const detail = await screen.findByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
+  expect(within(detail).getByRole('heading', { name: 'Nguyễn Phong' })).toBeInTheDocument()
+  expect(screen.getByLabelText('Tìm NCC')).toHaveValue('')
+  expect(service.listSuppliers).toHaveBeenCalledWith(expect.objectContaining({ search: 'NCC000031' }))
+})
+
 it('summarizes supplier validation state with scan-friendly KPI cards and panels', async () => {
   const service = makeService()
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   const summary = screen.getByRole('region', { name: 'Tổng quan nhà cung cấp' })
   expect(summary.closest('.management-filter-column')).not.toBeNull()
   expect(summary.closest('.management-page-header')).toBeNull()
@@ -207,7 +224,7 @@ it('filters suppliers by search and status', async () => {
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   const filterForm = screen.getByRole('search', { name: 'Lọc nhà cung cấp' })
   const searchInput = within(filterForm).getByLabelText('Tìm NCC')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
@@ -228,7 +245,7 @@ it('uses supplier sidebar filters without a reset action', async () => {
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   const filterForm = screen.getByRole('search', { name: 'Lọc nhà cung cấp' })
   const searchInput = within(filterForm).getByLabelText('Tìm NCC')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
@@ -250,7 +267,7 @@ it('reactively filters suppliers by payable, purchase totals, and status in the 
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
 
   expect(within(sidebar).queryByRole('region', { name: 'Nhóm nhà cung cấp' })).not.toBeInTheDocument()
@@ -301,7 +318,7 @@ it('uses 15-row pagination range and navigates pages through the list footer', a
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   const footer = screen.getByRole('navigation', { name: 'Phân trang nhà cung cấp' })
   expect(within(footer).getByText('1 - 15 trong 16 nhà cung cấp')).toBeInTheDocument()
   expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
@@ -316,7 +333,7 @@ it('creates supplier with blank phone and selected linked customer', async () =>
 
   render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
 
-  await screen.findByText('NCC000031')
+  await screen.findByRole('button', { name: 'NCC000031' })
   await userEvent.click(screen.getByRole('button', { name: 'Tạo nhà cung cấp' }))
   expect(screen.queryByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })).not.toBeInTheDocument()
   const form = await screen.findByRole('form', { name: 'Thông tin nhà cung cấp' })

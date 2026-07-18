@@ -14,13 +14,13 @@ export function supplierMoneyText(value: number) {
 }
 
 export function supplierCreatorLabel(supplier: Pick<Supplier, 'created_by' | 'source_creator_name'>) {
-  return supplier.created_by?.name || supplier.source_creator_name || 'Chưa có dữ liệu'
+  return supplier.created_by?.name || supplier.source_creator_name || ''
 }
 
 export function supplierCreatedDateText(supplier: Pick<Supplier, 'created_at' | 'source_created_at'>) {
-  return formatKvDate(supplier.created_at ?? supplier.source_created_at, 'Chưa có dữ liệu')
+  return formatKvDate(supplier.created_at ?? supplier.source_created_at)
 }
 
 export function supplierGroupLabel(supplier: Pick<Supplier, 'supplier_group'>) {
-  return supplier.supplier_group?.name || 'Chưa có'
+  return supplier.supplier_group?.name || ''
 }

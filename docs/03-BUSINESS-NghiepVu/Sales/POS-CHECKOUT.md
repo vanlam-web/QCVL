@@ -106,6 +106,12 @@ Trong MVP, một lần thanh toán chỉ có tối đa một tài khoản ngân 
 
 ## 3. NHÓM 2 — XỬ LÝ HỆ THỐNG
 
+### BR-CHK-03A: Thời gian và người bán trên chứng từ POS
+
+- POS dùng **tên hiển thị** của tài khoản đang đăng nhập làm người bán trên header thanh toán và payload chứng từ, không hiển thị email/login account.
+- Nhân viên có thể sửa ngày và giờ hóa đơn trước khi tạo hóa đơn hoặc lưu báo giá.
+- Backend nhận `created_at` từ checkout/báo giá theo ngày + giờ đã sửa, validate timestamp hợp lệ, rồi lưu cùng chứng từ bán hàng và các dòng tiền phát sinh. Nếu payload không có `created_at` hợp lệ, backend fallback về thời gian ghi nhận thực tế.
+
 ### BR-CHK-04: Trừ kho vật tư
 
 Khi đơn bán thành công, hệ thống **luôn trừ kho** theo các dòng hàng đã chốt.

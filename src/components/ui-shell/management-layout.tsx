@@ -84,7 +84,7 @@ export function ManagementFilterSidebar({
     if (!popoverOpen || !onPopoverClose) return undefined
     const closePopover = onPopoverClose
 
-    function closeWhenOutside(event: PointerEvent) {
+    function closeWhenOutside(event: Event) {
       const target = event.target
       if (!(target instanceof Node)) return
       if (sidebarRef.current?.contains(target)) return
@@ -92,11 +92,26 @@ export function ManagementFilterSidebar({
     }
 
     document.addEventListener('pointerdown', closeWhenOutside, true)
-    return () => document.removeEventListener('pointerdown', closeWhenOutside, true)
+    document.addEventListener('click', closeWhenOutside, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeWhenOutside, true)
+      document.removeEventListener('click', closeWhenOutside, true)
+    }
   }, [onPopoverClose, popoverOpen])
 
   return (
-    <aside ref={sidebarRef} aria-label={ariaLabel} className={`management-filter-sidebar${popoverOpen ? ' management-filter-sidebar-popover-open' : ''}`}>
+    <aside
+      ref={sidebarRef}
+      aria-label={ariaLabel}
+      className={`management-filter-sidebar${popoverOpen ? ' management-filter-sidebar-popover-open' : ''}`}
+      onClick={(event) => {
+        if (!popoverOpen || !onPopoverClose) return
+        if (!(event.target instanceof Element)) return
+        if (event.target.closest('button, input, select, textarea, label, a, [role="button"], [role="checkbox"], [role="radio"], [role="option"]')) return
+        if (event.target.closest('.management-filter-quick-time-menu, .management-filter-product-group-popover, .management-date-picker-popover, [aria-label="Chọn nhanh thời gian"]')) return
+        onPopoverClose()
+      }}
+    >
       {children}
       {actions ? <ManagementFilterActionBar>{actions}</ManagementFilterActionBar> : null}
     </aside>

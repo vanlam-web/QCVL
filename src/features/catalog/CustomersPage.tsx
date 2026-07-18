@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { BarChart3, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
-import { MetricCard, MetricGrid, MoneyText } from '../../components/ui-shell/primitives'
+import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
+import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import {
@@ -90,7 +90,7 @@ const customerCreatedDateLabels: Record<CustomerCreatedDateFilter, string> = {
 
 function customerCreatorLabel(customer: Customer) {
   if (customer.created_by?.name) return customer.created_by.name
-  return customer.source_creator_name?.trim() ? 'Chưa khớp tài khoản' : 'Chưa có dữ liệu'
+  return customer.source_creator_name?.trim() ? 'Chưa khớp tài khoản' : ''
 }
 
 function customerTypeLabel(customer: Customer) {
@@ -102,12 +102,12 @@ function customerTypeLabel(customer: Customer) {
     case 'other':
       return 'Khác'
     default:
-      return 'Chưa có dữ liệu'
+      return ''
   }
 }
 
 function customerGroupLabel(customer: Customer) {
-  return customer.customer_group?.name?.trim() || 'Chưa có'
+  return customer.customer_group?.name?.trim() || ''
 }
 
 function CustomerSupplierLinkIcon() {
@@ -127,6 +127,8 @@ export function CustomersPage({
   orderService: Pick<OrderService, 'getCustomerDebt'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
 }) {
+  const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
+  const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
   const [state, setState] = useState<CustomerState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -142,8 +144,8 @@ export function CustomersPage({
   const customerDebtRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
   const [showFilters, setShowFilters] = useState(true)
-  const [search, setSearch] = useState('')
-  const [lastSearch, setLastSearch] = useState('')
+  const [search, setSearch] = useState(routeSearch)
+  const [lastSearch, setLastSearch] = useState(routeSearch)
   const [customerGroupId, setCustomerGroupId] = useState('all')
   const [status, setStatus] = useState<CustomerStatusFilter>('active')
   const [createdFrom, setCreatedFrom] = useState('')
@@ -239,11 +241,24 @@ export function CustomersPage({
     async function loadInitialCustomers() {
       setError(null)
       try {
-        const result = await service.listCustomers({ page: 1, page_size: defaultPageSize, status: 'active' })
+        const result = await service.listCustomers({
+          search: routeSearch || routeOpen || undefined,
+          page: 1,
+          page_size: defaultPageSize,
+          status: 'active',
+        })
         if (!active) return
         setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
         setPage(result.page)
         setPageSize(result.page_size)
+        if (routeOpen) {
+          const openedCustomer = result.items.find((customer) => customer.code === routeOpen || customer.name === routeOpen)
+          if (openedCustomer) {
+            setSelectedCustomerId(openedCustomer.id)
+            setActiveDetailTab('info')
+            setCustomerHistoryType('invoice')
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được khách hàng.'))
       }
@@ -254,7 +269,7 @@ export function CustomersPage({
     return () => {
       active = false
     }
-  }, [defaultPageSize, service])
+  }, [defaultPageSize, routeOpen, routeSearch, service])
 
   useEffect(() => {
     let active = true
@@ -545,7 +560,7 @@ export function CustomersPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Nhóm khách">
             <ManagementFilterSelectField
@@ -795,25 +810,25 @@ export function CustomersPage({
                     key: 'phone',
                     header: <ManagementSortableHeader kind="text" sortKey="phone" sortState={customerSortState} onSort={requestCustomerSort}>Điện thoại</ManagementSortableHeader>,
                     headerIsCell: true,
-                    cell: (customer) => formatPhoneDisplay(customer.phone),
+                    cell: (customer) => formatPhoneDisplay(customer.phone, ''),
                   },
                   {
                     key: 'group',
                     header: <ManagementSortableHeader kind="text" sortKey="group" sortState={customerSortState} onSort={requestCustomerSort}>Nhóm khách</ManagementSortableHeader>,
                     headerIsCell: true,
-                    cell: (customer) => customer.customer_group?.name ?? '-',
+                    cell: (customer) => customer.customer_group?.name ?? '',
                   },
                   {
                     key: 'debt',
                     header: <ManagementSortableHeader kind="number" sortKey="total_debt_amount" sortState={customerSortState} onSort={requestCustomerSort}>Công nợ</ManagementSortableHeader>,
                     headerIsCell: true,
-                    cell: (customer) => customer.total_debt_amount === undefined || customer.total_debt_amount === null ? '-' : <MoneyText value={customer.total_debt_amount} />,
+                    cell: (customer) => customer.total_debt_amount === undefined || customer.total_debt_amount === null ? '' : <MoneyText value={customer.total_debt_amount} />,
                   },
                   {
                     key: 'sales',
                     header: <ManagementSortableHeader kind="number" sortKey="total_sales_amount" sortState={customerSortState} onSort={requestCustomerSort}>Tổng bán</ManagementSortableHeader>,
                     headerIsCell: true,
-                    cell: (customer) => customer.total_sales_amount === undefined ? '-' : <MoneyText value={customer.total_sales_amount} />,
+                    cell: (customer) => customer.total_sales_amount === undefined ? '' : <MoneyText value={customer.total_sales_amount} />,
                   },
                 ]}
                 getDetailLabel={(customer) => `Chi tiết khách hàng ${customer.code}`}
@@ -871,9 +886,9 @@ export function CustomersPage({
                             columns="four"
                             items={[
                               { label: 'Loại khách', value: customerTypeLabel(customer) },
-                              { label: 'Điện thoại', value: formatPhoneDisplay(customer.phone, 'Chưa có') },
-                              { label: 'MST', value: customer.tax_code ?? 'Chưa có MST' },
-                              { label: 'Địa chỉ', value: customer.address ?? 'Chưa có địa chỉ' },
+                              { label: 'Điện thoại', value: formatPhoneDisplay(customer.phone) },
+                              { label: 'MST', value: customer.tax_code ?? '' },
+                              { label: 'Địa chỉ', value: customer.address ?? '' },
                             ]}
                           />
                           {customer.linked_supplier ? (
@@ -892,7 +907,7 @@ export function CustomersPage({
                             </ManagementDetailCard>
                           ) : null}
                           <ManagementDetailInlineNote icon={<StickyNote aria-hidden="true" size={16} />}>
-                            {customer.note?.trim() ? customer.note : 'Chưa có ghi chú'}
+                            {customer.note?.trim() ? customer.note : ''}
                           </ManagementDetailInlineNote>
                         </ManagementDetailSection>
                       ) : activeDetailTab === 'debt' ? (
@@ -1044,7 +1059,11 @@ function CustomerDebtPanel({
           <tbody>
             {invoiceRows.map((invoice) => (
               <tr key={invoice.id}>
-                <td>{invoice.code}</td>
+                <td>
+                  <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' })}>
+                    {invoice.code}
+                  </ManagementRecordLink>
+                </td>
                 <td>{dateTime(invoice.created_at)}</td>
                 <td><MoneyText value={invoice.total_amount} /></td>
                 <td><MoneyText value={invoice.paid_amount} /></td>
@@ -1097,9 +1116,13 @@ function CustomerHistoryPanel({
         <tbody>
           {history.items.map((document) => (
             <tr key={document.id}>
-              <td>{document.code}</td>
+              <td>
+                <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', document.code, { type: historyType })}>
+                  {document.code}
+                </ManagementRecordLink>
+              </td>
               <td>{dateTime(document.created_at)}</td>
-              <td>{document.seller.name || '-'}</td>
+              <td>{document.seller.name || ''}</td>
               <td><MoneyText value={document.total_amount} /></td>
               <td>{salesDocumentStatusText(document)}</td>
             </tr>

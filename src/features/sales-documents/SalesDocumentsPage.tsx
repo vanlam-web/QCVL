@@ -1,5 +1,5 @@
 import { useEffect, useState, type MouseEvent } from 'react'
-import { ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -21,13 +21,13 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
-import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
 import { displayPriceListName } from '../../lib/price-list-display'
 import type { SalesDocumentDetail, SalesDocumentListItem } from './types'
 import type { SalesDocumentService } from './sales-document-service'
-import type { OrderService, QuoteReopenPayload } from '../orders/order-service'
+import type { InvoiceRevisionHandoffPayload, OrderService, QuoteReopenPayload } from '../orders/order-service'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { FoundationService } from '../users/foundation-service'
 import {
@@ -58,15 +58,43 @@ import {
   paymentReceiptMethodTotal,
   paymentReceiptStatusLabel,
   paymentStatusFilterLabel,
+  parseSalesDocumentDateTimeInputText,
+  salesDocumentDateTimeInputText,
   salesDocumentDateTimeText,
   salesDocumentCreatedDateTimeText,
   salesDocumentLineSellPrice,
   salesDocumentListSummary,
   salesDocumentStatusLabel,
   salesDocumentStatusTone,
+  salesDocumentUnitNameText,
 } from './sales-document-presenter'
 import { SalesDocumentImportDialog } from './SalesDocumentImportDialog'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+
+function initialSalesDocumentRouteFilters() {
+  const params = new URLSearchParams(window.location.search)
+  const search = (params.get('search') ?? '').trim()
+  const open = (params.get('open') ?? '').trim()
+  const routeType = params.get('type')
+  const type: SalesDocumentTypeFilter[] = routeType === 'invoice' || routeType === 'quote' ? [routeType] : allTypeFilters
+  const monthRange = currentMonthRange()
+  const hasSearch = search.length > 0
+  const hasOpen = open.length > 0
+
+  return {
+    search,
+    open,
+    type,
+    time: (hasSearch || hasOpen ? 'all' : 'month') as TimeFilter,
+    from: hasSearch || hasOpen ? '' : monthRange.from,
+    to: hasSearch || hasOpen ? '' : monthRange.to,
+    shouldOpenSingleResult: hasSearch || hasOpen,
+  }
+}
+
+function salesDocumentCreatedAtPayload(value: string) {
+  return parseSalesDocumentDateTimeInputText(value) ?? undefined
+}
 
 type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
 
@@ -88,6 +116,7 @@ export function SalesDocumentsPage({
   catalogService,
   onCreateSalesDocument,
   onOpenQuoteInPos,
+  onOpenInvoiceRevisionInPos,
   onOpenQuotePrint,
 }: {
   service: SalesDocumentService
@@ -97,13 +126,15 @@ export function SalesDocumentsPage({
   onCreateSalesDocument?: () => void
   onOpenDashboard: () => void
   onOpenQuoteInPos?: (payload: QuoteReopenPayload) => void
+  onOpenInvoiceRevisionInPos?: (payload: InvoiceRevisionHandoffPayload) => void
   onOpenQuotePrint?: (documentId: string) => void
 }) {
   const [state, setState] = useState<SalesDocumentsState | null>(null)
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
-  const [search, setSearch] = useState('')
-  const [lastSearch, setLastSearch] = useState('')
-  const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(allTypeFilters)
+  const [routeFilters] = useState(initialSalesDocumentRouteFilters)
+  const [search, setSearch] = useState(routeFilters.search)
+  const [lastSearch, setLastSearch] = useState(routeFilters.search)
+  const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(routeFilters.type)
   const [statusFilter, setStatusFilter] = useState<SalesDocumentStatusFilter[]>(defaultStatusFilters)
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<PaymentStatusValue[]>(allPaymentStatusFilters)
   const [paymentMethodFilter, setPaymentMethodFilter] = useState<PaymentMethodFilter>('all')
@@ -111,9 +142,9 @@ export function SalesDocumentsPage({
   const [priceListFilter, setPriceListFilter] = useState('all')
   const [sellerOptions, setSellerOptions] = useState<Array<{ id: string; name: string }>>([])
   const [priceListOptions, setPriceListOptions] = useState<Array<{ id: string; name: string }>>([])
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('month')
-  const [dateFrom, setDateFrom] = useState(() => currentMonthRange().from)
-  const [dateTo, setDateTo] = useState(() => currentMonthRange().to)
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>(routeFilters.time)
+  const [dateFrom, setDateFrom] = useState(() => routeFilters.from)
+  const [dateTo, setDateTo] = useState(() => routeFilters.to)
   const [quickTimeOpen, setQuickTimeOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
   const [selected, setSelected] = useState<SalesDocumentDetail | null>(null)
@@ -122,6 +153,7 @@ export function SalesDocumentsPage({
   const [detailError, setDetailError] = useState<string | null>(null)
   const [detailErrorDocumentId, setDetailErrorDocumentId] = useState<string | null>(null)
   const [openingQuoteId, setOpeningQuoteId] = useState<string | null>(null)
+  const [openingRevisionId, setOpeningRevisionId] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [canceling, setCanceling] = useState(false)
@@ -191,28 +223,128 @@ export function SalesDocumentsPage({
     }
   }
 
+  async function openInvoiceRevisionInPos(document: SalesDocumentListItem) {
+    if (onOpenInvoiceRevisionInPos === undefined) return
+    setDetailError(null)
+    setDetailErrorDocumentId(null)
+    setOpeningRevisionId(document.id)
+    try {
+      const sourceDocument = selected?.id === document.id ? selected : await service.getSalesDocument(document.id)
+      if (sourceDocument === null) throw new Error('Sales document not found')
+      onOpenInvoiceRevisionInPos({
+        mode: 'invoice-revision',
+        original_order: { id: sourceDocument.id, code: sourceDocument.code },
+        customer: {
+          customer_id: sourceDocument.customer.id,
+          snapshot: {
+            code: sourceDocument.customer.code,
+            name: sourceDocument.customer.name,
+            phone: sourceDocument.customer.phone,
+          },
+        },
+        items: sourceDocument.items.map((item) => ({
+          order_item_id: item.id,
+          product_id: item.product.id,
+          product_snapshot: {
+            code: item.product.code,
+            name: item.product.name,
+            unit_name: item.product.unit_name,
+            sell_method: item.product.sell_method,
+          },
+          quantity: item.quantity,
+          width_m: item.width_m,
+          height_m: item.height_m,
+          linear_m: item.linear_m,
+          unit_price: item.unit_price,
+          discount_amount: item.discount_amount,
+          price_source: item.price_source,
+          note: item.note,
+        })),
+        summary: {
+          subtotal_amount: sourceDocument.subtotal_amount,
+          discount_amount: sourceDocument.discount_amount,
+          total_amount: sourceDocument.total_amount,
+        },
+        note: sourceDocument.note,
+        created_at: sourceDocument.created_at,
+      })
+    } catch (cause) {
+      setSelected(null)
+      setDetailError(formatApiError(cause, 'KhÃ´ng má»Ÿ Ä‘Æ°á»£c hÃ³a Ä‘Æ¡n sá»­a táº¡i POS.'))
+      setDetailErrorDocumentId(document.id)
+    } finally {
+      setOpeningRevisionId(null)
+    }
+  }
+
   useEffect(() => {
     let active = true
 
     async function loadInitialDocuments() {
       setError(null)
       try {
-        const monthRange = currentMonthRange()
+        const openDetailPromise = routeFilters.open ? service.getSalesDocument(routeFilters.open) : null
         const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
-          type: allTypeFilters,
+          search: routeFilters.search || routeFilters.open,
+          type: routeFilters.type,
           status: defaultStatusFilters,
           paymentStatus: allPaymentStatusFilters,
           paymentMethod: 'all',
           seller: 'all',
           priceList: 'all',
-          time: 'month',
-          from: monthRange.from,
-          to: monthRange.to,
+          time: routeFilters.time,
+          from: routeFilters.from,
+          to: routeFilters.to,
           page: 1,
           page_size: defaultPageSize,
         }))
         if (!active) return
         setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
+        if (routeFilters.open && openDetailPromise) {
+          const openDocument = result.items.find((document) => document.code === routeFilters.open)
+          if (openDocument) setLoadingDocumentId(openDocument.id)
+          try {
+            const detail = await openDetailPromise
+            if (!active) return
+            setSelected(detail)
+          } catch (cause) {
+            if (!active) return
+            setDetailError(formatApiError(cause, 'Không tải được chi tiết chứng từ.'))
+            if (openDocument) setDetailErrorDocumentId(openDocument.id)
+          } finally {
+            if (active) setLoadingDocumentId(null)
+          }
+        } else if (routeFilters.shouldOpenSingleResult && result.items.length === 1) {
+          const [singleDocument] = result.items
+          setLoadingDocumentId(singleDocument.id)
+          try {
+            const detail = await service.getSalesDocument(singleDocument.id)
+            if (!active) return
+            setSelected(detail)
+          } catch (cause) {
+            if (!active) return
+            setDetailError(formatApiError(cause, 'Không tải được chi tiết chứng từ.'))
+            setDetailErrorDocumentId(singleDocument.id)
+          } finally {
+            if (active) setLoadingDocumentId(null)
+          }
+        } else if (routeFilters.open) {
+          const openDocument = result.items.find((document) => document.code === routeFilters.open)
+          if (openDocument) {
+            setLoadingDocumentId(openDocument.id)
+            try {
+              const detail = await service.getSalesDocument(openDocument.id)
+              if (!active) return
+              setSelected(detail)
+            } catch (cause) {
+              if (!active) return
+              setDetailError(formatApiError(cause, 'KhÃ´ng táº£i Ä‘Æ°á»£c chi tiáº¿t chá»©ng tá»«.'))
+              setDetailErrorDocumentId(openDocument.id)
+            } finally {
+              if (active) setLoadingDocumentId(null)
+            }
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được chứng từ bán hàng.'))
       }
@@ -223,7 +355,7 @@ export function SalesDocumentsPage({
     return () => {
       active = false
     }
-  }, [defaultPageSize, service])
+  }, [defaultPageSize, routeFilters, service])
 
   useEffect(() => {
     let active = true
@@ -422,18 +554,21 @@ export function SalesDocumentsPage({
     }
   }
 
-  async function saveSelectedDocumentNote(nextNote: string) {
+  async function saveSelectedDocumentChanges(input: { note: string; createdAt: string }) {
     if (!selected) return
     setDetailError(null)
     setDetailErrorDocumentId(null)
     try {
-      const saved = await service.updateSalesDocumentNote(selected.id, { note: nextNote.trim() || null })
+      const saved = await service.updateSalesDocumentNote(selected.id, {
+        note: input.note.trim() || null,
+        created_at: salesDocumentCreatedAtPayload(input.createdAt),
+      })
       setSelected(saved)
       setState((current) => current
         ? {
             ...current,
             items: current.items.map((item) => (
-              item.id === saved.id ? { ...item, note: saved.note } : item
+              item.id === saved.id ? { ...item, note: saved.note, created_at: saved.created_at } : item
             )),
           }
         : current)
@@ -587,7 +722,7 @@ export function SalesDocumentsPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Thời gian">
             <div className="management-filter-time-options">
@@ -759,17 +894,19 @@ export function SalesDocumentsPage({
                     <SalesDocumentDetailView
                       key={selected ? selected.id : `loading-${detailErrorDocumentId ?? loadingDocumentId ?? document.id}`}
                       document={selected}
-                      editDisabled={openingQuoteId === document.id}
+                      editDisabled={openingQuoteId === document.id || openingRevisionId === document.id}
                       error={detailError}
                       loading={loadingDocumentId === document.id}
                       onEdit={
                         document.order_type === 'quote' && document.status === 'active' && orderService && onOpenQuoteInPos
                           ? () => void openQuoteInPos(document)
-                          : undefined
+                          : document.order_type === 'invoice' && document.status === 'completed' && onOpenInvoiceRevisionInPos
+                            ? () => void openInvoiceRevisionInPos(document)
+                            : undefined
                       }
                       onCancel={() => setCancelOpen(true)}
                       onOpenQuotePrint={onOpenQuotePrint}
-                      onSaveNote={saveSelectedDocumentNote}
+                      onSaveNote={saveSelectedDocumentChanges}
                     />
                   )}
                   selectedRowKey={selected?.id ?? detailErrorDocumentId ?? loadingDocumentId}
@@ -845,10 +982,12 @@ function SalesDocumentDetailView({
   onCancel?: () => void
   onEdit?: () => void
   onOpenQuotePrint?: (documentId: string) => void
-  onSaveNote?: (note: string) => Promise<void>
+  onSaveNote?: (input: { note: string; createdAt: string }) => Promise<void>
 }) {
   const [activeTab, setActiveTab] = useState<'info' | 'payment-history'>('info')
   const [note, setNote] = useState(document?.note ?? '')
+  const [createdAtInput, setCreatedAtInput] = useState(() => salesDocumentDateTimeInputText(document?.created_at))
+  const [editingCreatedAt, setEditingCreatedAt] = useState(false)
   const [savingNote, setSavingNote] = useState(false)
   const infoTabId = `sales-document-${document?.id ?? 'loading'}-info-tab`
   const infoPanelId = `sales-document-${document?.id ?? 'loading'}-info-panel`
@@ -857,11 +996,18 @@ function SalesDocumentDetailView({
   const hasPaymentHistory = Array.isArray(document?.payment_receipts) && document.payment_receipts.length > 0
   const selectedTab = hasPaymentHistory ? activeTab : 'info'
 
+  useEffect(() => {
+    setNote(document?.note ?? '')
+    setCreatedAtInput(salesDocumentDateTimeInputText(document?.created_at))
+    setEditingCreatedAt(false)
+  }, [document?.id, document?.note, document?.created_at])
+
   async function saveNote() {
     if (!document || !onSaveNote) return
     setSavingNote(true)
     try {
-      await onSaveNote(note)
+      await onSaveNote({ note, createdAt: createdAtInput })
+      setEditingCreatedAt(false)
     } finally {
       setSavingNote(false)
     }
@@ -909,7 +1055,11 @@ function SalesDocumentDetailView({
       {selectedTab === 'info' ? (
         <section aria-label="Thông tin chứng từ" aria-labelledby={infoTabId} id={infoPanelId} role="tabpanel">
           <header className="management-detail-header">
-            <h2>{document.customer.name}</h2>
+            <h2>
+              <ManagementRecordLink href={managementRecordOpenHref('/customers', document.customer.code ?? document.customer.name)}>
+                {document.customer.name}
+              </ManagementRecordLink>
+            </h2>
             <span>{document.code}</span>
             <StatusChip tone={salesDocumentStatusTone(document)}>
               {salesDocumentStatusLabel(document)}
@@ -928,7 +1078,29 @@ function SalesDocumentDetailView({
             </div>
             <div>
               <dt>Ngày bán:</dt>
-              <dd>{salesDocumentCreatedDateTimeText(document)}</dd>
+              <dd>
+                {editingCreatedAt ? (
+                  <input
+                    aria-label="Sửa ngày bán"
+                    className="management-detail-inline-input"
+                    placeholder="dd/mm/yyyy hh:mm"
+                    type="text"
+                    value={createdAtInput}
+                    onChange={(event) => setCreatedAtInput(event.target.value)}
+                  />
+                ) : (
+                  <button
+                    className="management-link-button"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setEditingCreatedAt(true)
+                    }}
+                  >
+                    {salesDocumentCreatedDateTimeText(document)}
+                  </button>
+                )}
+              </dd>
             </div>
             {document.price_list ? (
               <div>
@@ -944,6 +1116,7 @@ function SalesDocumentDetailView({
                 <th>Mã hàng</th>
                 <th>Tên hàng</th>
                 <th>Số lượng</th>
+                <th>Đơn vị</th>
                 <th>Đơn giá</th>
                 <th>Giảm giá</th>
                 <th>Giá bán</th>
@@ -953,12 +1126,17 @@ function SalesDocumentDetailView({
             <tbody>
               {document.items.map((item) => (
                 <tr key={item.id}>
-                  <td>{item.product.code}</td>
+                  <td>
+                    <ManagementRecordLink href={managementRecordOpenHref('/products', item.product.code)}>
+                      {item.product.code}
+                    </ManagementRecordLink>
+                  </td>
                   <td>
                     <span>{item.product.name}</span>
                     {item.note ? <small>{item.note}</small> : null}
                   </td>
-                  <td>{`${item.quantity} ${item.product.unit_name}`}</td>
+                  <td>{item.quantity}</td>
+                  <td>{salesDocumentUnitNameText(item.product.unit_name)}</td>
                   <td><MoneyText value={item.unit_price} /></td>
                   <td><MoneyText value={item.discount_amount} /></td>
                   <td><MoneyText value={salesDocumentLineSellPrice(item)} /></td>
@@ -1021,7 +1199,11 @@ function SalesDocumentDetailView({
               <tbody>
                 {paymentReceipts.map((receipt) => (
                   <tr key={receipt.id}>
-                    <td>{receipt.code}</td>
+                    <td>
+                      <ManagementRecordLink href={managementRecordOpenHref('/finance', receipt.code)}>
+                        {receipt.code}
+                      </ManagementRecordLink>
+                    </td>
                     <td>{salesDocumentDateTimeText(receipt.created_at, document.created_at)}</td>
                     <td>{paymentReceiptCreatorLabel(receipt, document.seller)}</td>
                     <td><MoneyText value={receipt.total_received_amount} /></td>

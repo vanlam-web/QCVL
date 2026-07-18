@@ -16,7 +16,7 @@ describe('date format', () => {
   })
 
   it('uses fallback for empty or invalid values', () => {
-    expect(formatKvDateTime(null)).toBe('Chưa có')
+    expect(formatKvDateTime(null)).toBe('')
     expect(formatKvDateTime('bad-date', '-')).toBe('-')
     expect(formatKvDate('bad-date', '-')).toBe('-')
   })

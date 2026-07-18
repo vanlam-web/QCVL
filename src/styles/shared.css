@@ -223,13 +223,25 @@
 }
 
 .app-content > .dashboard-shell {
-  min-height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-height: 0;
   background: transparent;
+  color: var(--color-text);
+  padding: var(--space-3);
+}
+
+.app-content > .dashboard-shell .dashboard-header,
+.app-content > .dashboard-shell .dashboard-grid {
+  width: min(100%, 112rem);
+  min-width: 0;
 }
 
 .account-page {
   align-items: center;
-  overflow-y: auto;
+  overflow: visible;
 }
 
 .account-page-header {
@@ -590,7 +602,7 @@
 
 .management-filter-rail {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   min-height: 0;
 }
@@ -617,7 +629,7 @@
   border-color: color-mix(in srgb, var(--color-primary) 52%, var(--color-border));
   border-radius: 999px;
   justify-self: end;
-  z-index: 1;
+  z-index: calc(var(--z-shell) + 4);
   color: var(--color-primary);
   opacity: 0;
   pointer-events: none;
@@ -625,7 +637,14 @@
   transform: translateY(-50%);
 }
 
-.management-filter-sidebar:hover .management-filter-collapse-button,
+.management-filter-rail .management-filter-expand-button {
+  border-color: color-mix(in srgb, var(--color-primary) 52%, var(--color-border));
+  border-radius: 999px;
+  z-index: calc(var(--z-shell) + 4);
+  color: var(--color-primary);
+}
+
+.management-filter-column:hover .management-filter-collapse-button,
 .management-filter-collapse-button:focus-visible {
   opacity: 1;
   pointer-events: auto;
@@ -2131,14 +2150,26 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   text-transform: none;
 }
 
-.finance-cashbook-counterparty-link {
+.finance-cashbook-data-table tbody td {
   color: var(--color-text);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+.finance-cashbook-counterparty-link {
+  font-weight: 600;
   text-transform: none;
 }
 
-.finance-cashbook-counterparty-link:hover {
-  color: var(--color-primary);
+.finance-cashbook-data-table .management-link-button,
+.finance-cashbook-data-table .finance-cashbook-counterparty-link {
+  color: var(--color-text);
+}
+
+.finance-cashbook-data-table .management-link-button:hover,
+.finance-cashbook-data-table .management-link-button:focus-visible,
+.finance-cashbook-data-table .finance-cashbook-counterparty-link:hover,
+.finance-cashbook-data-table .finance-cashbook-counterparty-link:focus-visible {
+  color: var(--color-text);
 }
 
 .management-data-row {
@@ -2385,6 +2416,28 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 
 .management-modal-dialog-compact {
   width: min(31.25rem, calc(100vw - var(--space-4)));
+}
+
+.management-modal-backdrop:has(.finance-cashbook-edit-preview-dialog) {
+  place-items: start center;
+  padding-top: 5.5rem;
+}
+
+.finance-cashbook-edit-preview-dialog {
+  gap: var(--space-3);
+  width: min(48rem, calc(100vw - var(--space-4)));
+  max-height: calc(100vh - 7rem);
+  padding: var(--space-3);
+}
+
+.finance-cashbook-edit-preview-dialog .management-detail-panel {
+  gap: var(--space-2);
+}
+
+.finance-cashbook-edit-preview-dialog .management-detail-header,
+.finance-cashbook-edit-preview-dialog .management-detail-meta-grid,
+.finance-cashbook-edit-preview-dialog .management-detail-inline-note {
+  gap: var(--space-2);
 }
 
 .catalog-product-group-dialog {
@@ -2717,7 +2770,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   color: var(--color-primary);
   padding: 0;
   font: inherit;
-  font-weight: 800;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -2732,10 +2785,10 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   gap: var(--space-1);
   border: 0;
   background: transparent;
-  color: var(--color-primary);
+  color: var(--color-text);
   padding: 0;
   font: inherit;
-  font-weight: 800;
+  font-weight: 600;
   text-align: left;
   cursor: pointer;
 }
@@ -2761,15 +2814,39 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   text-decoration: none;
 }
 
+.management-record-link {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-info);
+  font: inherit;
+  font-weight: 600;
+  min-height: 1.75rem;
+  margin: -0.25rem -0.375rem;
+  padding: 0.25rem 0.375rem;
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.management-record-link:hover,
+.management-record-link:focus-visible {
+  background: color-mix(in srgb, var(--color-info) 8%, transparent);
+  color: var(--color-info);
+  text-decoration: none;
+}
+
 .finance-cashbook-linked-documents {
   display: grid;
   gap: var(--space-2);
   padding-top: var(--space-2);
 }
 
-.finance-cashbook-linked-documents > p {
+.finance-cashbook-linked-documents-inner > p {
   color: var(--color-text-muted);
   font-size: 0.9rem;
+  justify-self: start;
+  margin: 0;
+  text-align: left;
 }
 
 .finance-cashbook-linked-documents-inner {
@@ -2778,6 +2855,16 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   border: 1px solid var(--color-border-muted);
   border-radius: var(--radius-sm);
   padding: var(--space-2);
+}
+
+.finance-cashbook-linked-document-link {
+  color: var(--color-info);
+  font-weight: 600;
+}
+
+.finance-cashbook-linked-document-link:hover,
+.finance-cashbook-linked-document-link:focus-visible {
+  color: var(--color-info);
 }
 
 .management-detail-panel h2,

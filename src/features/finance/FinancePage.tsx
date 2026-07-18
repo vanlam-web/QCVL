@@ -107,6 +107,23 @@ const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }
   { key: 'is_business_accounted', label: 'Hạch toán KQKD' },
 ]
 
+function initialFinanceRouteFilters() {
+  const params = new URLSearchParams(window.location.search)
+  const search = (params.get('search') ?? '').trim()
+  const open = (params.get('open') ?? '').trim()
+  const monthRange = currentMonthRange()
+  const hasSearch = search.length > 0
+  const hasOpen = open.length > 0
+
+  return {
+    search,
+    open,
+    from: hasSearch || hasOpen ? '' : monthRange.from,
+    to: hasSearch || hasOpen ? '' : monthRange.to,
+    time: (hasSearch || hasOpen ? 'all' : 'month') as CashbookTimeFilter,
+  }
+}
+
 function cashbookColumnLabel(column: CashbookColumnKey) {
   if (column === 'created_by') return 'Người tạo'
   if (column === 'finance_account') return 'Số tài khoản'
@@ -130,6 +147,7 @@ function financeAccountPayload(account: FinanceAccount): Omit<FinanceAccount, 'i
 
 export function FinancePage({ service }: { service: FinanceService }) {
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
+  const [routeFilters] = useState(initialFinanceRouteFilters)
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [balances, setBalances] = useState<CashbookBalance[]>([])
   const [debts, setDebts] = useState<CustomerDebtSummary[] | null>(null)
@@ -143,15 +161,15 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookTotal, setCashbookTotal] = useState(0)
   const [cashbookPage, setCashbookPage] = useState(1)
   const [cashbookPageSize, setCashbookPageSize] = useState(defaultPageSize)
-  const [cashbookSearch, setCashbookSearch] = useState('')
-  const [lastCashbookSearch, setLastCashbookSearch] = useState('')
+  const [cashbookSearch, setCashbookSearch] = useState(routeFilters.search)
+  const [lastCashbookSearch, setLastCashbookSearch] = useState(routeFilters.search)
   const [cashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [lastCashbookSearchScope, setLastCashbookSearchScope] = useState<CashbookSearchScope>('all')
-  const [cashbookTimeFilter, setCashbookTimeFilter] = useState<CashbookTimeFilter>('month')
-  const [cashbookFrom, setCashbookFrom] = useState(() => currentMonthRange().from)
-  const [lastCashbookFrom, setLastCashbookFrom] = useState(() => currentMonthRange().from)
-  const [cashbookTo, setCashbookTo] = useState(() => currentMonthRange().to)
-  const [lastCashbookTo, setLastCashbookTo] = useState(() => currentMonthRange().to)
+  const [cashbookTimeFilter, setCashbookTimeFilter] = useState<CashbookTimeFilter>(routeFilters.time)
+  const [cashbookFrom, setCashbookFrom] = useState(routeFilters.from)
+  const [lastCashbookFrom, setLastCashbookFrom] = useState(routeFilters.from)
+  const [cashbookTo, setCashbookTo] = useState(routeFilters.to)
+  const [lastCashbookTo, setLastCashbookTo] = useState(routeFilters.to)
   const [cashbookQuickTimeOpen, setCashbookQuickTimeOpen] = useState(false)
   const [cashbookFundMode, setCashbookFundMode] = useState<CashbookFundMode>('all')
   const [cashbookAccountId, setCashbookAccountId] = useState('')
@@ -179,6 +197,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [selectedCashbookEntry, setSelectedCashbookEntry] = useState<CashbookEntry | null>(null)
   const [cashbookDetail, setCashbookDetail] = useState<CashbookEntryDetail | null>(null)
   const [cashbookDeleteTarget, setCashbookDeleteTarget] = useState<CashbookEntryDetail | null>(null)
+  const [cashbookEditPreview, setCashbookEditPreview] = useState<CashbookEntryDetail | null>(null)
   const [deletingCashbookEntry, setDeletingCashbookEntry] = useState(false)
   const [cashbookFavoriteIds, setCashbookFavoriteIds] = useState<string[]>(() => readCashbookFavoriteIds())
   const [showCashbookFavoritesOnly, setShowCashbookFavoritesOnly] = useState(false)
@@ -487,8 +506,8 @@ export function FinancePage({ service }: { service: FinanceService }) {
     try {
       const [accountResult, balanceResult, voucherResult] = await Promise.all([
         service.listAccounts({ is_active: true }),
-        service.listCashbookBalances(),
-        service.listCashbookVouchers(),
+        showAuxiliaryFinanceSections ? service.listCashbookBalances() : Promise.resolve({ items: [] }),
+        showAuxiliaryFinanceSections ? service.listCashbookVouchers() : Promise.resolve({ items: [], total: 0 }),
       ])
       setAccounts(accountResult.items)
       setBalances(balanceResult.items)
@@ -503,14 +522,15 @@ export function FinancePage({ service }: { service: FinanceService }) {
     async function loadInitial() {
       setError(null)
       try {
-        const accountResult = await service.listAccounts({ is_active: true })
-        const [balanceResult, voucherResult, debtResult, cashbookResult] = await Promise.all([
-          service.listCashbookBalances(),
-          service.listCashbookVouchers(),
+        const [accountResult, balanceResult, voucherResult, debtResult, cashbookResult] = await Promise.all([
+          service.listAccounts({ is_active: true }),
+          showAuxiliaryFinanceSections ? service.listCashbookBalances() : Promise.resolve({ items: [] }),
+          showAuxiliaryFinanceSections ? service.listCashbookVouchers() : Promise.resolve({ items: [], total: 0 }),
           service.listCustomerDebts({ page: 1, page_size: defaultPageSize }),
           service.listCashbookEntries({
-            from: currentMonthRange().from,
-            to: currentMonthRange().to,
+            search: routeFilters.search || routeFilters.open || undefined,
+            from: routeFilters.from || undefined,
+            to: routeFilters.to || undefined,
             direction: 'all',
             status: 'posted',
             page: 1,
@@ -535,6 +555,21 @@ export function FinancePage({ service }: { service: FinanceService }) {
         setCashbookTotal(cashbookResult.total)
         setCashbookPage(cashbookResult.page)
         setCashbookPageSize(cashbookResult.page_size)
+        if (routeFilters.open) {
+          const openedEntry = cashbookResult.items.find((entry) => entry.code === routeFilters.open)
+          if (openedEntry) {
+            setSelectedCashbookEntry(openedEntry)
+            setCashbookDetail(null)
+            try {
+              const detail = await hydrateCashbookDetail(await service.getCashbookEntry(openedEntry.id))
+              if (!active) return
+              setCashbookDetail(detail)
+              setCashbookEntries((current) => current?.map((item) => (item.id === detail.id ? { ...item, ...detail } : item)) ?? current)
+            } catch (cause) {
+              if (active) setError(formatApiError(cause, 'KhÃ´ng táº£i Ä‘Æ°á»£c chi tiáº¿t sá»• quá»¹.'))
+            }
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được dữ liệu tài chính.'))
       }
@@ -543,7 +578,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     return () => {
       active = false
     }
-  }, [defaultPageSize, hydrateCashbookCounterparties, service])
+  }, [defaultPageSize, hydrateCashbookCounterparties, hydrateCashbookDetail, routeFilters.from, routeFilters.open, routeFilters.search, routeFilters.to, service])
 
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
     preventManagementSearchSubmit(event, () => applyCashbookSearch(cashbookSearch))
@@ -788,11 +823,11 @@ export function FinancePage({ service }: { service: FinanceService }) {
       )
     }
     if (column === 'created_at') return dateText(entry.created_at)
-    if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? '-'
-    if (column === 'finance_account') return entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '-'
+    if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? ''
+    if (column === 'finance_account') return entry.finance_account.account_type === 'bank' ? entry.finance_account.code : ''
     if (column === 'source_type') return entry.source?.category_name ?? sourceTypeText(entry.source_type)
     if (column === 'counterparty') {
-      if (!cashbookCounterpartyHasName(entry.counterparty)) return '-'
+      if (!cashbookCounterpartyHasName(entry.counterparty)) return ''
       const label = cashbookCounterpartyLabel(entry)
       const counterpartyName = entry.counterparty?.name ?? ''
       const displayName = cashbookCounterpartyDisplayName(counterpartyName)
@@ -812,7 +847,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     }
     if (column === 'amount_delta') return <MoneyText value={entry.amount_delta} />
     if (column === 'status') return <StatusChip tone={entry.status === 'posted' ? 'success' : 'neutral'}>{statusText(entry.status)}</StatusChip>
-    if (column === 'note') return entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note ?? '-'
+    if (column === 'note') return entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note ?? ''
     return entry.is_business_accounted ? 'Có' : 'Không'
   }
 
@@ -956,6 +991,20 @@ export function FinancePage({ service }: { service: FinanceService }) {
     } finally {
       setDeletingCashbookEntry(false)
     }
+  }
+
+  function openCashbookDetailEdit(detail: CashbookEntryDetail) {
+    if (detail.source.type === 'manual_voucher' && detail.status === 'posted') {
+      openVoucherRevision({
+        id: detail.source.id,
+        code: detail.source.code || detail.code,
+        source_type: 'manual_voucher',
+        status: detail.status,
+        amount: Math.abs(detail.amount_delta),
+      })
+      return
+    }
+    setCashbookEditPreview(detail)
   }
 
   const voucherDialogLabel = voucherMode === null
@@ -1524,7 +1573,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                       <td>{debt.customer_code ?? 'Khách lẻ'}</td>
                       <td>{debt.customer_name}</td>
                       <td>{debt.open_invoice_count}</td>
-                      <td>{debt.oldest_order_code ?? '-'}</td>
+                      <td>{debt.oldest_order_code ?? ''}</td>
                       <td><MoneyText value={debt.total_debt} /></td>
                       <td>
                         <ManagementRowActionButton
@@ -1714,7 +1763,11 @@ export function FinancePage({ service }: { service: FinanceService }) {
                       </tr>
                       {selectedCashbookEntry?.id === entry.id ? (
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>
-                          <FinanceDetailPanel detail={cashbookDetail} onDeleteRequest={setCashbookDeleteTarget} />
+                          <FinanceDetailPanel
+                            detail={cashbookDetail}
+                            onDeleteRequest={setCashbookDeleteTarget}
+                            onEditRequest={openCashbookDetailEdit}
+                          />
                         </ManagementDetailRow>
                       ) : null}
                     </Fragment>
@@ -1778,7 +1831,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                             Hủy
                           </ManagementRowActionButton>
                         </>
-                      ) : '-'}
+                      ) : ''}
                     </td>
                   </tr>
                 ))}
@@ -1802,6 +1855,33 @@ export function FinancePage({ service }: { service: FinanceService }) {
         onCancel={() => setCashbookDeleteTarget(null)}
         onConfirm={() => void confirmCashbookDelete()}
       />
+      {cashbookEditPreview ? (
+        <div className="management-modal-backdrop">
+          <section
+            aria-label={`Sửa phiếu ${cashbookEditPreview.code}`}
+            aria-modal="true"
+            className="management-modal-dialog finance-cashbook-edit-preview-dialog"
+            role="dialog"
+          >
+            <header className="management-modal-header">
+              <h2>{`Sửa phiếu ${cashbookEditPreview.code}`}</h2>
+              <button
+                aria-label={`Đóng popup sửa phiếu ${cashbookEditPreview.code}`}
+                className="management-icon-button"
+                type="button"
+                onClick={() => setCashbookEditPreview(null)}
+              >
+                <X aria-hidden="true" size={18} />
+              </button>
+            </header>
+            <FinanceDetailPanel detail={cashbookEditPreview} showActionFooter={false} />
+            <footer className="management-modal-footer">
+              <button className="button button-secondary" type="button" onClick={() => setCashbookEditPreview(null)}>Bỏ qua</button>
+              <button className="button button-primary" disabled title="Phiếu tự động/import chưa hỗ trợ sửa trực tiếp" type="button">Lưu</button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
     </ManagementPage>
   )
 }

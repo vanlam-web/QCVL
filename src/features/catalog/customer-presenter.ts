@@ -18,11 +18,11 @@ export function customerSalesDocumentStatusText(document: SalesDocumentListItem)
 }
 
 export function customerDateTime(value: string | null | undefined) {
-  return formatKvDateTime(value, 'Chưa có dữ liệu')
+  return formatKvDateTime(value)
 }
 
 export function customerDate(value: string | null | undefined) {
-  return formatKvDate(value, 'Chưa có dữ liệu')
+  return formatKvDate(value)
 }
 
 export function customerVisibleSummary(customers: Array<Pick<Customer, 'total_debt_amount' | 'total_sales_amount'>>) {

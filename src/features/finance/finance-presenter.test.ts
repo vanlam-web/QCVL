@@ -87,7 +87,7 @@ describe('finance presenter', () => {
     expect(paymentMethodText('bank_transfer')).toBe('Ngân hàng')
     expect(sourceTypeText('payment_receipt_method')).toBe('Phiếu thu')
     expect(sourceTypeText('kiotviet_cashbook')).toBe('Sổ quỹ KV')
-    expect(financeDateText('bad-date')).toBe('Chưa có')
+    expect(financeDateText('bad-date')).toBe('')
     expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
   })
 
@@ -96,24 +96,24 @@ describe('finance presenter', () => {
     expect(cashbookDetailPaymentMethodText({ ...receiptEntry, payment_method: 'cash', finance_account: { ...receiptEntry.finance_account, account_type: 'cash' } })).toBe('Tiền mặt')
   })
 
-  it('shows a dash when imported cashbook detail has no counterparty payload', () => {
+  it('leaves imported cashbook detail counterparty blank when payload is missing', () => {
     const importedDetail = {
       ...receiptEntry,
       counterparty: null,
       source: { ...receiptEntry.source, counterparty_address: null },
     } as unknown as CashbookEntryDetail
 
-    expect(cashbookDetailCounterpartyText(importedDetail)).toBe('-')
+    expect(cashbookDetailCounterpartyText(importedDetail)).toBe('')
   })
 
-  it('shows a dash when imported cashbook detail has no creator payload', () => {
+  it('leaves imported cashbook detail creator blank when payload is missing', () => {
     const importedDetail = {
       ...receiptEntry,
       created_by: null,
       source: { ...receiptEntry.source, source_creator_name: null },
     } as unknown as CashbookEntryDetail
 
-    expect(cashbookDetailCreatorText(importedDetail)).toBe('-')
+    expect(cashbookDetailCreatorText(importedDetail)).toBe('')
   })
 
   it('builds linked document display rows from allocations', () => {

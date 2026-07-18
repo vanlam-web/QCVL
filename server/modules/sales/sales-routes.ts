@@ -14,6 +14,7 @@ export interface SalesRouteHandlers {
   checkout(): RouteResult
   createQuote(): RouteResult
   reopenQuotePayload(): RouteResult
+  reviseInvoice(): RouteResult
   listSalesDocuments(): RouteResult
   getSalesDocument(): RouteResult
   updateSalesDocument(): RouteResult
@@ -33,6 +34,7 @@ export function handleSalesRoute(context: SalesRouteContext, handlers: SalesRout
   if (method === 'GET' && /^\/api\/v1\/orders\/quotes\/[^/]+\/reopen-payload$/.test(pathname)) {
     return handlers.reopenQuotePayload()
   }
+  if (method === 'POST' && /^\/api\/v1\/orders\/[^/]+\/revise$/.test(pathname)) return handlers.reviseInvoice()
   if (method === 'GET' && pathname === '/api/v1/sales-documents') return handlers.listSalesDocuments()
   if (method === 'POST' && pathname === '/api/v1/sales-documents/import/kiotviet/preview') return handlers.previewKiotVietInvoiceImport()
   if (method === 'POST' && pathname === '/api/v1/sales-documents/import/kiotviet') return handlers.importKiotVietInvoices()

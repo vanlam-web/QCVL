@@ -450,6 +450,39 @@ it('closes filter sidebar popovers when clicking outside', async () => {
   expect(sidebar).not.toHaveClass('management-filter-sidebar-popover-open')
 })
 
+it('closes filter sidebar popovers when clicking empty sidebar background', async () => {
+  function FilterPopoverHarness() {
+    const [open, setOpen] = useState(true)
+    return (
+      <>
+        <ManagementFilterSidebar
+          ariaLabel="Bá»™ lá»c kiá»ƒm kho"
+          onPopoverClose={() => setOpen(false)}
+          popoverOpen={open}
+        >
+          <ManagementFilterGroup title="NgÃ y táº¡o">
+            {open ? (
+              <div aria-label="Chá»n nhanh thá»i gian" className="management-filter-quick-time-menu" role="region">
+                ThÃ¡ng nÃ y
+              </div>
+            ) : null}
+          </ManagementFilterGroup>
+        </ManagementFilterSidebar>
+        <button type="button">BÃªn ngoÃ i</button>
+      </>
+    )
+  }
+
+  render(<FilterPopoverHarness />)
+
+  const sidebar = screen.getByRole('complementary', { name: 'Bá»™ lá»c kiá»ƒm kho' })
+  expect(sidebar).toHaveClass('management-filter-sidebar-popover-open')
+  await userEvent.click(sidebar)
+
+  expect(screen.queryByRole('region', { name: 'Chá»n nhanh thá»i gian' })).not.toBeInTheDocument()
+  expect(sidebar).not.toHaveClass('management-filter-sidebar-popover-open')
+})
+
 it('renders a reusable management table footer with range page and disabled controls', () => {
   const onFirst = vi.fn()
   const onLast = vi.fn()

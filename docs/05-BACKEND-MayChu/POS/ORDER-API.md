@@ -23,7 +23,8 @@ Trạng thái implementation hiện tại:
 
 - Đã có foundation checkout/hóa đơn và Sales Documents readonly theo các phase đã merge.
 - 2026-07-12: Sales Documents có import hóa đơn KiotViet cho dữ liệu lịch sử và stock-out. Import này phục vụ hoàn thiện tồn `Hang hoa`: đọc chi tiết hóa đơn KV, gom theo `Ma hoa don`, và hóa đơn hoàn tất tạo nguồn trừ tồn `sale_deduction` trong dev-memory.
-- Sửa/hủy hóa đơn đã chốt và đảo kho/tiền/công nợ nằm ngoài phạm vi hiện tại. Chỉ bật khi có transaction an toàn, rule nghiệp vụ rõ và test đủ cho các bảng liên quan.
+- 2026-07-18: Sửa hóa đơn đã chốt đã có flow riêng từ Sales Documents sang POS bằng handoff `invoice-revision`; khi lưu POS gọi `POST /orders/{id}/revise`, tạo hóa đơn mới `MaCu.01` và chuyển hóa đơn cũ sang `cancelled`.
+- Hủy hóa đơn độc lập và các rule nâng cao như khóa mềm/giới hạn 10 ngày vẫn thuộc phase sau nếu code chưa enforce tại endpoint.
 
 Không bao gồm:
 
@@ -472,28 +473,24 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
 
 **Input:**
 
+Payload dùng cùng cấu trúc checkout, cộng thêm lý do sửa. Frontend không gửi `customer_snapshot`; Backend resolve khách và tạo snapshot khi lưu.
+
 ```json
 {
   "customer_id": "uuid",
-  "customer_snapshot": {
-    "code": "KH000001",
-    "name": "Công ty ABC",
-    "phone": "0901234567"
-  },
+  "created_at": "2026-07-18T04:15:00+07:00",
+  "note": "Nội dung sau sửa",
+  "retail_debt_note": "Ghi chú công nợ sau sửa",
   "items": [
     {
       "product_id": "uuid",
-      "product_snapshot": {
-        "code": "BAT-HIFLEX-32",
-        "name": "Bạt Hiflex 3.2m",
-        "unit_name": "m2",
-        "sell_method": "area_m2"
-      },
       "sell_method": "area_m2",
       "quantity": 1,
       "width_m": 2,
       "height_m": 3,
       "unit_price": 50000,
+      "sale_unit_name": "m2",
+      "stock_qty_per_sale_unit": 1,
       "discount_amount": 0,
       "price_source": "manual",
       "note": "Nội dung sau sửa"
@@ -503,54 +500,58 @@ Tạo bản sửa của hóa đơn đã chốt theo mã `MaCu.01`, không sửa 
     "cash_amount": 0,
     "bank_amount": 0,
     "bank_account_id": null,
-    "old_debt_payment_amount": 0
+    "old_debt_payment_amount": 0,
+    "change_returned_amount": 0
   },
   "revision_reason_code": "wrong_dimension",
-  "revision_reason_note": "Sửa sai kích thước",
-  "note": "Nội dung sau sửa"
+  "revision_reason_note": "Sửa sai kích thước"
 }
 ```
 
 **Validation:**
 
-- Hóa đơn gốc phải cùng organization, `order_type = invoice`.
-- Chỉ cho sửa bản hóa đơn còn hiệu lực gần nhất trong chuỗi `base_code`.
-- Hóa đơn đang bị user khác lock thì trả `RESOURCE_CONFLICT`.
+- Actor phải có `perm.edit_order_locked`.
+- Hóa đơn gốc phải cùng organization, `order_type = invoice`, `status = completed`.
+- `customer_id` được phép bỏ trống; Backend resolve về `khachle - Khách lẻ` giống checkout.
 - `revision_reason_code` bắt buộc, thuộc nhóm `wrong_price`, `wrong_dimension`, `wrong_customer`, `customer_changed_mind`, `other`.
 - `revision_reason_note` không bắt buộc, trừ khi `revision_reason_code = other`.
-- Nhân viên nội bộ được sửa/hủy trong 10 ngày từ thời điểm tạo hóa đơn; sau 10 ngày endpoint yêu cầu quyền quản lý/admin hoặc quyền mạnh tương ứng.
 - Input giỏ hàng và payment validate như checkout.
 
 **Workflow:**
 
-1. Lock hóa đơn gốc hoặc kiểm tra lock hiện có của actor.
-2. Validate lại toàn bộ nội dung sau sửa.
-3. Tạo hóa đơn mới với cùng `base_code`, `revision_no` tăng 1 và mã dạng `HD000123.01`.
+1. Validate quyền, hóa đơn gốc, lý do sửa và payload checkout.
+2. Tính `base_code` từ hóa đơn gốc và lấy `revision_no` kế tiếp trong cùng organization.
+3. Tạo hóa đơn mới với mã dạng `HD000123.01`, lưu `base_code`, `revision_no`, `revised_from_order_id` và `revision_reason_*`.
 4. Chuyển hóa đơn cũ sang `status = cancelled`, `cancel_reason_type = revised`, `replaced_by_order_id = hóa đơn mới`.
-5. Hóa đơn mới lưu `revised_from_order_id = hóa đơn cũ`.
-6. Đảo kho của hóa đơn cũ bằng `stock_movements.movement_type = invoice_reversal`, rồi trừ kho lại theo hóa đơn mới.
-7. Đảo công nợ của hóa đơn cũ, rồi ghi công nợ lại theo hóa đơn mới nếu còn nợ.
-8. Xử lý tiền theo chênh lệch: bản mới tăng tiền thì thu thêm hoặc ghi nợ; bản mới giảm tiền thì hoàn tiền hoặc cấn nợ cũ nếu khách còn nợ.
-9. Ghi `order_status_history` cho cả hóa đơn cũ và hóa đơn mới.
-10. Unlock hóa đơn.
+5. Ghi cashbook/payment receipt cho hóa đơn mới theo payload payment.
+6. Trả kết quả checkout của hóa đơn mới để POS mở Bill Preview.
 
 **Response data:**
 
+HTTP `201`.
+
 ```json
 {
-  "old_order": {
-    "id": "uuid",
-    "code": "HD000123",
-    "status": "cancelled"
-  },
-  "new_order": {
+  "order": {
     "id": "uuid",
     "code": "HD000123.01",
+    "order_type": "invoice",
     "status": "completed",
-    "revision_no": 1
-  }
+    "created_at": "2026-07-18T04:15:00.000Z",
+    "total_amount": 300000,
+    "paid_amount": 300000,
+    "debt_amount": 0,
+    "payment_status": "paid",
+    "base_code": "HD000123",
+    "revision_no": 1,
+    "revised_from_order_id": "old-order-id"
+  },
+  "payment_receipt": null,
+  "inventory_warnings": []
 }
 ```
+
+`payment_receipt` có dữ liệu khi payload tạo phiếu thu; nếu không thu tiền ngay thì trả `null`.
 
 ---
 

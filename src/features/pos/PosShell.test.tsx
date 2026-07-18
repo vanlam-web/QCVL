@@ -6,6 +6,7 @@ import type { CatalogService } from '../catalog/catalog-service'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { OrderService } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
+import { saveInvoiceRevisionHandoffPayload } from './invoice-revision-handoff'
 import { saveQuoteReopenPayload } from './quote-draft-handoff'
 import { posDraftStorageKey } from './pos-core'
 
@@ -114,6 +115,7 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
   return {
     validateCart: vi.fn(),
     checkout: vi.fn(),
+    reviseInvoice: vi.fn(),
     saveQuote: vi.fn(async () => ({
       id: 'quote-1',
       code: 'BG000001',
@@ -229,6 +231,40 @@ it('loads enough quick products for local POS grid pagination on startup', async
   await screen.findByRole('button', { name: /Mica 3mm/ })
 
   expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 120, sort: 'pos_usage' })
+})
+
+it('hides placeholder unit text from POS cart lines', async () => {
+  const noUnitProduct = {
+    id: 'p-no-unit',
+    code: 'DV',
+    name: 'Dich Vu',
+    status: 'active' as const,
+    unit_name: 'Cần cập nhật',
+    sell_method: 'quantity' as const,
+  }
+  const service = makeCatalogService({
+    listProducts: vi.fn(async () => ({
+      items: [noUnitProduct],
+      page: 1,
+      page_size: 20,
+      total: 1,
+    })),
+    resolvePrices: vi.fn(async () => ({
+      items: [{
+        product_id: 'p-no-unit',
+        unit_price: 0,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      }],
+    })),
+  })
+  renderPosShell({ catalogService: service })
+
+  await userEvent.click(await screen.findByRole('button', { name: 'DV Dich Vu 0' }))
+  const cart = screen.getByLabelText('K02 giỏ hàng')
+
+  expect(within(cart).getByText('Dich Vu')).toBeInTheDocument()
+  expect(within(cart).queryByText(/Cần cập nhật/)).not.toBeInTheDocument()
 })
 
 it('replaces the K03 product panel with the checkout drawer while payment is open', async () => {
@@ -1761,5 +1797,63 @@ it('blocks checkout when reopened quote has inactive or missing product warning'
   const checkoutDrawer = await openCheckoutDrawer()
   expect(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' })).toBeDisabled()
   expect(within(checkoutDrawer).getByRole('button', { name: 'Báo giá' })).toBeDisabled()
+  expect(orderService.checkout).not.toHaveBeenCalled()
+})
+
+it('loads invoice revision handoff and saves through reviseInvoice instead of checkout', async () => {
+  saveInvoiceRevisionHandoffPayload({
+    mode: 'invoice-revision',
+    original_order: { id: 'order-1', code: 'HD000123' },
+    customer: {
+      customer_id: 'customer-1',
+      snapshot: { code: 'KH000001', name: 'Khach le', phone: null },
+    },
+    items: [{
+      order_item_id: 'item-1',
+      product_id: 'p-1',
+      product_snapshot: { code: 'MICA-3MM', name: 'Mica 3mm', unit_name: 'm', sell_method: 'quantity' },
+      quantity: 1,
+      unit_price: 99000,
+      discount_amount: 0,
+      price_source: 'manual',
+      note: null,
+    }],
+    summary: { subtotal_amount: 99000, discount_amount: 0, total_amount: 99000 },
+    note: 'Sua hoa don HD000123',
+    created_at: '2026-07-18T04:51:00.000Z',
+  })
+  const orderService = makeOrderService({
+    reviseInvoice: vi.fn(async () => ({
+      order: {
+        id: 'order-2',
+        code: 'HD000123.01',
+        order_type: 'invoice' as const,
+        status: 'completed' as const,
+        total_amount: 99000,
+        paid_amount: 99000,
+        debt_amount: 0,
+        payment_status: 'paid' as const,
+      },
+      payment_receipt: null,
+      inventory_warnings: [],
+    })),
+  })
+
+  renderPosShell({ orderService })
+
+  expect(await screen.findByRole('button', { name: /Sửa HD000123/ })).toBeInTheDocument()
+
+  const checkoutDrawer = await openCheckoutDrawer()
+  await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Lưu sửa hóa đơn' }))
+
+  expect(orderService.reviseInvoice).toHaveBeenCalledWith(
+    'order-1',
+    expect.objectContaining({
+      revision_reason_code: 'other',
+      revision_reason_note: 'Sửa hóa đơn từ POS',
+      note: 'Sua hoa don HD000123',
+      items: [expect.objectContaining({ product_id: 'p-1', unit_price: 99000 })],
+    }),
+  )
   expect(orderService.checkout).not.toHaveBeenCalled()
 })

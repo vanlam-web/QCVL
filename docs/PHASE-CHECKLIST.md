@@ -87,6 +87,15 @@ Current status 2026-07-16:
 - Detail NCC/Phiếu nhập vẫn theo shell chung đã chốt: note chung, grid info chung, tab lịch sử thanh toán chỉ hiện khi có payment row, và `Khách hàng đồng thời là Nhà cung cấp` chỉ hiện khi dữ liệu liên kết thật có sẵn.
 - Bảng NCC trên `3202` ẩn cột `Nhóm NCC`; field nhóm NCC chỉ giữ để mở rộng sau, không chiếm chiều ngang list khi chưa có dữ liệu thật.
 
+Current status 2026-07-17:
+
+- Local `3202` đã khôi phục đúng catalog sau khi dọn dữ liệu test sau `2026-07-11`: `products=682`, `active=497`, `inactive=185`. Nguyên nhân mất hàng là state cũ dùng ngày import `2026-07-14` làm `products.created_at`; file KiotViet `DanhSachSanPham_KV12072026-222359-533.xlsx` có cột `Thời gian tạo` và đã được dùng để cập nhật lại ngày tạo gốc cho `497` hàng active. Không dùng ngày import để xóa catalog theo mốc ngày.
+- UI local `/products` đã xác nhận lại sau restart API `3100`: `1 - 15 trong 497 hàng hóa (611 mã hàng)`, không còn hàng active sau `2026-07-11`.
+- Batch UI V1 2026-07-17 da ra soat tren `3202`: filter sidebar co nut an/hien va quick-time click-away dung; link chung doi mau hover va chi dung cho text co dich dieu huong; Hóa đơn/Phiếu nhập detail tách `Số lượng`/`Đơn vị`; hàng hóa ẩn placeholder `Cần cập nhật` va không còn dòng `Đơn vị` trong tab `Thông tin`; So quy co link sang hoa don/phieu nhap va popup sua phieu thu/chi gọn hơn.
+- Link điều hướng thật trong V1 đang dùng cùng một màu `--color-info` để dễ nhận diện trên nền tối; không gạch chân, không dùng màu riêng khác nhau giữa các module.
+- Link record noi bo 2026-07-17 dung `?open=` de mo detail that, khong dung `?search=` neu muc tieu la mo ban ghi. Detail title cua ban ghi dang mo khong duoc la self-link; vi du ten khach hang/NCC hien tai chi hien text thuong, con link cheo den khach/NCC/hoa don/phieu nhap/so quy khac moi giu `ManagementRecordLink`.
+- Đã deploy batch này lên NAS `3200` với `QCVL_NAS_RESTART=false`; `verify:local`, `build:nas`, `verify:nas-bundle`, `db:migrate`, `health:nas` pass. Health trace `14a943e1-b214-4573-83c1-c3c6e859c208`, persistence `postgres`. Chưa chạy `smoke:nas` vì thiếu `QCVL_SMOKE_PASSWORD`.
+
 ---
 
 ## ÄÃ£ Merge VÃ o `main`

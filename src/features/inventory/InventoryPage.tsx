@@ -816,8 +816,8 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                         </button>
                       </td>
                       <td>{stocktakeDateTimeText(item.created_at)}</td>
-                      <td>{item.product_code || 'Chưa có'}</td>
-                      <td>{item.product_name || 'Chưa có'}</td>
+                      <td>{item.product_code || ''}</td>
+                      <td>{item.product_name || ''}</td>
                       <td>{stocktakeQuantityText(item.product_system_qty ?? null)}</td>
                       <td>{stocktakeQuantityText(item.product_actual_qty ?? null)}</td>
                       <td>{stocktakeQuantityText(item.product_difference_qty ?? null)}</td>
@@ -883,7 +883,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                     <td>{numberText(roll.remaining_length_m)} m</td>
                     <td>{numberText(roll.remaining_area_m2)} m²</td>
                     <td><StatusChip tone={roll.status === 'empty' || roll.status === 'discarded' ? 'neutral' : 'success'}>{roll.status}</StatusChip></td>
-                    <td>{roll.note ?? 'Chưa có'}</td>
+                    <td>{roll.note ?? ''}</td>
                   </tr>
                 ))}
                 {sheets.map((sheet) => (
@@ -895,7 +895,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                     <td>{numberText(sheet.length_m)} m</td>
                     <td>{numberText(sheet.area_m2)} m²</td>
                     <td><StatusChip tone={sheet.status === 'discarded' || sheet.status === 'used' ? 'neutral' : 'success'}>{sheet.status}</StatusChip></td>
-                    <td>{sheet.note ?? 'Chưa có'}</td>
+                    <td>{sheet.note ?? ''}</td>
                   </tr>
                 ))}
                 {rolls.length === 0 && sheets.length === 0 ? (
@@ -1286,7 +1286,7 @@ function StocktakeInlineDetail({
             <tbody>
               {detail.items.map((item) => (
                 <tr key={item.id}>
-                  <td><strong>{item.product_code || 'Chưa có'}</strong></td>
+                  <td><strong>{item.product_code || ''}</strong></td>
                   <td>{stocktakeProductNameText(item.product_name, item.unit_name)}</td>
                   <td>{stocktakeQuantityText(item.system_qty)}</td>
                   <td>{stocktakeQuantityText(item.actual_qty)}</td>
@@ -1345,7 +1345,7 @@ function StocktakeInlineDetail({
 }
 
 function stocktakeProductNameText(productName: string, unitName: string | null) {
-  return unitName ? `${productName} (${unitName})` : productName || 'Chưa có'
+  return unitName ? `${productName} (${unitName})` : productName || ''
 }
 
 function stocktakeDifferenceSummaryQty(stocktake: Stocktake) {
@@ -1372,11 +1372,11 @@ function stocktakeCreatorOptions(stocktakes: Stocktake[]) {
 
 function stocktakeCreatorText(stocktake: Stocktake) {
   if (stocktake.created_by?.name) return stocktake.created_by.name
-  return stocktake.source_creator_name ? 'Chưa khớp tài khoản' : 'Chưa có dữ liệu'
+  return stocktake.source_creator_name ? '' : ''
 }
 
 function stocktakeDisplayDate(value: string) {
-  if (!value) return '--/--/----'
+  if (!value) return ''
   const [year, month, day] = value.split('-')
   return `${day}/${month}/${year}`
 }

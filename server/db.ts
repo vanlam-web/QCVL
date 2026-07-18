@@ -12,6 +12,7 @@ import type {
   ProductListData,
   PurchaseReceiptData,
   SalesDocumentData,
+  SalesDocumentPaymentReceiptData,
   ServerRepository,
   StockMovementData,
   StocktakeDetailData,
@@ -31,6 +32,11 @@ const productReferenceGuards = [
   { table: 'product_boms', column: 'product_id' },
   { table: 'product_bom_items', column: 'component_product_id' },
 ] as const
+
+const financeAccountsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const salesFinanceEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const userDisplayNameEnsureCache = new WeakMap<pg.Pool, Map<string, Promise<ReadonlyMap<string, string>>>>()
+const financeAccountsListCache = new WeakMap<pg.Pool, Map<string, Promise<FinanceAccountData[]>>>()
 
 export function createPgRepository(databaseUrl: string): ServerRepository & { close(): Promise<void> } {
   const pool = new Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30_000 })
@@ -170,6 +176,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         await replacePermissionsForUser(pool, userId, input.permissions)
         const user = await findUserListItem(pool, input.organizationId, userId)
         await pool.query('commit')
+        invalidateOrgCache(userDisplayNameEnsureCache, pool, input.organizationId)
         if (!user) throw new Error('Created user not found.')
         return user
       } catch (error) {
@@ -242,6 +249,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           if (isUniqueViolation(error)) throw new Error('USER_ALREADY_EXISTS')
           throw error
         }
+        invalidateOrgCache(userDisplayNameEnsureCache, pool, input.organizationId)
       }
       return findUserListItem(pool, input.organizationId, input.id)
     },
@@ -613,7 +621,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             limit 1
           ) draft_bom_data on true
           where ${clauses.join(' and ')}
-          order by p.updated_at desc, p.created_at desc
+          order by p.created_at desc, p.code asc, p.name asc
         `,
         values,
       )
@@ -688,6 +696,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         created_at: row.created_at?.toISOString?.() ?? row.created_at,
         updated_at: row.updated_at?.toISOString?.() ?? row.updated_at,
       })) satisfies ProductListData[]
+    },
+
+    async listProductsPage(input) {
+      const items = await this.listProducts?.(input) ?? []
+      const { page, pageSize } = paginationFromUrl(input.url, 15)
+      const start = Math.max(0, page - 1) * pageSize
+      return {
+        items: items.slice(start, start + pageSize),
+        total: items.length,
+        total_all: items.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0),
+      }
     },
 
     async listStockMovements(input) {
@@ -1204,6 +1223,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           account.notify_on_transaction ?? false,
         ],
       )
+      invalidateOrgCache(financeAccountsListCache, pool, input.organizationId)
       return mapFinanceAccountRow(result.rows[0])
     },
 
@@ -1276,6 +1296,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         values,
       )
+      if (result.rows[0]) invalidateOrgCache(financeAccountsListCache, pool, input.organizationId)
       return result.rows[0] ? mapFinanceAccountRow(result.rows[0]) : null
     },
 
@@ -2796,26 +2817,314 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
     },
 
+    async reviseSalesDocument(input) {
+      await ensureSalesFinanceTables(pool)
+      await ensureStockMovementsTable(pool)
+      await pool.query('begin')
+      try {
+        const originalResult = await pool.query<PgOrderRow>(
+          `
+            select *
+            from orders
+            where organization_id = $1
+              and (id = $2 or code = $3)
+            limit 1
+          `,
+          [input.organizationId, input.originalOrderId, input.originalOrderCode],
+        )
+        const originalRow = originalResult.rows[0]
+        if (!originalRow) {
+          await pool.query('rollback')
+          return null
+        }
+
+        const revisionResult = await pool.query<{ max_revision: number }>(
+          `
+            select coalesce(max(revision_no), 0)::int as max_revision
+            from orders
+            where organization_id = $1
+              and regexp_replace(code, '\\.\\d+$', '') = $2
+          `,
+          [input.organizationId, input.document.base_code ?? input.originalOrderCode.replace(/\.\d+$/, ''),],
+        )
+        const baseCode = input.document.base_code ?? originalRow.base_code ?? originalRow.code.replace(/\.\d+$/, '')
+        const nextRevisionNo = Math.max(Number(revisionResult.rows[0]?.max_revision ?? 0), Number(input.document.revision_no ?? 0)) || 0
+        const revisionNo = nextRevisionNo > 0 ? nextRevisionNo : 1
+        const revisedDocument: SalesDocumentData = {
+          ...input.document,
+          base_code: baseCode,
+          revision_no: revisionNo,
+          revised_from_order_id: originalRow.id,
+        }
+
+        await insertSalesDocument(pool, input.organizationId, revisedDocument)
+
+        await pool.query(
+          `
+            update orders
+            set status = 'cancelled',
+                replaced_by_order_id = $3,
+                cancel_reason_type = 'revised',
+                updated_at = now()
+            where organization_id = $1
+              and id = $2
+          `,
+          [input.organizationId, originalRow.id, revisedDocument.id],
+        )
+        await pool.query(
+          `
+            update customer_debt_entries
+            set status = 'closed',
+                remaining_debt = 0,
+                updated_at = now()
+            where organization_id = $1
+              and order_id = $2
+              and status = 'open'
+          `,
+          [input.organizationId, originalRow.id],
+        )
+
+        if (input.cashbookEntries.length > 0) {
+          const receiptId = input.cashbookEntries[0].id
+          const receiptCode = input.cashbookEntries[0].code
+          const totalReceived = input.cashbookEntries.reduce((sum, entry) => sum + Math.max(entry.amount_delta, 0), 0)
+          await pool.query(
+            `
+              insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
+              values ($1, $2, $3, $4, $5, $6, $7, $8)
+            `,
+            [receiptId, input.organizationId, receiptCode, revisedDocument.customer.id, revisedDocument.id, totalReceived, input.cashbookEntries[0].note, input.cashbookEntries[0].created_at],
+          )
+          for (const entry of input.cashbookEntries) {
+            await pool.query(
+              `
+                insert into payment_receipt_methods (
+                  organization_id, payment_receipt_id, order_id, method,
+                  finance_account_id, amount, allocations, created_at
+                )
+                values ($1, $2, $3, $4, $5, $6, '[]'::jsonb, $7)
+              `,
+              [
+                input.organizationId,
+                receiptId,
+                revisedDocument.id,
+                entry.finance_account.account_type === 'bank' ? 'bank_transfer' : 'cash',
+                entry.finance_account.id,
+                Math.abs(entry.amount_delta),
+                entry.created_at,
+              ],
+            )
+          }
+        }
+
+        for (const entry of input.cashbookEntries) {
+          await insertCashbookEntry(pool, input.organizationId, entry)
+        }
+
+        await saveSalesDocumentStockMovements(pool, input.organizationId, revisedDocument)
+        await pool.query('commit')
+        return this.getSalesDocument?.({ organizationId: input.organizationId, id: revisedDocument.id }) ?? revisedDocument
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async listSalesDocumentsPage(input) {
+      await ensureSalesFinanceTables(pool)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const page = positiveInt(input.url.searchParams.get('page'), 1)
+      const pageSize = positiveInt(input.url.searchParams.get('page_size'), 20)
+      const offset = (page - 1) * pageSize
+      const values: unknown[] = [input.organizationId]
+      const filters = ['o.organization_id = $1']
+      const type = filterValues(input.url, 'type')
+      const status = filterValues(input.url, 'status')
+      const customerId = input.url.searchParams.get('customer_id')
+      const paymentStatus = filterValues(input.url, 'payment_status')
+      const from = input.url.searchParams.get('from')
+      const to = input.url.searchParams.get('to')
+      const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
+
+      if (type.length > 0) {
+        values.push(type)
+        filters.push(`o.order_type = any($${values.length}::text[])`)
+      }
+      if (status.length > 0) {
+        values.push(status)
+        filters.push(`o.status = any($${values.length}::text[])`)
+      }
+      if (customerId) {
+        values.push(customerId)
+        filters.push(`o.customer_id = $${values.length}`)
+      }
+      if (paymentStatus.length > 0) {
+        values.push(paymentStatus)
+        filters.push(`o.payment_status = any($${values.length}::text[])`)
+      }
+      if (from) {
+        values.push(from)
+        filters.push(`(o.created_at at time zone 'UTC')::date >= $${values.length}::date`)
+      }
+      if (to) {
+        values.push(to)
+        filters.push(`(o.created_at at time zone 'UTC')::date <= $${values.length}::date`)
+      }
+      if (search) {
+        values.push(`%${search}%`)
+        filters.push(`(
+          ${accentInsensitiveSearchSql('o.code')} like $${values.length}
+          or ${accentInsensitiveSearchSql("coalesce(o.customer_snapshot->>'code', '')")} like $${values.length}
+          or ${accentInsensitiveSearchSql("coalesce(o.customer_snapshot->>'name', '')")} like $${values.length}
+          or ${accentInsensitiveSearchSql("coalesce(o.note, '')")} like $${values.length}
+        )`)
+      }
+
+      const summaryValues = [...values]
+      values.push(pageSize, offset)
+      const limitPlaceholder = `$${values.length - 1}`
+      const offsetPlaceholder = `$${values.length}`
+      const result = await pool.query(
+        `
+          with filtered_orders as (
+            select o.*
+            from orders o
+            where ${filters.join(' and ')}
+          ),
+          filtered_summary as (
+            select
+              count(*)::int as total,
+              coalesce(sum(total_amount), 0) as summary_total_amount,
+              coalesce(sum(debt_amount), 0) as summary_debt_amount
+            from filtered_orders
+          ),
+          paged_orders as (
+            select *
+            from filtered_orders
+            order by updated_at desc, created_at desc
+            limit ${limitPlaceholder}
+            offset ${offsetPlaceholder}
+          ),
+          paged_items as (
+            select
+              oi.order_id,
+              coalesce(
+                jsonb_agg(
+                  jsonb_build_object(
+                    'product_id', oi.product_id,
+                    'product_snapshot',
+                      case
+                        when oi.product_snapshot <> '{}'::jsonb then oi.product_snapshot
+                        when p.id is not null then jsonb_build_object(
+                          'code', p.code,
+                          'name', p.name,
+                          'unit_name', p.unit_name,
+                          'sell_method', p.sell_method
+                        )
+                        else '{}'::jsonb
+                      end,
+                    'quantity', oi.quantity,
+                    'unit_price', oi.unit_price,
+                    'discount_amount', oi.discount_amount,
+                    'line_total', oi.line_total
+                  ) order by oi.sort_order
+                ) filter (where oi.id is not null),
+                '[]'::jsonb
+              ) as items
+            from order_items oi
+            join paged_orders po on po.id = oi.order_id
+            left join products p on p.organization_id = oi.organization_id and p.id::text = oi.product_id
+            group by oi.order_id
+          )
+          select
+            po.*,
+            coalesce(pi.items, '[]'::jsonb) as items,
+            fs.total,
+            fs.summary_total_amount,
+            fs.summary_debt_amount
+          from paged_orders po
+          cross join filtered_summary fs
+          left join paged_items pi on pi.order_id = po.id
+          order by po.updated_at desc, po.created_at desc
+        `,
+        values,
+      )
+      const firstRow = result.rows[0]
+      let total = Number(firstRow?.total ?? 0)
+      let summaryTotalAmount = Number(firstRow?.summary_total_amount ?? 0)
+      let summaryDebtAmount = Number(firstRow?.summary_debt_amount ?? 0)
+      if (!firstRow) {
+        const summaryResult = await pool.query(
+          `
+            select
+              count(*)::int as total,
+              coalesce(sum(o.total_amount), 0) as summary_total_amount,
+              coalesce(sum(o.debt_amount), 0) as summary_debt_amount
+            from orders o
+            where ${filters.join(' and ')}
+          `,
+          summaryValues,
+        )
+        total = Number(summaryResult.rows[0]?.total ?? 0)
+        summaryTotalAmount = Number(summaryResult.rows[0]?.summary_total_amount ?? 0)
+        summaryDebtAmount = Number(summaryResult.rows[0]?.summary_debt_amount ?? 0)
+      }
+      return {
+        items: result.rows
+          .map(mapOrderRow)
+          .map((document) => hydrateSalesDocumentUserSnapshot(document, userDisplayNames)),
+        total,
+        summary: {
+          total_amount: summaryTotalAmount,
+          debt_amount: summaryDebtAmount,
+        },
+      }
+    },
+
     async listSalesDocuments(input) {
       await ensureSalesFinanceTables(pool)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
       const result = await pool.query(
         `
           select
             o.*,
             coalesce(
-              jsonb_agg(jsonb_build_object('product_id', oi.product_id) order by oi.sort_order)
+              jsonb_agg(
+                jsonb_build_object(
+                  'product_id', oi.product_id,
+                  'product_snapshot',
+                    case
+                      when oi.product_snapshot <> '{}'::jsonb then oi.product_snapshot
+                      when p.id is not null then jsonb_build_object(
+                        'code', p.code,
+                        'name', p.name,
+                        'unit_name', p.unit_name,
+                        'sell_method', p.sell_method
+                      )
+                      else '{}'::jsonb
+                    end,
+                  'quantity', oi.quantity,
+                  'unit_price', oi.unit_price,
+                  'discount_amount', oi.discount_amount,
+                  'line_total', oi.line_total
+                ) order by oi.sort_order
+              )
                 filter (where oi.id is not null),
               '[]'::jsonb
             ) as items
           from orders o
           left join order_items oi on oi.order_id = o.id
+          left join products p on p.organization_id = oi.organization_id and p.id::text = oi.product_id
           where o.organization_id = $1
           group by o.id
           order by o.updated_at desc, o.created_at desc
         `,
         [input.organizationId],
       )
-      return result.rows.map(mapOrderRow).filter((document) => salesDocumentMatches(input.url, document))
+      return result.rows
+        .map(mapOrderRow)
+        .map((document) => hydrateSalesDocumentUserSnapshot(document, userDisplayNames))
+        .filter((document) => salesDocumentMatches(input.url, document))
     },
 
     async getSalesDocument(input) {
@@ -2825,19 +3134,43 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           select
             o.*,
             coalesce(
-              jsonb_agg(jsonb_build_object('product_id', oi.product_id) order by oi.sort_order)
+              jsonb_agg(
+                jsonb_build_object(
+                  'product_id', oi.product_id,
+                  'product_snapshot',
+                    case
+                      when oi.product_snapshot <> '{}'::jsonb then oi.product_snapshot
+                      when p.id is not null then jsonb_build_object(
+                        'code', p.code,
+                        'name', p.name,
+                        'unit_name', p.unit_name,
+                        'sell_method', p.sell_method
+                      )
+                      else '{}'::jsonb
+                    end,
+                  'quantity', oi.quantity,
+                  'unit_price', oi.unit_price,
+                  'discount_amount', oi.discount_amount,
+                  'line_total', oi.line_total
+                ) order by oi.sort_order
+              )
                 filter (where oi.id is not null),
               '[]'::jsonb
             ) as items
           from orders o
           left join order_items oi on oi.order_id = o.id
-          where o.organization_id = $1 and o.id = $2
+          left join products p on p.organization_id = oi.organization_id and p.id::text = oi.product_id
+          where o.organization_id = $1 and (o.id = $2 or o.code = $2)
           group by o.id
           limit 1
         `,
         [input.organizationId, input.id],
       )
-      return result.rows[0] ? mapOrderRow(result.rows[0]) : null
+      if (!result.rows[0]) return null
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const document = hydrateSalesDocumentUserSnapshot(mapOrderRow(result.rows[0]), userDisplayNames)
+      const paymentReceipts = await listSalesDocumentPaymentReceipts(pool, input.organizationId, document, userDisplayNames)
+      return { ...document, payment_receipts: paymentReceipts }
     },
 
     async cancelSalesDocument(input) {
@@ -2884,19 +3217,58 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async updateSalesDocumentNote(input) {
       await ensureSalesFinanceTables(pool)
+      const assignments: string[] = ['updated_at = now()']
+      const values: unknown[] = [input.organizationId, input.id]
+      if (input.note !== undefined) {
+        values.push(input.note ?? '')
+        assignments.unshift(`note = $${values.length}`)
+      }
+      if (input.created_at !== undefined) {
+        values.push(input.created_at)
+        assignments.unshift(`created_at = $${values.length}::timestamptz`)
+      }
       const result = await pool.query(
         `
           update orders
-          set note = $3,
-              updated_at = now()
+          set ${assignments.join(', ')}
           where organization_id = $1
             and (id = $2 or code = $2)
-          returning id
+          returning id, code
         `,
-        [input.organizationId, input.id, input.note ?? ''],
+        values,
       )
       const orderId = result.rows[0]?.id
+      const orderCode = result.rows[0]?.code
       if (!orderId) return null
+      if (input.created_at !== undefined) {
+        await pool.query(
+          `
+            update payment_receipts
+            set created_at = $3::timestamptz
+            where organization_id = $1
+              and order_id = $2
+          `,
+          [input.organizationId, orderId, input.created_at],
+        )
+        await pool.query(
+          `
+            update payment_receipt_methods
+            set created_at = $3::timestamptz
+            where organization_id = $1
+              and order_id = $2
+          `,
+          [input.organizationId, orderId, input.created_at],
+        )
+        await pool.query(
+          `
+            update cashbook_entries
+            set created_at = $3::timestamptz
+            where organization_id = $1
+              and source->>'order_code' = $4
+          `,
+          [input.organizationId, orderId, input.created_at, orderCode],
+        )
+      }
       return this.getSalesDocument?.({ organizationId: input.organizationId, id: String(orderId) }) ?? null
     },
 
@@ -3137,6 +3509,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async listCashbookEntries(input) {
       await ensureSalesFinanceTables(pool)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
       const result = await pool.query(
         `
           select *
@@ -3149,11 +3522,160 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
       const entries = result.rows
         .map(mapCashbookRow)
+        .map((entry) => hydrateCashbookEntryUserSnapshot(entry, userDisplayNames))
         .map((entry) => hydrateCashbookEntryFinanceAccount(entry, accounts))
       if (input.url.searchParams.get('exclude_replaced_deleted_accounts') !== 'true') {
         return entries.filter((entry) => cashbookEntryMatches(input.url, entry))
       }
       return entries.filter((entry) => !isReplacedDeletedFinanceAccount(entry.finance_account, accounts)).filter((entry) => cashbookEntryMatches(input.url, entry))
+    },
+
+    async listCashbookEntriesPage(input) {
+      await ensureSalesFinanceTables(pool)
+      const page = positiveInt(input.url.searchParams.get('page'), 1)
+      const pageSize = positiveInt(input.url.searchParams.get('page_size'), 20)
+      const offset = (page - 1) * pageSize
+      const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const values: unknown[] = [input.organizationId]
+      const filters = ['ce.organization_id = $1']
+      const dateFilters: string[] = []
+
+      const addValue = (value: unknown) => {
+        values.push(value)
+        return `$${values.length}`
+      }
+      const financeAccountId = input.url.searchParams.get('finance_account_id')
+      const financeAccountType = input.url.searchParams.get('finance_account_type')
+      const direction = input.url.searchParams.get('direction')
+      const status = input.url.searchParams.get('status')
+      const isBusinessAccounted = input.url.searchParams.get('is_business_accounted')
+      const from = input.url.searchParams.get('from')
+      const to = input.url.searchParams.get('to')
+      const search = normalizeSearchText(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
+      const searchScope = input.url.searchParams.get('search_scope') ?? 'all'
+      let fromPlaceholder: string | null = null
+
+      if (financeAccountId && financeAccountId !== 'all') {
+        filters.push(`coalesce(fa.id, ce.finance_account->>'id') = ${addValue(financeAccountId)}`)
+      }
+      if (financeAccountType && financeAccountType !== 'all') {
+        filters.push(`coalesce(fa.account_type, ce.finance_account->>'account_type') = ${addValue(financeAccountType)}`)
+      }
+      if (direction && direction !== 'all') {
+        filters.push(`ce.direction = ${addValue(direction)}`)
+      }
+      if (status && status !== 'all') {
+        filters.push(`ce.status = ${addValue(status)}`)
+      }
+      if (isBusinessAccounted === 'true' || isBusinessAccounted === 'false') {
+        filters.push(`ce.is_business_accounted = ${addValue(isBusinessAccounted === 'true')}`)
+      }
+      if (input.url.searchParams.get('exclude_replaced_deleted_accounts') === 'true') {
+        const excludedFinanceAccountIds = accounts
+          .filter((account) => isReplacedDeletedFinanceAccount(account, accounts))
+          .map((account) => account.id)
+        if (excludedFinanceAccountIds.length > 0) {
+          filters.push(`coalesce(ce.finance_account->>'id', '') <> all(${addValue(excludedFinanceAccountIds)}::text[])`)
+        }
+      }
+      if (from) {
+        fromPlaceholder = addValue(from)
+        dateFilters.push(`(created_at at time zone 'UTC')::date >= ${fromPlaceholder}::date`)
+      }
+      if (to) {
+        dateFilters.push(`(created_at at time zone 'UTC')::date <= ${addValue(to)}::date`)
+      }
+      if (search) {
+        const searchPlaceholder = addValue(`%${search}%`)
+        const scopedSearchExpressions: Record<string, string[]> = {
+          code: ['ce.code'],
+          note: ["coalesce(ce.note, '')"],
+          transfer_content: ["coalesce(ce.source->>'transfer_content', '')"],
+          counterparty: ["coalesce(ce.counterparty->>'name', '')", "coalesce(ce.counterparty->>'phone', '')"],
+          finance_account: ["coalesce(fa.account_number, fa.code, ce.finance_account->>'code', '')", "coalesce(fa.name, ce.finance_account->>'name', '')"],
+          all: [
+            'ce.code',
+            "coalesce(ce.note, '')",
+            "coalesce(ce.counterparty->>'name', '')",
+            "coalesce(ce.counterparty->>'phone', '')",
+            "coalesce(fa.account_number, fa.code, ce.finance_account->>'code', '')",
+            "coalesce(fa.name, ce.finance_account->>'name', '')",
+            "coalesce(ce.source->>'transfer_content', '')",
+          ],
+        }
+        const expressions = scopedSearchExpressions[searchScope] ?? scopedSearchExpressions.all
+        filters.push(`(${expressions.map((expression) => `${accentInsensitiveSearchSql(expression)} like ${searchPlaceholder}`).join(' or ')})`)
+      }
+
+      const currentDateWhere = dateFilters.length > 0 ? dateFilters.join(' and ') : 'true'
+      const openingWhere = fromPlaceholder ? `(created_at at time zone 'UTC')::date < ${fromPlaceholder}::date` : 'false'
+      values.push(pageSize, offset)
+      const limitPlaceholder = `$${values.length - 1}`
+      const offsetPlaceholder = `$${values.length}`
+      const result = await pool.query(
+        `
+          with base_entries as (
+            select ce.*
+            from cashbook_entries ce
+            left join finance_accounts fa
+              on fa.organization_id = ce.organization_id
+             and fa.id = ce.finance_account->>'id'
+            where ${filters.join(' and ')}
+          ),
+          filtered_summary as (
+            select
+              count(*)::int as total,
+              coalesce(sum(greatest(amount_delta, 0)), 0) as total_in,
+              coalesce(sum(greatest(-amount_delta, 0)), 0) as total_out
+            from base_entries
+            where ${currentDateWhere}
+          ),
+          opening_summary as (
+            select coalesce(sum(amount_delta), 0) as opening_balance
+            from base_entries
+            where ${openingWhere}
+          ),
+          paged_entries as (
+            select *
+            from base_entries
+            where ${currentDateWhere}
+            order by created_at desc
+            limit ${limitPlaceholder}
+            offset ${offsetPlaceholder}
+          )
+          select
+            pe.*,
+            fs.total,
+            fs.total_in,
+            fs.total_out,
+            os.opening_balance
+          from filtered_summary fs
+          cross join opening_summary os
+          left join paged_entries pe on true
+          order by pe.created_at desc nulls last
+        `,
+        values,
+      )
+      const firstRow = result.rows[0]
+      const total = Number(firstRow?.total ?? 0)
+      const openingBalance = Number(firstRow?.opening_balance ?? 0)
+      const totalIn = Number(firstRow?.total_in ?? 0)
+      const totalOut = Number(firstRow?.total_out ?? 0)
+      return {
+        items: result.rows
+          .filter((row) => row.id)
+          .map(mapCashbookRow)
+          .map((entry) => hydrateCashbookEntryUserSnapshot(entry, userDisplayNames))
+          .map((entry) => hydrateCashbookEntryFinanceAccount(entry, accounts)),
+        total,
+        summary: {
+          opening_balance: openingBalance,
+          total_in: totalIn,
+          total_out: totalOut,
+          ending_balance: openingBalance + totalIn - totalOut,
+        },
+      }
     },
 
     async getCashbookEntry(input) {
@@ -3170,7 +3692,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       )
       if (!result.rows[0]) return null
       const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
-      const entry = hydrateCashbookEntryFinanceAccount(mapCashbookRow(result.rows[0]), accounts)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const entry = hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(mapCashbookRow(result.rows[0]), userDisplayNames), accounts)
       return hydrateCashbookEntryLink(pool, input.organizationId, entry)
     },
 
@@ -3229,6 +3752,11 @@ function dbDateText(value: unknown) {
     return value.toISOString()
   }
   return String(value)
+}
+
+function positiveInt(value: string | null, fallback: number) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback
 }
 
 async function ensureProductCatalogSchema(pool: pg.Pool) {
@@ -4239,6 +4767,7 @@ async function ensurePosProductUsageTable(pool: pg.Pool) {
 }
 
 async function ensureFinanceAccountsTable(pool: pg.Pool) {
+  return ensureSchemaOnce(financeAccountsEnsureCache, pool, async () => {
   await pool.query(`
     create table if not exists finance_accounts (
       id text not null,
@@ -4259,6 +4788,7 @@ async function ensureFinanceAccountsTable(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists finance_accounts_org_type_idx on finance_accounts (organization_id, account_type, is_active, name)')
+  })
 }
 
 function mapFinanceAccountRow(row: {
@@ -4290,17 +4820,48 @@ function mapFinanceAccountRow(row: {
 }
 
 async function listFinanceAccountsForExclusion(pool: pg.Pool, organizationId: string) {
-  await ensureFinanceAccountsTable(pool)
-  const result = await pool.query(
-    `
-      select id, code, name, account_type, is_default_cash, is_active,
-             account_number, account_holder, opening_balance, note, notify_on_transaction
-      from finance_accounts
-      where organization_id = $1
-    `,
-    [organizationId],
-  )
-  return result.rows.map(mapFinanceAccountRow)
+  return getCachedOrgPromise(financeAccountsListCache, pool, organizationId, async () => {
+    await ensureFinanceAccountsTable(pool)
+    const result = await pool.query(
+      `
+        select id, code, name, account_type, is_default_cash, is_active,
+               account_number, account_holder, opening_balance, note, notify_on_transaction
+        from finance_accounts
+        where organization_id = $1
+      `,
+      [organizationId],
+    )
+    return result.rows.map(mapFinanceAccountRow)
+  })
+}
+
+function getCachedOrgPromise<T>(
+  cache: WeakMap<pg.Pool, Map<string, Promise<T>>>,
+  pool: pg.Pool,
+  organizationId: string,
+  run: () => Promise<T>,
+) {
+  let byOrg = cache.get(pool)
+  if (!byOrg) {
+    byOrg = new Map<string, Promise<T>>()
+    cache.set(pool, byOrg)
+  }
+  const existing = byOrg.get(organizationId)
+  if (existing) return existing
+  const pending = run().catch((error) => {
+    byOrg?.delete(organizationId)
+    throw error
+  })
+  byOrg.set(organizationId, pending)
+  return pending
+}
+
+function invalidateOrgCache<T>(
+  cache: WeakMap<pg.Pool, Map<string, Promise<T>>>,
+  pool: pg.Pool,
+  organizationId: string,
+) {
+  cache.get(pool)?.delete(organizationId)
 }
 
 function normalizeFinanceAccountIdentity(value: string | null | undefined) {
@@ -4336,6 +4897,7 @@ function isReplacedDeletedFinanceAccount(
 }
 
 async function ensureSalesFinanceTables(pool: pg.Pool) {
+  return ensureSchemaOnce(salesFinanceEnsureCache, pool, async () => {
   await pool.query(`
     create table if not exists orders (
       id text primary key default gen_random_uuid()::text,
@@ -4359,6 +4921,14 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
       unique (organization_id, code)
     )
   `)
+  await pool.query(`alter table orders add column if not exists base_code text`)
+  await pool.query(`alter table orders add column if not exists revision_no integer not null default 0`)
+  await pool.query(`alter table orders add column if not exists revised_from_order_id text references orders(id) on delete set null`)
+  await pool.query(`alter table orders add column if not exists replaced_by_order_id text references orders(id) on delete set null`)
+  await pool.query(`alter table orders add column if not exists cancel_reason_type text`)
+  await pool.query(`alter table orders add column if not exists revision_reason_code text`)
+  await pool.query(`alter table orders add column if not exists revision_reason_note text`)
+  await pool.query(`update orders set base_code = regexp_replace(code, '\\.\\d+$', '') where base_code is null or btrim(base_code) = ''`)
   await pool.query('create index if not exists orders_org_type_created_idx on orders (organization_id, order_type, created_at desc)')
   await pool.query('create index if not exists orders_org_updated_created_idx on orders (organization_id, updated_at desc, created_at desc)')
   await pool.query('create index if not exists orders_org_customer_idx on orders (organization_id, customer_id)')
@@ -4444,6 +5014,18 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
   await pool.query('alter table cashbook_entries add column if not exists created_by jsonb null')
   await pool.query('create index if not exists cashbook_entries_org_created_idx on cashbook_entries (organization_id, created_at desc)')
   await migrateLegacyPosFinanceCodes(pool)
+  })
+}
+
+function ensureSchemaOnce(cache: WeakMap<pg.Pool, Promise<void>>, pool: pg.Pool, run: () => Promise<void>) {
+  const existing = cache.get(pool)
+  if (existing) return existing
+  const pending = run().catch((error) => {
+    cache.delete(pool)
+    throw error
+  })
+  cache.set(pool, pending)
+  return pending
 }
 
 async function migrateLegacyPosFinanceCodes(pool: pg.Pool) {
@@ -4592,6 +5174,13 @@ type PgOrderRow = {
   payment_status: string
   note: string
   items: SalesDocumentData['items']
+  base_code?: string | null
+  revision_no?: string | number | null
+  revised_from_order_id?: string | null
+  replaced_by_order_id?: string | null
+  cancel_reason_type?: string | null
+  revision_reason_code?: string | null
+  revision_reason_note?: string | null
 }
 
 type PgCashbookRow = {
@@ -4617,9 +5206,10 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
       insert into orders (
         id, organization_id, code, order_type, status, customer_id,
         customer_snapshot, seller_snapshot, subtotal_amount, discount_amount,
-        total_amount, paid_amount, debt_amount, payment_status, note, created_at, updated_at
+        total_amount, paid_amount, debt_amount, payment_status, note, base_code, revision_no,
+        revised_from_order_id, replaced_by_order_id, cancel_reason_type, revision_reason_code, revision_reason_note, created_at, updated_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, now())
+      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now())
       on conflict (organization_id, code) do nothing
     `,
     [
@@ -4638,18 +5228,40 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
       document.debt_amount,
       document.payment_status,
       document.note,
+      document.base_code ?? null,
+      document.revision_no ?? 0,
+      document.revised_from_order_id ?? null,
+      document.replaced_by_order_id ?? null,
+      document.cancel_reason_type ?? null,
+      document.revision_reason_code ?? null,
+      document.revision_reason_note ?? null,
       document.created_at,
     ],
   )
 
   for (const [index, item] of document.items.entries()) {
+    const detailItem = item as {
+      product_id: string
+      quantity?: number
+      unit_price?: number
+      discount_amount?: number
+      line_total?: number
+    }
+    const quantity = Number(detailItem.quantity ?? 1)
+    const unitPrice = Number(detailItem.unit_price ?? 0)
+    const discountAmount = Number(detailItem.discount_amount ?? 0)
+    const lineTotal = Number.isFinite(detailItem.line_total ?? Number.NaN)
+      ? Number(detailItem.line_total)
+      : Math.max(quantity * unitPrice - discountAmount, 0)
     await pool.query(
       `
-        insert into order_items (organization_id, order_id, product_id, product_snapshot, sort_order)
-        values ($1, $2, $3, '{}'::jsonb, $4)
+        insert into order_items (
+          organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order
+        )
+        values ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7, $8)
         on conflict do nothing
       `,
-      [organizationId, document.id, item.product_id, index + 1],
+      [organizationId, document.id, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1],
     )
   }
 
@@ -4685,7 +5297,96 @@ function mapOrderRow(row: PgOrderRow): SalesDocumentData {
     payment_status: row.payment_status,
     note: row.note,
     items: row.items,
+    base_code: row.base_code ?? undefined,
+    revision_no: row.revision_no !== null && row.revision_no !== undefined ? Number(row.revision_no) : undefined,
+    revised_from_order_id: row.revised_from_order_id ?? null,
+    replaced_by_order_id: row.replaced_by_order_id ?? null,
+    cancel_reason_type: row.cancel_reason_type ?? null,
+    revision_reason_code: row.revision_reason_code ?? null,
+    revision_reason_note: row.revision_reason_note ?? null,
   }
+}
+
+async function userDisplayNameMap(pool: pg.Pool, organizationId: string) {
+  return getCachedOrgPromise(userDisplayNameEnsureCache, pool, organizationId, async () => {
+    await ensureUserManagementColumns(pool)
+    const result = await pool.query(
+      `
+        select id::text, display_name
+        from users
+        where organization_id = $1
+      `,
+      [organizationId],
+    )
+    return new Map(result.rows.map((row) => [String(row.id), String(row.display_name)]))
+  })
+}
+
+function hydrateUserReference<T extends { id: string; name: string }>(reference: T, userDisplayNames: ReadonlyMap<string, string>): T {
+  const displayName = userDisplayNames.get(reference.id)
+  return displayName ? { ...reference, name: displayName } : reference
+}
+
+function hydrateSalesDocumentUserSnapshot(document: SalesDocumentData, userDisplayNames: ReadonlyMap<string, string>): SalesDocumentData {
+  return {
+    ...document,
+    seller: hydrateUserReference(document.seller, userDisplayNames),
+  }
+}
+
+function hydrateCashbookEntryUserSnapshot(entry: CashbookEntryData, userDisplayNames: ReadonlyMap<string, string>): CashbookEntryData {
+  return {
+    ...entry,
+    created_by: entry.created_by ? hydrateUserReference(entry.created_by, userDisplayNames) : entry.created_by,
+  }
+}
+
+async function listSalesDocumentPaymentReceipts(
+  pool: pg.Pool,
+  organizationId: string,
+  document: SalesDocumentData,
+  userDisplayNames: ReadonlyMap<string, string>,
+): Promise<SalesDocumentPaymentReceiptData[]> {
+  const result = await pool.query(
+    `
+      select
+        id,
+        code,
+        status,
+        direction,
+        amount_delta,
+        finance_account,
+        is_business_accounted,
+        source_type,
+        created_at,
+        note,
+        counterparty,
+        created_by,
+        source,
+        allocations
+      from cashbook_entries
+      where organization_id = $1
+        and direction = 'in'
+        and (
+          source->>'order_code' = $2
+          or allocations @> $3::jsonb
+          or allocations @> $4::jsonb
+        )
+      order by created_at desc
+    `,
+    [
+      organizationId,
+      document.code,
+      JSON.stringify([{ order_code: document.code }]),
+      JSON.stringify([{ order_id: document.id }]),
+    ],
+  )
+
+  return result.rows
+    .map(mapCashbookRow)
+    .map((entry) => hydrateCashbookEntryUserSnapshot(entry, userDisplayNames))
+    .filter((entry) => cashbookEntryMatchesSalesDocument(entry, document))
+    .map((entry) => cashbookEntrySalesDocumentPaymentReceipt(entry, document))
 }
 
 function mapCashbookRow(row: PgCashbookRow): CashbookEntryData {
@@ -4736,6 +5437,55 @@ function cashbookNoteOrderCode(note: string | null | undefined) {
 
 function cashbookEntryHasLinkedOrder(entry: CashbookEntryData) {
   return entry.source?.order_code || (entry.allocations?.length ?? 0) > 0
+}
+
+function cashbookEntryMatchesSalesDocument(entry: CashbookEntryData, document: SalesDocumentData) {
+  if (entry.direction !== 'in') return false
+  if (entry.source?.order_code === document.code) return true
+  return (entry.allocations ?? []).some((allocation) => allocation.order_id === document.id || allocation.order_code === document.code)
+}
+
+function cashbookEntrySalesDocumentPaymentReceipt(
+  entry: CashbookEntryData,
+  document: SalesDocumentData,
+): SalesDocumentPaymentReceiptData {
+  const amount = Math.abs(Number(entry.amount_delta))
+  const linkedAllocations = (entry.allocations ?? []).filter((allocation) => allocation.order_id === document.id || allocation.order_code === document.code)
+  const allocations = linkedAllocations.length > 0
+    ? linkedAllocations.map((allocation) => ({
+        order_id: allocation.order_id,
+        order_code: allocation.order_code,
+        allocated_amount: Number(allocation.allocated_amount),
+        remaining_after: Number(allocation.remaining_after),
+      }))
+    : [{
+        order_id: document.id,
+        order_code: document.code,
+        allocated_amount: amount,
+        remaining_after: Math.max(Number(document.debt_amount), 0),
+      }]
+  const allocatedTotal = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
+  const sourceCreatorName = entry.source?.source_creator_name?.trim()
+
+  return {
+    id: entry.id,
+    code: entry.code,
+    status: entry.status === 'cancelled' ? 'cancelled' : 'posted',
+    receipt_type: (entry.allocations?.length ?? 0) > 1 ? 'mixed_sale_and_debt' : 'sale_payment',
+    total_received_amount: allocatedTotal > 0 ? allocatedTotal : amount,
+    created_at: entry.created_at,
+    created_by: entry.created_by ?? { id: sourceCreatorName ? `kiotviet-${entry.id}` : document.seller.id, name: sourceCreatorName || document.seller.name },
+    methods: [{
+      method_type: entry.finance_account.account_type === 'bank' || entry.payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash',
+      amount,
+      finance_account: {
+        id: entry.finance_account.id,
+        code: entry.finance_account.account_number ?? entry.finance_account.code,
+        name: entry.finance_account.name,
+      },
+    }],
+    allocations,
+  }
 }
 
 async function hydrateCashbookEntryLink(pool: pg.Pool, organizationId: string, entry: CashbookEntryData) {
@@ -4957,19 +5707,30 @@ function salesDocumentMatches(url: URL, document: SalesDocumentData) {
 
 function cashbookEntryMatches(url: URL, entry: CashbookEntryData) {
   const search = normalizeSearchText(url.searchParams.get('search') ?? url.searchParams.get('q') ?? '')
+  const searchScope = url.searchParams.get('search_scope') ?? 'all'
   const financeAccountId = url.searchParams.get('finance_account_id')
   const financeAccountType = url.searchParams.get('finance_account_type')
   const direction = url.searchParams.get('direction')
   const status = url.searchParams.get('status')
+  const isBusinessAccounted = url.searchParams.get('is_business_accounted')
   const from = url.searchParams.get('from')
   const to = url.searchParams.get('to')
   if (financeAccountId && financeAccountId !== 'all' && entry.finance_account.id !== financeAccountId) return false
   if (financeAccountType && financeAccountType !== 'all' && entry.finance_account.account_type !== financeAccountType) return false
   if (direction && direction !== 'all' && entry.direction !== direction) return false
   if (status && status !== 'all' && entry.status !== status) return false
+  if (isBusinessAccounted === 'true' && !entry.is_business_accounted) return false
+  if (isBusinessAccounted === 'false' && entry.is_business_accounted) return false
   if (!dateRangeMatches(entry.created_at, from, to)) return false
   if (search) {
-    const haystack = normalizeSearchText(`${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name}`)
+    const scopedHaystacks = {
+      code: entry.code,
+      note: entry.note ?? '',
+      transfer_content: entry.source?.transfer_content ?? '',
+      counterparty: `${entry.counterparty.name} ${entry.counterparty.phone ?? ''}`,
+      all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name} ${entry.source?.transfer_content ?? ''}`,
+    }
+    const haystack = normalizeSearchText(scopedHaystacks[searchScope as keyof typeof scopedHaystacks] ?? scopedHaystacks.all)
     if (!haystack.includes(search)) return false
   }
   return true

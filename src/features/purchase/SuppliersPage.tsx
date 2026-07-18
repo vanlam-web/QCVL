@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
 import type { SupplierInput, SupplierListFilters, SupplierService } from './supplier-service'
-import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -102,6 +102,8 @@ export function SuppliersPage({
   service: SupplierService
   onOpenDashboard: () => void
 }) {
+  const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
+  const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null)
   const [customers, setCustomers] = useState<SupplierCustomerOption[]>([])
   const [financeAccounts, setFinanceAccounts] = useState<SupplierFinanceAccount[]>([])
@@ -109,8 +111,8 @@ export function SuppliersPage({
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState<{ current_payable_amount: number; total_purchase_amount: number } | null>(null)
-  const [search, setSearch] = useState('')
-  const [lastSearch, setLastSearch] = useState('')
+  const [search, setSearch] = useState(routeSearch)
+  const [lastSearch, setLastSearch] = useState(routeSearch)
   const [status, setStatus] = useState<SupplierStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<SupplierStatus | 'all'>('active')
   const [totalPurchaseMin, setTotalPurchaseMin] = useState('')
@@ -224,13 +226,24 @@ export function SuppliersPage({
     async function loadInitialData() {
       setError(null)
       try {
-        const supplierResult = await service.listSuppliers({ status: 'active', page: 1, page_size: defaultPageSize })
+        const supplierResult = await service.listSuppliers({
+          search: routeSearch || routeOpen || undefined,
+          status: 'active',
+          page: 1,
+          page_size: defaultPageSize,
+        })
         if (!active) return
         setSuppliers(supplierResult.items)
         setTotal(supplierResult.total)
         setSummary(supplierResult.summary ?? null)
         setPage(supplierResult.page)
         setPageSize(supplierResult.page_size)
+        if (routeOpen) {
+          const openSupplierItem = supplierResult.items.find((supplier) => supplier.code === routeOpen || supplier.name === routeOpen)
+          if (openSupplierItem) {
+            await openSupplier(openSupplierItem)
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được nhà cung cấp.'))
       }
@@ -241,7 +254,7 @@ export function SuppliersPage({
     return () => {
       active = false
     }
-  }, [defaultPageSize, service])
+  }, [defaultPageSize, routeOpen, routeSearch, service])
 
   async function ensureCustomersLoaded() {
     if (customersLoaded) return
@@ -561,7 +574,7 @@ export function SuppliersPage({
               { label: 'Ngày tạo:', value: supplierCreatedDateText(detailSupplier) },
               { label: 'Nhóm nhà cung cấp:', value: supplierGroupLabel(detailSupplier) },
             ]}
-            title={detailSupplier.name}
+              title={detailSupplier.name}
           />
         ) : null}
         {detailSupplier && !isEditingSupplier && supplierDetailTab === 'info' ? (
@@ -569,10 +582,10 @@ export function SuppliersPage({
             <ManagementDetailInfoList
               columns="three"
               items={[
-                { label: 'Điện thoại', value: formatPhoneDisplay(detailSupplier.phone, 'Chưa có') },
-                { label: 'Email', value: detailSupplier.email ?? 'Chưa có' },
-                { label: 'MST', value: detailSupplier.tax_code ?? 'Chưa có' },
-                { label: 'Địa chỉ', value: detailSupplier.address ?? 'Chưa có', span: 3 },
+                { label: 'Điện thoại', value: formatPhoneDisplay(detailSupplier.phone) },
+                { label: 'Email', value: detailSupplier.email ?? '' },
+                { label: 'MST', value: detailSupplier.tax_code ?? '' },
+                { label: 'Địa chỉ', value: detailSupplier.address ?? '', span: 3 },
               ]}
             />
             {detailSupplier.linked_customer ? (
@@ -582,7 +595,9 @@ export function SuppliersPage({
               >
                 <p>
                   <span className="management-detail-meta-label">Khách hàng liên kết:</span>{' '}
-                  <strong>{detailSupplier.linked_customer.code} - {detailSupplier.linked_customer.name}</strong>
+                  <ManagementRecordLink href={managementRecordOpenHref('/customers', detailSupplier.linked_customer.code)}>
+                    {detailSupplier.linked_customer.code} - {detailSupplier.linked_customer.name}
+                  </ManagementRecordLink>
                 </p>
                 <p>
                   Gộp khách hàng {detailSupplier.linked_customer.code} - {detailSupplier.linked_customer.name} và nhà cung cấp {detailSupplier.code} - {detailSupplier.name}
@@ -613,9 +628,13 @@ export function SuppliersPage({
                 <tbody>
                   {currentSupplierReceipts.map((receipt) => (
                     <tr key={receipt.id}>
-                      <td>{receipt.code}</td>
+                      <td>
+                        <ManagementRecordLink href={managementRecordOpenHref('/purchase/receipts', receipt.code)}>
+                          {receipt.code}
+                        </ManagementRecordLink>
+                      </td>
                       <td>{formatKvDateTime(receipt.received_at)}</td>
-                      <td>{receipt.supplier_document_no ?? '-'}</td>
+                      <td>{receipt.supplier_document_no ?? ''}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
                       <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
@@ -658,9 +677,13 @@ export function SuppliersPage({
                 <tbody>
                   {currentSupplierDebtReceipts.map((receipt) => (
                     <tr key={receipt.id}>
-                      <td>{receipt.code}</td>
+                      <td>
+                        <ManagementRecordLink href={managementRecordOpenHref('/purchase/receipts', receipt.code)}>
+                          {receipt.code}
+                        </ManagementRecordLink>
+                      </td>
                       <td>{formatKvDateTime(receipt.received_at)}</td>
-                      <td>{receipt.supplier_document_no ?? '-'}</td>
+                      <td>{receipt.supplier_document_no ?? ''}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
                       <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
@@ -898,7 +921,7 @@ export function SuppliersPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Tổng mua">
             <label>

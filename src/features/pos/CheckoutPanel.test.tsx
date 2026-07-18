@@ -66,6 +66,7 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
       status: 'active' as const,
       total_amount: 240000,
     })),
+    reviseInvoice: vi.fn(),
     getQuoteReopenPayload: vi.fn(),
     listFinanceAccounts: vi.fn(async () => ({
       items: [
@@ -232,15 +233,49 @@ it('shows compact payment header metadata and line summary', () => {
   )
 
   expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('Văn Viết Phương Lâm')
-  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('08/07/2026')
-  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('07:29')
-  expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' }).textContent).toBe(
-    'Văn Viết Phương Lâm07:2908/07/2026',
-  )
+  expect(within(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).getByLabelText('Ngày hóa đơn')).toHaveValue('2026-07-08')
+  expect(within(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).getByLabelText('Thời gian hóa đơn')).toHaveValue('07:29')
   expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
   expect(screen.queryByText('Khách cần trả')).toBeInTheDocument()
   expect(screen.getByText('Cong ty ABC')).toBeInTheDocument()
   expect(document.querySelector('.checkout-summary-kv')).not.toBeInTheDocument()
+})
+
+it('marks the seller as a display name and lets the invoice date and time be edited', async () => {
+  const service = makeOrderService()
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={service}
+      sellerName="Văn Viết Phương Lâm"
+      orderCreatedAt="2026-07-08T07:29:00.000Z"
+    />,
+  )
+
+  const meta = screen.getByRole('group', { name: 'Thông tin hóa đơn' })
+  expect(within(meta).getByLabelText('Tên hiển thị')).toHaveTextContent('Văn Viết Phương Lâm')
+
+  const timeInput = within(meta).getByLabelText('Thời gian hóa đơn')
+  expect(timeInput).toHaveValue('07:29')
+  const dateInput = within(meta).getByLabelText('Ngày hóa đơn')
+  expect(dateInput).toHaveValue('2026-07-08')
+
+  await userEvent.clear(dateInput)
+  await userEvent.type(dateInput, '2026-07-09')
+  await userEvent.clear(timeInput)
+  await userEvent.type(timeInput, '08:15')
+
+  expect(dateInput).toHaveValue('2026-07-09')
+  expect(timeInput).toHaveValue('08:15')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(service.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      created_at: '2026-07-09T08:15:00.000Z',
+    }),
+  )
 })
 
 it('keeps payment drawer compact without quick amount chips and with footer actions in one row', () => {

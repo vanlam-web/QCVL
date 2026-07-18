@@ -1,6 +1,6 @@
 ﻿# 01-SALES-DOCUMENT-LIST — Danh sách chứng từ bán hàng
 
-> **Phase hiện tại:** Đã có readonly list/detail cho `HD...` và `BG...`; báo giá active mở lại được vào POS draft
+> **Phase hiện tại:** Đã có readonly list/detail cho `HD...` và `BG...`; báo giá active mở lại được vào POS draft; hóa đơn hoàn thành có nút Sửa mở POS revision draft riêng
 > **Tham khảo:** KiotViet `Đơn hàng > Hóa đơn`; không dùng mô hình `Đặt hàng/Giao hàng`
 
 ---
@@ -46,6 +46,7 @@ Hiện tại đã triển khai:
 - exact document-code lookup không bị che bởi filter mặc định
 - bấm dòng chứng từ để mở chi tiết readonly inline
 - mở lại báo giá active vào POS draft local
+- hóa đơn hoàn thành mở readonly; bấm **Sửa** mở POS theo flow `invoice-revision` riêng, tab hiển thị `Sửa HD...`
 - giữ giá snapshot của báo giá khi mở lại; cảnh báo nếu giá hiện tại khác hoặc sản phẩm không còn khả dụng
 
 Shared management layout:
@@ -60,7 +61,6 @@ Shared management layout:
 Ngoài phạm vi hiện tại:
 
 - in lại bill hóa đơn nếu Bill Preview/print flow chưa có
-- sửa hóa đơn
 - hủy hóa đơn
 - thao tác đảo kho/tiền/công nợ từ danh sách
 
@@ -150,7 +150,7 @@ Nếu POS/báo giá/hóa đơn không chọn khách, backend phải gán chứng
 
 | Trạng thái | Thao tác |
 |---|---|
-| Hóa đơn hoàn thành | Mở chi tiết readonly |
+| Hóa đơn hoàn thành | Mở chi tiết readonly; bấm **Sửa** mở POS revision draft riêng, tab hiển thị `Sửa HD...` |
 | Hóa đơn đã hủy | Mở chi tiết readonly nếu dữ liệu đã có |
 | Báo giá active | Mở chi tiết readonly, mở lại vào POS draft local |
 | Báo giá không còn mở được | Mở chi tiết readonly; xử lý theo cảnh báo nếu sản phẩm/khách/giá đã lệch |
@@ -164,17 +164,7 @@ Các thao tác sau không hiển thị trong footer chi tiết V1:
 | Hóa đơn hoàn thành | Trả hàng, Tạo QR |
 | Hóa đơn đã hủy | Trả hàng, Tạo QR |
 
-Quy tắc sửa/hủy hóa đơn khi mở phạm vi:
-
-- Không sửa đè hóa đơn đã chốt.
-- Bấm **Sửa hóa đơn** mở chứng từ tại POS như một bản nháp sửa, tab hiển thị `Sửa HD000123`.
-- Khi lưu lại, hệ thống tạo mã mới theo quy tắc `MaCu.01`, `MaCu.02`.
-- Chứng từ cũ chuyển sang trạng thái **Đã hủy** với lý do sửa chứng từ.
-- Hủy hóa đơn không tạo bản sửa cũng đưa chứng từ về trạng thái **Đã hủy**.
-- Chứng từ đã hủy/sửa xem lại qua filter trạng thái **Đã hủy** hiện có; không tạo khu riêng nếu chưa cần.
-- Sửa/hủy bắt buộc chọn lý do nhanh và có thể nhập ghi chú thêm.
-- Nhân viên được sửa/hủy trong 10 ngày; sau 10 ngày chỉ quản lý/admin hoặc quyền mạnh tương ứng.
-- Chỉ bật khi Backend có transaction an toàn để đồng bộ chứng từ, kho, sổ quỹ và công nợ.
+Lưu ý: luồng sửa hóa đơn hoàn thành đã có ở V1, nhưng không nằm trong nhóm thao tác footer ở bảng trên. Flow này mở POS bằng handoff riêng `invoice-revision`, giữ tab `Sửa HD...`, và khi lưu sẽ gọi `POST /orders/{id}/revise`.
 
 ---
 

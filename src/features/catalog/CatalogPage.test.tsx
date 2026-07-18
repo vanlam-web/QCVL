@@ -573,13 +573,52 @@ it('renders products as a goods and inventory-oriented list, not a pricebook wor
   expect(within(grid).queryByRole('columnheader', { name: 'Cách tính bán' })).not.toBeInTheDocument()
   expect(within(grid).queryByRole('button', { name: 'Ngưng bán' })).not.toBeInTheDocument()
   expect(within(grid).getByText('650 000')).toBeInTheDocument()
-  expect(within(grid).getAllByText('Chưa có').length).toBeGreaterThanOrEqual(3)
+  const keoRow = within(grid).getByRole('row', { name: /KEO Keo dán/ })
+  const keoCells = Array.from(keoRow.querySelectorAll('td'))
+  expect(keoCells[5]).toHaveTextContent('')
+  expect(keoCells[6]).toHaveTextContent('')
+  expect(keoCells[8]).toHaveTextContent('')
   const footer = screen.getByRole('navigation', { name: 'Phân trang hàng hóa' })
   expect(footer).toHaveClass('management-table-footer')
   expect(footer).toContainElement(screen.getByText('1 - 2 trong 2 hàng hóa'))
   expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
   expect(screen.queryByRole('table', { name: 'Lưới bảng giá' })).not.toBeInTheDocument()
   expect(screen.queryByRole('form', { name: 'Công thức bảng giá' })).not.toBeInTheDocument()
+})
+
+it('leaves missing product list values blank instead of showing placeholders', async () => {
+  const service = makeService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-empty',
+          code: 'EMPTY',
+          name: 'Missing fields',
+          status: 'active' as const,
+          unit_name: 'cai',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 0,
+          default_sale_price: undefined,
+          inventory_shape: 'normal' as const,
+          created_at: '2026-07-15T01:00:00.000Z',
+          updated_at: '2026-07-16T01:00:00.000Z',
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+
+  render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const row = await screen.findByRole('row', { name: /EMPTY Missing fields/ })
+  const cells = Array.from(row.querySelectorAll('td'))
+
+  expect(cells[5]).toHaveTextContent('')
+  expect(cells[6]).toHaveTextContent('')
+  expect(cells[8]).toHaveTextContent('')
+  expect(row).not.toHaveTextContent('Chưa có')
 })
 
 it('sorts product rows from shared column headers', async () => {
@@ -603,7 +642,7 @@ it('sorts product rows from shared column headers', async () => {
   expect(within(grid).getByRole('columnheader', { name: 'Tên hàng' })).toHaveAttribute('aria-sort', 'descending')
 })
 
-it('shows recently created or edited products first by default', async () => {
+it('shows recently created products first by default', async () => {
   const service = makeService({
     listProducts: vi.fn(async () => ({
       items: [
@@ -656,8 +695,8 @@ it('shows recently created or edited products first by default', async () => {
 
   const grid = await screen.findByRole('table', { name: 'Danh sách hàng hóa' })
   const rows = within(grid).getAllByRole('row')
-  expect(rows[1]).toHaveTextContent('EDIT')
-  expect(rows[2]).toHaveTextContent('NEW')
+  expect(rows[1]).toHaveTextContent('NEW')
+  expect(rows[2]).toHaveTextContent('EDIT')
   expect(rows[3]).toHaveTextContent('OLD')
 })
 
@@ -816,7 +855,7 @@ it('expands product details directly under the selected row and closes on second
   expect(detail.querySelector('.management-detail-footer-actions')).not.toBeNull()
   expect(within(detail).queryByRole('button', { name: 'In tem mã' })).not.toBeInTheDocument()
   expect(within(detail).getByText('Mica 3mm')).toBeInTheDocument()
-  expect(within(detail).getByText('m tới')).toBeInTheDocument()
+  expect(Array.from(detail.querySelectorAll('dt')).map((label) => label.textContent)).not.toContain('Đơn vị')
   expect(within(detail).getByText('100 000')).toBeInTheDocument()
 
   await userEvent.click(within(detail).getByRole('tab', { name: 'Đơn vị & quy đổi' }))
@@ -828,6 +867,39 @@ it('expands product details directly under the selected row and closes on second
 
   await userEvent.click(productRow as HTMLElement)
   expect(screen.queryByRole('region', { name: 'Chi tiết hàng hóa MICA-3MM' })).not.toBeInTheDocument()
+})
+
+it('hides placeholder product units from the list and detail fields', async () => {
+  const service = makeService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-no-unit',
+          code: 'NO-UNIT',
+          name: 'No unit product',
+          status: 'active' as const,
+          unit_name: 'Can cap nhat',
+          sell_method: 'quantity' as const,
+          latest_purchase_cost: 0,
+          inventory_shape: 'normal' as const,
+          created_at: '2026-07-15T01:00:00.000Z',
+          updated_at: '2026-07-15T01:00:00.000Z',
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })
+
+  render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await userEvent.click(await screen.findByRole('button', { name: 'NO-UNIT' }))
+  const detail = screen.getByRole('region', { name: 'Chi tiết hàng hóa NO-UNIT' })
+  const detailLabels = Array.from(detail.querySelectorAll('dt')).map((label) => label.textContent)
+  expect(screen.queryByText('Can cap nhat')).not.toBeInTheDocument()
+  expect(detail).not.toHaveTextContent('Can cap nhat')
+  expect(detailLabels).not.toContain('Đơn vị')
 })
 
 it('shows stock card tab as a KV-style movement table with placeholders for missing API fields', async () => {
@@ -850,14 +922,17 @@ it('shows stock card tab as a KV-style movement table with placeholders for miss
   expect(within(stockCardTable).getByRole('columnheader', { name: 'Số lượng' })).toBeInTheDocument()
   expect(within(stockCardTable).getByRole('columnheader', { name: 'Tồn cuối' })).toBeInTheDocument()
   expect(within(stockCardTable).getByRole('columnheader', { name: 'Đối tác' })).toBeInTheDocument()
-  expect(within(stockCardTable).getByRole('button', { name: 'HD011036' })).toBeInTheDocument()
+  expect(within(stockCardTable).getByRole('link', { name: 'HD011036' })).toHaveAttribute(
+    'href',
+    '/sales-documents?open=HD011036&type=invoice',
+  )
   expect(within(stockCardTable).getByText('Bán hàng')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('300 000')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('107 751,2')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('-1,656')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('18,344')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('Khách lẻ')).toBeInTheDocument()
-  expect(within(stockCardTable).getByRole('button', { name: 'KK000043' })).toBeInTheDocument()
+  expect(within(stockCardTable).getByText('KK000043')).toBeInTheDocument()
   expect(within(stockCardTable).getByText('Cân bằng kiểm kho')).toBeInTheDocument()
   expect(within(stockCardTable).queryByText('stocktake_balance')).not.toBeInTheDocument()
   expect(within(stockCardTable).queryByText('Chưa có')).not.toBeInTheDocument()
@@ -927,7 +1002,7 @@ it('shows KiotViet provisional stock and draft BOM metadata for imported product
 
   await screen.findByText('HH')
   expect(screen.getByRole('columnheader', { name: 'Tồn kho' })).toBeInTheDocument()
-  expect(screen.getByText('4 cai')).toBeInTheDocument()
+  expect(screen.getByText('4')).toBeInTheDocument()
 
   await userEvent.click(screen.getByText('HH'))
   const detail = screen.getByRole('region', { name: 'Chi tiết hàng hóa HH' })
@@ -983,7 +1058,7 @@ it('shows calculated QCVL operating stock as the main product stock value', asyn
 
   await screen.findByText('BT')
   expect(screen.getByRole('columnheader', { name: /Tồn kho/ })).toBeInTheDocument()
-  expect(screen.getByText('156 m2')).toBeInTheDocument()
+  expect(screen.getByText('156')).toBeInTheDocument()
 
   await userEvent.click(screen.getByText('BT'))
   const detail = screen.getByRole('region', { name: 'Chi tiết hàng hóa BT' })

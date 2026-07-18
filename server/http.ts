@@ -121,8 +121,67 @@ export interface WorkstationData {
   status: 'active' | 'inactive'
 }
 
-export type SalesDocumentData = ReturnType<typeof makeSalesDocument>
+export interface SalesDocumentData {
+  id: string
+  code: string
+  order_type: 'invoice' | 'quote'
+  status: string
+  created_at: string
+  customer: { id: string; code: string; name: string; phone: string | null }
+  seller: { id: string; name: string }
+  subtotal_amount: number
+  discount_amount: number
+  total_amount: number
+  paid_amount: number
+  debt_amount: number
+  payment_status: string
+  note: string | null
+  items: Array<Record<string, unknown>>
+  base_code?: string
+  revision_no?: number
+  revised_from_order_id?: string | null
+  replaced_by_order_id?: string | null
+  cancel_reason_type?: string | null
+  revision_reason_code?: string | null
+  revision_reason_note?: string | null
+}
+export interface SalesDocumentListPageData {
+  items: SalesDocumentData[]
+  total: number
+  summary: {
+    total_amount: number
+    debt_amount: number
+  }
+}
+export interface SalesDocumentPaymentReceiptData {
+  id: string
+  code: string
+  status: 'posted' | 'cancelled'
+  receipt_type: 'sale_payment' | 'debt_collection' | 'mixed_sale_and_debt'
+  total_received_amount: number
+  created_at: string
+  created_by: { id: string; name: string }
+  methods: Array<{
+    method_type: 'cash' | 'bank_transfer'
+    amount: number
+    finance_account: { id: string; code: string; name: string }
+  }>
+  allocations: Array<{
+    order_id: string
+    order_code: string
+    allocated_amount: number
+    remaining_after: number
+  }>
+}
 export type PurchaseReceiptData = ReturnType<typeof makePurchaseReceipt>
+export interface PurchaseReceiptListPageData {
+  items: PurchaseReceiptData[]
+  total: number
+  summary?: {
+    payable_amount: number
+    remaining_amount: number
+  }
+}
 export interface ProductListData {
   id: string
   code: string
@@ -173,6 +232,11 @@ export interface ProductListData {
   } | null
   created_at: string
   updated_at: string
+}
+export interface ProductListPageData {
+  items: ProductListData[]
+  total: number
+  total_all?: number
 }
 
 export interface ProductGroupListData {
@@ -239,7 +303,12 @@ export interface FinanceAccountData {
   note?: string | null
   notify_on_transaction?: boolean
 }
-export type CashbookEntryData = Omit<ReturnType<typeof makeCashbookEntry>, 'finance_account'> & {
+export interface CashbookEntryData {
+  id: string
+  code: string
+  status: string
+  direction: 'in' | 'out'
+  amount_delta: number
   finance_account: {
     id: string
     code: string
@@ -247,6 +316,15 @@ export type CashbookEntryData = Omit<ReturnType<typeof makeCashbookEntry>, 'fina
     account_type: 'cash' | 'bank'
     account_number?: string | null
     account_holder?: string | null
+  }
+  is_business_accounted: boolean
+  source_type: string
+  created_at: string
+  note: string | null
+  counterparty: {
+    type: string
+    name: string
+    phone: string | null
   }
   created_by?: { id: string; name: string } | null
   source?: {
@@ -272,6 +350,16 @@ export type CashbookEntryData = Omit<ReturnType<typeof makeCashbookEntry>, 'fina
   }>
   payment_method?: string
 }
+export interface CashbookListPageData {
+  items: CashbookEntryData[]
+  total: number
+  summary: {
+    opening_balance: number
+    total_in: number
+    total_out: number
+    ending_balance: number
+  }
+}
 export type CustomerDebtSummaryData = CustomerDebtItem
 export type CustomerDebtDetailData = ReturnType<typeof makeCustomerDebtDetail>
 export interface StocktakeListData {
@@ -294,6 +382,11 @@ export interface StocktakeListData {
   product_actual_qty?: number | null
   product_difference_qty?: number | null
   note: string | null
+}
+export interface StocktakeListPageData {
+  items: StocktakeListData[]
+  total: number
+  creator_options?: Array<{ id: string; name: string }>
 }
 
 export interface StocktakeDetailItemData {
@@ -374,6 +467,7 @@ export interface ServerRepository {
   getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
   recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
   listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
+  listProductsPage?(input: { organizationId: string; url: URL }): Promise<ProductListPageData>
   listProductGroups?(input: { organizationId: string }): Promise<ProductGroupListData[]>
   updateProductGroup?(input: { organizationId: string; id: string; name: string }): Promise<ProductGroupListData | null>
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
@@ -420,6 +514,7 @@ export interface ServerRepository {
   deleteImportedKiotVietStocktakes?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   deleteImportedKiotVietPurchaseReceipts?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   listPurchaseReceipts?(input: { organizationId: string; url: URL }): Promise<PurchaseReceiptData[]>
+  listPurchaseReceiptsPage?(input: { organizationId: string; url: URL }): Promise<PurchaseReceiptListPageData>
   getPurchaseReceipt?(input: { organizationId: string; id: string }): Promise<PurchaseReceiptData | null>
   findPurchaseReceiptsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   listStockMovements?(input: { organizationId: string; url: URL }): Promise<StockMovementData[]>
@@ -485,6 +580,7 @@ export interface ServerRepository {
     missing_product_rows: number
   }>
   listStocktakes?(input: { organizationId: string; url: URL }): Promise<StocktakeListData[]>
+  listStocktakesPage?(input: { organizationId: string; url: URL }): Promise<StocktakeListPageData>
   getStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
   updateStocktakeNote?(input: { organizationId: string; id: string; note: string | null }): Promise<StocktakeDetailData | null>
   cancelStocktake?(input: { organizationId: string; id: string }): Promise<StocktakeDetailData | null>
@@ -527,10 +623,19 @@ export interface ServerRepository {
     document: SalesDocumentData
     cashbookEntries: CashbookEntryData[]
   }): Promise<void>
+  reviseSalesDocument?(input: {
+    organizationId: string
+    originalOrderId: string
+    originalOrderCode: string
+    document: SalesDocumentData
+    cashbookEntries: CashbookEntryData[]
+    reason: { code: string; note: string | null }
+  }): Promise<SalesDocumentData | null>
   listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
+  listSalesDocumentsPage?(input: { organizationId: string; url: URL }): Promise<SalesDocumentListPageData>
   getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
   cancelSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
-  updateSalesDocumentNote?(input: { organizationId: string; id: string; note: string | null }): Promise<SalesDocumentData | null>
+  updateSalesDocumentNote?(input: { organizationId: string; id: string; note?: string | null; created_at?: string }): Promise<SalesDocumentData | null>
   findSalesDocumentsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   deleteImportedKiotVietInvoices?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>
   upsertImportedKiotVietInvoices?(input: {
@@ -567,6 +672,7 @@ export interface ServerRepository {
     note?: string
   }): Promise<{ payment_receipt_id: string; allocated_amount: number }>
   listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
+  listCashbookEntriesPage?(input: { organizationId: string; url: URL }): Promise<CashbookListPageData>
   getCashbookEntry?(input: { organizationId: string; id: string }): Promise<CashbookEntryData | null>
   getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
@@ -759,7 +865,7 @@ const purchaseReceipts = Array.from({ length: 20 }, (_, index) => makePurchaseRe
 syncSupplierTotalsFromPurchaseReceipts()
 const purchaseReceipt = purchaseReceipts[0]
 
-const salesDocuments = Array.from({ length: 20 }, (_, index) => makeSalesDocument(index + 1))
+const salesDocuments: SalesDocumentData[] = Array.from({ length: 20 }, (_, index) => makeSalesDocument(index + 1))
 
 const inventoryProducts = products.map((product, index) => ({
   product_id: product.id,
@@ -887,7 +993,7 @@ function syncSupplierTotalsFromPurchaseReceipts() {
   }
 }
 
-function makeSalesDocument(number: number) {
+function makeSalesDocument(number: number): SalesDocumentData {
   const customer = customers[(number - 1) % Math.min(customers.length, 5)] ?? customers[0]
   const product = products[(number - 1) % products.length] ?? products[0]
   const isQuote = number % 2 === 0
@@ -1039,7 +1145,7 @@ function filterSalesDocuments(url: URL) {
 
 async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
   const filtered: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
-  if (url.searchParams.get('sort') !== 'pos_usage') return newestProductsFirst(filtered)
+  if (url.searchParams.get('sort') !== 'pos_usage') return defaultProductOrder(filtered)
 
   const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
   return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
@@ -1079,10 +1185,13 @@ function filterProducts(url: URL) {
   })
 }
 
-function newestProductsFirst<T extends { created_at?: string | null; code?: string }>(items: readonly T[]) {
+function defaultProductOrder<T extends { code?: string; name?: string; created_at?: string | null }>(items: readonly T[]) {
   return [...items].sort((left, right) => {
-    const compared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
-    return compared === 0 ? String(left.code ?? '').localeCompare(String(right.code ?? ''), 'vi', { numeric: true, sensitivity: 'base' }) : compared
+    const createdCompared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
+    if (Number.isFinite(createdCompared) && createdCompared !== 0) return createdCompared
+    const codeCompared = String(left.code ?? '').localeCompare(String(right.code ?? ''), 'vi', { numeric: true, sensitivity: 'base' })
+    if (codeCompared !== 0) return codeCompared
+    return String(left.name ?? '').localeCompare(String(right.name ?? ''), 'vi', { numeric: true, sensitivity: 'base' })
   })
 }
 
@@ -1099,7 +1208,7 @@ function productUsageCounts() {
   for (const document of salesDocuments) {
     if (document.order_type !== 'invoice' && document.order_type !== 'quote') continue
     for (const item of document.items ?? []) {
-      if (!item.product_id) continue
+      if (typeof item.product_id !== 'string' || item.product_id.trim() === '') continue
       usageByProductId.set(item.product_id, (usageByProductId.get(item.product_id) ?? 0) + 1)
     }
   }
@@ -1134,6 +1243,66 @@ async function nextSalesDocumentCode(
     return Math.max(max, Number(match[1]))
   }, 0) + 1
   return `${prefix}${String(nextNumber).padStart(6, '0')}`
+}
+
+function invoiceBaseCode(code: string) {
+  const match = /^(HD\d{6})(?:\.\d+)?$/.exec(code)
+  return match ? match[1] : code
+}
+
+function invoiceRevisionNumber(document: SalesDocumentData, baseCode: string) {
+  if (document.base_code === baseCode && typeof document.revision_no === 'number') return document.revision_no
+  const match = new RegExp(`^${baseCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:\\.(\\d+))?$`).exec(document.code)
+  if (!match) return null
+  return match[1] ? Number(match[1]) : 0
+}
+
+async function nextInvoiceRevision(
+  repository: ServerRepository,
+  organizationId: string,
+  baseCode: string,
+) {
+  const documents = repository.listSalesDocuments
+    ? await repository.listSalesDocuments({
+        organizationId,
+        url: new URL('http://api.local/api/v1/sales-documents?type=invoice&page=1&page_size=100000'),
+      })
+    : salesDocuments.filter((document) => document.order_type === 'invoice')
+  const nextRevision = documents.reduce((max, document) => {
+    const revisionNo = invoiceRevisionNumber(document, baseCode)
+    return revisionNo === null ? max : Math.max(max, revisionNo)
+  }, 0) + 1
+  return {
+    baseCode,
+    revisionNo: nextRevision,
+    code: `${baseCode}.${String(nextRevision).padStart(2, '0')}`,
+  }
+}
+
+const allowedRevisionReasonCodes = new Set([
+  'wrong_price',
+  'wrong_dimension',
+  'wrong_customer',
+  'customer_changed_mind',
+  'other',
+])
+
+function requiredRevisionReasonCode(body: Record<string, unknown>) {
+  const code = typeof body.revision_reason_code === 'string' ? body.revision_reason_code.trim() : ''
+  if (!allowedRevisionReasonCodes.has(code)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'revision_reason_code is required.', {
+      revision_reason_code: ['revision_reason_code is required.'],
+    })
+  }
+  const note = typeof body.revision_reason_note === 'string' && body.revision_reason_note.trim() !== ''
+    ? body.revision_reason_note.trim()
+    : null
+  if (code === 'other' && note === null) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'revision_reason_note is required.', {
+      revision_reason_note: ['revision_reason_note is required when revision_reason_code is other.'],
+    })
+  }
+  return { code, note }
 }
 
 function checkoutPaymentStatus(orderType: 'invoice' | 'quote', paidAmount: number, debtAmount: number) {
@@ -1542,8 +1711,9 @@ function filterCashbookEntries(url: URL) {
       const scopedHaystacks = {
         code: entry.code,
         note: entry.note,
+        transfer_content: entry.source?.transfer_content ?? '',
         counterparty: `${entry.counterparty.name} ${entry.counterparty.phone ?? ''}`,
-        all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name}`,
+        all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name} ${entry.source?.transfer_content ?? ''}`,
       }
       const haystack = normalizeSearchText(scopedHaystacks[searchScope as keyof typeof scopedHaystacks] ?? scopedHaystacks.all)
       if (!haystack.includes(search)) return false
@@ -1554,6 +1724,7 @@ function filterCashbookEntries(url: URL) {
 
 function makeOrderFromCheckout(body: {
   customer_id?: string
+  created_at?: string
   note?: string
   items?: Array<{
     product_id?: string
@@ -1565,7 +1736,7 @@ function makeOrderFromCheckout(body: {
   }>
   payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
 }, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>, code: string, seller: { id: string; name: string }) {
-  const createdAt = runtimeIso()
+  const createdAt = readCheckoutCreatedAt(body.created_at) ?? runtimeIso()
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
   const discount = (body.items ?? []).reduce((sum, item) => sum + Number(item.discount_amount ?? 0), 0)
   const total = Math.max(subtotal - discount, 0)
@@ -1604,6 +1775,21 @@ function makeOrderFromCheckout(body: {
         discount_amount: Number(item.discount_amount ?? 0),
       })),
   }
+}
+
+function readCheckoutCreatedAt(value: unknown) {
+  if (typeof value !== 'string' || value.trim() === '') return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.toISOString()
+}
+
+function optionalIsoDateTime(value: unknown, field: string) {
+  if (value === undefined) return undefined
+  if (typeof value !== 'string' || value.trim() === '') throw new HttpError(400, 'VALIDATION_ERROR', `${field} is required.`, { [field]: [`${field} is required.`] })
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) throw new HttpError(400, 'VALIDATION_ERROR', `${field} is invalid.`, { [field]: [`${field} is invalid.`] })
+  return parsed.toISOString()
 }
 
 type PosCartValidationLine = {
@@ -1857,7 +2043,7 @@ async function collectCustomerDebt(request: Request) {
   const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
   const inputNote = body.note?.trim()
   const entryNote = inputNote ? `${inputNote} - ${allocationCodes}` : `Thu no ${allocationCodes}`
-  const baseEntry = {
+  const baseEntry: Omit<CashbookEntryData, 'id' | 'code' | 'amount_delta' | 'finance_account'> = {
     status: 'posted',
     direction: 'in',
     is_business_accounted: true,
@@ -1897,33 +2083,53 @@ async function collectCustomerDebt(request: Request) {
 }
 
 function makeSalesDocumentDetail(
-  document: ReturnType<typeof makeSalesDocument>,
+  document: SalesDocumentData,
   productCatalog: ProductListData[] = products,
 ) {
+  const hydratedDocument = document as typeof document & {
+    payment_receipts?: SalesDocumentPaymentReceiptData[]
+  }
   const rawItems = Array.isArray(document.items) ? document.items : []
   const detailItems = rawItems.length > 0
     ? rawItems.map((item, index) => {
         const detailItem = item as {
           product_id: string
+          product_snapshot?: {
+            code?: string
+            name?: string
+            unit_name?: string
+            sell_method?: string
+          }
           quantity?: number
           unit_price?: number
           discount_amount?: number
+          line_total?: number
           sale_unit_name?: string
           width_m?: number | null
           height_m?: number | null
           linear_m?: number | null
+          note?: string | null
         }
+        const snapshot = detailItem.product_snapshot
         const product = productCatalog.find((candidate) => candidate.id === detailItem.product_id)
           ?? products.find((candidate) => candidate.id === detailItem.product_id)
-          ?? products[0]
+          ?? null
         const quantity = Number(detailItem.quantity ?? 1)
         const unitPrice = Number(detailItem.unit_price ?? document.subtotal_amount)
         const discountAmount = Number(detailItem.discount_amount ?? 0)
         const lineSubtotal = quantity * unitPrice
+        const lineTotal = Number.isFinite(detailItem.line_total ?? Number.NaN)
+          ? Number(detailItem.line_total)
+          : Math.max(lineSubtotal - discountAmount, 0)
+        const productId = detailItem.product_id ?? product?.id ?? products[0].id
+        const productCode = snapshot?.code ?? product?.code ?? products[0].code
+        const productName = snapshot?.name ?? product?.name ?? products[0].name
+        const productUnitName = detailItem.sale_unit_name ?? snapshot?.unit_name ?? product?.unit_name ?? products[0].unit_name
+        const productSellMethod = snapshot?.sell_method ?? product?.sell_method ?? products[0].sell_method
         return {
           id: `${document.id}-item-${index + 1}`,
           line_no: index + 1,
-          product: { id: product.id, code: product.code, name: product.name, unit_name: detailItem.sale_unit_name ?? product.unit_name, sell_method: product.sell_method },
+          product: { id: productId, code: productCode, name: productName, unit_name: productUnitName, sell_method: productSellMethod },
           quantity,
           width_m: detailItem.width_m ?? null,
           height_m: detailItem.height_m ?? null,
@@ -1931,13 +2137,13 @@ function makeSalesDocumentDetail(
           unit_price: unitPrice,
           line_subtotal_amount: lineSubtotal,
           discount_amount: discountAmount,
-          line_total: Math.max(lineSubtotal - discountAmount, 0),
+          line_total: lineTotal,
           price_source: 'price_source' in item && typeof item.price_source === 'string' ? item.price_source : 'default_price_list',
-          note: 'note' in item && typeof item.note === 'string' ? item.note : null,
+          note: typeof detailItem.note === 'string' ? detailItem.note : ('note' in item && typeof item.note === 'string' ? item.note : null),
         }
       })
     : [{
-        id: `${document.id}-item-1`,
+      id: `${document.id}-item-1`,
         line_no: 1,
         product: { id: productCatalog[0]?.id ?? products[0].id, code: productCatalog[0]?.code ?? products[0].code, name: productCatalog[0]?.name ?? products[0].name, unit_name: productCatalog[0]?.unit_name ?? products[0].unit_name, sell_method: productCatalog[0]?.sell_method ?? products[0].sell_method },
         quantity: 1,
@@ -1956,7 +2162,7 @@ function makeSalesDocumentDetail(
     price_list: { id: 'pl-default', code: 'BG-LE', name: 'Bang gia le' },
     change_returned_amount: 0,
     items: detailItems,
-    payment_receipts: [],
+    payment_receipts: Array.isArray(hydratedDocument.payment_receipts) ? hydratedDocument.payment_receipts : [],
     debt_entries: document.debt_amount > 0
       ? [
           {
@@ -1982,7 +2188,7 @@ function makeSalesDocumentDetail(
   }
 }
 
-function makeCashbookEntry(number: number) {
+function makeCashbookEntry(number: number): CashbookEntryData {
   const isIn = number % 2 === 1
   const amount = 150000 + number * 25000
   const account = financeAccounts[number % 3 === 0 ? 1 : 0]
@@ -2183,6 +2389,11 @@ async function getDevApiResponse(
       displayName: requiredString(body.display_name, 'display_name'),
       permissions: normalizePermissions(body.permissions),
     }
+    await ensureUserLoginIdsAvailable(repository, currentUser.organization.id, {
+      email: userInput.email,
+      username: userInput.username,
+      phone: userInput.phone,
+    })
     let created: UserListItemData
     try {
       created = repository.createUser
@@ -2201,6 +2412,11 @@ async function getDevApiResponse(
     const id = getIdFromPath(path) ?? ''
     const username = typeof body.username === 'string' ? body.username.trim() : undefined
     const contactEmail = body.email === undefined ? undefined : nullableString(body.email)
+    await ensureUserLoginIdsAvailable(repository, currentUser.organization.id, {
+      email: contactEmail === undefined ? undefined : (contactEmail ?? makeInternalUserEmail(username ?? id)).toLowerCase(),
+      username,
+      phone: body.phone === undefined ? undefined : nullableString(body.phone),
+    }, id)
     let updated: UserListItemData | null | undefined
     try {
       updated = await repository.updateUser?.({
@@ -2208,7 +2424,7 @@ async function getDevApiResponse(
         id,
         email: contactEmail === undefined ? undefined : (contactEmail ?? makeInternalUserEmail(username ?? id)).toLowerCase(),
         username,
-        phone: body.phone === undefined ? undefined : requiredString(body.phone, 'phone'),
+        phone: body.phone === undefined ? undefined : nullableString(body.phone),
         birthday: body.birthday === undefined ? undefined : nullableString(body.birthday),
         region: body.region === undefined ? undefined : nullableString(body.region),
         ward: body.ward === undefined ? undefined : nullableString(body.ward),
@@ -2272,6 +2488,19 @@ async function getDevApiResponse(
         return { found: true, data: renamed }
       },
       listProducts: async () => {
+        if (repository.listProductsPage && url.searchParams.get('sort') !== 'pos_usage') {
+          const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, url })
+          return {
+            found: true,
+            data: {
+              items: result.items,
+              page,
+              page_size: pageSize,
+              total: result.total,
+              total_all: result.total_all ?? result.total,
+            },
+          }
+        }
         const items = await listProductsForRequest(url, repository, currentUser.organization.id)
         return {
           found: true,
@@ -2440,6 +2669,19 @@ async function getDevApiResponse(
         return { found: true, data: paged(newestFirst(items), page, pageSize) }
       },
       stocktakes: async () => {
+        if (repository.listStocktakesPage) {
+          const result = await repository.listStocktakesPage({ organizationId: currentUser.organization.id, url })
+          return {
+            found: true,
+            data: {
+              items: result.items,
+              page,
+              page_size: pageSize,
+              total: result.total,
+              creator_options: result.creator_options ?? stocktakeCreatorOptions(result.items),
+            },
+          }
+        }
         const items = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
           ?? [makeStocktake(currentUser.user)]
         const creatorUrl = new URL(url)
@@ -2756,7 +2998,7 @@ async function getDevApiResponse(
           addCustomerSalesFromCheckout(order)
           addCustomerDebtFromCheckout(order)
         }
-        return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
+        return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', created_at: order.created_at, total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
       },
       createQuote: async () => {
         const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
@@ -2769,10 +3011,90 @@ async function getDevApiResponse(
         } else {
           salesDocuments.unshift(quote)
         }
-        return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', total_amount: quote.total_amount }, status: 201 }
+        return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', created_at: quote.created_at, total_amount: quote.total_amount }, status: 201 }
       },
       reopenQuotePayload: async () => ({ found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }),
+      reviseInvoice: async () => {
+        const originalId = getIdFromPath(path) ?? ''
+        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0] & Record<string, unknown>
+        const reason = requiredRevisionReasonCode(body)
+        if (!currentUser.permissions.includes('perm.edit_order_locked')) {
+          throw new HttpError(403, 'PERMISSION_DENIED', 'Missing permission perm.edit_order_locked.')
+        }
+        const original = repository.getSalesDocument
+          ? await repository.getSalesDocument({ organizationId: currentUser.organization.id, id: originalId })
+          : salesDocuments.find((document) => document.id === originalId || document.code === originalId) ?? null
+        if (!original) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+        if (original.order_type !== 'invoice' || original.status !== 'completed') {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'Only completed invoices can be revised.')
+        }
+
+        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
+        const baseCode = original.base_code ?? invoiceBaseCode(original.code)
+        const nextRevision = await nextInvoiceRevision(repository, currentUser.organization.id, baseCode)
+        const seller = { id: currentUser.user.id, name: currentUser.user.display_name }
+        const revisedOrder = {
+          ...makeOrderFromCheckout(body, 'invoice', customer, nextRevision.code, seller),
+          base_code: nextRevision.baseCode,
+          revision_no: nextRevision.revisionNo,
+          revised_from_order_id: original.id,
+          replaced_by_order_id: null,
+          cancel_reason_type: null,
+          revision_reason_code: reason.code,
+          revision_reason_note: reason.note,
+        } satisfies SalesDocumentData
+        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
+        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(revisedOrder, body.payment, seller) : addCashbookEntriesFromCheckout(revisedOrder, body.payment, seller)
+        const saved = repository.reviseSalesDocument
+          ? await repository.reviseSalesDocument({
+              organizationId: currentUser.organization.id,
+              originalOrderId: original.id,
+              originalOrderCode: original.code,
+              document: revisedOrder,
+              cashbookEntries: paymentEntries,
+              reason,
+            })
+          : null
+        if (!saved) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+        return {
+          found: true,
+          data: {
+            order: {
+              id: saved.id,
+              code: saved.code,
+              order_type: 'invoice',
+              status: 'completed',
+              created_at: saved.created_at,
+              total_amount: saved.total_amount,
+              paid_amount: saved.paid_amount,
+              debt_amount: saved.debt_amount,
+              payment_status: saved.payment_status,
+              base_code: saved.base_code,
+              revision_no: saved.revision_no,
+              revised_from_order_id: saved.revised_from_order_id,
+            },
+            payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null,
+            inventory_warnings: [],
+          },
+          status: 201,
+        }
+      },
       listSalesDocuments: async () => {
+        const page = Number(url.searchParams.get('page') ?? '1')
+        const pageSize = Number(url.searchParams.get('page_size') ?? '20')
+        if (repository.listSalesDocumentsPage) {
+          const result = await repository.listSalesDocumentsPage({ organizationId: currentUser.organization.id, url })
+          return {
+            found: true,
+            data: {
+              items: result.items,
+              page,
+              page_size: pageSize,
+              total: result.total,
+              summary: result.summary,
+            },
+          }
+        }
         if (repository.listSalesDocuments) {
           const items = await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url })
           return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
@@ -2785,13 +3107,7 @@ async function getDevApiResponse(
         if (repository.getSalesDocument) {
           const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
           if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
-          const productCatalog = repository.listProducts
-            ? await repository.listProducts({
-                organizationId: currentUser.organization.id,
-                url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
-              })
-            : products
-          return { found: true, data: makeSalesDocumentDetail(document, productCatalog) }
+          return { found: true, data: makeSalesDocumentDetail(document) }
         }
         const document = salesDocuments.find((item) => item.id === id || item.code === id)
         if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
@@ -2800,34 +3116,42 @@ async function getDevApiResponse(
       updateSalesDocument: async () => {
         const id = getIdFromPath(path) ?? ''
         const body = await readJson(request)
-        const productCatalog = async () => repository.listProducts
-          ? repository.listProducts({
-              organizationId: currentUser.organization.id,
-              url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
-            })
-          : products
-        if (body.note !== undefined && body.status === undefined) {
+        const createdAt = optionalIsoDateTime(body.created_at, 'created_at')
+        if ((body.note !== undefined || createdAt !== undefined) && body.status === undefined) {
           if (repository.updateSalesDocumentNote) {
             const document = await repository.updateSalesDocumentNote({
               organizationId: currentUser.organization.id,
               id,
-              note: nullableString(body.note),
+              ...(body.note !== undefined ? { note: nullableString(body.note) } : {}),
+              ...(createdAt !== undefined ? { created_at: createdAt } : {}),
             })
             if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-            return { found: true, data: makeSalesDocumentDetail(document, await productCatalog()) }
+            return { found: true, data: makeSalesDocumentDetail(document) }
           }
           const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
           if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-          salesDocuments[index] = { ...salesDocuments[index], note: nullableString(body.note) ?? '' }
+          const updatedDocument = {
+            ...salesDocuments[index],
+            ...(body.note !== undefined ? { note: nullableString(body.note) ?? '' } : {}),
+            ...(createdAt !== undefined ? { created_at: createdAt } : {}),
+          }
+          salesDocuments[index] = updatedDocument
+          if (createdAt !== undefined) {
+            for (const entry of cashbookEntries) {
+              const matchesOrder = entry.source?.order_code === updatedDocument.code
+                || (entry.allocations ?? []).some((allocation) => allocation.order_id === updatedDocument.id || allocation.order_code === updatedDocument.code)
+              if (matchesOrder) entry.created_at = createdAt
+            }
+          }
           return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }
         }
-        if (body.status !== 'cancelled' || body.note !== undefined) {
+        if (body.status !== 'cancelled' || body.note !== undefined || body.created_at !== undefined) {
           throw new HttpError(400, 'VALIDATION_ERROR', 'Only sales document cancellation or note update is supported.')
         }
         if (repository.cancelSalesDocument) {
           const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
           if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-          return { found: true, data: makeSalesDocumentDetail(document, await productCatalog()) }
+          return { found: true, data: makeSalesDocumentDetail(document) }
         }
         const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
         if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
@@ -2979,6 +3303,13 @@ async function getDevApiResponse(
       },
       listCashbook: async () => {
         const entriesUrl = cashbookEntriesUrl(url)
+        if (repository.listCashbookEntriesPage) {
+          const pageData = await repository.listCashbookEntriesPage({ organizationId: currentUser.organization.id, url: entriesUrl })
+          return {
+            found: true,
+            data: { ...pageData, page, page_size: pageSize },
+          }
+        }
         const entries = repository.listCashbookEntries
           ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
           : filterCashbookEntries(entriesUrl)
@@ -3189,7 +3520,9 @@ function stocktakeCreatorOptions(items: readonly StocktakeListData[]) {
 
 function getIdFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
-  return parts.at(-1) === 'post' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' ? parts.at(-2) : parts.at(-1)
+  return parts.at(-1) === 'post' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' || parts.at(-1) === 'revise'
+    ? parts.at(-2)
+    : parts.at(-1)
 }
 
 function getSupplierIdFromPath(path: string) {
@@ -3222,6 +3555,35 @@ function financeAccountFromBody(body: Partial<FinanceAccountData>): Omit<Finance
 function normalizePermissions(value: unknown) {
   if (!Array.isArray(value)) return allPermissions.map((permission) => permission.code)
   return value.filter((permission): permission is PermissionCode => typeof permission === 'string' && permission.startsWith('perm.'))
+}
+
+async function ensureUserLoginIdsAvailable(
+  repository: ServerRepository,
+  organizationId: string,
+  input: { email?: string | null; username?: string | null; phone?: string | null },
+  excludeUserId?: string,
+) {
+  if (!repository.listUsers) return
+  const users = await repository.listUsers({ organizationId, url: new URL('http://api.local/api/v1/users?page=1&page_size=10000') })
+  const normalizedEmail = input.email?.trim().toLowerCase() ?? null
+  const normalizedUsername = input.username?.trim().toLowerCase() ?? null
+  const normalizedPhone = input.phone?.replace(/\D/g, '') ?? null
+  const inputIdentifiers = new Set<string>()
+  if (normalizedEmail) inputIdentifiers.add(normalizedEmail)
+  if (normalizedUsername) inputIdentifiers.add(normalizedUsername)
+  if (normalizedPhone) inputIdentifiers.add(normalizedPhone)
+  const conflict = users.find((user) => {
+    if (excludeUserId && user.id === excludeUserId) return false
+    const userIdentifiers = [
+      user.email.trim().toLowerCase(),
+      user.username?.trim().toLowerCase(),
+      user.phone ? user.phone.replace(/\D/g, '') : null,
+    ].filter((identifier): identifier is string => Boolean(identifier))
+    return userIdentifiers.some((identifier) => inputIdentifiers.has(identifier))
+  })
+  if (conflict) {
+    throw new HttpError(409, 'RESOURCE_CONFLICT', 'User email, username, or phone already exists.')
+  }
 }
 
 function requiredString(value: unknown, field: string) {

@@ -26,17 +26,17 @@ export function numberText(value: number) {
 }
 
 export function moneyText(value: number | null) {
-  if (value === null) return 'Chưa có'
+  if (value === null) return ''
   return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value).replaceAll('.', ' ')
 }
 
 export function stocktakeQuantityText(value: number | null) {
-  if (value === null) return 'Chưa có'
+  if (value === null) return ''
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value)
 }
 
 export function stocktakeMoneyText(value: number | null) {
-  if (value === null) return 'Chưa có'
+  if (value === null) return ''
   return new Intl.NumberFormat('en-US', { maximumFractionDigits: 3 }).format(value)
 }
 

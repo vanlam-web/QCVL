@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronRight, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
@@ -24,6 +24,7 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
@@ -31,9 +32,11 @@ import { ProductGroupTreeSelect } from './ProductGroupTreeSelect'
 import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStatusFilter, ProductStockMovement, SellMethod } from './types'
 import {
   catalogDateTimeText,
+  catalogDateText,
   catalogInventoryShapeLabel,
   catalogQuantityText,
   catalogStockCardMoneyText,
+  catalogUnitNameDisplay,
   normalizeCatalogBomLines,
   type CatalogBomFormLine,
 } from './catalog-presenter'
@@ -53,6 +56,13 @@ type ProductKindFilter = ProductKind | 'all'
 type ProductGroupFilter = string[]
 type ProductInventoryShapeFilter = NonNullable<Product['inventory_shape']> | 'all'
 type ProductCreatedDateFilter = QuickDateRangePreset | 'custom'
+
+function productDocumentHref(code: string) {
+  if (code.startsWith('HD')) return managementRecordOpenHref('/sales-documents', code, { type: 'invoice' })
+  if (code.startsWith('PN')) return managementRecordOpenHref('/purchase/receipts', code)
+  if (code.startsWith('PC') || code.startsWith('PT') || code.startsWith('TT')) return managementRecordOpenHref('/finance', code)
+  return null
+}
 type ProductCreateKind = ProductKind
 type BomFormLine = CatalogBomFormLine
 type StockAdjustForm = { actualQty: string; reason: string }
@@ -130,18 +140,13 @@ const productCreatedDateLabels: Record<ProductCreatedDateFilter, string> = {
   custom: 'Tùy chỉnh',
 }
 
-function productActivityTime(product: Pick<Product, 'created_at' | 'updated_at'>) {
-  const createdAt = Date.parse(product.created_at ?? '')
-  const updatedAt = Date.parse(product.updated_at ?? '')
-  const validCreatedAt = Number.isFinite(createdAt) ? createdAt : 0
-  const validUpdatedAt = Number.isFinite(updatedAt) ? updatedAt : 0
-  return Math.max(validCreatedAt, validUpdatedAt)
-}
-
-function newestCatalogProductsFirst(products: readonly Product[]) {
+function defaultCatalogProductOrder(products: readonly Product[]) {
   return [...products].sort((left, right) => {
-    const compared = productActivityTime(right) - productActivityTime(left)
-    return compared === 0 ? left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' }) : compared
+    const createdCompared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
+    if (Number.isFinite(createdCompared) && createdCompared !== 0) return createdCompared
+    const codeCompared = left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' })
+    if (codeCompared !== 0) return codeCompared
+    return left.name.localeCompare(right.name, 'vi', { numeric: true, sensitivity: 'base' })
   })
 }
 
@@ -167,10 +172,10 @@ const detailTabs: Array<{ key: ProductDetailTab; label: string }> = [
 
 function catalogProductInventoryText(product: Product) {
   if (product.operating_stock) {
-    return `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}`
+    return catalogQuantityText(product.operating_stock.quantity)
   }
   if (product.kiotviet_provisional_stock) {
-    return `${catalogQuantityText(product.kiotviet_provisional_stock.quantity)} ${product.kiotviet_provisional_stock.unit_name}`
+    return catalogQuantityText(product.kiotviet_provisional_stock.quantity)
   }
   return 'Chưa có'
 }
@@ -187,6 +192,8 @@ export function CatalogPage({
   service: CatalogService
   onOpenDashboard: () => void
 }) {
+  const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
+  const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
   const [state, setState] = useState<CatalogState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -210,8 +217,8 @@ export function CatalogPage({
   const [stockAdjustForms, setStockAdjustForms] = useState<Record<string, StockAdjustForm>>({})
   const [stocktakeNotices, setStocktakeNotices] = useState<Record<string, StocktakeNotice>>({})
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
-  const [search, setSearch] = useState('')
-  const [lastSearch, setLastSearch] = useState('')
+  const [search, setSearch] = useState(routeSearch)
+  const [lastSearch, setLastSearch] = useState(routeSearch)
   const [status, setStatus] = useState<ProductStatusFilter>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
   const [productKindFilter, setProductKindFilter] = useState<ProductKindFilter>('all')
@@ -306,7 +313,12 @@ export function CatalogPage({
       setError(null)
       try {
         const [result, groupResult] = await Promise.all([
-          service.listProducts({ page: 1, page_size: defaultPageSize, status: 'active' }),
+          service.listProducts({
+            search: routeSearch || routeOpen || undefined,
+            page: 1,
+            page_size: defaultPageSize,
+            status: 'active',
+          }),
           service.listProductGroups(),
         ])
         if (!active) return
@@ -314,6 +326,13 @@ export function CatalogPage({
         setProductGroups(groupResult.items)
         setPage(result.page)
         setPageSize(result.page_size)
+        if (routeOpen) {
+          const openedProduct = result.items.find((product) => product.code === routeOpen || product.name === routeOpen)
+          if (openedProduct) {
+            setSelectedProductId(openedProduct.id)
+            setSelectedDetailTab('info')
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được hàng hóa.'))
       }
@@ -324,7 +343,7 @@ export function CatalogPage({
     return () => {
       active = false
     }
-  }, [defaultPageSize, service])
+  }, [defaultPageSize, routeOpen, routeSearch, service])
 
   useEffect(() => {
     if (!productCreatedQuickTimeOpen) return undefined
@@ -765,7 +784,7 @@ export function CatalogPage({
     sortedItems: sortedProducts,
     sortState: productSortState,
     requestSort: requestProductSort,
-  } = useManagementTableSort<Product, ProductSortKey>(newestCatalogProductsFirst(visibleProducts), {
+  } = useManagementTableSort<Product, ProductSortKey>(defaultCatalogProductOrder(visibleProducts), {
     code: { kind: 'text', value: (product) => product.code },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
@@ -849,25 +868,33 @@ export function CatalogPage({
       key: 'price',
       header: <ManagementSortableHeader kind="number" sortKey="default_sale_price" sortState={productSortState} onSort={requestProductSort}>Giá bán</ManagementSortableHeader>,
       headerIsCell: true,
-      cell: (product) => product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price),
+      cell: (product) => product.default_sale_price === null || product.default_sale_price === undefined ? '' : formatMoney(product.default_sale_price),
     },
     {
       key: 'operating-stock',
       header: <ManagementSortableHeader kind="number" sortKey="operating_stock" sortState={productSortState} onSort={requestProductSort}>Tồn kho</ManagementSortableHeader>,
       headerIsCell: true,
-      cell: (product) => catalogProductInventoryText(product),
+      cell: (product) => {
+        if (product.operating_stock) {
+          return catalogQuantityText(product.operating_stock.quantity)
+        }
+        if (product.kiotviet_provisional_stock) {
+          return catalogQuantityText(product.kiotviet_provisional_stock.quantity)
+        }
+        return ''
+      },
     },
     {
       key: 'unit',
       header: <ManagementSortableHeader kind="text" sortKey="unit_name" sortState={productSortState} onSort={requestProductSort}>Đơn vị</ManagementSortableHeader>,
       headerIsCell: true,
-      cell: (product) => product.unit_name,
+      cell: (product) => catalogUnitNameDisplay(product.unit_name) ?? '',
     },
     {
       key: 'out-of-stock',
       header: <ManagementSortableHeader kind="text" sortKey="out_of_stock" sortState={productSortState} onSort={requestProductSort}>Dự kiến hết hàng</ManagementSortableHeader>,
       headerIsCell: true,
-      cell: () => 'Chưa có',
+      cell: () => '',
     },
   ]
 
@@ -904,7 +931,7 @@ export function CatalogPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup
             title="Nhóm hàng"
@@ -1073,6 +1100,7 @@ export function CatalogPage({
                                       <h3>{product.name}</h3>
                                       <span className="status-chip">{product.status === 'active' ? 'Đang bán' : 'Ngưng bán'}</span>
                                     </div>
+                                    <span>{`Ngày tạo ${catalogDateText(product.created_at)}`}</span>
                                     <span>{catalogInventoryShapeLabel(product.inventory_shape ?? 'normal')} · {sellMethodLabels[product.sell_method]}</span>
                                   </div>
                                 </header>
@@ -1080,10 +1108,6 @@ export function CatalogPage({
                                   <div>
                                     <dt>Mã hàng</dt>
                                     <dd>{product.code}</dd>
-                                  </div>
-                                  <div>
-                                    <dt>Đơn vị</dt>
-                                    <dd>{product.unit_name}</dd>
                                   </div>
                                   <div>
                                     <dt>Cách tính bán</dt>
@@ -1095,7 +1119,7 @@ export function CatalogPage({
                                   </div>
                                   <div>
                                     <dt>Giá bán</dt>
-                                    <dd>{product.default_sale_price === null || product.default_sale_price === undefined ? 'Chưa có' : formatMoney(product.default_sale_price)}</dd>
+                                    <dd>{product.default_sale_price === null || product.default_sale_price === undefined ? '' : formatMoney(product.default_sale_price)}</dd>
                                   </div>
                                   <div>
                                     <dt>Loại tồn</dt>
@@ -1199,7 +1223,7 @@ export function CatalogPage({
                                               </select>
                                             </label>
                                           </td>
-                                          <td>{component?.name ?? 'Chưa có'}</td>
+                                          <td>{component?.name ?? ''}</td>
                                           <td>
                                             <label>
                                               <span className="sr-only">Định mức</span>
@@ -1217,7 +1241,7 @@ export function CatalogPage({
                                               />
                                             </label>
                                           </td>
-                                          <td>{component?.unit_name ?? 'Chưa có'}</td>
+                                          <td>{component?.unit_name ?? ''}</td>
                                           <td>{formatMoney(component?.latest_purchase_cost ?? 0)}</td>
                                           <td>{component?.product_kind !== undefined ? productKindLabels[component.product_kind] : 'Chưa chọn'}</td>
                                           <td>
@@ -1265,13 +1289,15 @@ export function CatalogPage({
                               <section aria-label={`Đơn vị và quy đổi ${product.code}`} className="catalog-bom-panel">
                                 <header>
                                   <h3>Đơn vị & quy đổi</h3>
-                                  <span>{(product.unit_conversions ?? []).length > 0 ? `${product.unit_conversions?.length ?? 0} quy đổi` : 'Chưa có'}</span>
+                                  <span>{(product.unit_conversions ?? []).length > 0 ? `${product.unit_conversions?.length ?? 0} quy đổi` : ''}</span>
                                 </header>
                                 <dl className="management-detail-meta-grid management-detail-meta-grid-four">
-                                  <div>
-                                    <dt>Đơn vị hiện tại</dt>
-                                    <dd>{product.unit_name}</dd>
-                                  </div>
+                                  {catalogUnitNameDisplay(product.unit_name) ? (
+                                    <div>
+                                      <dt>Đơn vị hiện tại</dt>
+                                      <dd>{catalogUnitNameDisplay(product.unit_name)}</dd>
+                                    </div>
+                                  ) : null}
                                   <div>
                                     <dt>Cách tính bán</dt>
                                     <dd>{sellMethodLabels[product.sell_method]}</dd>
@@ -1282,7 +1308,7 @@ export function CatalogPage({
                                   </div>
                                   <div>
                                     <dt>Quy đổi</dt>
-                                    <dd>{(product.unit_conversions ?? []).length > 0 ? `${product.unit_conversions?.length ?? 0} đơn vị` : 'Chưa có'}</dd>
+                                    <dd>{(product.unit_conversions ?? []).length > 0 ? `${product.unit_conversions?.length ?? 0} đơn vị` : ''}</dd>
                                   </div>
                                 </dl>
                                 {(product.unit_conversions ?? []).length > 0 ? (
@@ -1300,7 +1326,11 @@ export function CatalogPage({
                                         {(product.unit_conversions ?? []).map((conversion) => (
                                           <tr key={conversion.unit_id}>
                                             <td>{conversion.unit_name}</td>
-                                            <td>{`1 ${conversion.unit_name} = ${catalogQuantityText(conversion.stock_qty_per_unit)} ${product.unit_name}`}</td>
+                                            <td>
+                                              {catalogUnitNameDisplay(product.unit_name)
+                                                ? `1 ${conversion.unit_name} = ${catalogQuantityText(conversion.stock_qty_per_unit)} ${catalogUnitNameDisplay(product.unit_name)}`
+                                                : `1 ${conversion.unit_name} = ${catalogQuantityText(conversion.stock_qty_per_unit)}`}
+                                            </td>
                                             <td>{conversion.is_default_purchase_unit ? 'Có' : 'Không'}</td>
                                             <td>{conversion.is_default_sale_unit ? 'Có' : 'Không'}</td>
                                           </tr>
@@ -1320,7 +1350,7 @@ export function CatalogPage({
                                 <dl className="management-detail-meta-grid management-detail-meta-grid-four">
                                   <div>
                                     <dt>Tồn QCVL</dt>
-                                    <dd>{product.operating_stock ? `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}` : 'Chưa có'}</dd>
+                                    <dd>{product.operating_stock ? `${catalogQuantityText(product.operating_stock.quantity)} ${product.operating_stock.unit_name}` : ''}</dd>
                                   </div>
                                   <div>
                                     <dt>Nguồn</dt>
@@ -1362,9 +1392,9 @@ export function CatalogPage({
                                 {stocktakeNotices[product.id] ? (
                                   <p role="status">
                                     Đã tạo phiếu kiểm kho {stocktakeNotices[product.id].code}.{' '}
-                                    <a href={`/inventory?stocktake_id=${encodeURIComponent(stocktakeNotices[product.id].id)}`}>
+                                    <ManagementRecordLink href={`/inventory?stocktake_id=${encodeURIComponent(stocktakeNotices[product.id].id)}`}>
                                       Xem phiếu {stocktakeNotices[product.id].code}
-                                    </a>
+                                    </ManagementRecordLink>
                                   </p>
                                 ) : null}
                                 {(product.inventory_shape ?? 'normal') === 'normal' && product.product_kind !== 'service' && product.product_kind !== 'combo' ? (
@@ -1506,19 +1536,19 @@ export function CatalogPage({
                                         {movementState?.items.map((movement) => (
                                           <tr key={movement.id}>
                                             <td>
-                                              {movement.document_code ? (
-                                                <button className="management-link-button" type="button">
+                                              {movement.document_code && productDocumentHref(movement.document_code) ? (
+                                                <ManagementRecordLink href={productDocumentHref(movement.document_code) ?? '#'}>
                                                   {movement.document_code}
-                                                </button>
-                                              ) : 'Chưa có'}
+                                                </ManagementRecordLink>
+                                              ) : movement.document_code ?? ''}
                                             </td>
                                             <td>{catalogDateTimeText(movement.created_at)}</td>
                                             <td>{movementTypeLabels[movement.movement_type] ?? movement.movement_type}</td>
-                                            <td>{movement.transaction_price === null || movement.transaction_price === undefined ? 'Chưa có' : catalogStockCardMoneyText(movement.transaction_price)}</td>
-                                            <td>{movement.cost_price === null || movement.cost_price === undefined ? 'Chưa có' : catalogStockCardMoneyText(movement.cost_price)}</td>
+                                            <td>{movement.transaction_price === null || movement.transaction_price === undefined ? '' : catalogStockCardMoneyText(movement.transaction_price)}</td>
+                                            <td>{movement.cost_price === null || movement.cost_price === undefined ? '' : catalogStockCardMoneyText(movement.cost_price)}</td>
                                             <td>{catalogQuantityText(movement.quantity_delta)}</td>
-                                            <td>{movement.ending_qty === null || movement.ending_qty === undefined ? 'Chưa có' : catalogQuantityText(movement.ending_qty)}</td>
-                                            <td>{movement.partner_name || 'Chưa có'}</td>
+                                            <td>{movement.ending_qty === null || movement.ending_qty === undefined ? '' : catalogQuantityText(movement.ending_qty)}</td>
+                                            <td>{movement.partner_name || ''}</td>
                                           </tr>
                                         ))}
                                       </tbody>

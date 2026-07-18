@@ -58,7 +58,7 @@ describe('reports-presenter', () => {
   })
 
   it('formats report display values outside the reports page', () => {
-    expect(reportDateText('not-a-date')).toBe('Chưa có')
+    expect(reportDateText('not-a-date')).toBe('')
     expect(reportNumberText(1234.567)).toBe('1.234,567')
   })
 })

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from './AuthProvider'
 import { useAuth } from './auth-context'
 import type { AuthService } from './auth-service'
+import { ApiError } from '../../lib/api/client'
 import type { CurrentUserData } from '../../lib/api/types'
 import type { RealtimeChannel } from '../../lib/realtime/access-channel'
 import type { ApiRequester } from '../users/foundation-service'
@@ -50,6 +51,31 @@ it('marks bootstrap ready when no stored session exists', async () => {
 
   expect(await screen.findByText('ready')).toBeInTheDocument()
   expect(screen.getByText('anonymous')).toBeInTheDocument()
+})
+
+it('clears the active user when the stored token disappears during the session', async () => {
+  const api = { request: vi.fn().mockResolvedValue(currentUser) }
+  const { rerender } = render(
+    <AuthProvider
+      service={makeAuthService('token')}
+      api={api}
+    >
+      <StatusProbe />
+    </AuthProvider>,
+  )
+
+  expect(await screen.findByText('u-1')).toBeInTheDocument()
+
+  rerender(
+    <AuthProvider
+      service={makeAuthService(null)}
+      api={api}
+    >
+      <StatusProbe />
+    </AuthProvider>,
+  )
+
+  await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
 })
 
 it('keeps protected routes pending while a stored session is being restored', () => {
@@ -228,7 +254,32 @@ it('uses cached /me data immediately while refreshing the session', async () => 
   })
 })
 
-it('uses fresh cached /me data without a network refresh during bootstrap', async () => {
+it('does not reuse the memory user fallback when sessionStorage is available but empty', async () => {
+  const firstApi = { request: vi.fn().mockResolvedValue(currentUser) }
+  const firstRender = render(
+    <AuthProvider service={makeAuthService('token')} api={firstApi}>
+      <StatusProbe />
+    </AuthProvider>,
+  )
+
+  expect(await screen.findByText('u-1')).toBeInTheDocument()
+  firstRender.unmount()
+  window.sessionStorage.clear()
+
+  const secondApi: ApiRequester = {
+    request: vi.fn(<T,>() => new Promise<T>(() => undefined)) as ApiRequester['request'],
+  }
+  render(
+    <AuthProvider service={makeAuthService('token')} api={secondApi}>
+      <StatusProbe />
+    </AuthProvider>,
+  )
+
+  expect(screen.getByText('booting')).toBeInTheDocument()
+  expect(screen.getByText('anonymous')).toBeInTheDocument()
+})
+
+it('keeps fresh cached /me data visible while refreshing the session in background', async () => {
   const api = { request: vi.fn().mockResolvedValue(currentUser) }
   window.sessionStorage.setItem(
     'qc-oms.auth.current-user.v2',
@@ -254,5 +305,42 @@ it('uses fresh cached /me data without a network refresh during bootstrap', asyn
 
   expect(await screen.findByText('ready')).toBeInTheDocument()
   expect(screen.getByText('u-1')).toBeInTheDocument()
-  expect(api.request).not.toHaveBeenCalled()
+  await waitFor(() => expect(api.request).toHaveBeenCalledTimes(1))
+})
+
+it('revalidates a fresh cached /me session and signs out when the token is no longer valid', async () => {
+  const signOut = vi.fn()
+  const api = {
+    request: vi.fn().mockRejectedValue(new ApiError(401, 'AUTH_REQUIRED', 'Authentication is required.', 'trace-auth')),
+  }
+  window.sessionStorage.setItem(
+    'qc-oms.auth.current-user.v2',
+    JSON.stringify({ cached_at: Date.now(), data: currentUser }),
+  )
+
+  render(
+    <AuthProvider
+      service={{
+        signIn: vi.fn(),
+        signOut,
+        getAccessToken: vi.fn().mockResolvedValue('stale-token'),
+      }}
+      api={api}
+      realtimeClient={{
+        channel: vi.fn(() => ({
+          on: vi.fn().mockReturnThis(),
+          subscribe: vi.fn().mockReturnThis(),
+          unsubscribe: vi.fn(),
+        })),
+        removeChannel: vi.fn(),
+      }}
+    >
+      <StatusProbe />
+    </AuthProvider>,
+  )
+
+  expect(await screen.findByText('ready')).toBeInTheDocument()
+  await waitFor(() => expect(screen.getByText('anonymous')).toBeInTheDocument())
+  await waitFor(() => expect(api.request).toHaveBeenCalledTimes(1))
+  await waitFor(() => expect(signOut).toHaveBeenCalledTimes(1))
 })

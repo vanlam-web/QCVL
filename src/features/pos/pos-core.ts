@@ -1,5 +1,5 @@
 import type { Customer, Product, SellMethod } from '../catalog/types'
-import type { CheckoutCartLine, QuoteReopenPayload } from '../orders/order-service'
+import type { CheckoutCartLine, InvoiceRevisionHandoffPayload, QuoteReopenPayload } from '../orders/order-service'
 import { parseMoneyInput } from '../../lib/number-format'
 
 export const posDraftStorageKey = 'qc-oms.pos.invoice-tabs.v1'
@@ -18,6 +18,7 @@ export interface PosInvoiceTab {
   selectedCustomer: Customer | null
   orderNote: string
   sourceQuote?: { id: string; code: string }
+  sourceRevision?: { id: string; code: string }
 }
 
 export function normalizeSearch(value: string) {
@@ -45,6 +46,20 @@ export function initialQuotePayloadToTabs(payload: QuoteReopenPayload | null): P
   return restored.length > 0 ? restored : [makeInvoiceTab(1)]
 }
 
+export function initialInvoiceRevisionPayloadToTabs(payload: InvoiceRevisionHandoffPayload): PosInvoiceTab[] {
+  return [
+    {
+      ...makeInvoiceTab(1),
+      id: `invoice-revision-${payload.original_order.id}`,
+      createdAt: payload.created_at ?? new Date().toISOString(),
+      cartLines: invoiceRevisionPayloadToCartLines(payload),
+      selectedCustomer: invoiceRevisionPayloadToCustomer(payload),
+      orderNote: payload.note ?? `Sua hoa don ${payload.original_order.code}`,
+      sourceRevision: { id: payload.original_order.id, code: payload.original_order.code },
+    },
+  ]
+}
+
 export function makeInvoiceTab(number: number): PosInvoiceTab {
   return {
     id: `invoice-${number}`,
@@ -57,13 +72,16 @@ export function makeInvoiceTab(number: number): PosInvoiceTab {
 }
 
 export function invoiceTabLabel(tab: PosInvoiceTab, active = true) {
+  if (tab.sourceRevision) {
+    return `Sửa ${tab.sourceRevision.code}${isInvoiceTabDirty(tab) ? ' •' : ''}`
+  }
   const dirty = isInvoiceTabDirty(tab)
   const prefix = active ? 'Hóa đơn' : 'HĐ'
   return `${prefix} ${tab.number}${dirty ? ' •' : ''}`
 }
 
 export function isInvoiceTabDirty(tab: PosInvoiceTab) {
-  return tab.cartLines.length > 0 || tab.selectedCustomer !== null || tab.orderNote.trim() !== '' || tab.sourceQuote !== undefined
+  return tab.cartLines.length > 0 || tab.selectedCustomer !== null || tab.orderNote.trim() !== '' || tab.sourceQuote !== undefined || tab.sourceRevision !== undefined
 }
 
 export function nextInvoiceNumber(tabs: PosInvoiceTab[]) {
@@ -109,10 +127,48 @@ export function restoreInvoiceTabs(): PosInvoiceTab[] {
         selectedCustomer: tab.selectedCustomer ?? null,
         orderNote: typeof tab.orderNote === 'string' ? tab.orderNote : '',
         sourceQuote: tab.sourceQuote,
+        sourceRevision: tab.sourceRevision,
       }))
   } catch {
     return []
   }
+}
+
+export function invoiceRevisionPayloadToCustomer(payload: InvoiceRevisionHandoffPayload): Customer | null {
+  if (payload.customer.customer_id === null) return null
+  return {
+    id: payload.customer.customer_id,
+    code: payload.customer.snapshot.code ?? '',
+    name: payload.customer.snapshot.name,
+    phone: payload.customer.snapshot.phone,
+    tax_code: null,
+    address: null,
+    customer_group_id: null,
+    customer_group: null,
+  }
+}
+
+export function invoiceRevisionPayloadToCartLines(payload: InvoiceRevisionHandoffPayload): CheckoutCartLine[] {
+  return payload.items.map((item, index) => ({
+    id: `${payload.original_order.id}-revision-${index + 1}`,
+    product: {
+      id: item.product_id ?? `missing-${item.order_item_id}`,
+      code: item.product_snapshot.code,
+      name: item.product_snapshot.name,
+      status: item.product_id === null ? 'inactive' : 'active',
+      unit_name: item.product_snapshot.unit_name,
+      sell_method: item.product_snapshot.sell_method,
+    },
+    quantity: item.quantity,
+    width_m: item.width_m ?? undefined,
+    height_m: item.height_m ?? undefined,
+    linear_m: item.linear_m ?? undefined,
+    unitPrice: item.unit_price,
+    discountAmount: item.discount_amount,
+    priceSource: item.price_source,
+    isManualPrice: true,
+    note: item.note ?? undefined,
+  }))
 }
 
 export function quoteBlockedReason(cartLines: CheckoutCartLine[]): string | null {
@@ -253,9 +309,12 @@ export function makeCartLine({
 }
 
 export function saleUnitOptions(product: Product) {
-  const options = [{ unitName: product.unit_name, stockQtyPerUnit: 1 }]
+  const options = displaySaleUnitName(product.unit_name)
+    ? [{ unitName: product.unit_name, stockQtyPerUnit: 1 }]
+    : []
   for (const conversion of product.unit_conversions ?? []) {
     if (!Number.isFinite(conversion.stock_qty_per_unit) || conversion.stock_qty_per_unit <= 0) continue
+    if (!displaySaleUnitName(conversion.unit_name)) continue
     if (options.some((option) => option.unitName === conversion.unit_name)) continue
     options.push({ unitName: conversion.unit_name, stockQtyPerUnit: conversion.stock_qty_per_unit })
   }
@@ -264,6 +323,21 @@ export function saleUnitOptions(product: Product) {
 
 export function selectedSaleUnitText(line: CheckoutCartLine) {
   return line.saleUnitName ?? line.product.unit_name
+}
+
+export function displaySaleUnitName(value: string | null | undefined) {
+  const unitName = value?.trim() ?? ''
+  const normalized = unitName
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  if (normalized === '' || normalized === 'can cap nhat') return ''
+  return unitName
+}
+
+export function posPriceWithUnitText(priceText: string, unitName: string | null | undefined) {
+  const displayUnit = displaySaleUnitName(unitName)
+  return displayUnit ? `${priceText}/${displayUnit}` : priceText
 }
 
 export function isAreaLine(line: CheckoutCartLine) {

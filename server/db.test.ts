@@ -165,6 +165,7 @@ describe('createPgRepository product units', () => {
     expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('alter table products add column if not exists product_group_id'))).toBe(false)
     expect(listSql).toContain(`(p.created_at at time zone 'UTC')::date >= $`)
     expect(listSql).toContain(`(p.created_at at time zone 'UTC')::date <= $`)
+    expect(listSql).toContain('order by p.created_at desc, p.code asc, p.name asc')
     expect(listSql).not.toContain(`'[]'::jsonb as unit_conversions`)
     expect(products?.[0].unit_conversions).toEqual([{
       source_code: 'B50',
@@ -1235,5 +1236,222 @@ describe('createPgRepository product units', () => {
       account_number: '0947900909',
       account_holder: 'VAN VIET PHUONG LAM',
     }))
+  })
+
+  test('paginates PostgreSQL cashbook rows in SQL and keeps summary in the database', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from finance_accounts')) {
+        return {
+          rows: [
+            {
+              id: 'cash-main',
+              code: 'TM01',
+              name: 'Tien mat',
+              account_type: 'cash',
+              is_default_cash: true,
+              is_active: true,
+              account_number: null,
+              account_holder: null,
+              opening_balance: 0,
+              note: null,
+              notify_on_transaction: true,
+            },
+          ],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from users')) {
+        return { rows: [{ id: 'user-1', display_name: 'Admin' }], rowCount: 1 }
+      }
+      if (sql.includes('with base_entries')) {
+        return {
+          rows: [{
+            id: 'cashbook-page-1',
+            code: 'TTHD011149',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '220000',
+            finance_account: { id: 'cash-main', code: 'TM01', name: 'Tien mat', account_type: 'cash' },
+            counterparty: { type: 'customer', name: 'Khach', phone: null },
+            note: 'Thu tien',
+            source_type: 'payment_receipt_method',
+            source: { type: 'payment_receipt', id: 'source-1', code: 'TT000001', order_code: 'HD011149', transfer_content: 'Khach tra tien' },
+            allocations: [],
+            is_business_accounted: true,
+            created_by: { id: 'user-1', name: 'admin' },
+            created_at: new Date('2026-07-18T04:51:00.000Z'),
+            total: 1,
+            total_in: '220000',
+            total_out: '0',
+            opening_balance: '100000',
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.listCashbookEntriesPage?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/finance/cashbook?search=Khach&search_scope=transfer_content&page=2&page_size=20&from=2026-07-01&to=2026-07-31&is_business_accounted=true'),
+    })
+
+    const pageSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with base_entries'))?.[0])
+    expect(pageSql).toContain('limit $')
+    expect(pageSql).toContain('offset $')
+    expect(pageSql).toContain('coalesce(sum(greatest(amount_delta, 0)), 0) as total_in')
+    expect(pageSql).toContain('coalesce(sum(amount_delta), 0) as opening_balance')
+    expect(result).toEqual({
+      items: [{
+        id: 'cashbook-page-1',
+        code: 'TTHD011149',
+        status: 'posted',
+        direction: 'in',
+        amount_delta: 220000,
+        finance_account: { id: 'cash-main', code: 'TM01', name: 'Tien mat', account_type: 'cash', account_number: null, account_holder: null },
+        counterparty: { type: 'customer', name: 'Khach', phone: null },
+        note: 'Thu tien',
+        source_type: 'payment_receipt_method',
+        source: { type: 'payment_receipt', id: 'source-1', code: 'TT000001', order_code: 'HD011149', transfer_content: 'Khach tra tien' },
+        allocations: [],
+        is_business_accounted: true,
+        created_by: { id: 'user-1', name: 'Admin' },
+        created_at: '2026-07-18T04:51:00.000Z',
+      }],
+      total: 1,
+      summary: {
+        opening_balance: 100000,
+        total_in: 220000,
+        total_out: 0,
+        ending_balance: 320000,
+      },
+    })
+  })
+})
+
+describe('createPgRepository sales document paging', () => {
+  beforeEach(() => {
+    pgMock.Pool.mockClear()
+    pgMock.query.mockReset()
+    pgMock.end.mockReset()
+  })
+
+  test('pushes sales document filters and paging into SQL', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with filtered_orders')) {
+        return {
+          rows: [{
+            id: 'order-1',
+            code: 'HD000001',
+            order_type: 'invoice',
+            status: 'completed',
+            created_at: new Date('2026-07-10T08:00:00.000Z'),
+            customer_snapshot: { id: 'customer-1', code: 'KH000001', name: 'Thanh Test', phone: null },
+            seller_snapshot: { id: 'user-1', name: 'Admin' },
+            subtotal_amount: '700000',
+            discount_amount: '0',
+            total_amount: '700000',
+            paid_amount: '500000',
+            debt_amount: '200000',
+            payment_status: 'partial',
+            note: '',
+            items: [],
+            base_code: null,
+            revision_no: '0',
+            revised_from_order_id: null,
+            replaced_by_order_id: null,
+            cancel_reason_type: null,
+            revision_reason_code: null,
+            revision_reason_note: null,
+            total: 3,
+            summary_total_amount: '900000',
+            summary_debt_amount: '200000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id::text, display_name')) {
+        return { rows: [{ id: 'user-1', display_name: 'Phạm Nhật Linh 2' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.listSalesDocumentsPage?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/sales-documents?type=invoice&status=completed&payment_status=partial&from=2026-07-01&to=2026-07-18&page=2&page_size=25&search=Thanh'),
+    })
+
+    const pageSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with filtered_orders'))?.[0])
+    const pageValues = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with filtered_orders'))?.[1]
+    expect(pageSql).toContain('from orders o')
+    expect(pageSql).toContain('o.order_type = any($')
+    expect(pageSql).toContain("(o.created_at at time zone 'UTC')::date >= $")
+    expect(pageSql).toContain('join paged_orders po on po.id = oi.order_id')
+    expect(pageSql).toContain('left join products p')
+    expect(pageSql).toContain("'product_snapshot'")
+    expect(pageSql).toContain('limit $')
+    expect(pageSql).toContain('offset $')
+    expect(pageValues?.at(-2)).toBe(25)
+    expect(pageValues?.at(-1)).toBe(25)
+    expect(result?.total).toBe(3)
+    expect(result?.summary.total_amount).toBe(900000)
+    expect(result?.items[0].seller.name).toBe('Phạm Nhật Linh 2')
+  })
+
+  test('gets sales document detail by id or code', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from orders o') && sql.includes('limit 1')) {
+        return {
+          rows: [{
+            id: 'order-1',
+            code: 'HD010985',
+            order_type: 'invoice',
+            status: 'completed',
+            created_at: new Date('2026-06-30T17:08:00.000Z'),
+            customer_snapshot: { id: 'customer-1', code: 'KH000001', name: 'Thanh Test', phone: null },
+            seller_snapshot: { id: 'user-1', name: 'Admin' },
+            subtotal_amount: '700000',
+            discount_amount: '0',
+            total_amount: '700000',
+            paid_amount: '500000',
+            debt_amount: '200000',
+            payment_status: 'partial',
+            note: '',
+            items: [],
+            base_code: null,
+            revision_no: '0',
+            revised_from_order_id: null,
+            replaced_by_order_id: null,
+            cancel_reason_type: null,
+            revision_reason_code: null,
+            revision_reason_note: null,
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id::text, display_name')) {
+        return { rows: [{ id: 'user-1', display_name: 'Phạm Nhật Linh 2' }], rowCount: 1 }
+      }
+      if (sql.includes('from payment_receipts')) {
+        return { rows: [], rowCount: 0 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const byCode = await repository.getSalesDocument?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      id: 'HD010985',
+    })
+
+    const detailSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('from orders o') && String(sql).includes('limit 1'))?.[0])
+    expect(detailSql).toContain('(o.id = $2 or o.code = $2)')
+    expect(byCode?.code).toBe('HD010985')
+    expect(byCode?.payment_receipts).toEqual([])
   })
 })

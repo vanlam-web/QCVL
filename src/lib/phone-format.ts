@@ -1,4 +1,4 @@
-export function formatPhoneDisplay(phone: string | null | undefined, fallback = '-') {
+export function formatPhoneDisplay(phone: string | null | undefined, fallback = '') {
   const raw = phone?.trim()
   if (!raw) return fallback
 

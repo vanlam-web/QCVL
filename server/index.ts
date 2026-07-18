@@ -36,7 +36,7 @@ const server = createServer(async (request, response) => {
   })
   const webResponse = request.url?.startsWith('/api/')
     ? await handler(webRequest)
-    : await getStaticResponse(new URL(webRequest.url), staticRoot)
+    : await getStaticResponse(new URL(webRequest.url), staticRoot, webRequest.headers)
 
   response.writeHead(webResponse.status, Object.fromEntries(webResponse.headers.entries()))
   if (webResponse.body) {

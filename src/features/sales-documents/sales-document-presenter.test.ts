@@ -7,16 +7,19 @@ import {
   paymentReceiptMethodTotal,
   paymentReceiptStatusLabel,
   salesDocumentDateTimeText,
+  salesDocumentDateTimeInputText,
   salesDocumentCreatedDateTimeText,
   salesDocumentLineSellPrice,
   salesDocumentListSummary,
   salesDocumentMeasureText,
   salesDocumentMoneyText,
+  salesDocumentUnitNameText,
   paymentStatusFilterLabel,
   salesDocumentQuoteLineDimensionText,
   salesDocumentPaymentSettlementStatus,
   salesDocumentStatusLabel,
   salesDocumentStatusTone,
+  parseSalesDocumentDateTimeInputText,
 } from './sales-document-presenter'
 import type { SalesDocumentDetail } from './types'
 
@@ -93,8 +96,15 @@ describe('sales document presenter', () => {
     expect(salesDocumentLineSellPrice({ quantity: 0, line_total: 120000 })).toBe(120000)
   })
 
+  it('hides placeholder unit names from sales document detail lines', () => {
+    expect(salesDocumentUnitNameText('m2')).toBe('m2')
+    expect(salesDocumentUnitNameText('Cần cập nhật')).toBe('')
+    expect(salesDocumentUnitNameText('Can cap nhat')).toBe('')
+    expect(salesDocumentUnitNameText('')).toBe('')
+  })
+
   it('formats sales document date text outside the page', () => {
-    expect(salesDocumentDateTimeText(null)).toBe('-')
+    expect(salesDocumentDateTimeText(null)).toBe('')
     expect(salesDocumentDateTimeText('bad-date', '2026-07-09T03:00:00Z')).not.toBe('-')
   })
 
@@ -102,6 +112,14 @@ describe('sales document presenter', () => {
     expect(salesDocumentCreatedDateTimeText({
       created_at: '2026-07-12T17:20:00.000Z',
     })).toBe('12/07/2026 17:20')
+    expect(salesDocumentDateTimeInputText('2026-07-12T17:20:00.000Z')).toBe('12/07/2026 17:20')
+    expect(salesDocumentDateTimeInputText('bad-date')).toBe('')
+  })
+
+  it('parses sales document edit time from dd/mm/yyyy hh:mm input', () => {
+    expect(parseSalesDocumentDateTimeInputText('18/07/2026 04:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseSalesDocumentDateTimeInputText('18/07/2026 4:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseSalesDocumentDateTimeInputText('bad-date')).toBeNull()
   })
 
   it('formats quote print values outside the print page', () => {

@@ -281,7 +281,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
                     <td>{debt.customer_code ?? 'Khách lẻ'}</td>
                     <td>{debt.customer_name}</td>
                     <td>{debt.open_invoice_count}</td>
-                    <td>{debt.oldest_order_code ?? '-'}</td>
+                    <td>{debt.oldest_order_code ?? ''}</td>
                     <td><MoneyText value={debt.total_debt} /></td>
                   </tr>
                 ))}

@@ -15,7 +15,7 @@ export function deviceSeenAtText(value: string) {
   return formatKvDateTime(value)
 }
 
-export function accountValueOrFallback(value: string | null | undefined, fallback = 'Chưa có') {
+export function accountValueOrFallback(value: string | null | undefined, fallback = '') {
   const text = value?.trim()
   return text ? text : fallback
 }

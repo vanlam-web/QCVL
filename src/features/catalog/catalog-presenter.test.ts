@@ -11,7 +11,7 @@ describe('catalog presenter', () => {
   it('formats catalog display values outside the page', () => {
     expect(catalogQuantityText(12.3456)).toBe('12,346')
     expect(catalogStockCardMoneyText(1200000)).toBe('1 200 000')
-    expect(catalogDateTimeText('bad-date')).toBe('bad-date')
+    expect(catalogDateTimeText('bad-date')).toBe('')
     expect(catalogInventoryShapeLabel('roll')).toBe('Cuộn')
   })
 

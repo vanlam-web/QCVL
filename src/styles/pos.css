@@ -2063,7 +2063,7 @@
 
 .checkout-panel-meta {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 0.5rem;
   color: var(--color-text-muted);
@@ -2078,6 +2078,39 @@
   font-size: 0.875rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.checkout-panel-time-input {
+  width: 4.25rem;
+  min-height: 1.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0 0.1rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-panel-date-input {
+  width: 6.6rem;
+  min-height: 1.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0 0.1rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout-panel-date-input:hover,
+.checkout-panel-date-input:focus,
+.checkout-panel-time-input:hover,
+.checkout-panel-time-input:focus {
+  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
+  color: var(--color-text);
 }
 
 .checkout-customer-line {

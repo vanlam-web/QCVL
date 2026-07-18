@@ -145,7 +145,7 @@ export function AccountPage({
 
           <p className="management-detail-inline-note account-note">
             <Edit3 aria-hidden="true" size={15} />
-            {accountValueOrFallback(profile?.note, 'Chưa có ghi chú')}
+            {accountValueOrFallback(profile?.note)}
           </p>
         </section>
 
@@ -264,7 +264,7 @@ export function AccountPage({
                   Điện thoại
                   <span className="account-input-with-prefix">
                     <span aria-hidden="true">VN</span>
-                    <input aria-label="Điện thoại" name="phone" defaultValue={profile?.phone ?? ''} placeholder="Chưa có" />
+                    <input aria-label="Điện thoại" name="phone" defaultValue={profile?.phone ?? ''} />
                   </span>
                 </label>
                 <label>
@@ -274,31 +274,31 @@ export function AccountPage({
                 <label>
                   Sinh nhật
                   <span className="management-input-with-icon account-input-with-icon">
-                    <input aria-label="Sinh nhật" name="birthday" defaultValue={profile?.birthday ?? ''} placeholder="Chưa có" />
+                    <input aria-label="Sinh nhật" name="birthday" defaultValue={profile?.birthday ?? ''} />
                     <CalendarDays aria-hidden="true" size={16} />
                   </span>
                 </label>
                 <label>
                   Khu vực
                   <span className="management-input-with-icon account-input-with-icon">
-                    <input aria-label="Khu vực" name="region" defaultValue={profile?.region ?? ''} placeholder="Chưa có" />
+                    <input aria-label="Khu vực" name="region" defaultValue={profile?.region ?? ''} />
                     <Search aria-hidden="true" size={16} />
                   </span>
                 </label>
                 <label>
                   Phường/Xã
                   <span className="management-input-with-icon account-input-with-icon">
-                    <input aria-label="Phường/Xã" name="ward" defaultValue={profile?.ward ?? ''} placeholder="Chưa có" />
+                    <input aria-label="Phường/Xã" name="ward" defaultValue={profile?.ward ?? ''} />
                     <Search aria-hidden="true" size={16} />
                   </span>
                 </label>
                 <label>
                   Địa chỉ
-                  <input name="address" defaultValue={profile?.address ?? ''} placeholder="Chưa có" />
+                  <input name="address" defaultValue={profile?.address ?? ''} />
                 </label>
                 <label className="account-edit-field-wide">
                   Ghi chú
-                  <textarea name="note" defaultValue={profile?.note ?? ''} placeholder="Chưa có" />
+                  <textarea name="note" defaultValue={profile?.note ?? ''} />
                 </label>
               </div>
 

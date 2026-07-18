@@ -8,6 +8,7 @@ import type {
   QuoteReopenPayload,
   QuoteSummary,
   RecentPriceList,
+  ReviseInvoiceInput,
 } from './types'
 
 export type {
@@ -15,9 +16,11 @@ export type {
   CheckoutResult,
   CustomerDebtDetail,
   FinanceAccount,
+  InvoiceRevisionHandoffPayload,
   QuoteReopenPayload,
   QuoteSummary,
   RecentPriceList,
+  ReviseInvoiceInput,
 } from './types'
 
 export interface OrderApiRequester {
@@ -38,6 +41,11 @@ export function createOrderService(api: OrderApiRequester) {
       }),
     saveQuote: (input: CheckoutInput) =>
       api.request<QuoteSummary>('/api/v1/orders/quotes', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
+    reviseInvoice: (orderId: string, input: ReviseInvoiceInput) =>
+      api.request<CheckoutResult>(`/api/v1/orders/${orderId}/revise`, {
         method: 'POST',
         body: JSON.stringify(input),
       }),

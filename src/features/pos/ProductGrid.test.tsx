@@ -67,6 +67,22 @@ it('shows an empty state when no active product is available', () => {
   expect(screen.getByText('Chưa có sản phẩm đang bán.')).toBeInTheDocument()
 })
 
+it('hides placeholder unit text on quick product cards', () => {
+  const noUnitProduct = { ...product(1), unit_name: 'Cần cập nhật' }
+  render(
+    <ProductGrid
+      products={[noUnitProduct]}
+      prices={pricesFor([noUnitProduct])}
+      loading={false}
+      onSelectProduct={vi.fn()}
+    />,
+  )
+
+  expect(screen.getByText('1 000')).toBeInTheDocument()
+  expect(screen.queryByText(/Cần cập nhật/)).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /SP-01.*1 000/ })).toBeInTheDocument()
+})
+
 it('paginates quick products by 12 items per page', async () => {
   const products = Array.from({ length: 13 }, (_, index) => product(index + 1))
   render(

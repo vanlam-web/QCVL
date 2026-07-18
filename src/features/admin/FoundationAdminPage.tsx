@@ -63,7 +63,7 @@ const roleDefinitions = [
     id: 'admin',
     name: 'Quản trị',
     description: 'Toàn quyền thiết lập người dùng và cấu hình vận hành.',
-    permissions: ['perm.manage_users'],
+    permissions: ['perm.access_admin_panel', 'perm.manage_users'],
   },
   {
     id: 'cashier',
@@ -101,7 +101,7 @@ function validateUserForm(form: {
 }, mode: UserDialogMode) {
   const errors: UserFormErrors = {}
   if (!form.displayName.trim()) errors.displayName = 'Tên hiển thị là bắt buộc.'
-  if (!form.phone.trim()) errors.phone = 'SĐT là bắt buộc.'
+  if (mode === 'create' && !form.phone.trim()) errors.phone = 'SĐT là bắt buộc.'
   if (!form.username.trim()) errors.username = 'Tên đăng nhập là bắt buộc.'
   if (mode === 'create' && !form.password) errors.password = 'Mật khẩu là bắt buộc.'
   if (mode === 'create' && !form.passwordConfirmation) errors.passwordConfirmation = 'Nhập lại mật khẩu là bắt buộc.'
@@ -555,8 +555,8 @@ export function FoundationAdminPage({
                     <Fragment key={user.id}>
                       <tr className={selectedUser?.id === user.id ? 'management-data-row-selected' : undefined}>
                         <td>{user.display_name}</td>
-                        <td>{user.username || user.email || 'Chưa có'}</td>
-                        <td>{user.phone || 'Chưa có'}</td>
+                        <td>{user.username || user.email || ''}</td>
+                        <td>{user.phone || ''}</td>
                         <td>{userRoleLabel(user)}</td>
                         <td>{userStatusLabel(user.status)}</td>
                         <td>

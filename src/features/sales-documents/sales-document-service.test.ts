@@ -21,6 +21,19 @@ it('serializes supported sales document filter params', async () => {
   )
 })
 
+it('updates sales document created time through the quick save endpoint', async () => {
+  const request = vi.fn(async () => ({ id: 'order-1', created_at: '2026-07-18T04:15:00.000Z' }))
+  const api = { request: request as unknown as SalesDocumentApiRequester['request'] }
+  const service = createSalesDocumentService(api)
+
+  await service.updateSalesDocumentNote('order-1', { note: 'Ghi chú mới', created_at: '2026-07-18T04:15:00.000Z' })
+
+  expect(request).toHaveBeenCalledWith('/api/v1/sales-documents/order-1', {
+    method: 'PATCH',
+    body: JSON.stringify({ note: 'Ghi chú mới', created_at: '2026-07-18T04:15:00.000Z' }),
+  })
+})
+
 it('calls KiotViet invoice import endpoints', async () => {
   const calls: Array<[string, RequestInit | undefined]> = []
   const request: SalesDocumentApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

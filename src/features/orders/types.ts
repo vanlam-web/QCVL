@@ -33,6 +33,7 @@ export interface FinanceAccount {
 
 export interface CheckoutInput {
   customer_id?: string
+  created_at?: string
   note?: string
   retail_debt_note?: string
   items: Array<{
@@ -55,6 +56,18 @@ export interface CheckoutInput {
     old_debt_payment_amount: number
     change_returned_amount: number
   }
+}
+
+export type RevisionReasonCode =
+  | 'wrong_price'
+  | 'wrong_dimension'
+  | 'wrong_customer'
+  | 'customer_changed_mind'
+  | 'other'
+
+export interface ReviseInvoiceInput extends CheckoutInput {
+  revision_reason_code: RevisionReasonCode
+  revision_reason_note?: string
 }
 
 export interface QuoteSummary {
@@ -107,6 +120,39 @@ export interface QuoteReopenPayload {
   note: string | null
 }
 
+export interface InvoiceRevisionHandoffPayload {
+  mode: 'invoice-revision'
+  original_order: {
+    id: string
+    code: string
+  }
+  customer: {
+    customer_id: string | null
+    snapshot: { code: string | null; name: string; phone: string | null }
+  }
+  items: Array<{
+    order_item_id: string
+    product_id: string | null
+    product_snapshot: {
+      code: string
+      name: string
+      unit_name: string
+      sell_method: Product['sell_method']
+    }
+    quantity: number
+    width_m?: number | null
+    height_m?: number | null
+    linear_m?: number | null
+    unit_price: number
+    discount_amount: number
+    price_source: string
+    note: string | null
+  }>
+  summary: { subtotal_amount: number; discount_amount: number; total_amount: number }
+  note: string | null
+  created_at?: string
+}
+
 export interface CheckoutResult {
   order: {
     id: string
@@ -117,6 +163,10 @@ export interface CheckoutResult {
     paid_amount: number
     debt_amount: number
     payment_status: 'unpaid' | 'partial' | 'paid'
+    created_at?: string
+    base_code?: string
+    revision_no?: number
+    revised_from_order_id?: string | null
   }
   payment_receipt: { id: string; code: string; total_received_amount: number } | null
   inventory_warnings: Array<{ product_id: string; code: string; message: string }>

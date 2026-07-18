@@ -118,7 +118,23 @@ function persistentRepository(passwordHash: string, displayName = 'Admin'): Serv
       return documents.filter((document) => documentMatches(input.url, document))
     },
     async getSalesDocument(input) {
-      return documents.find((document) => document.id === input.id) ?? null
+      return documents.find((document) => document.id === input.id || document.code === input.id) ?? null
+    },
+    async updateSalesDocumentNote(input) {
+      const document = documents.find((item) => item.id === input.id || item.code === input.id)
+      if (!document) return null
+      if (input.note !== undefined) document.note = input.note ?? ''
+      if (input.created_at !== undefined) {
+        document.created_at = input.created_at
+        for (const entry of cashbook) entry.created_at = input.created_at
+      }
+      return document
+    },
+    async listCashbookEntries(input) {
+      return cashbook.filter((entry) => cashbookMatches(input.url, entry))
+    },
+    async getCashbookEntry(input) {
+      return cashbook.find((entry) => entry.id === input.id || entry.code === input.id) ?? null
     },
     async getCustomerDebt(input) {
       const invoices = documents
@@ -320,6 +336,72 @@ describe('createHttpHandler', () => {
     expect((await usernameLogin.json()).data.access_token).toEqual(expect.any(String))
     expect(phoneLogin.status).toBe(200)
     expect((await phoneLogin.json()).data.access_token).toEqual(expect.any(String))
+  })
+
+  test('rejects creating a user when the username or phone would collide with another login id', async () => {
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(await hashPassword('ChangeMe123!')),
+        async listUsers() {
+          return [
+            {
+              id: 'user-admin',
+              email: 'admin@example.test',
+              username: 'admin',
+              phone: null,
+              birthday: null,
+              region: null,
+              ward: null,
+              address: null,
+              note: null,
+              display_name: 'Admin',
+              status: 'active',
+              permissions: ['perm.manage_users'],
+            },
+            {
+              id: 'user-cashier',
+              email: 'cashier@example.test',
+              username: '0947900909',
+              phone: '0900000000',
+              birthday: null,
+              region: null,
+              ward: null,
+              address: null,
+              note: null,
+              display_name: 'Cashier',
+              status: 'active',
+              permissions: ['perm.create_order'],
+            },
+          ]
+        },
+      } as ServerRepository,
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/users', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+        body: JSON.stringify({
+          email: 'newcashier@example.test',
+          username: 'new-cashier',
+          phone: '0947900909',
+          password: 'Password123!',
+          display_name: 'New Cashier',
+          permissions: ['perm.create_order'],
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(409)
+    expect(body.error.code).toBe('RESOURCE_CONFLICT')
   })
 
   test('rejects invalid login without creating a token', async () => {
@@ -690,6 +772,61 @@ describe('createHttpHandler', () => {
       displayName: 'Admin Updated',
       id: 'user-1',
       passwordHash: expect.any(String),
+    }))
+  })
+
+  test('updates a user display name when phone is empty', async () => {
+    const updatedUsers: unknown[] = []
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(await hashPassword('ChangeMe123!')),
+        async updateUser(input: unknown) {
+          updatedUsers.push(input)
+          return {
+            id: 'user-1',
+            email: 'admin@qc-oms.local',
+            username: 'admin',
+            phone: null,
+            birthday: null,
+            region: null,
+            ward: null,
+            address: null,
+            note: null,
+            display_name: 'Phạm Nhật Linh 2',
+            status: 'active',
+            permissions: ['perm.manage_users'],
+          }
+        },
+      } as ServerRepository,
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/users/user-1', {
+        method: 'PATCH',
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+        body: JSON.stringify({
+          email: 'admin@qc-oms.local',
+          username: 'admin',
+          phone: null,
+          display_name: 'Phạm Nhật Linh 2',
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.display_name).toBe('Phạm Nhật Linh 2')
+    expect(updatedUsers[0]).toEqual(expect.objectContaining({
+      id: 'user-1',
+      displayName: 'Phạm Nhật Linh 2',
+      phone: null,
     }))
   })
 
@@ -2602,7 +2739,7 @@ describe('createHttpHandler', () => {
     ])
   })
 
-  test('sorts product list by KiotViet created time descending by default', async () => {
+  test('sorts product list by created time by default instead of import time', async () => {
     const productRepository = await createDevMemoryRepository()
     await productRepository.upsertProductsByCode?.({
       organizationId: 'org-dev-memory',
@@ -3129,6 +3266,161 @@ describe('createHttpHandler', () => {
     expect(customerBody.data.items[0].total_sales_amount).toBe(4000000)
   })
 
+  test('uses repository cashbook page response instead of loading the full list', async () => {
+    const listCashbookEntriesPage = vi.fn(async () => ({
+      items: [],
+      total: 0,
+      summary: {
+        opening_balance: 0,
+        total_in: 0,
+        total_out: 0,
+        ending_balance: 0,
+      },
+    }))
+    const listCashbookEntries = vi.fn(async () => [])
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(await hashPassword('ChangeMe123!')),
+        listCashbookEntriesPage,
+        listCashbookEntries,
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook?finance_account_type=bank&page=3&page_size=20', {
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+    const routedUrl = listCashbookEntriesPage.mock.calls[0]?.[0].url
+
+    expect(response.status).toBe(200)
+    expect(body.data).toEqual({
+      items: [],
+      total: 0,
+      summary: {
+        opening_balance: 0,
+        total_in: 0,
+        total_out: 0,
+        ending_balance: 0,
+      },
+      page: 3,
+      page_size: 20,
+    })
+    expect(routedUrl?.searchParams.get('exclude_replaced_deleted_accounts')).toBe('true')
+    expect(listCashbookEntries).not.toHaveBeenCalled()
+  })
+
+  test('revises a completed invoice by creating .01 and cancelling the old invoice', async () => {
+    const repository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-retail',
+          created_at: '2026-07-18T04:10:00.000Z',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 100000, discount_amount: 0, price_source: 'manual' }],
+          payment: { cash_amount: 100000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+    const originalOrderId = checkoutBody.data.order.id
+
+    const revise = await handler(
+      new Request(`http://api.local/api/v1/orders/${originalOrderId}/revise`, {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-retail',
+          created_at: '2026-07-18T04:51:00.000Z',
+          note: 'Sua gia',
+          revision_reason_code: 'wrong_price',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 120000, discount_amount: 0, price_source: 'manual' }],
+          payment: { cash_amount: 120000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const reviseBody = await revise.json()
+
+    const originalResponse = await handler(
+      new Request(`http://api.local/api/v1/sales-documents/${originalOrderId}`, {
+        headers: { authorization },
+      }),
+    )
+    const originalBody = await originalResponse.json()
+
+    expect(revise.status).toBe(201)
+    expect(reviseBody.data.order).toMatchObject({
+      code: `${checkoutBody.data.order.code}.01`,
+      order_type: 'invoice',
+      status: 'completed',
+      total_amount: 120000,
+      paid_amount: 120000,
+      debt_amount: 0,
+      payment_status: 'paid',
+      revision_no: 1,
+      base_code: checkoutBody.data.order.code,
+      revised_from_order_id: originalOrderId,
+    })
+    expect(originalBody.data).toMatchObject({
+      id: originalOrderId,
+      code: checkoutBody.data.order.code,
+      status: 'cancelled',
+      cancel_reason_type: 'revised',
+      replaced_by_order_id: reviseBody.data.order.id,
+    })
+  })
+
+  test('rejects invoice revision without a reason code', async () => {
+    const repository = await createDevMemoryRepository()
+    const handler = createHttpHandler({ repository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/orders/order-001/revise', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-retail',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 120000, discount_amount: 0, price_source: 'manual' }],
+          payment: { cash_amount: 120000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('VALIDATION_ERROR')
+    expect(body.error.fields.revision_reason_code).toEqual(['revision_reason_code is required.'])
+  })
+
   test('validates POS cart product existence and measurement fields before checkout', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -3313,7 +3605,7 @@ describe('createHttpHandler', () => {
     const checkoutBody = await checkout.json()
 
     const detail = await handler(
-      new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
+      new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.code}`, {
         headers: { authorization },
       }),
     )
@@ -3323,6 +3615,69 @@ describe('createHttpHandler', () => {
     expect(detailBody.data.items[0].product.id).toBe('product-002')
     expect(detailBody.data.items[0].product.code).toBe('DECAL-PP')
     expect(detailBody.data.items[0].unit_price).toBe(600000)
+  })
+
+  test('preserves repository payment history in POS sales document detail', async () => {
+    const baseRepository = repository(await hashPassword('ChangeMe123!'))
+    const testRepository: ServerRepository = {
+      ...baseRepository,
+      getSalesDocument: vi.fn(async () => ({
+        id: 'order-payment-history',
+        code: 'HD011137',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-10T09:00:00.000Z',
+        customer: { id: 'customer-kl4', code: 'KH-KL4', name: 'kl4', phone: null },
+        seller: { id: 'seller-kv', name: 'KiotViet' },
+        subtotal_amount: 3000000,
+        discount_amount: 0,
+        total_amount: 3000000,
+        paid_amount: 1000000,
+        debt_amount: 2000000,
+        payment_status: 'partial',
+        note: null,
+        items: [{ product_id: 'product-001' }],
+        payment_receipts: [{
+          id: 'cashbook-tthd-011137',
+          code: 'TTHD011137',
+          status: 'posted',
+          receipt_type: 'sale_payment',
+          total_received_amount: 1000000,
+          created_at: '2026-07-10T09:01:00.000Z',
+          created_by: { id: 'seller-kv', name: 'KiotViet' },
+          methods: [{
+            method_type: 'bank_transfer',
+            amount: 1000000,
+            finance_account: { id: 'bank-kv-0947900909', code: '0947900909', name: 'MBBank' },
+          }],
+          allocations: [{
+            order_id: 'order-payment-history',
+            order_code: 'HD011137',
+            allocated_amount: 1000000,
+            remaining_after: 2000000,
+          }],
+        }],
+      })),
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const detail = await handler(
+      new Request('http://api.local/api/v1/sales-documents/order-payment-history', {
+        headers: { authorization },
+      }),
+    )
+    const detailBody = await detail.json()
+
+    expect(detail.status).toBe(200)
+    expect(detailBody.data.payment_receipts.map((receipt: { code: string }) => receipt.code)).toEqual(['TTHD011137'])
   })
 
   test('updates a POS sales document note and returns refreshed detail', async () => {
@@ -3349,12 +3704,13 @@ describe('createHttpHandler', () => {
       }),
     )
     const checkoutBody = await checkout.json()
+    const receiptCode = checkoutBody.data.payment_receipt.code
 
     const update = await handler(
       new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
         method: 'PATCH',
         headers: { authorization },
-        body: JSON.stringify({ note: 'Ghi chú mới' }),
+        body: JSON.stringify({ note: 'Ghi chú mới', created_at: '2026-07-18T04:15:00.000Z' }),
       }),
     )
     const detail = await handler(
@@ -3362,12 +3718,21 @@ describe('createHttpHandler', () => {
         headers: { authorization },
       }),
     )
+    const cashbook = await handler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${receiptCode}&page=1&page_size=10`, {
+        headers: { authorization },
+      }),
+    )
     const updateBody = await update.json()
     const detailBody = await detail.json()
+    const cashbookBody = await cashbook.json()
+    const linkedCashbook = cashbookBody.data.items.find((item: { code: string; created_at: string }) => item.code === receiptCode)
 
     expect(update.status).toBe(200)
     expect(updateBody.data.note).toBe('Ghi chú mới')
     expect(detailBody.data.note).toBe('Ghi chú mới')
+    expect(detailBody.data.created_at).toBe('2026-07-18T04:15:00.000Z')
+    expect(linkedCashbook?.created_at).toBe('2026-07-18T04:15:00.000Z')
   })
 
   test('hydrates POS sales document detail products from repository catalog for imported products', async () => {
@@ -3948,6 +4313,41 @@ describe('createHttpHandler', () => {
     expect(createdTime).toBeLessThanOrEqual(Date.now() + 1000)
   })
 
+  test('uses checkout payload created_at for new invoice time', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = await handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          customer_id: 'customer-011',
+          created_at: '2026-07-08T08:15:00.000Z',
+          items: [{ product_id: 'product-001', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'default_price_list' }],
+          payment: { cash_amount: 600000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+        }),
+      }),
+    )
+    const checkoutBody = await checkout.json()
+    const orderCode = checkoutBody.data.order.code
+    const documents = await handler(
+      new Request(`http://api.local/api/v1/sales-documents?search=${orderCode}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const documentsBody = await documents.json()
+
+    expect(checkout.status).toBe(201)
+    expect(checkoutBody.data.order.created_at).toBe('2026-07-08T08:15:00.000Z')
+    expect(documentsBody.data.items[0].created_at).toBe('2026-07-08T08:15:00.000Z')
+  })
+
   test('moves customer with newest bill to top of default customer list', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -4269,6 +4669,160 @@ describe('createHttpHandler', () => {
     expect(cleanupBody.data.deleted_rows).toBeGreaterThanOrEqual(19)
     expect(afterDemoBody.data.items).toEqual([])
     expect(afterDefaultBody.data.items[0]).toEqual(expect.objectContaining({ code: 'khachle' }))
+  })
+
+  test('uses paged product repository for product list instead of loading the full catalog twice', async () => {
+    const baseRepository = repository(await hashPassword('ChangeMe123!'))
+    const listProducts = vi.fn(async () => [])
+    const listProductsPage = vi.fn(async () => ({
+      items: [{
+        id: 'product-fast-1',
+        code: 'FAST-1',
+        name: 'Fast product',
+        status: 'active',
+        product_kind: 'goods',
+        unit_name: 'pcs',
+        sell_method: 'quantity',
+        latest_purchase_cost: null,
+        latest_purchase_cost_at: null,
+        default_sale_price: 1000,
+        price_list_prices: {},
+        product_group_id: null,
+        product_group: null,
+        inventory_shape: 'normal',
+        track_inventory: true,
+        unit_conversions: [],
+        created_at: '2026-07-01T00:00:00.000Z',
+        updated_at: '2026-07-01T00:00:00.000Z',
+      }],
+      total: 51,
+      total_all: 51,
+    }))
+    const testRepository = { ...baseRepository, listProducts, listProductsPage }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=15', { headers: { authorization } }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(listProductsPage).toHaveBeenCalledTimes(1)
+    expect(listProducts).not.toHaveBeenCalled()
+    expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['FAST-1'])
+    expect(body.data.total).toBe(51)
+    expect(body.data.total_all).toBe(51)
+  })
+
+  test('uses paged stocktake repository with creator options instead of loading all stocktakes twice', async () => {
+    const baseRepository = repository(await hashPassword('ChangeMe123!'))
+    const listStocktakes = vi.fn(async () => [])
+    const listStocktakesPage = vi.fn(async () => ({
+      items: [{
+        id: 'stocktake-fast-1',
+        code: 'KK-FAST-1',
+        status: 'balanced',
+        source_type: 'kiotviet_import',
+        created_at: '2026-07-01T00:00:00.000Z',
+        balanced_at: null,
+        source_creator_name: null,
+        created_by: { id: 'user-1', name: 'Admin' },
+        total_actual_qty: 1,
+        total_actual_value: null,
+        total_difference_value: null,
+        increased_qty: 0,
+        decreased_qty: 0,
+        product_code: 'FAST-1',
+        product_name: 'Fast product',
+        product_system_qty: 1,
+        product_actual_qty: 1,
+        product_difference_qty: 0,
+        note: null,
+      }],
+      total: 42,
+      creator_options: [{ id: 'user-1', name: 'Admin' }],
+    }))
+    const testRepository = { ...baseRepository, listStocktakes, listStocktakesPage }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(new Request('http://api.local/api/v1/inventory/stocktakes?status=balanced&page=1&page_size=15', { headers: { authorization } }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(listStocktakesPage).toHaveBeenCalledTimes(1)
+    expect(listStocktakes).not.toHaveBeenCalled()
+    expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['KK-FAST-1'])
+    expect(body.data.total).toBe(42)
+    expect(body.data.creator_options).toEqual([{ id: 'user-1', name: 'Admin' }])
+  })
+
+  test('hydrates sales document detail from item snapshots without loading the full product catalog', async () => {
+    const baseRepository = repository(await hashPassword('ChangeMe123!'))
+    const listProducts = vi.fn(async () => [])
+    const testRepository: ServerRepository = {
+      ...baseRepository,
+      listProducts,
+      getSalesDocument: vi.fn(async () => ({
+        id: 'order-snapshot-1',
+        code: 'HD-SNAPSHOT-1',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-01T00:00:00.000Z',
+        customer: { id: 'customer-1', code: 'KH-1', name: 'Customer 1', phone: null },
+        seller: { id: 'seller-1', name: 'Seller 1' },
+        subtotal_amount: 2000,
+        discount_amount: 0,
+        total_amount: 2000,
+        paid_amount: 2000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [{
+          product_id: 'missing-product',
+          product_snapshot: { code: 'SNAP-1', name: 'Snapshot product', unit_name: 'pcs', sell_method: 'quantity' },
+          quantity: 2,
+          unit_price: 1000,
+          discount_amount: 0,
+          line_total: 2000,
+        }],
+      })),
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(new Request('http://api.local/api/v1/sales-documents/HD-SNAPSHOT-1', { headers: { authorization } }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(listProducts).not.toHaveBeenCalled()
+    expect(body.data.items[0].product).toEqual({
+      id: 'missing-product',
+      code: 'SNAP-1',
+      name: 'Snapshot product',
+      unit_name: 'pcs',
+      sell_method: 'quantity',
+    })
   })
 })
 

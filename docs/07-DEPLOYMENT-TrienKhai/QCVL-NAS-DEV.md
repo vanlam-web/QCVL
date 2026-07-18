@@ -1,6 +1,60 @@
 # QCVL NAS Dev Runbook
 
-> Cap nhat: 2026-07-17.
+> Cap nhat: 2026-07-18.
+
+## Latest NAS Deploy - 2026-07-18 Static Compression And Frontend Waterfall Cleanup
+
+Batch toi uu tiep cho toc do NAS `3200`.
+
+- Root cause moi: static server chua doc `Accept-Encoding`, asset JS/CSS gui nguyen ban; do truc tiep `/assets/index-*.js` tren NAS cho thay gzip van tai `312927` bytes nhu plain.
+- Fix static: cache file theo `mtimeMs + size`, gzip text asset lon, them `ETag`, `304`, va `cache-control: immutable` cho asset hash.
+- Fix frontend: Finance bo call balance/voucher an, load accounts/debts/cashbook song song; Dashboard load activity sales/purchase song song va tai period page 2+ song song.
+- Verification local: `npm run typecheck` pass; `server/static.test.ts`, dashboard tests, finance tests pass.
+- `npm run build:nas` pass; `npm run verify:nas-bundle` pass.
+- Local built static server da xac nhan gzip co hieu luc: `index-Qg8dCbMn.js` plain `313068`, gzip `94361`.
+- `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas` pass; `db:migrate` khong co migration moi.
+- `health:nas` pass sau copy: `persistence: "postgres"`, trace `a5b1b447-4af7-47d4-b37e-6465df62034b`.
+- Do lai gzip tren `3200` sau copy van chua giam byte vi runtime chua restart (`index-Qg8dCbMn.js`: plain `313068`, gzip request `313068`). Can restart `qcvl-app` de static handler moi co hieu luc.
+
+## Latest NAS Deploy - 2026-07-18 Finance Cashbook Speed
+
+Da build/copy batch Finance cashbook speed len NAS `3200`.
+
+- Root cause: `/api/v1/finance/cashbook` con load full list roi moi page trong JS; user/account lookup lap lai lam finance/dashboard co cam giac nang.
+- Fix code: them `repository.listCashbookEntriesPage`, day filter/search/scope/summary/paging xuong PostgreSQL; cache lookup user display name va finance account theo `pg.Pool + organizationId`.
+- Filter da khop UI: `search_scope`, `is_business_accounted`, account id/type, direction, status, from/to.
+- Verification local: `npm run typecheck` pass; `npx vitest run server/http.test.ts server/db.test.ts` pass (`2` files / `121` tests).
+- Benchmark warm NAS DB tu repo local: `accounts=101ms`, `debts=102ms`, `cashbook-month-page=137ms`, `cashbook-bank-page=137ms`, `sales-page=162ms`.
+- `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas` pass; `db:migrate` khong co migration moi.
+- `health:nas` pass sau copy: `persistence: "postgres"`, trace `10092f21-683f-4741-a162-6bc2489c97cb`.
+- Backend runtime chua restart vi khong co `QCVL_NAS_SSH_TARGET`; can reset/restart NAS hoac container `qcvl-app` de server code moi chay that tren `3200`.
+
+## Latest NAS Deploy - 2026-07-18 Dashboard SQL Paging
+
+Da build/copy batch toi uu Dashboard len NAS `3200`.
+
+- Root cause: API `/api/v1/sales-documents` tren PostgreSQL hydrate toan bo `orders` + `order_items`, roi moi filter/page trong JS. Dashboard goi list hoa don theo nhieu khoang thoi gian, nen trang bi cham khi data lon.
+- Fix code: them `repository.listSalesDocumentsPage` cho PostgreSQL, day filter `type/status/customer/payment_status/from/to/search`, `limit/offset`, `total`, `summary` xuong SQL; chi hydrate `order_items` cho page hien tai.
+- `npm test -- server/db.test.ts` pass: `82` files / `614` tests.
+- `npm run typecheck` pass.
+- `npm test -- server/http.test.ts src/features/dashboard/dashboard-service.test.ts` pass: `82` files / `687` tests.
+- `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas` pass; `db:migrate` khong co migration moi.
+- `health:nas` pass sau copy: `persistence: "postgres"`, trace `a637686e-1e18-4062-8730-3a8b7c7dcbc8`.
+- Backend runtime can restart `qcvl-app` de nap code DB paging moi. Restart qua SSH chua chay duoc vi thieu `QCVL_NAS_SSH_TARGET`; thu `admin@100.84.228.125` bang keyless bi `Permission denied (publickey,password)`.
+
+## Latest NAS Deploy - 2026-07-18 Dashboard Real Data And Activity Paging
+
+Da build/copy batch Dashboard len NAS `3200`.
+
+- Lenh dung: `QCVL_NAS_DEPLOY_CONFIRM=true`, `QCVL_NAS_RESTART=false`, `npm run deploy:nas`.
+- Dashboard dung du lieu hoa don that cho KPI/chart/top hang/top khach; bo loc doanh thu, top hang, top khach doc lap nhau.
+- Cot hoat dong ben phai lay chieu cao cot trai lam chuan; noi dung du cuon trong danh sach, khong keo gian Dashboard.
+- Tab `Giao dich` load 20 dong dau, cuon toi cuoi load them moi lo 20 dong; link so tien co khoang cach rieng va mo chung tu hoa don.
+- `build:nas` pass, `verify:nas-bundle` pass: bundle dung `100.84.228.125:3200` va khong goi `100.84.228.125:3100`.
+- `db:migrate` pass, khong co migration moi (`migrated: []`, `baseline_stamped: []`).
+- `health:nas` pass sau deploy: `persistence: "postgres"`, trace `594e6b39-4b2f-47c7-bdc5-2279ee83377f`.
+- `env:status` NAS pass sau deploy: `pending: []`, `in_sync: true`, health trace `4ddd96af-4d54-4ac3-865d-bf473ec62212`.
+- Khong restart `qcvl-app` trong deploy nay (`QCVL_NAS_RESTART=false`).
 
 ## Latest NAS Deploy - 2026-07-17 Product Filters And Sidebar Collapse
 
@@ -487,3 +541,8 @@ Nếu UI báo `Máy chủ gặp lỗi... Mã lỗi: req-...`:
 - Mã đó dùng để tra log backend tương ứng request.
 - Cần xem log `qcvl-app` hoặc server log theo mã request.
 - Không đoán lỗi từ UI nếu chưa đọc log.
+
+## 8. POS checkout note
+
+- Header hoa don POS dung ten hien thi cua user dang nhap.
+- Ngay va gio hoa don co the sua trong input `date` + `time`; backend luu `created_at` theo ngay gio da sua neu payload hop le.

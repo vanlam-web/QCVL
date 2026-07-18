@@ -147,12 +147,14 @@ Hóa đơn đã checkout thành công không bị sửa đè trực tiếp.
 
 Khi nhân viên sửa hóa đơn đã chốt:
 
-- hệ thống mở hóa đơn sang POS như một nháp sửa, tab hiển thị `Sửa HD000123`
+- hệ thống mở hóa đơn sang POS như một nháp sửa bằng handoff riêng `invoice-revision`, không dùng lại quote reopen flow
+- POS chạy mode `invoice-revision`, tab hiển thị `Sửa HD000123`
 - hệ thống tạo một hóa đơn mới dựa trên nội dung đã sửa
 - mã mới dùng mã cũ kèm số lần sửa, ví dụ `HD000123.01`, `HD000123.02`
 - hóa đơn cũ chuyển sang trạng thái đã hủy với lý do sửa chứng từ
 - hóa đơn cũ không bị xóa vật lý để có thể kiểm tra lại lịch sử
 - hóa đơn mới giữ liên kết tới hóa đơn cũ gần nhất và mã gốc
+- hóa đơn mới lưu lý do sửa bằng `revision_reason_code` và `revision_reason_note`
 - sau khi lưu bản sửa thành công, POS đóng tab sửa và mở Bill Preview cho bản mới
 
 Quy tắc này áp dụng chung cho các phiếu/chứng từ có cơ chế sửa sau chốt; mỗi domain sẽ mô tả chi tiết tác động đảo kho, tiền và công nợ tương ứng.

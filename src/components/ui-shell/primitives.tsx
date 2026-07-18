@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { formatMoney } from '../../lib/number-format'
 
 type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
@@ -9,6 +9,30 @@ export function StatusChip({ children, tone = 'neutral' }: { children: ReactNode
 
 export function MoneyText({ value }: { value: number }) {
   return <span className="money-text">{formatMoney(value)}</span>
+}
+
+export function managementRecordSearchHref(path: string, search: string, extraParams: Record<string, string> = {}) {
+  const params = new URLSearchParams({ search })
+  Object.entries(extraParams).forEach(([key, value]) => params.set(key, value))
+  return `${path}?${params.toString()}`
+}
+
+export function managementRecordOpenHref(path: string, code: string, extraParams: Record<string, string> = {}) {
+  const params = new URLSearchParams({ open: code })
+  Object.entries(extraParams).forEach(([key, value]) => params.set(key, value))
+  return `${path}?${params.toString()}`
+}
+
+export function ManagementRecordLink({
+  className,
+  children,
+  ...props
+}: AnchorHTMLAttributes<HTMLAnchorElement> & { children: ReactNode }) {
+  return (
+    <a className={`management-record-link${className ? ` ${className}` : ''}`} {...props}>
+      {children}
+    </a>
+  )
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {

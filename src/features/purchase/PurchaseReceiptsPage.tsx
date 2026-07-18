@@ -28,7 +28,7 @@ import {
 } from './purchase-receipt-calculations'
 import { purchaseReceiptTimeQuickOptions } from './purchase-receipt-filters'
 import { isExactPurchaseReceiptCode, money, statusText } from './purchase-receipt-presenter'
-import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -251,6 +251,21 @@ function purchaseReceiptPaymentRows(receipt: PurchaseReceipt): PurchaseReceiptSu
   ]
 }
 
+function initialPurchaseReceiptRouteFilters() {
+  const params = new URLSearchParams(window.location.search)
+  const search = (params.get('search') ?? params.get('q') ?? '').trim()
+  const open = (params.get('open') ?? '').trim()
+  const hasSearch = search.length > 0
+  const hasOpen = open.length > 0
+
+  return {
+    search,
+    open,
+    status: (hasSearch || hasOpen ? 'all' : 'posted') as PurchaseReceiptStatus | 'all',
+    shouldOpenSingleResult: hasSearch || hasOpen,
+  }
+}
+
 export function PurchaseReceiptsPage({
   currentUser,
   service,
@@ -269,10 +284,11 @@ export function PurchaseReceiptsPage({
   const [total, setTotal] = useState(0)
   const [receiptListSummary, setReceiptListSummary] = useState<{ payable_amount: number; remaining_amount: number } | null>(null)
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
+  const [routeFilters] = useState(initialPurchaseReceiptRouteFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>('posted')
+  const [search, setSearch] = useState(routeFilters.search)
+  const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>(routeFilters.status)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [createdBy, setCreatedBy] = useState('all')
@@ -485,13 +501,53 @@ export function PurchaseReceiptsPage({
     async function loadInitialData() {
       setError(null)
       try {
-        const receiptResult = await service.listReceipts({ status: 'posted', page: 1, page_size: defaultPageSize })
+        const receiptResult = await service.listReceipts({
+          search: routeFilters.search || routeFilters.open || undefined,
+          status: routeFilters.status,
+          page: 1,
+          page_size: defaultPageSize,
+        })
         if (!active) return
         setReceipts(receiptResult.items)
         setTotal(receiptResult.total)
         setReceiptListSummary(receiptResult.summary ?? null)
         setPage(receiptResult.page)
         setPageSize(receiptResult.page_size)
+        if (routeFilters.shouldOpenSingleResult && receiptResult.items.length === 1) {
+          const [singleReceipt] = receiptResult.items
+          setLoadingReceiptId(singleReceipt.id)
+          try {
+            const detail = await service.getReceipt(singleReceipt.id)
+            if (!active) return
+            setDetailOpen(true)
+            setEditingId(detail.id)
+            setEditingStatus(detail.status)
+            setSelectedReceipt(detail)
+            setReceiptDetailTab('info')
+            setForm({
+              code: detail.code,
+              supplier_id: detail.supplier_id,
+              received_at: detail.received_at.slice(0, 16),
+              supplier_document_no: detail.supplier_document_no ?? '',
+              notes: detail.notes ?? '',
+              discount_amount: detail.discount_amount,
+              paid_amount: detail.paid_amount,
+              items: detail.items.map((item) => ({
+                product_id: item.product_id,
+                inventory_shape: item.inventory_shape,
+                unit_name: item.unit_name_snapshot,
+                quantity: item.quantity,
+                unit_cost: item.unit_cost,
+                discount_amount: item.discount_amount,
+                physical_payload: item.physical_payload,
+              })),
+            })
+          } catch (cause) {
+            if (active) setError(formatApiError(cause, 'Không tải được chi tiết phiếu nhập.'))
+          } finally {
+            if (active) setLoadingReceiptId(null)
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được phiếu nhập.'))
       }
@@ -502,7 +558,7 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [defaultPageSize, service])
+  }, [defaultPageSize, routeFilters, service])
 
   const ensureReceiptLookupsLoaded = useCallback(async () => {
     const requests: Promise<void>[] = []
@@ -1180,14 +1236,22 @@ export function PurchaseReceiptsPage({
                   { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
                   { label: 'Trạng thái:', value: detailStatus },
                 ]}
-                title={selectedReceipt.supplier.name}
+                title={(
+                  <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
+                    {selectedReceipt.supplier.name}
+                  </ManagementRecordLink>
+                )}
               />
               <ManagementDetailSection ariaLabel="Thông tin nhanh phiếu nhập">
                 <ManagementDetailInfoList
                   columns="three"
                   items={[
-                    { label: 'Nhà cung cấp', value: selectedReceipt.supplier.name },
-                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? 'Chưa có' },
+                    { label: 'Nhà cung cấp', value: (
+                      <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
+                        {selectedReceipt.supplier.name}
+                      </ManagementRecordLink>
+                    ) },
+                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? '' },
                     { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
                   ]}
                 />
@@ -1199,6 +1263,7 @@ export function PurchaseReceiptsPage({
                       <th>Mã hàng</th>
                       <th>Tên hàng</th>
                       <th>Số lượng</th>
+                      <th>Đơn vị</th>
                       <th>Đơn giá</th>
                       <th>Giảm giá</th>
                       <th>Giá nhập</th>
@@ -1208,12 +1273,17 @@ export function PurchaseReceiptsPage({
                   <tbody>
                     {selectedReceipt.items.map((item) => (
                       <tr key={item.id}>
-                        <td>{item.product.code}</td>
+                        <td>
+                          <ManagementRecordLink href={managementRecordOpenHref('/products', item.product.code)}>
+                            {item.product.code}
+                          </ManagementRecordLink>
+                        </td>
                         <td>
                           <span>{item.product.name}</span>
                           {item.physical_payload ? <small>{physicalSummary(item)}</small> : null}
                         </td>
-                        <td>{`${quantityText(item.quantity)} ${item.unit_name_snapshot}`}</td>
+                        <td>{quantityText(item.quantity)}</td>
+                        <td>{item.unit_name_snapshot}</td>
                         <td><MoneyText value={item.unit_cost} /></td>
                         <td><MoneyText value={item.discount_amount} /></td>
                         <td><MoneyText value={item.unit_cost} /></td>
@@ -1290,7 +1360,11 @@ export function PurchaseReceiptsPage({
                   <tbody>
                     {selectedReceiptPayments.map((payment) => (
                       <tr key={payment.id}>
-                        <td>{payment.code}</td>
+                        <td>
+                          <ManagementRecordLink href={managementRecordOpenHref('/finance', payment.code)}>
+                            {payment.code}
+                          </ManagementRecordLink>
+                        </td>
                         <td>{formatKvDateTime(payment.paid_at)}</td>
                         <td>{payment.created_by}</td>
                         <td>{supplierPaymentMethodText(payment.payment_method)}</td>
@@ -1414,7 +1488,11 @@ export function PurchaseReceiptsPage({
                   { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
                   { label: 'Trạng thái:', value: detailStatus },
                 ]}
-                title={selectedReceipt.supplier.name}
+                title={(
+                  <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
+                    {selectedReceipt.supplier.name}
+                  </ManagementRecordLink>
+                )}
               />
             ) : null}
             {selectedReceipt ? (
@@ -1422,8 +1500,12 @@ export function PurchaseReceiptsPage({
                 <ManagementDetailInfoList
                   columns="four"
                   items={[
-                    { label: 'Nhà cung cấp', value: selectedReceipt.supplier.name },
-                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? 'Chưa có' },
+                    { label: 'Nhà cung cấp', value: (
+                      <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
+                        {selectedReceipt.supplier.name}
+                      </ManagementRecordLink>
+                    ) },
+                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? '' },
                     { label: 'Cần trả NCC', value: money(selectedReceipt.payable_amount) },
                     { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
                   ]}
@@ -1768,7 +1850,11 @@ export function PurchaseReceiptsPage({
                 <tbody>
                   {selectedReceiptPayments.map((payment) => (
                     <tr key={payment.id}>
-                      <td>{payment.code}</td>
+                      <td>
+                        <ManagementRecordLink href={managementRecordOpenHref('/finance', payment.code)}>
+                          {payment.code}
+                        </ManagementRecordLink>
+                      </td>
                       <td>{formatKvDateTime(payment.paid_at)}</td>
                       <td>{payment.created_by}</td>
                       <td>{supplierPaymentMethodText(payment.payment_method)}</td>
@@ -2295,7 +2381,7 @@ export function PurchaseReceiptsPage({
             type="button"
             onClick={() => setShowFilters(false)}
           >
-            <ChevronRight aria-hidden="true" size={16} />
+            <ChevronLeft aria-hidden="true" size={16} />
           </button>
           <ManagementFilterGroup title="Trạng thái">
             <select

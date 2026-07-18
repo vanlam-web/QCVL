@@ -62,7 +62,7 @@ export function createAuthService(options: AuthServiceOptions): AuthService {
 
 function getStoredAccessToken() {
   try {
-    return window.localStorage.getItem(accessTokenStorageKey) ?? fallbackAccessToken
+    return window.localStorage.getItem(accessTokenStorageKey)
   } catch {
     return fallbackAccessToken
   }

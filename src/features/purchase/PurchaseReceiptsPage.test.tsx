@@ -430,6 +430,31 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
   expect(within(filterSidebar).queryByRole('button', { name: 'Đặt lại bộ lọc' })).not.toBeInTheDocument()
 })
 
+it('opens a single purchase receipt from route query and searches all statuses', async () => {
+  const originalUrl = window.location.href
+  window.history.pushState({}, '', '/purchase/receipts?search=PN000674')
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({ items: [postedReceipt], page: 1, page_size: 15, total: 1 })),
+    getReceipt: vi.fn(async () => postedReceipt),
+  })
+
+  try {
+    render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+    await waitFor(() => expect(service.listReceipts).toHaveBeenCalledWith({
+      search: 'PN000674',
+      status: 'all',
+      page: 1,
+      page_size: 15,
+    }))
+    expect(screen.getByLabelText('Tìm phiếu/NCC')).toHaveValue('PN000674')
+    expect(await screen.findByRole('region', { name: 'Chi tiết phiếu nhập PN000674' })).toBeInTheDocument()
+    expect(service.getReceipt).toHaveBeenCalledWith('receipt-posted')
+  } finally {
+    window.history.pushState({}, '', originalUrl)
+  }
+})
+
 it('opens purchase receipt create workspace from the plus action', async () => {
   const service = makeService()
 
@@ -732,8 +757,14 @@ it('opens posted receipts as view-only details', async () => {
   expect(note).toHaveClass('management-detail-note')
   expect(note).toHaveAttribute('readonly')
   expect(lineTable).toHaveClass('management-detail-table', 'management-detail-lines-table')
+  expect(within(lineTable).getByRole('columnheader', { name: 'Số lượng' })).toBeInTheDocument()
+  expect(within(lineTable).getByRole('columnheader', { name: 'Đơn vị' })).toBeInTheDocument()
   expect(within(lineTable).getByText('SP0001')).toBeInTheDocument()
   expect(within(lineTable).getByText('Decal sữa')).toBeInTheDocument()
+  const itemRow = within(lineTable).getByText('SP0001').closest('tr') as HTMLElement
+  expect(within(itemRow).getByText('2.00')).toBeInTheDocument()
+  expect(within(itemRow).getByText('m')).toBeInTheDocument()
+  expect(within(lineTable).queryByText('2.00 m')).not.toBeInTheDocument()
   expect(within(detail).getByText('Cần trả NCC')).toBeInTheDocument()
 })
 

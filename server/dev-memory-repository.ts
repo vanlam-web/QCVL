@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
-import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
+import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
 const defaultPriceList = { id: 'pl-dev-default', name: 'Bang gia le' }
@@ -44,37 +44,41 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const userOrder: string[] = []
   const groupIds = new Map<string, string>()
   const groupNamesById = new Map<string, string>()
-  const user: AuthUserRow = {
+  const adminAuthUser: AuthUserRow = {
     ...adminUser,
     password_hash: await hashPassword(process.env.QCVL_DEV_PASSWORD ?? 'ChangeMe123!'),
   }
-  authUsers.set(user.email, user)
-  users.set(user.id, {
-    id: user.id,
-    email: user.email,
-    username: 'admin',
-    phone: null,
-    birthday: null,
-    region: null,
-    ward: null,
-    address: null,
-    note: null,
-    display_name: user.display_name,
-    status: user.status,
-    permissions: [
-      'perm.access_admin_panel',
-      'perm.apply_discount',
-      'perm.create_order',
-      'perm.edit_order_locked',
-      'perm.edit_price_book',
-      'perm.manage_finance',
-      'perm.manage_inventory',
-      'perm.manage_users',
-      'perm.refund_order',
-      'perm.view_shift_report',
-    ],
-  })
-  userOrder.push(user.id)
+  seedAdminUser(adminAuthUser)
+
+  function seedAdminUser(userRecord: AuthUserRow) {
+    authUsers.set(userRecord.email, userRecord)
+    users.set(userRecord.id, {
+      id: userRecord.id,
+      email: userRecord.email,
+      username: 'admin',
+      phone: null,
+      birthday: null,
+      region: null,
+      ward: null,
+      address: null,
+      note: null,
+      display_name: userRecord.display_name,
+      status: userRecord.status,
+      permissions: [
+        'perm.access_admin_panel',
+        'perm.apply_discount',
+        'perm.create_order',
+        'perm.edit_order_locked',
+        'perm.edit_price_book',
+        'perm.manage_finance',
+        'perm.manage_inventory',
+        'perm.manage_users',
+        'perm.refund_order',
+        'perm.view_shift_report',
+      ],
+    })
+    if (!userOrder.includes(userRecord.id)) userOrder.push(userRecord.id)
+  }
 
   if (options.stateFile) {
     await loadState(options.stateFile, {
@@ -102,33 +106,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       groupIds,
       groupNamesById,
     })
-    authUsers.set(user.email, user)
-    users.set(user.id, {
-      id: user.id,
-      email: user.email,
-      username: 'admin',
-      phone: null,
-      birthday: null,
-      region: null,
-      ward: null,
-      address: null,
-      note: null,
-      display_name: user.display_name,
-      status: user.status,
-      permissions: [
-        'perm.access_admin_panel',
-        'perm.apply_discount',
-        'perm.create_order',
-        'perm.edit_order_locked',
-        'perm.edit_price_book',
-        'perm.manage_finance',
-        'perm.manage_inventory',
-        'perm.manage_users',
-        'perm.refund_order',
-        'perm.view_shift_report',
-      ],
-    })
-    if (!userOrder.includes(user.id)) userOrder.push(user.id)
+    if (!users.has(adminAuthUser.id)) seedAdminUser(adminAuthUser)
   }
 
   async function persist() {
@@ -162,17 +140,59 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
 
   if (syncExactCustomerSupplierLinks(customers, suppliers) > 0) await persist()
 
+  function activeAdminAuthUser() {
+    return [...authUsers.values()].find((candidate) => candidate.id === adminAuthUser.id) ?? adminAuthUser
+  }
+
+  function currentUserSnapshot(): CurrentUserData {
+    const activeAdmin = users.get(adminAuthUser.id)
+    const authAdmin = activeAdminAuthUser()
+    const adminPermissions: UserListItemData['permissions'] = [
+      'perm.access_admin_panel',
+      'perm.apply_discount',
+      'perm.create_order',
+      'perm.edit_order_locked',
+      'perm.edit_price_book',
+      'perm.manage_finance',
+      'perm.manage_inventory',
+      'perm.manage_users',
+      'perm.refund_order',
+      'perm.view_shift_report',
+    ]
+    const currentAdminPermissions: UserListItemData['permissions'] = activeAdmin?.id === adminAuthUser.id
+      ? Array.from(new Set([...(activeAdmin.permissions ?? []), ...adminPermissions]))
+      : activeAdmin?.permissions ?? adminPermissions
+    return {
+      user: {
+        id: adminAuthUser.id,
+        email: activeAdmin?.email ?? authAdmin.email,
+        display_name: activeAdmin?.display_name ?? authAdmin.display_name,
+      },
+      organization,
+      workstation: { id: 'ws-dev', code: 'DEV', name: 'May dev' },
+      permissions: currentAdminPermissions,
+    }
+  }
+
   return {
     async findUserByEmail(email) {
       const normalized = email.trim().toLowerCase()
-      if (normalized === 'adminnas' || normalized === 'admin') return user
+      if (normalized === 'adminnas') return activeAdminAuthUser()
       return authUsers.get(normalized) ?? null
     },
     async findUserByLogin(login) {
       const normalized = login.trim().toLowerCase()
-      if (normalized === 'adminnas') return user
+      if (normalized === 'adminnas') return activeAdminAuthUser()
       const byEmail = authUsers.get(normalized)
       if (byEmail) return byEmail
+      const exactUsernameMatches = userOrder
+        .map((id) => users.get(id))
+        .filter((item): item is UserListItemData => Boolean(item))
+        .filter((item) => item.username?.trim().toLowerCase() === normalized)
+      if (exactUsernameMatches.length === 1) {
+        return authUsers.get(exactUsernameMatches[0].email.trim().toLowerCase()) ?? null
+      }
+      if (exactUsernameMatches.length > 1) return null
       const phoneDigits = normalized.replace(/\D/g, '')
       const matches = userOrder
         .map((id) => users.get(id))
@@ -191,7 +211,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       sessions.delete(token)
     },
     async getSessionUser(token) {
-      return sessions.has(token) || token.trim().length > 0 ? currentUser() : null
+      return sessions.has(token) || token.trim().length > 0 ? currentUserSnapshot() : null
     },
     async listWorkstations() {
       return [{ id: 'ws-dev', code: 'DEV', name: 'May dev', status: 'active' }]
@@ -297,7 +317,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         ...item,
         email: normalizedEmail,
         username: input.username ?? item.username,
-        phone: input.phone ?? item.phone,
+        phone: input.phone !== undefined ? input.phone : item.phone,
         birthday: input.birthday ?? item.birthday,
         region: input.region ?? item.region,
         ward: input.ward ?? item.ward,
@@ -846,6 +866,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const to = input.url.searchParams.get('to')
       const createdBy = input.url.searchParams.get('created_by')
       return [...salesDocuments.values()]
+        .map((document) => hydrateSalesDocumentUserSnapshot(document, users))
         .filter((document) => {
           if (type && type !== 'all' && !type.split(',').includes(document.order_type)) return false
           if (status && status !== 'all' && !status.split(',').includes(document.status)) return false
@@ -868,8 +889,39 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       }
       await persist()
     },
+    async reviseSalesDocument(input) {
+      const original = [...salesDocuments.entries()].find(([, document]) => document.id === input.originalOrderId || document.code === input.originalOrderCode)
+      if (!original) return null
+      const [originalCode, originalDocument] = original
+      const revised = {
+        ...input.document,
+        base_code: input.document.base_code ?? originalDocument.base_code ?? invoiceBaseCode(originalDocument.code),
+        revision_no: input.document.revision_no ?? 1,
+        revised_from_order_id: originalDocument.id,
+      } as SalesDocumentData
+      const cancelled = {
+        ...originalDocument,
+        status: 'cancelled',
+        replaced_by_order_id: revised.id,
+        cancel_reason_type: 'revised',
+      } as SalesDocumentData
+      salesDocuments.set(originalCode, cancelled)
+      salesDocuments.set(revised.code, revised)
+      salesDocumentItems.set(revised.code, posInvoiceRowsFromSalesDocument(revised, products))
+      for (const entry of input.cashbookEntries) cashbookEntries.set(entry.id, entry)
+      await persist()
+      return revised
+    },
     async getSalesDocument(input) {
-      return [...salesDocuments.values()].find((document) => document.id === input.id || document.code === input.id) ?? null
+      const document = [...salesDocuments.values()].find((item) => item.id === input.id || item.code === input.id)
+      if (!document) return null
+      const hydratedDocument = hydrateSalesDocumentUserSnapshot(document, users)
+      const rawItems = salesDocumentItems.get(document.code)
+      const hydratedItems = rawItems
+        ? salesDocumentItemsToDetailItems(rawItems, products)
+        : document.items
+      const hydratedCashbookEntries = [...cashbookEntries.values()].map((entry) => hydrateCashbookEntryUserSnapshot(entry, users))
+      return hydrateSalesDocumentPaymentReceipts({ ...hydratedDocument, items: hydratedItems }, hydratedCashbookEntries)
     },
     async cancelSalesDocument(input) {
       const entry = [...salesDocuments.entries()].find(([, document]) => document.id === input.id || document.code === input.id)
@@ -888,8 +940,18 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const entry = [...salesDocuments.entries()].find(([, document]) => document.id === input.id || document.code === input.id)
       if (!entry) return null
       const [code, document] = entry
-      const updated = { ...document, note: input.note } as SalesDocumentData
+      const updated = {
+        ...document,
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        ...(input.created_at !== undefined ? { created_at: input.created_at } : {}),
+      } as SalesDocumentData
       salesDocuments.set(code, updated)
+      if (input.created_at !== undefined) {
+        for (const [entryId, cashbookEntry] of cashbookEntries.entries()) {
+          if (!cashbookEntryMatchesSalesDocument(cashbookEntry, updated)) continue
+          cashbookEntries.set(entryId, { ...cashbookEntry, created_at: input.created_at })
+        }
+      }
       await persist()
       return updated
     },
@@ -937,7 +999,9 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const financeAccountType = input.url.searchParams.get('finance_account_type')
       const from = input.url.searchParams.get('from')
       const to = input.url.searchParams.get('to')
-      return [...cashbookEntries.values()].map((entry) => hydrateCashbookEntryFinanceAccount(entry, financeAccounts))
+      return [...cashbookEntries.values()]
+        .map((entry) => hydrateCashbookEntryUserSnapshot(entry, users))
+        .map((entry) => hydrateCashbookEntryFinanceAccount(entry, financeAccounts))
         .filter((entry) => {
           if (financeAccountId && financeAccountId !== 'all' && entry.finance_account.id !== financeAccountId) return false
           if (financeAccountType && financeAccountType !== 'all' && entry.finance_account.account_type !== financeAccountType) return false
@@ -952,7 +1016,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async getCashbookEntry(input) {
       const entry = [...cashbookEntries.values()].find((item) => item.id === input.id || item.code === input.id)
-      return entry ? hydrateCashbookEntryFinanceAccount(entry, financeAccounts) : null
+      return entry ? hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(entry, users), financeAccounts) : null
     },
     async listStockMovements(input) {
       const productId = input.url.searchParams.get('product_id')
@@ -1105,6 +1169,11 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       await persist()
     },
   }
+}
+
+function invoiceBaseCode(code: string) {
+  const match = /^(HD\d{6})(?:\.\d+)?$/.exec(code)
+  return match ? match[1] : code
 }
 
 interface DevMemoryMaps {
@@ -1264,6 +1333,25 @@ function customerWithDisplaySalesAmount(customer: CustomerListData): CustomerLis
   return customer.kiotviet_net_sales !== null && customer.kiotviet_net_sales !== undefined
     ? { ...customer, total_sales_amount: customer.kiotviet_net_sales }
     : customer
+}
+
+function hydrateUserReference<T extends { id: string; name: string }>(reference: T, users: Map<string, UserListItemData>): T {
+  const user = users.get(reference.id)
+  return user ? { ...reference, name: user.display_name } : reference
+}
+
+function hydrateSalesDocumentUserSnapshot(document: SalesDocumentData, users: Map<string, UserListItemData>): SalesDocumentData {
+  return {
+    ...document,
+    seller: hydrateUserReference(document.seller, users),
+  }
+}
+
+function hydrateCashbookEntryUserSnapshot(entry: CashbookEntryData, users: Map<string, UserListItemData>): CashbookEntryData {
+  return {
+    ...entry,
+    created_by: entry.created_by ? hydrateUserReference(entry.created_by, users) : entry.created_by,
+  }
 }
 
 function hydrateStocktakeCreator(stocktake: StocktakeListData, users: Map<string, UserListItemData>): StocktakeListData {
@@ -1575,6 +1663,67 @@ function hydrateCashbookEntryFinanceAccount(
   }
 }
 
+function hydrateSalesDocumentPaymentReceipts(
+  document: SalesDocumentData,
+  entries: CashbookEntryData[],
+): SalesDocumentData & { payment_receipts: SalesDocumentPaymentReceiptData[] } {
+  const paymentReceipts = entries
+    .filter((entry) => cashbookEntryMatchesSalesDocument(entry, document))
+    .map((entry) => cashbookEntrySalesDocumentPaymentReceipt(entry, document))
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+
+  return { ...document, payment_receipts: paymentReceipts }
+}
+
+function cashbookEntryMatchesSalesDocument(entry: CashbookEntryData, document: SalesDocumentData) {
+  if (entry.direction !== 'in') return false
+  if (entry.source?.order_code === document.code) return true
+  return (entry.allocations ?? []).some((allocation) => allocation.order_id === document.id || allocation.order_code === document.code)
+}
+
+function cashbookEntrySalesDocumentPaymentReceipt(
+  entry: CashbookEntryData,
+  document: SalesDocumentData,
+): SalesDocumentPaymentReceiptData {
+  const amount = Math.abs(Number(entry.amount_delta))
+  const linkedAllocations = (entry.allocations ?? []).filter((allocation) => allocation.order_id === document.id || allocation.order_code === document.code)
+  const allocations = linkedAllocations.length > 0
+    ? linkedAllocations.map((allocation) => ({
+        order_id: allocation.order_id,
+        order_code: allocation.order_code,
+        allocated_amount: Number(allocation.allocated_amount),
+        remaining_after: Number(allocation.remaining_after),
+      }))
+    : [{
+        order_id: document.id,
+        order_code: document.code,
+        allocated_amount: amount,
+        remaining_after: Math.max(Number(document.debt_amount), 0),
+      }]
+  const allocatedTotal = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
+  const sourceCreatorName = entry.source?.source_creator_name?.trim()
+
+  return {
+    id: entry.id,
+    code: entry.code,
+    status: entry.status === 'cancelled' ? 'cancelled' : 'posted',
+    receipt_type: (entry.allocations?.length ?? 0) > 1 ? 'mixed_sale_and_debt' : 'sale_payment',
+    total_received_amount: allocatedTotal > 0 ? allocatedTotal : amount,
+    created_at: entry.created_at,
+    created_by: entry.created_by ?? { id: sourceCreatorName ? `kiotviet-${entry.id}` : document.seller.id, name: sourceCreatorName || document.seller.name },
+    methods: [{
+      method_type: entry.finance_account.account_type === 'bank' || entry.payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash',
+      amount,
+      finance_account: {
+        id: entry.finance_account.id,
+        code: entry.finance_account.account_number ?? entry.finance_account.code,
+        name: entry.finance_account.name,
+      },
+    }],
+    allocations,
+  }
+}
+
 function cashbookFinanceAccountSnapshot(account: FinanceAccountData): CashbookEntryData['finance_account'] {
   return {
     id: account.id,
@@ -1587,6 +1736,7 @@ function cashbookFinanceAccountSnapshot(account: FinanceAccountData): CashbookEn
 }
 
 type KiotVietCashbookRepositoryRow = Parameters<NonNullable<ServerRepository['upsertImportedKiotVietCashbook']>>[0]['rows'][number]
+type KiotVietInvoiceRepositoryRow = Parameters<NonNullable<ServerRepository['upsertImportedKiotVietInvoices']>>[0]['rows'][number]
 
 function preferPostedKiotVietCashbookRows(rows: KiotVietCashbookRepositoryRow[]) {
   const byCode = new Map<string, KiotVietCashbookRepositoryRow>()
@@ -2000,7 +2150,7 @@ function normalizeFinanceAccountNumber(value: string | null | undefined) {
 
 function toImportedSalesDocument(
   sourceCode: string,
-  itemMap: Map<number, Parameters<NonNullable<ServerRepository['upsertImportedKiotVietInvoices']>>[0]['rows'][number]>,
+  itemMap: Map<number, KiotVietInvoiceRepositoryRow>,
   customers: Map<string, CustomerListData>,
   products: Map<string, ProductListData>,
   users: Map<string, UserListItemData>,
@@ -2036,11 +2186,33 @@ function toImportedSalesDocument(
     debt_amount: debt,
     payment_status: debt <= 0 ? 'paid' : paid > 0 ? 'partial' : 'unpaid',
     note: firstRow?.note ?? null,
-    items: rows.map((row) => {
-      const product = resolveProductByImportCode(products, row.product_code)
-      return { product_id: product?.id ?? `product-${slug(row.product_code)}` }
-    }),
+    items: salesDocumentItemsFromImportRows(rows, products) as SalesDocumentData['items'],
   } as SalesDocumentData
+}
+
+function salesDocumentItemsFromImportRows(
+  rows: KiotVietInvoiceRepositoryRow[],
+  products: Map<string, ProductListData>,
+) {
+  return rows.map((row) => {
+    const product = resolveProductByImportCode(products, row.product_code)
+    return {
+      product_id: product?.id ?? `product-${slug(row.product_code)}`,
+      quantity: row.quantity,
+      unit_price: row.unit_price,
+      discount_amount: row.line_discount_amount,
+      line_total: row.line_amount,
+      sale_unit_name: row.unit_name ?? product?.unit_name ?? '',
+      note: row.product_note ?? null,
+    }
+  })
+}
+
+function salesDocumentItemsToDetailItems(
+  itemMap: Map<number, KiotVietInvoiceRepositoryRow>,
+  products: Map<string, ProductListData>,
+) {
+  return salesDocumentItemsFromImportRows([...itemMap.values()].sort((left, right) => left.rowNumber - right.rowNumber), products) as SalesDocumentData['items']
 }
 
 function posInvoiceRowsFromSalesDocument(
@@ -2389,26 +2561,6 @@ function isDemoStocktakeCode(code: string, explicitCodes: Set<string>) {
     || code.startsWith('DEMO-')
     || code.startsWith('TEST-')
     || code.startsWith('KK-CLEANUP-')
-}
-
-function currentUser(): CurrentUserData {
-  return {
-    user: { id: adminUser.id, email: adminUser.email, display_name: adminUser.display_name },
-    organization,
-    workstation: { id: 'ws-dev', code: 'DEV', name: 'May dev' },
-    permissions: [
-      'perm.access_admin_panel',
-      'perm.apply_discount',
-      'perm.create_order',
-      'perm.edit_order_locked',
-      'perm.edit_price_book',
-      'perm.manage_finance',
-      'perm.manage_inventory',
-      'perm.manage_users',
-      'perm.refund_order',
-      'perm.view_shift_report',
-    ],
-  }
 }
 
 function slug(value: string) {

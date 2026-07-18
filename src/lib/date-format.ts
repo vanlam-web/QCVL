@@ -32,13 +32,13 @@ function dateParts(value: DateInput) {
   return { day, month, year, hour, minute }
 }
 
-export function formatKvDateTime(value: DateInput, fallback = 'Chưa có') {
+export function formatKvDateTime(value: DateInput, fallback = '') {
   const parts = dateParts(value)
   if (!parts) return fallback
   return `${parts.day}/${parts.month}/${parts.year} ${parts.hour}:${parts.minute}`
 }
 
-export function formatKvDate(value: DateInput, fallback = 'Chưa có') {
+export function formatKvDate(value: DateInput, fallback = '') {
   const parts = dateParts(value)
   if (!parts) return fallback
   return `${parts.day}/${parts.month}/${parts.year}`

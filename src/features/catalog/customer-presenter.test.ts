@@ -29,8 +29,8 @@ describe('customer presenter', () => {
   })
 
   it('formats empty dates safely', () => {
-    expect(customerDateTime(null)).toBe('Chưa có dữ liệu')
-    expect(customerDateTime('bad')).toBe('Chưa có dữ liệu')
+    expect(customerDateTime(null)).toBe('')
+    expect(customerDateTime('bad')).toBe('')
   })
   it('summarizes visible customers outside the page', () => {
     expect(customerVisibleSummary([

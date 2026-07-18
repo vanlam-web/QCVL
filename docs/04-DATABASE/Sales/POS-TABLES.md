@@ -393,8 +393,8 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 | `payment_status` | `text` | ❌ | `not_applicable`, `unpaid`, `partial`, `paid` |
 | `note` | `text` | ✅ | Ghi chú đơn |
 | `cancel_reason_type` | `text` | ✅ | `user_cancelled` hoặc `revised`; null nếu chưa hủy |
-| `cancel_reason_code` | `text` | ✅ | Lý do nhanh khi sửa/hủy: `wrong_price`, `wrong_dimension`, `wrong_customer`, `customer_changed_mind`, `other` |
-| `cancel_reason_note` | `text` | ✅ | Ghi chú thêm khi sửa/hủy; bắt buộc nếu `cancel_reason_code = 'other'` |
+| `revision_reason_code` | `text` | ✅ | Lý do nhanh khi tạo bản sửa: `wrong_price`, `wrong_dimension`, `wrong_customer`, `customer_changed_mind`, `other` |
+| `revision_reason_note` | `text` | ✅ | Ghi chú thêm khi tạo bản sửa; bắt buộc nếu `revision_reason_code = 'other'` |
 | `cancelled_at` | `timestamptz` | ✅ | Thời điểm hủy nếu có |
 | `created_by` | `uuid` | ❌ | FK → `public.profiles.id` |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
@@ -426,9 +426,8 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 - Với `order_type = 'invoice'`, nếu `debt_amount > 0` và `paid_amount = 0` thì `payment_status = 'unpaid'`.
 - Nếu `status = 'cancelled'`, `cancel_reason_type` bắt buộc.
 - `cancel_reason_type IN ('user_cancelled', 'revised')` khi không null.
-- Nếu `status = 'cancelled'`, `cancel_reason_code` bắt buộc.
-- `cancel_reason_code IN ('wrong_price', 'wrong_dimension', 'wrong_customer', 'customer_changed_mind', 'other')` khi không null.
-- Nếu `cancel_reason_code = 'other'`, `cancel_reason_note` bắt buộc.
+- `revision_reason_code IN ('wrong_price', 'wrong_dimension', 'wrong_customer', 'customer_changed_mind', 'other')` khi không null.
+- Nếu `revision_reason_code = 'other'`, `revision_reason_note` bắt buộc.
 - `revision_no >= 0`
 - `base_code` không được rỗng sau khi trim.
 - Với bản gốc, `revision_no = 0`, `code = base_code`, `revised_from_order_id` null.
@@ -451,7 +450,7 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 - Khi sửa hóa đơn đã checkout, hệ thống tạo chứng từ mới với `base_code` giữ nguyên và `revision_no` tăng dần.
 - Ví dụ: bản gốc `HD000123`; sửa lần 1 tạo `HD000123.01`; sửa lần 2 tạo `HD000123.02`.
 - Bản cũ chuyển `status = 'cancelled'`, `cancel_reason_type = 'revised'`, và trỏ `replaced_by_order_id` tới bản mới.
-- Bản mới trỏ `revised_from_order_id` tới bản cũ gần nhất.
+- Bản mới trỏ `revised_from_order_id` tới bản cũ gần nhất, đồng thời lưu `revision_reason_code` và `revision_reason_note`.
 - Hủy hóa đơn không tạo bản sửa dùng `cancel_reason_type = 'user_cancelled'`.
 - Các tác động đảo kho, đảo tiền và đảo công nợ không được sửa trực tiếp vào dòng lịch sử cũ; domain Inventory/Finance phải tạo giao dịch đảo hoặc giao dịch bổ sung để truy vết.
 - Đảo kho do sửa/hủy hóa đơn dùng `stock_movements.movement_type = 'invoice_reversal'`; nếu bản sửa ghi lại tồn theo hóa đơn mới thì dùng movement bán hàng chính thức tương ứng, hoặc `invoice_revision` nếu cần phân biệt rõ với checkout thường.
@@ -463,9 +462,9 @@ Hóa đơn nháp POS Phase 2 vẫn lưu local theo máy POS, không tạo bản 
 - `idx_orders_org_customer` trên `(organization_id, customer_id)`
 - `idx_orders_org_created_at` trên `(organization_id, created_at DESC)`
 - `idx_orders_source_quote` trên `(organization_id, source_quote_id)` với điều kiện `source_quote_id IS NOT NULL`
-- `idx_orders_org_base_revision` trên `(organization_id, base_code, revision_no)`
-- `idx_orders_revised_from` trên `(organization_id, revised_from_order_id)` với điều kiện `revised_from_order_id IS NOT NULL`
-- `idx_orders_replaced_by` trên `(organization_id, replaced_by_order_id)` với điều kiện `replaced_by_order_id IS NOT NULL`
+- `orders_org_base_revision_idx` trên `(organization_id, base_code, revision_no)`
+
+Chưa thêm index riêng cho `revised_from_order_id` và `replaced_by_order_id` trong migration hiện tại; chỉ bổ sung khi truy vấn lịch sử sửa cần tối ưu.
 
 ---
 

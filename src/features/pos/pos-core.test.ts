@@ -5,12 +5,14 @@ import {
   cartLineDiscountPercent,
   checkoutSummary,
   clampLineDiscount,
+  displaySaleUnitName,
   invoiceTabLabel,
   isInvoiceTabDirty,
   linesToCheckoutItems,
   makeCartLine,
   makeInvoiceTab,
   normalizeSearch,
+  posPriceWithUnitText,
   readNonNegativeNumber,
   readPositiveMoney,
   removeCompletedInvoiceTab,
@@ -113,6 +115,13 @@ describe('pos-core', () => {
       sale_unit_name: 'Tấc',
       stock_qty_per_sale_unit: 0.05,
     }))
+  })
+
+  it('hides placeholder sale unit names from POS display helpers', () => {
+    expect(displaySaleUnitName('Cần cập nhật')).toBe('')
+    expect(displaySaleUnitName('Can cap nhat')).toBe('')
+    expect(posPriceWithUnitText('0', 'Cần cập nhật')).toBe('0')
+    expect(posPriceWithUnitText('120 000', 'm')).toBe('120 000/m')
   })
 
   it('keeps discount percent conversion in core logic', () => {

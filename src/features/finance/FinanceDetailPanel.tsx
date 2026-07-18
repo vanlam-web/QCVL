@@ -8,7 +8,7 @@ import {
   ManagementInlineDetailTabs,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { ManagementRecordLink, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import {
   cashbookDetailAmountLabel,
   cashbookDetailCategoryText,
@@ -29,9 +29,17 @@ import type { CashbookEntryDetail } from './types'
 interface FinanceDetailPanelProps {
   detail: CashbookEntryDetail | null
   onDeleteRequest?: (detail: CashbookEntryDetail) => void
+  onEditRequest?: (detail: CashbookEntryDetail) => void
+  showActionFooter?: boolean
 }
 
-export function FinanceDetailPanel({ detail, onDeleteRequest }: FinanceDetailPanelProps) {
+function linkedDocumentHref(code: string) {
+  if (code.startsWith('HD')) return managementRecordOpenHref('/sales-documents', code, { type: 'invoice' })
+  if (code.startsWith('PN')) return managementRecordOpenHref('/purchase/receipts', code)
+  return null
+}
+
+export function FinanceDetailPanel({ detail, onDeleteRequest, onEditRequest, showActionFooter = true }: FinanceDetailPanelProps) {
   if (detail === null) return <p>Đang tải chi tiết...</p>
   const counterpartyLabel = cashbookDetailCounterpartyLabel(detail)
   const counterpartyText = cashbookDetailCounterpartyText(detail)
@@ -64,29 +72,32 @@ export function FinanceDetailPanel({ detail, onDeleteRequest }: FinanceDetailPan
       <ManagementDetailInlineNote icon={<StickyNote aria-hidden="true" size={16} />}>
         {cashbookDetailNoteText(detail)}
       </ManagementDetailInlineNote>
-      <ManagementDetailActionFooter
-        leftActions={[
-          {
-            label: 'Xóa',
-            ariaLabel: `Xóa phiếu ${detail.code}`,
-            danger: true,
-            icon: <Trash2 aria-hidden="true" size={16} />,
-            onClick: () => onDeleteRequest?.(detail),
-          },
-        ]}
-        rightActions={[
-          {
-            label: 'Sửa',
-            ariaLabel: `Sửa phiếu ${detail.code}`,
-            icon: <Edit3 aria-hidden="true" size={16} />,
-          },
-          {
-            label: 'In',
-            ariaLabel: `In phiếu ${detail.code}`,
-            icon: <Printer aria-hidden="true" size={16} />,
-          },
-        ]}
-      />
+      {showActionFooter ? (
+        <ManagementDetailActionFooter
+          leftActions={[
+            {
+              label: 'Xóa',
+              ariaLabel: `Xóa phiếu ${detail.code}`,
+              danger: true,
+              icon: <Trash2 aria-hidden="true" size={16} />,
+              onClick: () => onDeleteRequest?.(detail),
+            },
+          ]}
+          rightActions={[
+            {
+              label: 'Sửa',
+              ariaLabel: `Sửa phiếu ${detail.code}`,
+              icon: <Edit3 aria-hidden="true" size={16} />,
+              onClick: () => onEditRequest?.(detail),
+            },
+            {
+              label: 'In',
+              ariaLabel: `In phiếu ${detail.code}`,
+              icon: <Printer aria-hidden="true" size={16} />,
+            },
+          ]}
+        />
+      ) : null}
     </ManagementDetailPanel>
   )
 }
@@ -113,7 +124,18 @@ function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
             <tbody>
               {linkedDocumentRows.map((linkedDocument) => (
                 <tr key={linkedDocument.id}>
-                  <td>{linkedDocument.code}</td>
+                  <td>
+                    {linkedDocumentHref(linkedDocument.code)
+                      ? (
+                          <ManagementRecordLink
+                            className="finance-cashbook-linked-document-link"
+                            href={linkedDocumentHref(linkedDocument.code) ?? undefined}
+                          >
+                            {linkedDocument.code}
+                          </ManagementRecordLink>
+                        )
+                      : linkedDocument.code}
+                  </td>
                   <td>{financeDateText(entry.created_at)}</td>
                   <td><MoneyText value={linkedDocument.totalAmount} /></td>
                   <td><MoneyText value={entry.direction === 'in' ? linkedDocument.remainingAmount : linkedDocument.settledBefore} /></td>
