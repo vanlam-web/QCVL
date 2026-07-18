@@ -2231,19 +2231,18 @@ function clearReceiptCreateDraft() {
               </button>
               <div className="purchase-receipt-workspace-side-body">
                 <div className="purchase-receipt-workspace-side-top-row">
-                  <label className="purchase-receipt-workspace-account-field">
-                    Tài khoản
-                    <input readOnly value={accountDisplayName(currentUser)} />
-                  </label>
-                  <label className="purchase-receipt-workspace-time-field">
-                    Thời gian nhập
+                  <div className="purchase-receipt-workspace-account-field">
+                    <input aria-label="Tài khoản" readOnly value={accountDisplayName(currentUser)} />
+                  </div>
+                  <div className="purchase-receipt-workspace-time-field">
                     <input
+                      aria-label="Thời gian nhập"
                       required
                       type="datetime-local"
                       value={form.received_at}
                       onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
                     />
-                  </label>
+                  </div>
                 </div>
                 <label>
                   Mã phiếu nhập

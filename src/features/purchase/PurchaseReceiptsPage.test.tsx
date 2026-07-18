@@ -524,6 +524,8 @@ it('opens purchase receipt create workspace from the plus action', async () => {
   const sideTopRow = accountInput.closest('.purchase-receipt-workspace-side-top-row')
   expect(sideTopRow).not.toBeNull()
   expect(receivedAtInput.closest('.purchase-receipt-workspace-side-top-row')).toBe(sideTopRow)
+  expect(sideTopRow).not.toHaveTextContent('Tài khoản')
+  expect(sideTopRow).not.toHaveTextContent('Thời gian nhập')
   expect(within(form).getByLabelText('Mã phiếu nhập')).toHaveAttribute('placeholder', 'Mã phiếu tự động')
   expect(within(form).getByLabelText('Số hóa đơn đầu vào')).toBeInTheDocument()
   expect(within(form).getByText('Tổng tiền hàng')).toBeInTheDocument()
