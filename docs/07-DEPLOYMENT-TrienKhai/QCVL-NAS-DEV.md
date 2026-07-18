@@ -2,6 +2,36 @@
 
 > Cap nhat: 2026-07-18.
 
+## Current Deploy Rule - 2026-07-18
+
+Dung duy nhat `npm run deploy:nas` de dua code len `3200`. Khong copy tay bang `robocopy`/`Copy-Item` nua, tru khi dang debug script.
+
+May trong LAN hien dung SMB path LAN, vi `\\100.84.228.125\docker` co the khong mo duoc tu Windows:
+
+```powershell
+$env:QCVL_NAS_DEPLOY_CONFIRM='true'
+$env:QCVL_NAS_APP_PATH='\\192.168.1.188\docker\QCVL\app'
+$env:QCVL_NAS_ENV_PATH='\\192.168.1.188\docker\QCVL\.env'
+$env:QCVL_NAS_SSH_TARGET='adminnas@192.168.1.188'
+$env:QCVL_NAS_SSH_KEY="$env:USERPROFILE\.ssh\qcvl_nas_ed25519"
+npm run deploy:nas
+Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
+Remove-Item Env:\QCVL_NAS_APP_PATH
+Remove-Item Env:\QCVL_NAS_ENV_PATH
+Remove-Item Env:\QCVL_NAS_SSH_TARGET
+Remove-Item Env:\QCVL_NAS_SSH_KEY
+```
+
+Neu can kiem tra truoc khi deploy:
+
+```powershell
+Test-Path '\\192.168.1.188\docker\QCVL\app'
+Test-Path '\\192.168.1.188\docker\QCVL\.env'
+ssh -i "$env:USERPROFILE\.ssh\qcvl_nas_ed25519" -o IdentitiesOnly=yes -o BatchMode=yes adminnas@192.168.1.188 "echo ok"
+```
+
+`\\100.84.228.125\docker\QCVL\app` chi la default/fallback cu cua script. Neu `Test-Path '\\100.84.228.125\docker'` tra `False`, dung LAN path ben tren. Public URL cua app van la `http://100.84.228.125:3200`.
+
 ## Latest NAS Deploy - 2026-07-18 Route Hot-Path Cut
 
 Batch toi uu tiep cho `3200` sau LAN benchmark.
@@ -266,9 +296,9 @@ Luu y khi test local:
 | Workspace local | `D:\Phần mềm\QCVL` |
 | Dev URL local | `http://127.0.0.1:3201` hoặc `http://127.0.0.1:3202` |
 | NAS URL | `http://100.84.228.125:3200` |
-| NAS share root | `\\100.84.228.125\docker\QCVL` |
-| Live frontend path | `\\100.84.228.125\docker\QCVL\app\dist` |
-| Live backend path | `\\100.84.228.125\docker\QCVL\app\dist-server` |
+| NAS share root | `\\192.168.1.188\docker\QCVL` from inside LAN |
+| Live frontend path | `\\192.168.1.188\docker\QCVL\app\dist` |
+| Live backend path | `\\192.168.1.188\docker\QCVL\app\dist-server` |
 | NAS app container | `qcvl-app` |
 | NAS database | PostgreSQL 16 container `qcvl-postgres` |
 | Runtime | React/Vite frontend + QCVL Node API + PostgreSQL |
@@ -341,8 +371,8 @@ Remove-Item Env:\QCVL_VERIFY_RECEIPT_CODE
 
 | Loại | Đưa lên NAS? | Đưa lên Git? | Giữ ở máy local? | Ghi chú |
 | --- | --- | --- | --- | --- |
-| Frontend build `dist/` | Có | Không bắt buộc | Có sau build | Copy vào `\\100.84.228.125\docker\QCVL\app\dist` |
-| Backend build `dist-server/` | Có | Không bắt buộc | Có sau build | Copy vào `\\100.84.228.125\docker\QCVL\app\dist-server` |
+| Frontend build `dist/` | Có | Không bắt buộc | Có sau build | `deploy:nas` copy vao `\\192.168.1.188\docker\QCVL\app\dist` |
+| Backend build `dist-server/` | Có | Không bắt buộc | Có sau build | `deploy:nas` copy vao `\\192.168.1.188\docker\QCVL\app\dist-server` |
 | Runtime source `server/`, `src/`, `public/` | Có khi NAS còn tự build lúc restart | Có | Có | NAS compose hiện chạy `npm ci && npm run build:all && npm run api:start`, nên vẫn cần source/config build |
 | Build config `package.json`, `package-lock.json`, `tsconfig*`, `vite.config.ts`, `index.html` | Có | Có | Có | Cần cho NAS build/restart |
 | Database/runtime scripts `database/`, `scripts/db-migrate.mjs`, `scripts/seed-dev20-data.mjs` | Có khi cần migrate/seed NAS | Có | Có | Không copy test/import script lên NAS |
@@ -355,7 +385,7 @@ Quy tắc:
 
 - Sửa local không tự xuất hiện trên NAS.
 - Kiểm tra local trước khi cần.
-- Khi owner nói đưa lên NAS, build và copy một lần vào `\\100.84.228.125\docker\QCVL\app`.
+- Khi owner nói đưa lên NAS, chay `npm run deploy:nas`; khong copy tay.
 - Sau sửa nghiệp vụ POS/checkout/công nợ, phải test trên dev local trước; chỉ deploy `3200` sau khi test/API xác nhận đúng.
 - Nếu sửa schema PostgreSQL, phải copy `database/schema.sql` và chạy `npm run db:migrate` trên môi trường đích trước khi restart `qcvl-app`.
 - Hóa đơn POS nợ toàn bộ phải có `payment_status = unpaid`, được cộng vào `total_debt_amount` của khách và xuất hiện trong chi tiết nợ cần thu.
@@ -363,7 +393,7 @@ Quy tắc:
 - Nếu chỉ sửa docs, không cần build frontend và không cần đụng NAS.
 - Nếu frontend gọi `http://100.84.228.125:3100/api/...`, build đang sai env hoặc fallback sai; sửa về `http://100.84.228.125:3200` rồi build/deploy lại.
 - Sau build NAS phải chạy `npm run verify:nas-bundle` để chặn bundle gọi nhầm `:3100`.
-- Không tạo/copy thêm bản `dist`, `dist-server`, `server`, `docs` ở ngoài `app`; Docker NAS chỉ mount `\\100.84.228.125\docker\QCVL\app`.
+- Không tạo/copy thêm bản `dist`, `dist-server`, `server`, `docs` ở ngoài `app`; Docker NAS chỉ mount `\\192.168.1.188\docker\QCVL\app` khi truy cap tu LAN.
 
 ## 4. Build và deploy
 
@@ -397,7 +427,7 @@ npm run import:dev-memory-to-postgres
 Remove-Item Env:\QCVL_IMPORT_CONFIRM
 ```
 
-Script doc DB theo thu tu `QCVL_NAS_DATABASE_URL`, `DATABASE_URL`, roi `\\100.84.228.125\docker\QCVL\.env` voi `POSTGRES_*`. Mac dinh import vao organization code `VAN-LAM`; neu can doi thi set `QCVL_IMPORT_ORGANIZATION_CODE`.
+Script doc DB theo thu tu `QCVL_NAS_DATABASE_URL`, `DATABASE_URL`, roi `\\192.168.1.188\docker\QCVL\.env` voi `POSTGRES_*`. Mac dinh import vao organization code `VAN-LAM`; neu can doi thi set `QCVL_IMPORT_ORGANIZATION_CODE`.
 
 Script ghi cac nhom du lieu da import tren 3202: hang hoa, gia mac dinh, ton tam KiotViet, BOM, kiem kho, khach hang, nha cung cap, phieu nhap, hoa don/chung tu ban hang. Khi ghi that, script tao backup local trong `backups/dev-memory-state-*.json` truoc khi day DB.
 
@@ -502,28 +532,9 @@ Verify bundle:
 npm run verify:nas-bundle
 ```
 
-Copy lên NAS:
+Copy len NAS:
 
-```powershell
-robocopy 'D:\Phần mềm\QCVL\dist' '\\100.84.228.125\docker\QCVL\app\dist' /MIR /NFL /NDL /NJH /NJS /NP
-robocopy 'D:\Phần mềm\QCVL\dist-server' '\\100.84.228.125\docker\QCVL\app\dist-server' /MIR /NFL /NDL /NJH /NJS /NP
-robocopy 'D:\Phần mềm\QCVL\server' '\\100.84.228.125\docker\QCVL\app\server' /E /NFL /NDL /NJH /NJS /NP
-robocopy 'D:\Phần mềm\QCVL\src' '\\100.84.228.125\docker\QCVL\app\src' /E /NFL /NDL /NJH /NJS /NP
-robocopy 'D:\Phần mềm\QCVL\public' '\\100.84.228.125\docker\QCVL\app\public' /E /NFL /NDL /NJH /NJS /NP
-robocopy 'D:\Phần mềm\QCVL\database' '\\100.84.228.125\docker\QCVL\app\database' /E /NFL /NDL /NJH /NJS /NP
-Copy-Item 'D:\Phần mềm\QCVL\package.json' '\\100.84.228.125\docker\QCVL\app\package.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\package-lock.json' '\\100.84.228.125\docker\QCVL\app\package-lock.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\index.html' '\\100.84.228.125\docker\QCVL\app\index.html' -Force
-Copy-Item 'D:\Phần mềm\QCVL\vite.config.ts' '\\100.84.228.125\docker\QCVL\app\vite.config.ts' -Force
-Copy-Item 'D:\Phần mềm\QCVL\tsconfig.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\tsconfig.app.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.app.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\tsconfig.node.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.node.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\tsconfig.server.json' '\\100.84.228.125\docker\QCVL\app\tsconfig.server.json' -Force
-Copy-Item 'D:\Phần mềm\QCVL\scripts\db-migrate.mjs' '\\100.84.228.125\docker\QCVL\app\scripts\db-migrate.mjs' -Force
-Copy-Item 'D:\Phần mềm\QCVL\scripts\seed-dev20-data.mjs' '\\100.84.228.125\docker\QCVL\app\scripts\seed-dev20-data.mjs' -Force
-```
-
-`robocopy` exit code `0`, `1`, `2`, `3` là thành công. Lớn hơn `3` là lỗi.
+Dung `npm run deploy:nas`. Khong copy tay bang `robocopy`/`Copy-Item` trong quy trinh binh thuong. Neu script loi o buoc copy, sua `QCVL_NAS_APP_PATH`/`QCVL_NAS_ENV_PATH` ve LAN path `\\192.168.1.188\docker\QCVL\...` roi chay lai script.
 
 Restart `qcvl-app` khi có thay đổi backend/server/runtime. Script deploy thật mặc định đã làm việc này qua SSH. Nếu health không có `persistence: "postgres"`, coi như deploy lỗi.
 
