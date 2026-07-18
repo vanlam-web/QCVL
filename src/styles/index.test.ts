@@ -621,11 +621,16 @@ it('keeps purchase receipt workspace table header on shared management colors', 
 })
 
 it('keeps purchase receipt workspace side panel aligned with shared filter width and spacing', () => {
-  expect(cssRule('.purchase-receipt-workspace-form')).toContain('grid-template-columns: minmax(0, 1fr) minmax(13rem, 16rem)')
+  expect(cssRule('.purchase-receipt-workspace-form')).toContain('grid-template-columns: minmax(0, 1fr) minmax(16rem, 19.25rem)')
   expect(cssRule('.purchase-receipt-workspace-form')).toContain('gap: var(--space-4)')
   expect(cssRule('.purchase-receipt-product-search-toolbar')).toBe('')
   expect(cssRule('.purchase-receipt-product-search-toolbar .pos-topbar-search-control')).toContain('width: min(33vw, 24rem)')
   expect(cssRule('.purchase-receipt-product-search-toolbar .purchase-receipt-product-search-results')).toContain('width: min(28rem, calc(100vw - 2rem))')
+  expect(cssRule('.purchase-receipt-workspace-main')).toContain('position: relative')
+  expect(cssRule('.management-loading-overlay')).toContain('position: absolute')
+  expect(cssRule('.management-loading-overlay')).toContain('place-items: center')
+  expect(cssRule('.purchase-receipt-workspace .purchase-receipt-line-card-row,\n.purchase-receipt-workspace .purchase-receipt-line-card-header')).toContain('grid-template-columns: 2.5rem minmax(6rem, 7.5rem) minmax(16rem, 1.5fr) 4.5rem 5.75rem 7rem 6.75rem 8rem')
+  expect(cssRule('.purchase-receipt-workspace .purchase-receipt-line-card-header span')).toContain('white-space: nowrap')
   expect(cssRule('.purchase-receipt-workspace-side.management-filter-sidebar')).toContain('border: 1px solid var(--color-border)')
   expect(cssRule('.purchase-receipt-workspace-side.management-filter-sidebar')).toContain('border-radius: var(--radius-md)')
   expect(cssRule('.purchase-receipt-workspace-side-body')).toContain('gap: var(--space-4)')

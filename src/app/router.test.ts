@@ -28,4 +28,20 @@ describe('app route bundle boundaries', () => {
       expect(routerSource).toContain(`import('${modulePath}')`)
     }
   })
+
+  test('places the purchase receipt create route before the base receipt route', () => {
+    const createRouteIndex = routerSource.indexOf('path={appRoutes.purchaseReceiptCreate}')
+    const listRouteIndex = routerSource.indexOf('path={appRoutes.purchaseReceipts}')
+
+    expect(createRouteIndex).toBeGreaterThan(-1)
+    expect(listRouteIndex).toBeGreaterThan(-1)
+    expect(createRouteIndex).toBeLessThan(listRouteIndex)
+  })
+
+  test('guards direct purchase receipt create loads by pathname', () => {
+    expect(routerSource).toContain('useLocation')
+    expect(routerSource).toContain('location.pathname === appRoutes.purchaseReceiptCreate')
+    expect(routerSource).toContain('createMode={effectiveCreateMode}')
+    expect(routerSource).toContain("key={effectiveCreateMode ? 'purchase-receipts-create' : 'purchase-receipts-list'}")
+  })
 })

@@ -33,7 +33,7 @@ beforeEach(() => {
   document.documentElement.removeAttribute('data-theme')
 })
 
-function renderShell(initialPath = '/purchase/receipts', currentUser = inventoryUser) {
+function renderShell(initialPath = '/receipts', currentUser = inventoryUser) {
   return render(
     <ThemeProvider>
       <MemoryRouter initialEntries={[initialPath]}>
@@ -88,7 +88,7 @@ it('renders POS as a quick action and keeps module navigation for management pag
   expect(within(navigation).getByRole('link', { name: /Kiểm kho/i })).toHaveAttribute('href', '/inventory')
   expect(within(navigation).getByRole('link', { name: /Bảng giá/i })).toHaveAttribute('href', '/price-book')
   expect(within(navigation).getByRole('link', { name: /Nhà cung cấp/i })).toHaveAttribute('href', '/suppliers')
-  expect(within(navigation).getByRole('link', { name: /Nhập hàng/i })).toHaveAttribute('href', '/purchase/receipts')
+  expect(within(navigation).getByRole('link', { name: /Nhập hàng/i })).toHaveAttribute('href', '/receipts')
   expect(within(navigation).queryByRole('link', { name: /Quản trị/i })).not.toBeInTheDocument()
   expect(within(navigation).queryByRole('button', { name: /Đổi sang giao diện/i })).not.toBeInTheDocument()
 })

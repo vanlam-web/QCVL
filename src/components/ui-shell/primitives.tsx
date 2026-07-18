@@ -1,3 +1,4 @@
+import { LoaderCircle } from 'lucide-react'
 import type { AnchorHTMLAttributes, ReactNode } from 'react'
 import { formatMoney } from '../../lib/number-format'
 
@@ -37,6 +38,17 @@ export function ManagementRecordLink({
 
 export function EmptyState({ children }: { children: ReactNode }) {
   return <div className="empty-state">{children}</div>
+}
+
+export function ManagementLoadingOverlay({ label = 'Đang tải dữ liệu...' }: { label?: string }) {
+  return (
+    <div className="management-loading-overlay" role="status" aria-live="polite" aria-busy="true">
+      <div className="management-loading-overlay-spinner" aria-hidden="true">
+        <LoaderCircle size={28} />
+      </div>
+      <p>{label}</p>
+    </div>
+  )
 }
 
 export function MetricGrid({ ariaLabel, children }: { ariaLabel: string; children: ReactNode }) {

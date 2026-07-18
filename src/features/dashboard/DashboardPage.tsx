@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState, type CSSProperties, type UIEvent, type WheelEvent } from 'react'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { appRoutes } from '../../app/routes'
 import { ApiError } from '../../lib/api/client'
 import type { CurrentUserData } from '../../lib/api/types'
 import { dashboardActivityPageSize, dashboardInitialActivityPageSize, emptyDashboardData, type DashboardActivity, type DashboardData, type DashboardLoadInput, type DashboardPeriod, type DashboardService, type DashboardSystemActivity } from './dashboard-service'
@@ -389,7 +390,7 @@ function RecentActivityList({
         const Icon = activityIcons[activity.kind]
         const counterpartyPath = activity.counterpartyType === 'supplier' ? '/suppliers' : '/customers'
         const documentHref = activity.documentType === 'purchase_receipt'
-          ? managementRecordOpenHref('/purchase/receipts', activity.documentCode)
+          ? managementRecordOpenHref(appRoutes.purchaseReceipts, activity.documentCode)
           : managementRecordOpenHref('/sales-documents', activity.documentCode, { type: 'invoice' })
         const counterparty = activity.counterpartyCode ? (
           <ManagementRecordLink className="dashboard-activity-counterparty" href={managementRecordOpenHref(counterpartyPath, activity.counterpartyCode)}>

@@ -319,7 +319,7 @@ Branch thá»±c hiá»‡n: `codex/load-performance`
 | Trang / thao tÃ¡c | TrÆ°á»›c | Sau |
 |---|---:|---:|
 | `/customers` initial API requests | 17 | 2 |
-| `/purchase/receipts` initial API requests | 7 | 2 |
+| `/receipts` initial API requests | 7 | 2 |
 | `/price-book` initial API requests | 4 | 3 |
 | `/suppliers` initial API requests | 4 | 2 |
 | `/pos` initial API requests | 4 | 4 |
@@ -328,7 +328,7 @@ Ghi chÃº:
 
 - `/sales-documents` list thÆ°á»ng cÃ²n khoáº£ng 1.09s sau auth/cache.
 - `/sales-documents` detail API cÃ²n khoáº£ng 1.3-1.4s trÃªn local QCVL Node API, nhÆ°ng UI Ä‘Ã£ pháº£n há»“i loading ngay.
-- `/purchase/receipts` detail cÃ²n 3 API song song (`receipt`, `suppliers`, `products`), nhÆ°ng loading inline hiá»‡n trÆ°á»›c khi API xong.
+- `/receipts` detail cÃ²n 3 API song song (`receipt`, `suppliers`, `products`), nhÆ°ng loading inline hiá»‡n trÆ°á»›c khi API xong.
 - Local QCVL Node API váº«n lÃ  giá»›i háº¡n thá»i gian: má»™t sá»‘ endpoint cÃ²n 0.7-1.4s trÆ°á»›c khi frontend render xong.
 
 ### Verification ÄÃ£ Cháº¡y

@@ -5,6 +5,7 @@ import { formatKvDateTime } from '../../lib/date-format'
 import type { Supplier, SupplierCustomerOption, SupplierFinanceAccount, SupplierPayableReceipt, SupplierStatus } from './types'
 import type { SupplierInput, SupplierListFilters, SupplierService } from './supplier-service'
 import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { appRoutes } from '../../app/routes'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -629,7 +630,7 @@ export function SuppliersPage({
                   {currentSupplierReceipts.map((receipt) => (
                     <tr key={receipt.id}>
                       <td>
-                        <ManagementRecordLink href={managementRecordOpenHref('/purchase/receipts', receipt.code)}>
+                        <ManagementRecordLink href={managementRecordOpenHref(appRoutes.purchaseReceipts, receipt.code)}>
                           {receipt.code}
                         </ManagementRecordLink>
                       </td>
@@ -678,7 +679,7 @@ export function SuppliersPage({
                   {currentSupplierDebtReceipts.map((receipt) => (
                     <tr key={receipt.id}>
                       <td>
-                        <ManagementRecordLink href={managementRecordOpenHref('/purchase/receipts', receipt.code)}>
+                        <ManagementRecordLink href={managementRecordOpenHref(appRoutes.purchaseReceipts, receipt.code)}>
                           {receipt.code}
                         </ManagementRecordLink>
                       </td>

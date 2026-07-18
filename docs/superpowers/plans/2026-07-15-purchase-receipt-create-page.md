@@ -6,7 +6,7 @@
 
 **Status 2026-07-16:** Implemented on local `3202`. Final create workspace uses `Tìm hàng (F3)` beside `Nhập hàng`, product selection creates POS-like line cards, no default empty row is rendered, empty receipts cannot be saved, the right panel uses shared management sidebar styling, and the create footer no longer includes `In`.
 
-**Architecture:** Keep the list route `/purchase/receipts`. The `+` button switches the page into a create workspace instead of rendering the draft form above the list. The workspace reuses current form state, line calculations, product/supplier lookups, and save/post service calls.
+**Architecture:** Keep the list route `/receipts`. The `+` button switches the page into a create workspace instead of rendering the draft form above the list. The workspace reuses current form state, line calculations, product/supplier lookups, and save/post service calls.
 
 **Tech Stack:** React, TypeScript, Vitest, Testing Library, shared management CSS.
 
@@ -85,4 +85,4 @@ Run: `npm run build`
 
 - [ ] **Step 3: Browser verify 3202**
 
-Open `http://127.0.0.1:3202/purchase/receipts`, click `+`, confirm workspace renders and no overlay error appears.
+Open `http://127.0.0.1:3202/receipts`, click `+`, confirm workspace renders and no overlay error appears.

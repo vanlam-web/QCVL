@@ -318,7 +318,7 @@ it('links supplier and purchase receipt in purchase activities', async () => {
   expect(await screen.findByText('Nguyễn Quản Lý')).toBeInTheDocument()
   expect(container.querySelector('.dashboard-activity-line')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Nguyễn Quản Lý mua hàng từ Thu Nghĩa trị giá 500 000 theo PN000001')
   expect(screen.getByRole('link', { name: 'Thu Nghĩa' })).toHaveAttribute('href', '/suppliers?open=NCC000035')
-  expect(screen.getByRole('link', { name: 'PN000001' })).toHaveAttribute('href', '/purchase/receipts?open=PN000001')
+  expect(screen.getByRole('link', { name: 'PN000001' })).toHaveAttribute('href', '/receipts?open=PN000001')
 })
 
 it('shows account-based modules without requiring a POS machine', async () => {

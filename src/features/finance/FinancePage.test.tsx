@@ -1148,7 +1148,7 @@ describe('FinancePage', () => {
     const linkedDocumentsTable = within(detail).getByRole('table', { name: 'Chứng từ liên kết' })
     const linkedReceipt = within(linkedDocumentsTable).getByRole('link', { name: 'PN000679' })
     expect(linkedReceipt).toHaveClass('finance-cashbook-linked-document-link')
-    expect(linkedReceipt).toHaveAttribute('href', '/purchase/receipts?open=PN000679')
+    expect(linkedReceipt).toHaveAttribute('href', '/receipts?open=PN000679')
     expect(within(detail).getByText('Đã trả trước')).toBeInTheDocument()
     expect(within(detail).getByText('Giá trị chi')).toBeInTheDocument()
   })
