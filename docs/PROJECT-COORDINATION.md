@@ -1,9 +1,29 @@
 ﻿# PROJECT-COORDINATION â€” Board Äiá»u Phá»‘i
 
 > **Vai trÃ²:** Board cho viá»‡c Ä‘ang má»Ÿ giá»¯a cÃ¡c luá»“ng Spec / Implement / Review.
-> **Cáº­p nháº­t:** 2026-07-17.
+> **Cáº­p nháº­t:** 2026-07-18.
 
 File nÃ y chá»‰ dÃ¹ng khi cÃ³ item Ä‘ang cáº§n nhiá»u luá»“ng phá»‘i há»£p. Náº¿u khÃ´ng cÃ³ item Ä‘ang má»Ÿ, xem queue sá»‘ng á»Ÿ [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) vÃ  issue review á»Ÿ [REVIEW-ISSUES.md](./REVIEW-ISSUES.md).
+
+---
+
+## Quy Uoc Lam Viec 2 May
+
+Owner se lam viec song song tren:
+
+- mot may trong LAN, truc tiep voi NAS/local trong LAN
+- mot may ngoai LAN qua Tailscale/remote
+
+De tranh dung nhau:
+
+- Moi luong Codex phai `git pull --ff-only` truoc khi sua.
+- Moi luong phai ghi/bao scope dang giu: module, file chinh, trang/API lien quan.
+- Khong sua cung module/file tren hai may cung luc neu chua co handoff ro.
+- Neu phat hien file da doi khac voi dieu dang lam, dung lai va bao Owner truoc khi tiep tuc.
+- Khi xong slice va Owner yeu cau, commit + push len `origin/main`, bao commit hash de may kia pull.
+- Neu can lam hai nhanh song song, tao branch rieng dang `codex/<scope>` va ghi vao board item.
+
+Mac dinh hien tai: `main` la Source of Truth; may nao bat dau viec moi thi pull tu `origin/main` truoc.
 
 ---
 

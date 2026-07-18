@@ -1,6 +1,6 @@
 # QCVL Codex Working Rules
 
-Version: 2026-07-10
+Version: 2026-07-18
 
 Read this file before working in this repo. These are the active rules for QCVL now.
 
@@ -151,6 +151,9 @@ For deploy-related work, verify:
 - Do not commit or push unless Owner asks.
 - Do not include secrets, database dumps, or backup data in Git.
 - Keep temporary logs/files out of commits unless intentionally tracked.
+- Owner may work from two Codex threads on two machines: one inside LAN and one outside LAN. Before editing, each thread must run `git pull --ff-only`, read `docs/PROJECT-COORDINATION.md`, and state the scope it is taking.
+- Do not edit the same feature/module/files from both machines at the same time unless Owner explicitly assigns a handoff. If overlap is discovered, stop, report conflict, and ask which thread owns the work.
+- After a completed slice, push to `origin/main` only when Owner asks, then report commit hash so the other machine can pull.
 
 ## 10. Current Standing Rule
 
