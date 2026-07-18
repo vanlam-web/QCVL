@@ -520,6 +520,7 @@ export function ManagementCompactSearch({
   emptySuggestion,
   selectFirstSuggestionOnEnter = false,
   inputRef,
+  onFocus,
   onChange,
   onSuggestionSelect,
 }: {
@@ -534,6 +535,7 @@ export function ManagementCompactSearch({
   emptySuggestion?: ReactNode
   selectFirstSuggestionOnEnter?: boolean
   inputRef?: Ref<HTMLInputElement>
+  onFocus?: () => void
   onChange: (value: string) => void
   onSuggestionSelect?: (suggestion: ManagementSearchSuggestion) => void
 }) {
@@ -547,6 +549,7 @@ export function ManagementCompactSearch({
         placeholder={placeholder}
         ref={inputRef}
         value={value}
+        onFocus={onFocus}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={(event) => {
           if (!selectFirstSuggestionOnEnter || event.key !== 'Enter' || suggestions === undefined || suggestions.length === 0) return

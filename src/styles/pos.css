@@ -1167,6 +1167,30 @@
   padding: 0 2.75rem 0 3rem;
 }
 
+.customer-search .management-search-suggestions {
+  gap: var(--space-2);
+}
+
+.customer-search .management-search-suggestions button {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.2rem;
+  align-items: start;
+  min-height: 3.75rem;
+  padding: var(--space-2) var(--space-3);
+}
+
+.customer-search .management-search-suggestions strong,
+.customer-search .management-search-suggestions span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customer-search .management-search-suggestions span {
+  white-space: normal;
+}
+
 .production-queue-panel {
   --production-queue-popover-lift: var(--space-2);
   grid-column: 1 / -1;

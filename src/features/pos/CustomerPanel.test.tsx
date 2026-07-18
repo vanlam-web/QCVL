@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -51,8 +51,29 @@ describe('CustomerPanel', () => {
 
     await userEvent.type(screen.getByPlaceholderText('Tìm khách hàng (F4)'), 'khach')
 
-    expect(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' })).toBeInTheDocument()
+    const option = await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' })
+    expect(within(option).getByText('Khach le')).toBeInTheDocument()
+    expect(within(option).getByText('Mã: KH000001')).toBeInTheDocument()
     expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', page: 1, page_size: 8 })
+  })
+
+  it('closes customer suggestions when clicking outside the customer search', async () => {
+    const service = serviceStub()
+
+    render(
+      <>
+        <CustomerPanel service={service} selectedCustomer={null} onSelectCustomer={vi.fn()} />
+        <button type="button">Bên ngoài</button>
+      </>,
+    )
+
+    await userEvent.type(screen.getByPlaceholderText('Tìm khách hàng (F4)'), 'khach')
+    expect(await screen.findByRole('listbox', { name: 'Gợi ý khách hàng' })).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Bên ngoài' }))
+
+    await waitFor(() => expect(screen.queryByRole('listbox', { name: 'Gợi ý khách hàng' })).not.toBeInTheDocument())
+    expect(screen.getByPlaceholderText('Tìm khách hàng (F4)')).toHaveValue('khach')
   })
 
   it('hides suggestions when the selected customer name is shown', () => {

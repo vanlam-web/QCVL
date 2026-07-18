@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
@@ -20,9 +20,24 @@ export function CustomerPanel({
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
+  const searchPanelRef = useRef<HTMLElement | null>(null)
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
   const searchQuery = search.trim()
   const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
+
+  useEffect(() => {
+    if (!suggestionsOpen) return undefined
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && searchPanelRef.current?.contains(target)) return
+      setSuggestionsOpen(false)
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [suggestionsOpen])
 
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,6 +53,7 @@ export function CustomerPanel({
   async function suggestCustomers(nextSearch: string) {
     setSearch(nextSearch)
     const query = nextSearch.trim()
+    setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
     if (query.length === 0 || (selectedCustomer !== null && query === selectedCustomerSearchText)) {
@@ -59,6 +75,7 @@ export function CustomerPanel({
   function selectCustomer(customer: Customer) {
     setSearch(customer.name)
     setResults([])
+    setSuggestionsOpen(false)
     onSelectCustomer(customer)
   }
 
@@ -75,6 +92,7 @@ export function CustomerPanel({
       onSelectCustomer(created)
       setResults([])
       setSearch(created.name)
+      setSuggestionsOpen(false)
       setForm({ code: '', name: '', phone: '' })
       setCreateOpen(false)
     } catch (cause) {
@@ -83,7 +101,7 @@ export function CustomerPanel({
   }
 
   return (
-    <section aria-label="Khách hàng" className="customer-panel">
+    <section ref={searchPanelRef} aria-label="Khách hàng" className="customer-panel">
       {error ? <p role="alert">{error}</p> : null}
 
       <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
@@ -93,12 +111,16 @@ export function CustomerPanel({
           value={search}
           leadingIcon={<Search aria-hidden="true" size={16} />}
           trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
+          onFocus={() => {
+            const query = search.trim()
+            setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
+          }}
           suggestions={
-            searchQuery.length > 0 && !searchShowsSelectedCustomer
+            suggestionsOpen && searchQuery.length > 0 && !searchShowsSelectedCustomer
               ? results.map((customer) => ({
                   id: customer.id,
-                  primary: `${customer.code} ${customer.name}`,
-                  secondary: customer.phone ?? '',
+                  primary: customer.name,
+                  secondary: `Mã: ${customer.code}`,
                   ariaLabel: `Chọn ${customer.code} ${customer.name}`,
                 }))
               : undefined
