@@ -28,7 +28,7 @@ import {
 } from './purchase-receipt-calculations'
 import { purchaseReceiptTimeQuickOptions } from './purchase-receipt-filters'
 import { isExactPurchaseReceiptCode, money, statusText } from './purchase-receipt-presenter'
-import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { EmptyState, ManagementLoadingOverlay, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -88,6 +88,7 @@ const blankForm: PurchaseReceiptInput = {
 const receiptProductSearchPageSize = 20
 const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
 const receiptCreateDraftWindowNamePrefix = 'qc-oms.purchase-receipt-create-draft='
+const receiptCreateDraftHistoryStateKey = 'qc_oms_purchase_receipt_create_draft_v1'
 
 interface PurchaseReceiptCreateDraft {
   form: PurchaseReceiptInput
@@ -129,6 +130,10 @@ function receiptProductSearchRank(product: PurchaseReceiptProduct, query: string
   return 6
 }
 
+function isReceiptPurchaseSearchableProduct(product: PurchaseReceiptProduct) {
+  return product.sell_method !== 'combo'
+}
+
 function uniqueReceiptProductsById(products: PurchaseReceiptProduct[]) {
   const seen = new Set<string>()
   return products.filter((product) => {
@@ -153,6 +158,22 @@ function accountDisplayName(currentUser?: CurrentUserData) {
 
 function readReceiptCreateDraft() {
   if (typeof window === 'undefined') return null
+  const historyDraft = window.history.state?.[receiptCreateDraftHistoryStateKey]
+  if (historyDraft && typeof historyDraft === 'object') {
+    try {
+      const parsed = historyDraft as Partial<PurchaseReceiptCreateDraft>
+      if (!parsed.form || !Array.isArray(parsed.form.items)) return null
+      return {
+        form: { ...blankForm, ...parsed.form },
+        paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
+        financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
+        rollLengthTexts: parsed.rollLengthTexts ?? {},
+        receiptWorkspaceSideCollapsed: Boolean(parsed.receiptWorkspaceSideCollapsed),
+      } satisfies PurchaseReceiptCreateDraft
+    } catch {
+      // fall through to storage fallback
+    }
+  }
   const rawSession = window.sessionStorage.getItem(receiptCreateDraftStorageKey)
   if (rawSession) {
     try {
@@ -204,6 +225,13 @@ function readReceiptCreateDraft() {
 
 function writeReceiptCreateDraft(draft: PurchaseReceiptCreateDraft) {
   if (typeof window === 'undefined') return
+  window.history.replaceState(
+    {
+      ...(window.history.state ?? {}),
+      [receiptCreateDraftHistoryStateKey]: draft,
+    },
+    '',
+  )
   window.sessionStorage.setItem(receiptCreateDraftStorageKey, JSON.stringify(draft))
   window.name = `${receiptCreateDraftWindowNamePrefix}${encodeURIComponent(JSON.stringify(draft))}`
   window.localStorage.setItem(receiptCreateDraftStorageKey, JSON.stringify(draft))
@@ -301,7 +329,7 @@ export function PurchaseReceiptsPage({
   const [activePreset, setActivePreset] = useState<string | null>(null)
   const [receiptQuickTimeOpen, setReceiptQuickTimeOpen] = useState(false)
   const [showFilters, setShowFilters] = useState(true)
-  const [detailOpen, setDetailOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(createMode)
   const [loadingReceiptId, setLoadingReceiptId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingStatus, setEditingStatus] = useState<PurchaseReceiptStatus | null>(null)
@@ -340,6 +368,7 @@ export function PurchaseReceiptsPage({
   })
   const [error, setError] = useState<string | null>(null)
   const receiptProductSearchRef = useRef<HTMLInputElement | null>(null)
+  const receiptProductSearchToolbarRef = useRef<HTMLDivElement | null>(null)
   const receiptCreateDraftRestoredRef = useRef(false)
   const skipReceiptCreateDraftPersistRef = useRef(false)
   const totals = useMemo(() => {
@@ -372,6 +401,7 @@ export function PurchaseReceiptsPage({
     if (!isCreatingReceipt || query.length === 0) return []
     const searchProducts = receiptProductCatalogSearchResult.search === search ? receiptProductCatalogSearchResult.products : []
     return uniqueReceiptProductsById([...searchProducts, ...products])
+      .filter(isReceiptPurchaseSearchableProduct)
       .filter((product) => receiptProductMatchesSearch(product, query))
       .sort((left, right) => {
         const rankDelta = receiptProductSearchRank(left, query) - receiptProductSearchRank(right, query)
@@ -411,6 +441,7 @@ export function PurchaseReceiptsPage({
     if (!showFavoriteReceiptsOnly) return sortedReceipts
     return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
   }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
+  const receiptWorkspaceLookupLoading = isCreatingReceipt && (!suppliersLoaded || !productsLoaded)
 
   useEffect(() => {
     if (!isCreatingReceipt) return undefined
@@ -425,6 +456,22 @@ export function PurchaseReceiptsPage({
     window.addEventListener('keydown', focusProductSearch)
     return () => window.removeEventListener('keydown', focusProductSearch)
   }, [isCreatingReceipt])
+
+  useEffect(() => {
+    if (!isCreatingReceipt) return undefined
+
+    function closeReceiptProductSearchOnOutsidePointer(event: PointerEvent) {
+      if (receiptProductSearch.trim().length === 0) return
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (receiptProductSearchToolbarRef.current?.contains(target)) return
+      setReceiptProductSearch('')
+      setReceiptProductCatalogSearchResult({ search: '', products: [] })
+    }
+
+    document.addEventListener('pointerdown', closeReceiptProductSearchOnOutsidePointer, true)
+    return () => document.removeEventListener('pointerdown', closeReceiptProductSearchOnOutsidePointer, true)
+  }, [isCreatingReceipt, receiptProductSearch])
 
   useEffect(() => {
     if (!isCreatingReceipt) return undefined
@@ -447,7 +494,7 @@ export function PurchaseReceiptsPage({
         if (!active) return
         setReceiptProductCatalogSearchResult({
           search,
-          products: productResult.items.filter((product) => product.status === 'active'),
+          products: productResult.items.filter((product) => product.status === 'active' && isReceiptPurchaseSearchableProduct(product)),
         })
       } catch (cause) {
         if (!active) return
@@ -657,9 +704,12 @@ export function PurchaseReceiptsPage({
     }
   }, [financeAccountId, form, isCreatingReceipt, paymentMethod, receiptWorkspaceSideCollapsed, rollLengthTexts])
 
-  function clearReceiptCreateDraft() {
+function clearReceiptCreateDraft() {
     skipReceiptCreateDraftPersistRef.current = true
     if (typeof window === 'undefined') return
+    const nextHistoryState = { ...(window.history.state ?? {}) }
+    delete nextHistoryState[receiptCreateDraftHistoryStateKey]
+    window.history.replaceState(nextHistoryState, '')
     if (window.name.startsWith(receiptCreateDraftWindowNamePrefix)) {
       window.name = ''
     }
@@ -1049,19 +1099,17 @@ export function PurchaseReceiptsPage({
       return
     }
     setError(null)
-    setDetailOpen(false)
     setLoadingReceiptId(null)
+    resetForm()
     try {
       const lookups = await ensureReceiptLookupsLoaded()
-      resetForm()
-      setForm((current) => ({ ...current, supplier_id: defaultReceiptSupplierId(lookups.suppliers) }))
+      setForm((current) => ({ ...current, supplier_id: current.supplier_id || defaultReceiptSupplierId(lookups.suppliers) }))
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được dữ liệu tạo phiếu nhập.'))
     }
   }
 
   function closeCreateReceipt() {
-    clearReceiptCreateDraft()
     if (createMode && onCloseCreateReceipt) {
       onCloseCreateReceipt()
       return
@@ -1966,11 +2014,10 @@ export function PurchaseReceiptsPage({
           onSubmit={saveReceipt}
         >
           <div className="purchase-receipt-workspace-main">
+            {receiptWorkspaceLookupLoading ? <ManagementLoadingOverlay label="Đang tải dữ liệu phiếu nhập..." /> : null}
             <div className="management-table-viewport purchase-receipt-workspace-table-wrap">
               {form.items.length === 0 ? (
-                <EmptyState>
-                  <p>Chọn hàng từ thanh tìm kiếm để thêm vào phiếu nhập.</p>
-                </EmptyState>
+                null
               ) : (
                 <ul aria-label="Dòng hàng phiếu nhập mới" className="pos-cart-lines purchase-receipt-line-cards">
                   <li aria-label="Cột dòng hàng nhập" className="pos-cart-line-heading purchase-receipt-line-heading">
@@ -2302,7 +2349,8 @@ export function PurchaseReceiptsPage({
         </button>
       ) : undefined}
       actions={isCreatingReceipt ? (
-        <ManagementCompactToolbar
+        <div ref={receiptProductSearchToolbarRef}>
+          <ManagementCompactToolbar
           ariaLabel="Tìm hàng nhập"
           className="purchase-receipt-product-search-toolbar"
           onSubmit={submitReceiptProductSearch}
@@ -2375,7 +2423,8 @@ export function PurchaseReceiptsPage({
               )}
             </ul>
           ) : null}
-        </ManagementCompactToolbar>
+          </ManagementCompactToolbar>
+        </div>
       ) : (
         <ManagementCompactToolbar ariaLabel="Lọc phiếu nhập" onSubmit={filterReceipts}>
           <ManagementCompactSearch
@@ -2511,7 +2560,7 @@ export function PurchaseReceiptsPage({
       ) : undefined}
     >
       {error ? <p role="alert">{error}</p> : null}
-      {receipts === null && error === null ? <p>Đang tải phiếu nhập...</p> : null}
+      {receipts === null && error === null && !isCreatingReceipt ? <p>Đang tải phiếu nhập...</p> : null}
       {isCreatingReceipt ? renderCreateReceiptWorkspace() : null}
       {!isCreatingReceipt && receipts ? (
         <ManagementListSurface ariaLabel="Danh sách phiếu nhập">

@@ -60,7 +60,7 @@ describe('mapKiotVietProductRows', () => {
     expect(result.invalid[1].errors).toContain('missing_name')
   })
 
-  it('uses a clear temporary unit for rows missing ĐVT', () => {
+  it('keeps unit blank for rows missing ĐVT', () => {
     const result = mapKiotVietProductRows([
       { rowNumber: 5, 'Mã hàng': 'NO-UNIT', 'Tên hàng': 'Thiếu đơn vị', 'ĐVT': '' },
     ])
@@ -68,7 +68,7 @@ describe('mapKiotVietProductRows', () => {
     expect(result.invalid).toHaveLength(0)
     expect(result.valid[0]).toMatchObject({
       code: 'NO-UNIT',
-      unit_name: 'Cần cập nhật',
+      unit_name: '',
       unit_name_needs_review: true,
     })
   })

@@ -23,6 +23,7 @@ export interface CatalogRouteHandlers {
   customerGroups(): RouteResult
   listCustomers(): RouteResult
   createCustomer(): RouteResult
+  updateCustomer(): RouteResult
   previewKiotVietCustomerImport(): RouteResult
   importKiotVietCustomers(): RouteResult
   deleteImportedKiotVietCustomers(): RouteResult
@@ -51,6 +52,7 @@ export function handleCatalogRoute(context: CatalogRouteContext, handlers: Catal
   if (method === 'GET' && pathname === '/api/v1/customer-groups') return handlers.customerGroups()
   if (method === 'GET' && pathname === '/api/v1/customers') return handlers.listCustomers()
   if (method === 'POST' && pathname === '/api/v1/customers') return handlers.createCustomer()
+  if (method === 'PATCH' && /^\/api\/v1\/customers\/[^/]+$/.test(pathname)) return handlers.updateCustomer()
   if (method === 'POST' && pathname === '/api/v1/customers/import/kiotviet/preview') return handlers.previewKiotVietCustomerImport()
   if (method === 'POST' && pathname === '/api/v1/customers/import/kiotviet') return handlers.importKiotVietCustomers()
   if (method === 'DELETE' && pathname === '/api/v1/customers/import/kiotviet') return handlers.deleteImportedKiotVietCustomers()

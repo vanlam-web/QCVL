@@ -89,7 +89,7 @@ export function mapKiotVietProductRows(rows: KiotVietRawProductRow[]) {
     const bomText = text(valueByHeader(row, 'Hàng thành phần', 'Vật tư cấu thành'))
     const productKind = mapProductKind(text(valueByHeader(row, 'Loại hàng')), bomText)
     const shapeAndMethod = shapeAndMethodForKind(productKind)
-    const validUnitName = unitName ?? 'Cần cập nhật'
+    const validUnitName = unitName ?? ''
 
     const priceListPrices = priceListPricesFromRow(row)
     const defaultPriceListPrice = priceListPrices.find((price) => isDefaultPriceListName(price.price_list_name))?.unit_price ?? null

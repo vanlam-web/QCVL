@@ -42,9 +42,6 @@ export function ProductImportDialog({
 
   const notes = preview ? (
     <>
-      {preview.summary.unit_review_rows > 0 ? (
-        <p>{preview.summary.unit_review_rows} dòng thiếu ĐVT sẽ gán tạm: Cần cập nhật</p>
-      ) : null}
       {preview.summary.ignored_columns.length > 0 ? <p>Bỏ qua: {preview.summary.ignored_columns.join(', ')}</p> : null}
       {preview.summary.deferred_columns.length > 0 ? <p>Làm sau: {preview.summary.deferred_columns.join(', ')}</p> : null}
     </>

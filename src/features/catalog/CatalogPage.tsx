@@ -25,6 +25,7 @@ import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../co
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { appRoutes } from '../../app/routes'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { CatalogService } from './catalog-service'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
@@ -59,7 +60,7 @@ type ProductCreatedDateFilter = QuickDateRangePreset | 'custom'
 
 function productDocumentHref(code: string) {
   if (code.startsWith('HD')) return managementRecordOpenHref('/sales-documents', code, { type: 'invoice' })
-  if (code.startsWith('PN')) return managementRecordOpenHref('/purchase/receipts', code)
+  if (code.startsWith('PN')) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
   if (code.startsWith('PC') || code.startsWith('PT') || code.startsWith('TT')) return managementRecordOpenHref('/finance', code)
   return null
 }

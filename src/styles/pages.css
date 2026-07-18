@@ -1275,7 +1275,7 @@ td:has(.money-text) {
 
 .purchase-receipt-workspace-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 16rem);
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 19.25rem);
   gap: var(--space-4);
   height: 100%;
   min-height: inherit;
@@ -1287,6 +1287,7 @@ td:has(.money-text) {
 }
 
 .purchase-receipt-workspace-main {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
@@ -1328,8 +1329,35 @@ td:has(.money-text) {
 }
 
 .purchase-receipt-workspace-table-wrap {
+  position: relative;
   background: var(--color-surface-muted);
   padding: var(--space-2);
+}
+
+.management-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  place-items: center;
+  gap: var(--space-3);
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  color: var(--color-text-muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.management-loading-overlay-spinner {
+  display: inline-flex;
+  animation: spin 1s linear infinite;
+  color: var(--color-primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .purchase-receipt-workspace-table {
@@ -1354,14 +1382,19 @@ td:has(.money-text) {
   padding-right: var(--space-5);
 }
 
-.purchase-receipt-line-card-row,
-.purchase-receipt-line-card-header {
-  grid-template-columns: 2.5rem 7.5rem minmax(14rem, 1.7fr) 5rem 7rem 7.5rem 7.5rem 8rem;
+.purchase-receipt-workspace .purchase-receipt-line-card-row,
+.purchase-receipt-workspace .purchase-receipt-line-card-header {
+  grid-template-columns: 2.5rem minmax(6rem, 7.5rem) minmax(16rem, 1.5fr) 4.5rem 5.75rem 7rem 6.75rem 8rem;
   column-gap: var(--space-2);
 }
 
-.purchase-receipt-line-card-header span {
+.purchase-receipt-workspace .purchase-receipt-line-card-header span {
   text-align: center;
+  white-space: nowrap;
+}
+
+.purchase-receipt-workspace .purchase-receipt-line-card-row .pos-cart-line-name {
+  min-width: 0;
 }
 
 .purchase-receipt-line-code {

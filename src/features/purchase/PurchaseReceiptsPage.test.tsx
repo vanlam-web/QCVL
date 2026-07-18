@@ -86,6 +86,25 @@ const remoteCodeProduct = {
   inventory_shape: 'normal' as const,
 }
 
+const comboProduct = {
+  id: 'product-combo',
+  code: 'CB-DECA',
+  name: 'Combo decal',
+  status: 'active' as const,
+  unit_name: 'bo',
+  sell_method: 'combo' as const,
+  latest_purchase_cost: 11480,
+  latest_purchase_cost_at: null,
+  inventory_shape: 'normal' as const,
+}
+
+const remoteComboProduct = {
+  ...comboProduct,
+  id: 'product-remote-combo',
+  code: 'CB-REMOTE',
+  name: 'Combo decal remote',
+}
+
 const receipt = {
   id: 'receipt-1',
   code: 'PN000673',
@@ -432,7 +451,7 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
 
 it('opens a single purchase receipt from route query and searches all statuses', async () => {
   const originalUrl = window.location.href
-  window.history.pushState({}, '', '/purchase/receipts?search=PN000674')
+  window.history.pushState({}, '', '/receipts?search=PN000674')
   const service = makeService({
     listReceipts: vi.fn(async () => ({ items: [postedReceipt], page: 1, page_size: 15, total: 1 })),
     getReceipt: vi.fn(async () => postedReceipt),
@@ -521,6 +540,35 @@ it('opens a blank purchase receipt create workspace from the create route', asyn
   expect(within(workspace).getByLabelText('Mã phiếu nhập')).toHaveValue('')
 })
 
+it('shows the purchase receipt create workspace immediately while lookups are loading', () => {
+  const pendingLookup = new Promise<never>(() => undefined)
+  const service = makeService({
+    listSuppliers: vi.fn(() => pendingLookup),
+    listProducts: vi.fn(() => pendingLookup),
+  })
+
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  expect(screen.getByRole('heading', { name: 'Nhập hàng' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Tạo phiếu nhập' })).toBeInTheDocument()
+  expect(screen.queryByRole('search', { name: 'Lọc phiếu nhập' })).not.toBeInTheDocument()
+})
+
+it('shows a centered loading overlay while create lookups are pending', () => {
+  const pendingSuppliers = new Promise<{ items: typeof suppliers; page: number; page_size: number; total: number }>(() => undefined)
+  const pendingProducts = new Promise<{ items: typeof products; page: number; page_size: number; total: number }>(() => undefined)
+  const service = makeService({
+    listSuppliers: vi.fn(() => pendingSuppliers),
+    listProducts: vi.fn(() => pendingProducts),
+  })
+
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  expect(screen.getByRole('status')).toHaveTextContent('Đang tải dữ liệu phiếu nhập...')
+  expect(screen.queryByText('Chọn hàng từ thanh tìm kiếm để thêm vào phiếu nhập.')).not.toBeInTheDocument()
+  expect(document.querySelector('.empty-state')).toBeNull()
+})
+
 it('restores the in-progress purchase receipt create workspace after remounting', async () => {
   const service = makeService()
 
@@ -551,6 +599,29 @@ it('restores the in-progress purchase receipt create workspace after remounting'
   expect(within(restoredForm).getByText('SP0001')).toBeInTheDocument()
   expect(within(restoredForm).getByText('Decal sữa')).toBeInTheDocument()
   expect(within(restoredForm).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+})
+
+it('keeps an in-progress purchase receipt draft when leaving the create page', async () => {
+  const onCloseCreateReceipt = vi.fn()
+  render(
+    <PurchaseReceiptsPage
+      createMode
+      currentUser={currentUser}
+      service={makeService()}
+      onCloseCreateReceipt={onCloseCreateReceipt}
+      onOpenDashboard={vi.fn()}
+    />,
+  )
+
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  await userEvent.type(within(form).getByLabelText('Số hóa đơn đầu vào'), 'HD-GIU-DRAFT')
+  await addProductToCreateReceipt('SP0001')
+  await userEvent.click(screen.getByRole('button', { name: 'Quay lại danh sách phiếu nhập' }))
+
+  expect(onCloseCreateReceipt).toHaveBeenCalled()
+  expect(window.history.state).toHaveProperty('qc_oms_purchase_receipt_create_draft_v1')
+  expect(window.localStorage.getItem(receiptCreateDraftStorageKey)).toContain('HD-GIU-DRAFT')
+  expect(window.localStorage.getItem(receiptCreateDraftStorageKey)).toContain('product-1')
 })
 
 it('keeps the purchase receipt list open when a saved create draft exists outside create mode', async () => {
@@ -623,6 +694,53 @@ it('searches remote products by code when creating purchase receipts', async () 
   await userEvent.keyboard('{Enter}')
 
   expect(within(workspace).getByText('NGD-01')).toBeInTheDocument()
+})
+
+it('hides combo products from purchase receipt product search results', async () => {
+  const listProducts = vi.fn(async (input: { search?: string } = {}) => {
+    if (input.search === 'decal') {
+      return { items: [remoteComboProduct], page: 1, page_size: 20, total: 1 }
+    }
+    return { items: [...products, comboProduct], page: 1, page_size: 20, total: 4 }
+  })
+  const service = makeService({ listProducts })
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+  const productSearch = await screen.findByRole('textbox', { name: 'Tìm hàng (F3)' })
+
+  await userEvent.type(productSearch, 'decal')
+
+  await waitFor(() =>
+    expect(listProducts).toHaveBeenCalledWith({
+      status: 'active',
+      search: 'decal',
+      page: 1,
+      page_size: 20,
+    }),
+  )
+  expect(await screen.findByText(/SP0001/)).toBeInTheDocument()
+  expect(screen.queryByText(/CB-DECA/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/CB-REMOTE/)).not.toBeInTheDocument()
+})
+
+it('closes purchase receipt product search results when clicking outside', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+  const productSearch = await screen.findByRole('textbox', { name: 'Tìm hàng (F3)' })
+
+  await userEvent.type(productSearch, 'decal')
+  expect(await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })).toBeInTheDocument()
+
+  await userEvent.click(document.body)
+
+  await waitFor(() => expect(screen.queryByRole('listbox', { name: 'Kết quả tìm hàng' })).not.toBeInTheDocument())
 })
 
 it('creates a draft receipt for normal items with computed totals shown locally', async () => {
