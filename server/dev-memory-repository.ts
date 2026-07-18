@@ -464,7 +464,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         const defaultPrice = defaultSalePrices.get(productCode) ?? product?.default_sale_price ?? 0
         const customerPrice = customerPriceList?.get(productCode)
         const unit_prices_by_source_code = Object.fromEntries(
-          (product?.unit_conversions ?? [])
+          ((product?.unit_conversions ?? []) as Array<{ source_code?: string | null }>)
             .map((conversion) => {
               const sourceCode = typeof conversion.source_code === 'string' && conversion.source_code.trim()
                 ? conversion.source_code
