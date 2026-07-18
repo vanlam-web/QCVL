@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
+import { buildSshArgs, requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
 
 describe('restartPlanFromEnv', () => {
   test('requires restart by default for confirmed NAS deploys', () => {
@@ -35,6 +35,23 @@ describe('requireRestartConfig', () => {
 
   test('accepts confirmed restart with SSH target', () => {
     expect(() => requireRestartConfig({ confirmed: true, restart: true, sshTarget: 'admin@100.84.228.125' })).not.toThrow()
+  })
+})
+
+describe('buildSshArgs', () => {
+  test('includes key and port when configured', () => {
+    expect(buildSshArgs({ QCVL_NAS_SSH_KEY: 'C:/Users/Admin/.ssh/qcvl', QCVL_NAS_SSH_PORT: '2222' }, 'admin@100.84.228.125')).toEqual([
+      '-tt',
+      '-o',
+      'StrictHostKeyChecking=no',
+      '-i',
+      'C:/Users/Admin/.ssh/qcvl',
+      '-o',
+      'IdentitiesOnly=yes',
+      '-p',
+      '2222',
+      'admin@100.84.228.125',
+    ])
   })
 })
 

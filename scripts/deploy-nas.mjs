@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
+import { buildSshArgs, requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
 
 const root = process.cwd()
 const nasRoot = process.env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
@@ -147,10 +147,7 @@ requireRestartConfig({ confirmed, restart: restartPlan.restart, sshTarget: proce
 
 if (restartPlan.restart) {
   run('ssh', [
-    '-tt',
-    '-o',
-    'StrictHostKeyChecking=no',
-    process.env.QCVL_NAS_SSH_TARGET,
+    ...buildSshArgs(process.env, process.env.QCVL_NAS_SSH_TARGET),
     'sudo /usr/local/bin/docker restart qcvl-app',
   ])
 }

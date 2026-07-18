@@ -455,10 +455,37 @@ Remove-Item Env:\QCVL_NAS_RESTART
 SSH restart rule:
 
 - Script chay `ssh <nas-user>@100.84.228.125 sudo /usr/local/bin/docker restart qcvl-app`.
+- Script ho tro `QCVL_NAS_SSH_KEY` neu dung private key rieng va `QCVL_NAS_SSH_PORT` neu SSH khong dung port 22.
 - Neu SSH hoi password, nhap mat khau NAS cua user do.
 - Neu sudo hoi password lan nua, nhap lai cung mat khau NAS.
 - Neu sudo bao user khong co quyen, vao DSM/Container Manager restart mot lan hoac cap quyen admin/sudo cho user do.
 - Khong dung `sudo -S` trong deploy script, vi se de ket/fail khi khong truyen password qua stdin.
+
+One-time setup de inside-LAN Codex tu restart NAS:
+
+```powershell
+ssh-keygen -t ed25519 -f "$env:USERPROFILE\.ssh\qcvl_nas_ed25519" -C "qcvl-codex-nas-restart"
+Get-Content "$env:USERPROFILE\.ssh\qcvl_nas_ed25519.pub"
+```
+
+Copy public key vua in ra vao `~/.ssh/authorized_keys` cua user NAS co quyen chay Docker. Sau do test tu may trong LAN:
+
+```powershell
+$env:QCVL_NAS_SSH_TARGET='<nas-user>@192.168.1.188'
+$env:QCVL_NAS_SSH_KEY="$env:USERPROFILE\.ssh\qcvl_nas_ed25519"
+npm run restart:nas
+```
+
+Khi test pass, deploy backend/server/runtime co the restart tu dong:
+
+```powershell
+$env:QCVL_NAS_DEPLOY_CONFIRM='true'
+$env:QCVL_NAS_APP_PATH='\\192.168.1.188\docker\QCVL\app'
+$env:QCVL_NAS_ENV_PATH='\\192.168.1.188\docker\QCVL\.env'
+$env:QCVL_NAS_SSH_TARGET='<nas-user>@192.168.1.188'
+$env:QCVL_NAS_SSH_KEY="$env:USERPROFILE\.ssh\qcvl_nas_ed25519"
+npm run deploy:nas
+```
 
 Build:
 
