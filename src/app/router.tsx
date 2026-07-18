@@ -82,6 +82,7 @@ export function AppRoutes() {
           <Route path={appRoutes.customers} element={<CustomersRoute />} />
           <Route path={appRoutes.suppliers} element={<SuppliersRoute />} />
           <Route path={appRoutes.purchaseReceipts} element={<PurchaseReceiptsRoute />} />
+          <Route path={appRoutes.purchaseReceiptCreate} element={<PurchaseReceiptsRoute createMode />} />
           <Route path={appRoutes.inventory} element={<InventoryRoute />} />
           <Route path={appRoutes.finance} element={<FinanceRoute />} />
           <Route path={appRoutes.reports} element={<ReportsRoute />} />
@@ -281,7 +282,7 @@ function SuppliersRoute() {
   )
 }
 
-function PurchaseReceiptsRoute() {
+function PurchaseReceiptsRoute({ createMode = false }: { createMode?: boolean }) {
   const { currentUser, initialized, getAccessToken, signOut } = useAuth()
   const navigate = useNavigate()
   const service = useMemo(() => createBrowserPurchaseReceiptService(getAccessToken), [getAccessToken])
@@ -294,7 +295,14 @@ function PurchaseReceiptsRoute() {
 
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
-      <PurchaseReceiptsPage currentUser={currentUser} service={service} onOpenDashboard={() => navigate(appRoutes.dashboard)} />
+      <PurchaseReceiptsPage
+        createMode={createMode}
+        currentUser={currentUser}
+        service={service}
+        onCloseCreateReceipt={() => navigate(appRoutes.purchaseReceipts)}
+        onOpenCreateReceipt={() => navigate(appRoutes.purchaseReceiptCreate)}
+        onOpenDashboard={() => navigate(appRoutes.dashboard)}
+      />
     </AppShell>
   )
 }

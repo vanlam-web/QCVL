@@ -269,9 +269,15 @@ function initialPurchaseReceiptRouteFilters() {
 export function PurchaseReceiptsPage({
   currentUser,
   service,
+  createMode = false,
+  onCloseCreateReceipt,
+  onOpenCreateReceipt,
 }: {
   currentUser?: CurrentUserData
   service: PurchaseReceiptService
+  createMode?: boolean
+  onCloseCreateReceipt?: () => void
+  onOpenCreateReceipt?: () => void
   onOpenDashboard: () => void
 }) {
   const [receipts, setReceipts] = useState<PurchaseReceipt[] | null>(null)
@@ -583,10 +589,14 @@ export function PurchaseReceiptsPage({
   }, [products, productsLoaded, service, suppliers, suppliersLoaded])
 
   useEffect(() => {
+    if (!createMode) return
     if (receiptCreateDraftRestoredRef.current) return
     receiptCreateDraftRestoredRef.current = true
     const draft = readReceiptCreateDraft()
-    if (!draft) return
+    if (!draft) {
+      void openCreateReceipt()
+      return
+    }
     const receiptCreateDraft = draft
 
     let active = true
@@ -617,7 +627,7 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [ensureReceiptLookupsLoaded])
+  }, [createMode, ensureReceiptLookupsLoaded])
 
   useEffect(() => {
     if (!isCreatingReceipt) return
@@ -827,6 +837,10 @@ export function PurchaseReceiptsPage({
         await service.updateReceipt(editingId, form)
       }
       if (editingId === null) clearReceiptCreateDraft()
+      if (editingId === null && createMode && onCloseCreateReceipt) {
+        onCloseCreateReceipt()
+        return
+      }
       setEditingId(null)
       setEditingStatus(null)
       setSelectedReceipt(null)
@@ -864,6 +878,10 @@ export function PurchaseReceiptsPage({
       setDetailOpen(false)
       setForm(blankForm)
       clearReceiptCreateDraft()
+      if (createMode && onCloseCreateReceipt) {
+        onCloseCreateReceipt()
+        return
+      }
       await loadReceipts()
     } catch (cause) {
       setError(formatApiError(cause, 'Không hoàn thành được phiếu nhập.'))
@@ -1026,6 +1044,10 @@ export function PurchaseReceiptsPage({
   }
 
   async function openCreateReceipt() {
+    if (!createMode && onOpenCreateReceipt) {
+      onOpenCreateReceipt()
+      return
+    }
     setError(null)
     setDetailOpen(false)
     setLoadingReceiptId(null)
@@ -1040,6 +1062,10 @@ export function PurchaseReceiptsPage({
 
   function closeCreateReceipt() {
     clearReceiptCreateDraft()
+    if (createMode && onCloseCreateReceipt) {
+      onCloseCreateReceipt()
+      return
+    }
     setEditingId(null)
     setEditingStatus(null)
     setSelectedReceipt(null)

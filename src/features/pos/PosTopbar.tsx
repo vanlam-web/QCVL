@@ -1,12 +1,18 @@
-import type { KeyboardEvent as ReactKeyboardEvent, RefObject } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react'
 import { PackageOpen, Plus, Search } from 'lucide-react'
 import { ConnectionStatus } from '../../components/ConnectionStatus'
 import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
-import { formatMoney } from '../../lib/number-format'
+import { formatMeasure, formatMoney } from '../../lib/number-format'
 import type { Product, ResolvedPrice } from '../catalog/types'
 import { displaySaleUnitName, maxInvoiceTabs, invoiceTabLabel, type PosInvoiceTab } from './pos-core'
 import { ProfileMenu } from './ProfileMenu'
+
+function productStockLine(product: Product) {
+  const stock = product.operating_stock ?? product.kiotviet_provisional_stock
+  if (!stock) return null
+  return `Tồn: ${formatMeasure(stock.quantity)} ${stock.unit_name}`
+}
 
 interface PosTopbarProps {
   connected: boolean
@@ -54,10 +60,30 @@ export function PosTopbar({
   onOpenManualMaterialOpening,
 }: PosTopbarProps) {
   const hasProductSearch = productSearch.trim().length > 0
+  const [searchResultsOpen, setSearchResultsOpen] = useState(false)
+  const searchRootRef = useRef<HTMLElement | null>(null)
+
+  useEffect(() => {
+    if (hasProductSearch) return
+    setSearchResultsOpen(false)
+  }, [hasProductSearch])
+
+  useEffect(() => {
+    if (!searchResultsOpen) return undefined
+
+    function closeOnOutsidePointer(event: PointerEvent) {
+      const target = event.target
+      if (target instanceof Node && searchRootRef.current?.contains(target)) return
+      setSearchResultsOpen(false)
+    }
+
+    window.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [searchResultsOpen])
 
   return (
     <section aria-label="K01 topbar" className="pos-topbar">
-      <section aria-label="K01 tìm kiếm" className="pos-topbar-search">
+      <section ref={searchRootRef} aria-label="K01 tìm kiếm" className="pos-topbar-search">
         <button
           aria-label="QC"
           className="pos-brand-button"
@@ -75,8 +101,14 @@ export function PosTopbar({
             ref={productSearchRef}
             value={productSearch}
             placeholder="Tìm hàng, combo, vật tư"
-            onFocus={onProductSearchFocus}
-            onChange={(event) => onProductSearchChange(event.target.value)}
+            onFocus={() => {
+              setSearchResultsOpen(true)
+              onProductSearchFocus()
+            }}
+            onChange={(event) => {
+              setSearchResultsOpen(true)
+              onProductSearchChange(event.target.value)
+            }}
             onKeyDown={onProductSearchKeyDown}
           />
           <span className="management-compact-search-trailing">
@@ -87,6 +119,7 @@ export function PosTopbar({
               type="button"
               onClick={() => {
                 if (hasProductSearch) {
+                  setSearchResultsOpen(false)
                   onProductSearchChange('')
                   return
                 }
@@ -97,22 +130,31 @@ export function PosTopbar({
             </button>
           </span>
         </label>
-        {hasProductSearch ? (
+        {hasProductSearch && searchResultsOpen ? (
           <ul aria-label="Kết quả tìm hàng" className="pos-search-results" role="listbox">
             {productSearchResults.length > 0 ? (
               productSearchResults.map((product) => {
                 const price = prices[product.id]?.unit_price ?? 0
+                const stockLine = productStockLine(product)
                 return (
                   <li key={product.id}>
                     <button
+                      className="pos-search-result"
                       role="option"
                       aria-selected="false"
+                      aria-label={`Chọn ${product.code} ${product.name}`}
                       type="button"
                       onClick={() => onProductSelect(product)}
                     >
-                      <strong>{product.code} {product.name}</strong>
-                      <span>{displaySaleUnitName(product.unit_name)}</span>
-                      <span>{formatMoney(price)}</span>
+                      <span className="pos-search-result-main">
+                        <span className="pos-search-result-title">
+                          <strong>{product.name}</strong>
+                          <span className="pos-search-result-unit">{displaySaleUnitName(product.unit_name)}</span>
+                        </span>
+                        <span className="pos-search-result-code">{product.code}</span>
+                        {stockLine ? <span className="pos-search-result-stock">{stockLine}</span> : null}
+                      </span>
+                      <span className="pos-search-result-price">{formatMoney(price)}</span>
                     </button>
                   </li>
                 )

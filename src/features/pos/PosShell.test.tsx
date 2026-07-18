@@ -386,11 +386,79 @@ it('uses the K01 F3 product search as an enabled product picker', async () => {
 
   await userEvent.type(search, 'mica')
   const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
-  await userEvent.click(within(results).getByRole('option', { name: /MICA-3MM Mica 3mm/ }))
+  await userEvent.click(within(results).getByRole('option', { name: /Chọn MICA-3MM Mica 3mm/ }))
 
   const cart = screen.getByLabelText('K02 giỏ hàng')
   expect(within(cart).getByText('Mica 3mm')).toBeInTheDocument()
   expect(within(cart).getAllByText('120 000').length).toBeGreaterThan(0)
+})
+
+it('shows POS search results as product cards without image or customer-order quantity', async () => {
+  const product = {
+    id: 'p-f5',
+    code: 'F5',
+    name: 'Fomex 5mm',
+    status: 'active' as const,
+    unit_name: 'Tấm',
+    sell_method: 'quantity' as const,
+    operating_stock: {
+      quantity: -28.8,
+      unit_name: 'Tấm',
+      source_type: 'stock_movements' as const,
+      source_label: null,
+    },
+  }
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({
+      items: [product],
+      page: 1,
+      page_size: 120,
+      total: 1,
+    })),
+    resolvePrices: vi.fn(async () => ({
+      items: [
+        {
+          product_id: 'p-f5',
+          unit_price: 195615,
+          price_source: 'default_price_list' as const,
+          price_list_id: 'pl-1',
+        },
+      ],
+    })),
+  })
+
+  renderPosShell({ catalogService })
+
+  await screen.findByRole('button', { name: /Fomex 5mm/ })
+  await userEvent.type(screen.getByRole('textbox', { name: 'Tìm hàng (F3)' }), 'f5')
+  const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
+  const option = within(results).getByRole('option', { name: /Fomex 5mm/ })
+
+  expect(within(option).getByText('Fomex 5mm', { selector: 'strong' })).toBeInTheDocument()
+  expect(within(option).getByText('Tấm')).toBeInTheDocument()
+  expect(within(option).getByText('F5')).toBeInTheDocument()
+  expect(within(option).getByText('Tồn: -28.8 Tấm')).toBeInTheDocument()
+  expect(within(option).getByText('195 615')).toBeInTheDocument()
+  expect(within(option).queryByText(/KH đặt/i)).not.toBeInTheDocument()
+  expect(option.querySelector('img')).toBeNull()
+})
+
+it('closes POS search results when clicking outside the search area', async () => {
+  renderPosShell()
+
+  const search = screen.getByRole('textbox', { name: 'Tìm hàng (F3)' })
+  await screen.findByRole('button', { name: /Mica 3mm/ })
+  await userEvent.type(search, 'mica')
+  expect(await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByLabelText('K02 giỏ hàng'))
+
+  expect(screen.queryByRole('listbox', { name: 'Kết quả tìm hàng' })).not.toBeInTheDocument()
+  expect(search).toHaveValue('mica')
+
+  await userEvent.click(search)
+
+  expect(await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })).toBeInTheDocument()
 })
 
 it('searches the product catalog beyond the quick POS cache and prioritizes exact combo names', async () => {
@@ -440,7 +508,10 @@ it('searches the product catalog beyond the quick POS cache and prioritizes exac
   }))
   const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
   const options = within(results).getAllByRole('option')
-  expect(options[0]).toHaveTextContent('IB In bạt')
+  expect(options[0]).toHaveAccessibleName('Chọn IB In bạt')
+  expect(within(options[0]).getByText('In bạt')).toBeInTheDocument()
+  expect(within(options[0]).getByText('m2')).toBeInTheDocument()
+  expect(within(options[0]).getByText('IB')).toBeInTheDocument()
   expect(options[0]).toHaveTextContent('600 000')
 })
 
@@ -499,7 +570,7 @@ it('checks out the selected remote POS search product instead of the quick-cache
   await screen.findByRole('button', { name: /Mica trong 3mm/ })
   await userEvent.type(screen.getByRole('textbox', { name: 'Tìm hàng (F3)' }), 'In bạt')
   const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
-  await userEvent.click(within(results).getByRole('option', { name: /IB In bạt/ }))
+  await userEvent.click(within(results).getByRole('option', { name: /Chọn IB In bạt/ }))
   const checkoutDrawer = await openCheckoutDrawer()
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 

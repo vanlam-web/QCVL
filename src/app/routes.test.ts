@@ -13,6 +13,7 @@ describe('app route constants', () => {
       customers: '/customers',
       suppliers: '/suppliers',
       purchaseReceipts: '/purchase/receipts',
+      purchaseReceiptCreate: '/purchase/receipts/new',
       inventory: '/inventory',
       finance: '/finance',
       reports: '/reports',

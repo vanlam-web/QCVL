@@ -511,6 +511,16 @@ it('opens purchase receipt create workspace from the plus action', async () => {
   expect(screen.queryByRole('table', { name: 'Danh sách phiếu nhập' })).not.toBeInTheDocument()
 })
 
+it('opens a blank purchase receipt create workspace from the create route', async () => {
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={makeService()} onOpenDashboard={vi.fn()} />)
+
+  const workspace = await screen.findByRole('region', { name: 'Tạo phiếu nhập' })
+  expect(screen.getByRole('heading', { name: 'Nhập hàng' })).toBeInTheDocument()
+  expect(screen.queryByRole('search', { name: 'Lọc phiếu nhập' })).not.toBeInTheDocument()
+  expect(within(workspace).getByRole('form', { name: 'Thông tin phiếu nhập' })).toBeInTheDocument()
+  expect(within(workspace).getByLabelText('Mã phiếu nhập')).toHaveValue('')
+})
+
 it('restores the in-progress purchase receipt create workspace after remounting', async () => {
   const service = makeService()
 
@@ -531,7 +541,7 @@ it('restores the in-progress purchase receipt create workspace after remounting'
 
   unmount()
 
-  render(<PurchaseReceiptsPage currentUser={currentUser} service={makeService()} onOpenDashboard={vi.fn()} />)
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={makeService()} onOpenDashboard={vi.fn()} />)
 
   const restoredWorkspace = await screen.findByRole('region', { name: 'Tạo phiếu nhập' })
   const restoredForm = within(restoredWorkspace).getByRole('form', { name: 'Thông tin phiếu nhập' })
@@ -541,6 +551,41 @@ it('restores the in-progress purchase receipt create workspace after remounting'
   expect(within(restoredForm).getByText('SP0001')).toBeInTheDocument()
   expect(within(restoredForm).getByText('Decal sữa')).toBeInTheDocument()
   expect(within(restoredForm).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+})
+
+it('keeps the purchase receipt list open when a saved create draft exists outside create mode', async () => {
+  window.localStorage.setItem(
+    receiptCreateDraftStorageKey,
+    JSON.stringify({
+      form: {
+        supplier_id: 'supplier-1',
+        received_at: '2026-07-18T08:00',
+        supplier_document_no: 'HD-DANG-NHAP',
+        items: [
+          {
+            product_id: 'product-1',
+            inventory_shape: 'normal',
+            unit_name: 'm',
+            quantity: 3,
+            unit_cost: 85000,
+            discount_amount: 0,
+            physical_payload: null,
+          },
+        ],
+      },
+      paymentMethod: 'cash',
+      financeAccountId: '',
+      rollLengthTexts: {},
+      receiptWorkspaceSideCollapsed: false,
+    }),
+  )
+
+  render(<PurchaseReceiptsPage currentUser={currentUser} service={makeService()} onOpenDashboard={vi.fn()} />)
+
+  expect(await screen.findByRole('heading', { name: 'Phiếu nhập' })).toBeInTheDocument()
+  expect(screen.getByRole('search', { name: 'Lọc phiếu nhập' })).toBeInTheDocument()
+  expect(screen.queryByRole('heading', { name: 'Nhập hàng' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('region', { name: 'Tạo phiếu nhập' })).not.toBeInTheDocument()
 })
 
 it('searches remote products by code when creating purchase receipts', async () => {
