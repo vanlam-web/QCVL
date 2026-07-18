@@ -35,6 +35,7 @@ import {
   cartLineDiscountAmountFromPercent,
   cartLineDiscountPercent,
   clampLineDiscount,
+  convertSaleUnitPrice,
   draftLineQuantity,
   displaySaleUnitName,
   initialQuotePayloadToTabs,
@@ -313,9 +314,11 @@ export function PosShell({
             if (line.isManualPrice) return line
             const resolved = priceResult.items.find((price) => price.product_id === line.product.id)
             if (resolved === undefined) return line
+            const product = resolveCartLineProduct(line)
             return clampLineDiscount({
               ...line,
-              unitPrice: resolved.unit_price,
+              product,
+              unitPrice: convertSaleUnitPrice(product, resolved.unit_price, undefined, selectedSaleUnitText(line)),
               priceSource: resolved.price_source,
             })
           }),
@@ -330,7 +333,7 @@ export function PosShell({
     return () => {
       active = false
     }
-  }, [catalogService, products, selectedCustomerId, updateActiveTab])
+  }, [catalogService, products, resolveCartLineProduct, selectedCustomerId, updateActiveTab])
 
   useEffect(() => {
     const missingPriceProductIds = productSearchResults
@@ -650,9 +653,21 @@ export function PosShell({
         const product = resolveCartLineProduct(line)
         const option = saleUnitOptions(product).find((candidate) => candidate.unitName === unitName)
         if (option === undefined || option.unitName === product.unit_name) {
-          return { ...line, product, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
+          const nextLine = { ...line, product, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
+          if (line.isManualPrice) return nextLine
+          const baseUnitPrice = prices[product.id]?.unit_price
+          const unitPrice = baseUnitPrice !== undefined
+            ? convertSaleUnitPrice(product, baseUnitPrice, undefined, undefined)
+            : convertSaleUnitPrice(product, line.unitPrice, selectedSaleUnitText(line), undefined)
+          return clampLineDiscount({ ...nextLine, unitPrice })
         }
-        return { ...line, product, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
+        const nextLine = { ...line, product, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
+        if (line.isManualPrice) return nextLine
+        const baseUnitPrice = prices[product.id]?.unit_price
+        const unitPrice = baseUnitPrice !== undefined
+          ? convertSaleUnitPrice(product, baseUnitPrice, undefined, option.unitName)
+          : convertSaleUnitPrice(product, line.unitPrice, selectedSaleUnitText(line), option.unitName)
+        return clampLineDiscount({ ...nextLine, unitPrice })
       }),
     }))
   }

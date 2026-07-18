@@ -662,6 +662,57 @@ it('checks out POS line with selected KiotViet unit conversion', async () => {
   )
 })
 
+it('converts automatic unit price when sale unit changes', async () => {
+  const unitProduct = {
+    id: 'p-unit',
+    code: 'TS1',
+    name: 'Test Sheet',
+    status: 'active' as const,
+    unit_name: 'Sheet',
+    sell_method: 'quantity' as const,
+    unit_conversions: [
+      {
+        unit_id: 'unit-half',
+        unit_name: 'Half Sheet',
+        stock_qty_per_unit: 0.5,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+      {
+        unit_id: 'unit-quarter',
+        unit_name: 'Quarter Sheet',
+        stock_qty_per_unit: 0.25,
+        is_default_purchase_unit: false,
+        is_default_sale_unit: false,
+      },
+    ],
+  }
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({ items: [unitProduct], page: 1, page_size: 120, total: 1 })),
+    resolvePrices: vi.fn(async () => ({
+      items: [{
+        product_id: 'p-unit',
+        unit_price: 20000,
+        price_source: 'default_price_list' as const,
+        price_list_id: 'pl-1',
+      }],
+    })),
+  })
+
+  renderPosShell({ catalogService })
+
+  await userEvent.click(await screen.findByRole('button', { name: /Test Sheet/ }))
+  const unitSelect = await screen.findByRole('combobox', { name: /Test Sheet/ })
+  const priceInput = screen.getByLabelText(/Đơn giá Test Sheet/) as HTMLInputElement
+  expect(priceInput).toHaveValue('20 000')
+
+  await userEvent.selectOptions(unitSelect, 'Half Sheet')
+  expect(priceInput).toHaveValue('10 000')
+
+  await userEvent.selectOptions(unitSelect, 'Quarter Sheet')
+  expect(priceInput).toHaveValue('5 000')
+})
+
 it('hydrates restored POS draft lines with current catalog unit conversions', async () => {
   const staleProduct = {
     id: 'p-f5',
@@ -728,6 +779,66 @@ it('hydrates restored POS draft lines with current catalog unit conversions', as
   expect(unitSelect.closest('.pos-cart-lines')).toHaveStyle({
     '--pos-line-unit-width': '4.9rem',
   })
+})
+
+it('keeps converted unit prices when customer change refreshes automatic prices', async () => {
+  const catalogService = makeCatalogService({
+    listProducts: vi.fn(async () => ({
+      items: [
+        {
+          id: 'p-unit',
+          code: 'TS1',
+          name: 'Test Sheet',
+          status: 'active' as const,
+          unit_name: 'Sheet',
+          sell_method: 'quantity' as const,
+          unit_conversions: [
+            {
+              unit_id: 'unit-half',
+              unit_name: 'Half Sheet',
+              stock_qty_per_unit: 0.5,
+              is_default_purchase_unit: false,
+              is_default_sale_unit: false,
+            },
+          ],
+        },
+      ],
+      page: 1,
+      page_size: 120,
+      total: 1,
+    })),
+    resolvePrices: vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{
+          product_id: 'p-unit',
+          unit_price: 20000,
+          price_source: 'default_price_list' as const,
+          price_list_id: 'pl-default',
+        }],
+      })
+      .mockResolvedValueOnce({
+        items: [{
+          product_id: 'p-unit',
+          unit_price: 10000,
+          price_source: 'customer_group_price_list' as const,
+          price_list_id: 'pl-customer',
+        }],
+      }),
+  })
+
+  renderPosShell({ catalogService })
+
+  await userEvent.click(await screen.findByRole('button', { name: /Test Sheet/ }))
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: /Test Sheet/ }), 'Half Sheet')
+  const priceInput = screen.getByLabelText(/Đơn giá Test Sheet/) as HTMLInputElement
+  expect(priceInput).toHaveValue('10 000')
+
+  await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
+  await userEvent.keyboard('{Enter}')
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
+
+  expect(priceInput).toHaveValue('5 000')
 })
 
 it('lets the cashier choose a converted sale unit for m2 products', async () => {

@@ -321,6 +321,27 @@ export function saleUnitOptions(product: Product) {
   return options
 }
 
+export function saleUnitStockQtyPerUnit(product: Product, saleUnitName?: string | null) {
+  const selectedUnitName = saleUnitName?.trim() ?? ''
+  const baseUnitName = product.unit_name.trim()
+  if (selectedUnitName === '' || selectedUnitName === baseUnitName) return 1
+  const option = saleUnitOptions(product).find((candidate) => candidate.unitName === selectedUnitName)
+  return option?.stockQtyPerUnit ?? 1
+}
+
+export function convertSaleUnitPrice(
+  product: Product,
+  unitPrice: number,
+  sourceSaleUnitName?: string | null,
+  targetSaleUnitName?: string | null,
+) {
+  if (isAreaProduct(product)) return Math.max(Math.round(unitPrice), 0)
+  const sourceFactor = saleUnitStockQtyPerUnit(product, sourceSaleUnitName)
+  const targetFactor = saleUnitStockQtyPerUnit(product, targetSaleUnitName)
+  if (sourceFactor <= 0 || targetFactor <= 0) return Math.max(Math.round(unitPrice), 0)
+  return Math.max(Math.round((unitPrice / sourceFactor) * targetFactor), 0)
+}
+
 export function selectedSaleUnitText(line: CheckoutCartLine) {
   return line.saleUnitName ?? line.product.unit_name
 }

@@ -5,6 +5,7 @@ import {
   cartLineDiscountPercent,
   checkoutSummary,
   clampLineDiscount,
+  convertSaleUnitPrice,
   displaySaleUnitName,
   invoiceTabLabel,
   isInvoiceTabDirty,
@@ -17,6 +18,7 @@ import {
   readPositiveMoney,
   removeCompletedInvoiceTab,
   initialQuotePayloadToTabs,
+  saleUnitStockQtyPerUnit,
 } from './pos-core'
 
 const areaProduct: Product = {
@@ -115,6 +117,39 @@ describe('pos-core', () => {
       sale_unit_name: 'Tấc',
       stock_qty_per_sale_unit: 0.05,
     }))
+  })
+
+  it('converts sale unit prices from the selected unit factor', () => {
+    const sheetProduct: Product = {
+      id: 'p-sheet',
+      code: 'SHEET',
+      name: 'Sheet',
+      status: 'active',
+      unit_name: 'Sheet',
+      sell_method: 'quantity',
+      unit_conversions: [
+        {
+          unit_id: 'unit-half',
+          unit_name: 'Half Sheet',
+          stock_qty_per_unit: 0.5,
+          is_default_purchase_unit: false,
+          is_default_sale_unit: false,
+        },
+        {
+          unit_id: 'unit-quarter',
+          unit_name: 'Quarter Sheet',
+          stock_qty_per_unit: 0.25,
+          is_default_purchase_unit: false,
+          is_default_sale_unit: false,
+        },
+      ],
+    }
+
+    expect(saleUnitStockQtyPerUnit(sheetProduct, 'Half Sheet')).toBe(0.5)
+    expect(convertSaleUnitPrice(sheetProduct, 20000, undefined, 'Half Sheet')).toBe(10000)
+    expect(convertSaleUnitPrice(sheetProduct, 10000, 'Half Sheet', 'Quarter Sheet')).toBe(5000)
+    expect(convertSaleUnitPrice(sheetProduct, 5000, 'Quarter Sheet', undefined)).toBe(20000)
+    expect(convertSaleUnitPrice(areaProduct, 50000, 'm2', 'tam')).toBe(50000)
   })
 
   it('hides placeholder sale unit names from POS display helpers', () => {
