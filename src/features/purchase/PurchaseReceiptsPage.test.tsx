@@ -518,7 +518,12 @@ it('opens purchase receipt create workspace from the plus action', async () => {
 
   const form = within(workspace).getByRole('form', { name: 'Thông tin phiếu nhập' })
   expect(within(form).queryByLabelText('Nhà cung cấp')).not.toBeInTheDocument()
-  expect(within(form).getByLabelText('Tài khoản')).toHaveValue('Nguyễn Thị Mai Phương')
+  const accountInput = within(form).getByLabelText('Tài khoản')
+  const receivedAtInput = within(form).getByLabelText('Thời gian nhập')
+  expect(accountInput).toHaveValue('Nguyễn Thị Mai Phương')
+  const sideTopRow = accountInput.closest('.purchase-receipt-workspace-side-top-row')
+  expect(sideTopRow).not.toBeNull()
+  expect(receivedAtInput.closest('.purchase-receipt-workspace-side-top-row')).toBe(sideTopRow)
   expect(within(form).getByLabelText('Mã phiếu nhập')).toHaveAttribute('placeholder', 'Mã phiếu tự động')
   expect(within(form).getByLabelText('Số hóa đơn đầu vào')).toBeInTheDocument()
   expect(within(form).getByText('Tổng tiền hàng')).toBeInTheDocument()

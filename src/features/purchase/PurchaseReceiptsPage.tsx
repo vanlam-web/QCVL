@@ -2230,25 +2230,27 @@ function clearReceiptCreateDraft() {
                 <ChevronRight aria-hidden="true" size={18} />
               </button>
               <div className="purchase-receipt-workspace-side-body">
-                <label>
-                  Tài khoản
-                  <input readOnly value={accountDisplayName(currentUser)} />
-                </label>
+                <div className="purchase-receipt-workspace-side-top-row">
+                  <label className="purchase-receipt-workspace-account-field">
+                    Tài khoản
+                    <input readOnly value={accountDisplayName(currentUser)} />
+                  </label>
+                  <label className="purchase-receipt-workspace-time-field">
+                    Thời gian nhập
+                    <input
+                      required
+                      type="datetime-local"
+                      value={form.received_at}
+                      onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
+                    />
+                  </label>
+                </div>
                 <label>
                   Mã phiếu nhập
                   <input
                     placeholder="Mã phiếu tự động"
                     value={form.code}
                     onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Thời gian nhập
-                  <input
-                    required
-                    type="datetime-local"
-                    value={form.received_at}
-                    onChange={(event) => setForm((current) => ({ ...current, received_at: event.target.value }))}
                   />
                 </label>
                 <label>

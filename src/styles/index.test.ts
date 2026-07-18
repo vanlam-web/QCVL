@@ -639,6 +639,7 @@ it('keeps purchase receipt workspace side panel aligned with shared filter width
   expect(cssRule('.purchase-receipt-workspace-side.management-filter-sidebar')).toContain('border: 1px solid var(--color-border)')
   expect(cssRule('.purchase-receipt-workspace-side.management-filter-sidebar')).toContain('border-radius: var(--radius-md)')
   expect(cssRule('.purchase-receipt-workspace-side-body')).toContain('gap: var(--space-4)')
+  expect(cssRule('.purchase-receipt-workspace-side-top-row')).toContain('grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.9fr)')
   expect(cssRule('.purchase-receipt-workspace-side label')).toContain('gap: var(--space-2)')
   expect(cssRule('.purchase-receipt-workspace-side > .purchase-receipt-workspace-actions.management-filter-actions')).toContain('grid-template-columns: 1fr 1fr')
   expect(cssRule('.purchase-receipt-workspace-side:hover .management-filter-collapse-button,\n.purchase-receipt-workspace-side .management-filter-collapse-button:focus-visible')).toContain('pointer-events: auto')

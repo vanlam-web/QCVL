@@ -1491,6 +1491,13 @@ td:has(.money-text) {
   padding-right: var(--space-1);
 }
 
+.purchase-receipt-workspace-side-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.9fr);
+  gap: var(--space-3);
+  align-items: end;
+}
+
 .purchase-receipt-workspace-side-rail {
   border-left: 1px solid var(--color-border-muted);
   background: var(--color-surface);
@@ -1521,6 +1528,10 @@ td:has(.money-text) {
   color: var(--color-text-muted);
   font-size: 0.78rem;
   font-weight: 800;
+}
+
+.purchase-receipt-workspace-side-top-row label {
+  gap: var(--space-1);
 }
 
 .purchase-receipt-workspace-side textarea {
