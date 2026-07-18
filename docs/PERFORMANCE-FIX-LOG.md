@@ -205,6 +205,42 @@ Ket qua:
 
 - Pass, `2` files / `13` tests.
 
+# 2026-07-18 - Route Hot-Path Cut For 3200
+
+### Van De Da Kiem
+
+- `/products` va `/inventory/stocktakes` van co cam giac nang vi route con goi list/full hydrate rat nhieu lan.
+- `/sales-documents?open=...` truoc do van keo full catalog ngay ca khi detail da co `product_snapshot`.
+- NAS backend can restart de nhan code server moi.
+
+### Fix Da Lam
+
+- `server/http.ts`
+  - `GET /api/v1/products` va `GET /api/v1/inventory/stocktakes` uu tien `listProductsPage` / `listStocktakesPage` neu repository co ho tro.
+  - `GET /api/v1/sales-documents/{id}` chi keo catalog khi item thieu snapshot.
+  - `PATCH /api/v1/sales-documents/{id}` cung dung duong snapshot, khong keo catalog vo can.
+- `server/db.ts`
+  - them `listProductsPage` va `listStocktakesPage` de route co the chuyen sang path page-aware khi repo ho tro.
+  - them helper page/creator option de giam route bookkeeping.
+- Tests:
+  - product page route khong goi full catalog hai lan.
+  - stocktake route khong goi full list hai lan.
+  - sales document detail dung snapshot item thay vi catalog khi du lieu da co snapshot.
+
+### Verification Da Chay
+
+```bash
+npx vitest run server/http.test.ts
+npx vitest run server/db.test.ts
+npm run typecheck
+```
+
+Ket qua:
+
+- HTTP: PASS, `100` tests.
+- DB: PASS, `25` tests.
+- Typecheck: PASS.
+
 ## 2026-07-18 - Dashboard Detail Waterfall Cut
 
 ### Van De Da Kiem

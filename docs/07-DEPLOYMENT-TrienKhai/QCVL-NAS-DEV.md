@@ -2,6 +2,16 @@
 
 > Cap nhat: 2026-07-18.
 
+## Latest NAS Deploy - 2026-07-18 Route Hot-Path Cut
+
+Batch toi uu tiep cho `3200` sau LAN benchmark.
+
+- Root cause: `products` va `inventory/stocktakes` con uu tien full list path; `sales-documents` detail van co the keo full catalog khi item da co snapshot.
+- Fix code: them optional repository path `listProductsPage` / `listStocktakesPage`; HTTP route uu tien page-aware path khi co.
+- Fix detail: `sales-documents/{id}` chi goi product catalog khi line thieu `product_snapshot`; snapshot day du thi hydrate truc tiep.
+- Verification local: `npx vitest run server/http.test.ts` pass (`100` tests); `npx vitest run server/db.test.ts` pass (`25` tests); `npm run typecheck` pass.
+- Vi co thay doi backend/server runtime, deploy NAS lan nay phai restart `qcvl-app`, khong dung `QCVL_NAS_RESTART=false`.
+
 ## Latest NAS Deploy - 2026-07-18 Static Compression And Frontend Waterfall Cleanup
 
 Batch toi uu tiep cho toc do NAS `3200`.

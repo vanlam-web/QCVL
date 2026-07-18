@@ -2082,6 +2082,35 @@ async function collectCustomerDebt(request: Request) {
   return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
 }
 
+async function salesDocumentProductCatalog(
+  repository: ServerRepository,
+  organizationId: string,
+  document: SalesDocumentData,
+) {
+  if (!salesDocumentNeedsProductCatalog(document)) return products
+  if (!repository.listProducts) return products
+  return repository.listProducts({
+    organizationId,
+    url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000'),
+  })
+}
+
+function salesDocumentNeedsProductCatalog(document: SalesDocumentData) {
+  return (document.items ?? []).some((item) => {
+    const snapshot = (item as { product_snapshot?: unknown }).product_snapshot
+    if (snapshot === null || typeof snapshot !== 'object') return true
+    const candidate = snapshot as { code?: unknown; name?: unknown; unit_name?: unknown; sell_method?: unknown }
+    return typeof candidate.code !== 'string'
+      || candidate.code.trim() === ''
+      || typeof candidate.name !== 'string'
+      || candidate.name.trim() === ''
+      || typeof candidate.unit_name !== 'string'
+      || candidate.unit_name.trim() === ''
+      || typeof candidate.sell_method !== 'string'
+      || candidate.sell_method.trim() === ''
+  })
+}
+
 function makeSalesDocumentDetail(
   document: SalesDocumentData,
   productCatalog: ProductListData[] = products,
@@ -3107,7 +3136,7 @@ async function getDevApiResponse(
         if (repository.getSalesDocument) {
           const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
           if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
-          return { found: true, data: makeSalesDocumentDetail(document) }
+          return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
         }
         const document = salesDocuments.find((item) => item.id === id || item.code === id)
         if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
@@ -3126,7 +3155,7 @@ async function getDevApiResponse(
               ...(createdAt !== undefined ? { created_at: createdAt } : {}),
             })
             if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-            return { found: true, data: makeSalesDocumentDetail(document) }
+            return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
           }
           const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
           if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
@@ -3151,7 +3180,7 @@ async function getDevApiResponse(
         if (repository.cancelSalesDocument) {
           const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
           if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-          return { found: true, data: makeSalesDocumentDetail(document) }
+          return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
         }
         const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
         if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
