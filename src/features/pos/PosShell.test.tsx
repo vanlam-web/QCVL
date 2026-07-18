@@ -156,6 +156,10 @@ beforeEach(() => {
   window.localStorage.clear()
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 async function openCheckoutDrawer() {
   await userEvent.click(await screen.findByRole('button', { name: 'Thanh toán' }))
   return screen.getByLabelText('Ngăn thanh toán')
@@ -231,6 +235,49 @@ it('loads enough quick products for local POS grid pagination on startup', async
   await screen.findByRole('button', { name: /Mica 3mm/ })
 
   expect(service.listProducts).toHaveBeenCalledWith({ status: 'active', page: 1, page_size: 120, sort: 'pos_usage' })
+})
+
+it('refreshes normal invoice time to the system clock when opening checkout', async () => {
+  window.localStorage.setItem(
+    posDraftStorageKey,
+    JSON.stringify([
+      {
+        id: 'invoice-1',
+        number: 1,
+        createdAt: '2026-07-18T01:00:00.000Z',
+        selectedCustomer: null,
+        orderNote: '',
+        cartLines: [
+          {
+            id: 'line-1',
+            product: {
+              id: 'p-1',
+              code: 'MICA-3MM',
+              name: 'Mica 3mm',
+              status: 'active',
+              unit_name: 'm',
+              sell_method: 'linear_m',
+            },
+            quantity: 1,
+            unitPrice: 120000,
+            priceSource: 'default_price_list',
+            isManualPrice: false,
+          },
+        ],
+      },
+    ]),
+  )
+
+  renderPosShell()
+
+  await screen.findByText('Mica 3mm')
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-07-18T20:05:00+07:00'))
+  fireEvent.click(screen.getByRole('button', { name: 'Thanh toán' }))
+
+  const drawer = screen.getByLabelText('Ngăn thanh toán')
+  expect(within(drawer).getByLabelText('Ngày hóa đơn')).toHaveValue('18/07/2026')
+  expect(within(drawer).getByLabelText('Thời gian hóa đơn')).toHaveValue('20:05')
 })
 
 it('hides placeholder unit text from POS cart lines', async () => {

@@ -2081,36 +2081,31 @@
 }
 
 .checkout-panel-time-input {
-  width: 4.25rem;
+  width: 4.75rem;
   min-height: 1.35rem;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--color-text-muted);
-  padding: 0 0.1rem;
+  padding: 0 0.35rem;
   font: inherit;
   font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: center;
 }
 
 .checkout-panel-date-input {
-  width: 6.6rem;
+  width: 7.5rem;
   min-height: 1.35rem;
   border: 1px solid transparent;
   border-radius: var(--radius-xs);
   background: transparent;
   color: var(--color-text-muted);
-  padding: 0 0.1rem;
+  padding: 0 0.35rem;
   font: inherit;
   font-variant-numeric: tabular-nums;
-}
-
-.checkout-panel-date-input:hover,
-.checkout-panel-date-input:focus,
-.checkout-panel-time-input:hover,
-.checkout-panel-time-input:focus {
-  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
-  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface));
-  color: var(--color-text);
+  letter-spacing: 0;
+  text-align: center;
 }
 
 .checkout-customer-line {
@@ -2258,6 +2253,35 @@
   border-radius: var(--radius-sm);
   padding: 0 0.625rem;
   background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.checkout-panel .checkout-panel-date-input,
+.checkout-panel .checkout-panel-time-input {
+  min-height: 1.35rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0 0.35rem;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-align: center;
+  appearance: textfield;
+}
+
+.checkout-panel .checkout-panel-date-input:focus,
+.checkout-panel .checkout-panel-time-input:focus {
+  border-color: var(--color-primary);
+  background: var(--color-surface);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent);
+  color: var(--color-text);
+  outline: none;
+}
+
+.checkout-panel .checkout-panel-date-input:hover,
+.checkout-panel .checkout-panel-time-input:hover {
   color: var(--color-text);
 }
 

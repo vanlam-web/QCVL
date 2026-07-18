@@ -164,6 +164,24 @@ it('places checkout divider under seller metadata instead of customer name', () 
   expect(cssRule('.checkout-action-row .button')).toContain('min-height: 2.25rem')
 })
 
+it('keeps POS invoice date and time inputs framed only while editing', () => {
+  const flatInputRule = cssRule('.checkout-panel .checkout-panel-date-input,\n.checkout-panel .checkout-panel-time-input')
+  const focusRule = cssRule('.checkout-panel .checkout-panel-date-input:focus,\n.checkout-panel .checkout-panel-time-input:focus')
+  const hoverRule = cssRule('.checkout-panel .checkout-panel-date-input:hover,\n.checkout-panel .checkout-panel-time-input:hover')
+
+  expect(cssRule('.checkout-panel-date-input')).toContain('width: 7.5rem')
+  expect(cssRule('.checkout-panel-time-input')).toContain('width: 4.75rem')
+  expect(flatInputRule).toContain('border: 1px solid transparent')
+  expect(flatInputRule).toContain('background: transparent')
+  expect(flatInputRule).toContain('padding: 0 0.35rem')
+  expect(flatInputRule).toContain('appearance: textfield')
+  expect(hoverRule).not.toContain('border-color')
+  expect(hoverRule).not.toContain('background')
+  expect(focusRule).toContain('box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-primary) 28%, transparent)')
+  expect(focusRule).toContain('border-color: var(--color-primary)')
+  expect(focusRule).toContain('background: var(--color-surface)')
+})
+
 it('keeps checkout summary text light with only payable total emphasized', () => {
   const compactSummaryRowRule = cssRule('.checkout-summary-compact div,\n.checkout-summary-compact .checkout-summary-highlight,\n.checkout-summary-compact .checkout-old-debt-summary')
 

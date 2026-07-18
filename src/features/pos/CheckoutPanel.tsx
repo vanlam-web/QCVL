@@ -305,14 +305,18 @@ export function CheckoutPanel({
           <input
             aria-label="Ngày hóa đơn"
             className="checkout-panel-date-input"
-            type="date"
+            inputMode="numeric"
+            placeholder="dd/MM/yyyy"
+            type="text"
             value={invoiceDate}
             onChange={(event) => setInvoiceDate(event.target.value)}
           />
           <input
             aria-label="Thời gian hóa đơn"
             className="checkout-panel-time-input"
-            type="time"
+            inputMode="numeric"
+            placeholder="HH:mm"
+            type="text"
             value={invoiceTime}
             onChange={(event) => setInvoiceTime(event.target.value)}
           />
@@ -661,17 +665,32 @@ function formatCheckoutDateTime(value: string | undefined) {
 }
 
 function checkoutDateInputValue(value: string | undefined) {
-  const source = value ?? new Date().toISOString()
-  const date = source.match(/^(\d{4}-\d{2}-\d{2})/)?.[1]
-  if (date) return date
-  const parsed = new Date(source)
-  return Number.isNaN(parsed.getTime()) ? new Date().toISOString().slice(0, 10) : parsed.toISOString().slice(0, 10)
+  const formatted = formatCheckoutDateTime(value).date
+  if (formatted) return formatted
+  return formatCheckoutDateTime(new Date().toISOString()).date
 }
 
 function checkoutCreatedAt(orderCreatedAt: string | undefined, invoiceDate: string, invoiceTime: string) {
   const source = orderCreatedAt ?? new Date().toISOString()
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) || !/^\d{2}:\d{2}$/.test(invoiceTime)) return source
-  return `${invoiceDate}T${invoiceTime}:00.000Z`
+  const date = parseCheckoutDateInput(invoiceDate)
+  const time = parseCheckoutTimeInput(invoiceTime)
+  if (!date || !time) return source
+  return `${date}T${time}:00.000Z`
+}
+
+function parseCheckoutDateInput(value: string) {
+  const localDate = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (localDate) {
+    const [, day, month, year] = localDate
+    return `${year}-${month}-${day}`
+  }
+  const isoDate = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (isoDate) return value
+  return null
+}
+
+function parseCheckoutTimeInput(value: string) {
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : null
 }
 
 function readMoney(value: string): number {

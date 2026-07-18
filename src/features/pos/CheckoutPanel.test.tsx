@@ -233,7 +233,7 @@ it('shows compact payment header metadata and line summary', () => {
   )
 
   expect(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).toHaveTextContent('Văn Viết Phương Lâm')
-  expect(within(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).getByLabelText('Ngày hóa đơn')).toHaveValue('2026-07-08')
+  expect(within(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).getByLabelText('Ngày hóa đơn')).toHaveValue('08/07/2026')
   expect(within(screen.getByRole('group', { name: 'Thông tin hóa đơn' })).getByLabelText('Thời gian hóa đơn')).toHaveValue('07:29')
   expect(screen.getByLabelText('Tóm tắt thanh toán')).toHaveClass('checkout-summary-compact')
   expect(screen.queryByText('Khách cần trả')).toBeInTheDocument()
@@ -259,16 +259,55 @@ it('marks the seller as a display name and lets the invoice date and time be edi
   const timeInput = within(meta).getByLabelText('Thời gian hóa đơn')
   expect(timeInput).toHaveValue('07:29')
   const dateInput = within(meta).getByLabelText('Ngày hóa đơn')
-  expect(dateInput).toHaveValue('2026-07-08')
+  expect(dateInput).toHaveValue('08/07/2026')
 
   await userEvent.clear(dateInput)
-  await userEvent.type(dateInput, '2026-07-09')
+  await userEvent.type(dateInput, '09/07/2026')
   await userEvent.clear(timeInput)
   await userEvent.type(timeInput, '08:15')
 
-  expect(dateInput).toHaveValue('2026-07-09')
+  expect(dateInput).toHaveValue('09/07/2026')
   expect(timeInput).toHaveValue('08:15')
 
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(service.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      created_at: '2026-07-09T08:15:00.000Z',
+    }),
+  )
+})
+
+it('shows invoice date and time as focused text editors while keeping submit payload ISO-like', async () => {
+  const service = makeOrderService()
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={service}
+      sellerName="Văn Viết Phương Lâm"
+      orderCreatedAt="2026-07-08T07:29:00.000Z"
+    />,
+  )
+
+  const meta = screen.getByRole('group', { name: 'Thông tin hóa đơn' })
+  const dateInput = within(meta).getByLabelText('Ngày hóa đơn')
+  const timeInput = within(meta).getByLabelText('Thời gian hóa đơn')
+
+  expect(dateInput).toHaveAttribute('type', 'text')
+  expect(dateInput).toHaveAttribute('inputmode', 'numeric')
+  expect(dateInput).toHaveValue('08/07/2026')
+  expect(timeInput).toHaveAttribute('type', 'text')
+  expect(timeInput).toHaveAttribute('inputmode', 'numeric')
+  expect(timeInput).toHaveValue('07:29')
+
+  await userEvent.click(dateInput)
+  expect(dateInput).toHaveFocus()
+
+  await userEvent.clear(dateInput)
+  await userEvent.type(dateInput, '09/07/2026')
+  await userEvent.clear(timeInput)
+  await userEvent.type(timeInput, '08:15')
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   expect(service.checkout).toHaveBeenCalledWith(

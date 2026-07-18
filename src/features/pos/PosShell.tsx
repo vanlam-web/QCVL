@@ -179,6 +179,16 @@ export function PosShell({
   const valueInputMouseUpSelectRefs = useRef<Set<HTMLInputElement>>(new Set())
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0] ?? makeInvoiceTab(1)
   const cartLines = activeTab.cartLines
+  const openCheckout = useCallback(() => {
+    if (activeTab.sourceRevision === undefined) {
+      setTabs((current) =>
+        current.map((tab) =>
+          tab.id === activeTabId ? { ...tab, createdAt: systemInvoiceCreatedAt() } : tab,
+        ),
+      )
+    }
+    setCheckoutOpen(true)
+  }, [activeTab.sourceRevision, activeTabId])
   const resolveCartLineProduct = useCallback((line: CheckoutCartLine) => {
     return products.find((product) => product.id === line.product.id || product.code === line.product.code) ?? line.product
   }, [products])
@@ -1390,7 +1400,7 @@ export function PosShell({
             loading={loadingProducts}
             onSelectProduct={selectProduct}
             footerAction={
-              <button className="pos-checkout-launcher button button-primary" type="button" onClick={() => setCheckoutOpen(true)}>
+              <button className="pos-checkout-launcher button button-primary" type="button" onClick={openCheckout}>
                 Thanh toán
               </button>
             }
@@ -1761,4 +1771,14 @@ function unitColumnWidthCh(line: CheckoutCartLine) {
 
 function columnWidthRem(widthCh: number) {
   return Number((widthCh * 0.64).toFixed(2))
+}
+
+function systemInvoiceCreatedAt() {
+  const now = new Date()
+  const year = String(now.getFullYear())
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hour = String(now.getHours()).padStart(2, '0')
+  const minute = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hour}:${minute}:00.000Z`
 }
