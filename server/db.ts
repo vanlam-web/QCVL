@@ -2194,6 +2194,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       })) satisfies StocktakeListData[]
     },
 
+    async listStocktakesPage(input) {
+      const items = await this.listStocktakes?.(input) ?? []
+      const { page, pageSize } = paginationFromUrl(input.url, 15)
+      const start = Math.max(0, page - 1) * pageSize
+      return {
+        items: items.slice(start, start + pageSize),
+        total: items.length,
+        creator_options: stocktakeCreatorOptions(items),
+      }
+    },
+
     async getStocktake(input) {
       const header = await pool.query(
         `
@@ -3752,6 +3763,26 @@ function dbDateText(value: unknown) {
     return value.toISOString()
   }
   return String(value)
+}
+
+function paginationFromUrl(url: URL, defaultPageSize: number) {
+  const rawPage = Number(url.searchParams.get('page') ?? '1')
+  const rawPageSize = Number(url.searchParams.get('page_size') ?? String(defaultPageSize))
+  return {
+    page: Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1,
+    pageSize: Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.floor(rawPageSize) : defaultPageSize,
+  }
+}
+
+function stocktakeCreatorOptions(items: readonly StocktakeListData[]) {
+  const creators = new Map<string, string>()
+  for (const item of items) {
+    if (!item.created_by) continue
+    creators.set(item.created_by.id, item.created_by.name)
+  }
+  return [...creators.entries()]
+    .map(([id, name]) => ({ id, name }))
+    .sort((left, right) => left.name.localeCompare(right.name, 'vi'))
 }
 
 function positiveInt(value: string | null, fallback: number) {
