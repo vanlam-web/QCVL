@@ -9,8 +9,8 @@ Read [docs/WORKER-START-HERE.md](docs/WORKER-START-HERE.md) first, then this fil
 Run this before editing, testing, building, or deploying:
 
 ```powershell
-npm run preflight
 git pull --ff-only
+npm run preflight
 ```
 
 `preflight` checks the required current docs:
@@ -22,6 +22,8 @@ git pull --ff-only
 - `docs/CURRENT-DATA-SOURCE.md`
 
 After reading them, state the scope you are taking in chat: module, files, page/API, and environment.
+
+Also read and update `Y:\TeamAI\WORKER-NOW.md` before editing files. `preflight` validates that board outside CI.
 
 ## 2. Current Project
 

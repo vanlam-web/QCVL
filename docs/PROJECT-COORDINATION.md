@@ -18,8 +18,8 @@ No other Codex workers are active.
 Before editing:
 
 ```powershell
-npm run preflight
 git pull --ff-only
+npm run preflight
 ```
 
 Then state scope in chat:
@@ -29,7 +29,7 @@ Then state scope in chat:
 - page/API
 - target environment
 
-Also update `Y:\TeamAI\WORKER-NOW.md` with the scope you took before changing files.
+Also read and update `Y:\TeamAI\WORKER-NOW.md` with the scope you took before changing files.
 
 ## Conflict Rule
 

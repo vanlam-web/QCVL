@@ -20,8 +20,8 @@ This is the first file for any Codex worker. Keep it short and current.
 ## Start Every Task
 
 ```powershell
-npm run preflight
 git pull --ff-only
+npm run preflight
 ```
 
 Then state:
@@ -29,6 +29,8 @@ Then state:
 - worker location: outside LAN or inside LAN
 - scope: module, files, page/API
 - target: `3202`, `3200`, docs only, or deploy
+
+Before editing files, read and update `Y:\TeamAI\WORKER-NOW.md` with your active scope. `preflight` also validates this board so a missing or malformed shared status file blocks local test/build/deploy scripts.
 
 ## Read Order
 

@@ -5,6 +5,20 @@ import { describe, expect, test } from 'vitest'
 
 import { collectPreflightReport, requiredPreflightDocs, resolveTeamAiBoardPath } from './preflight.mjs'
 
+const validTeamAiBoard = `# TeamAI Worker Now
+
+## Shared Repo State
+
+- Latest pushed commit to pull: \`abc1234 test\`
+
+## Worker Status
+
+| Worker | Current state | Area | Files being touched | Last pushed commit | Other worker must know |
+| --- | --- | --- | --- | --- | --- |
+| outside-LAN | idle | - | - | - | pull before editing |
+| inside-LAN | idle | - | - | - | pull before editing |
+`
+
 describe('preflight docs gate', () => {
   test('checks compact current-state docs first', () => {
     expect(requiredPreflightDocs).toEqual([
@@ -20,7 +34,7 @@ describe('preflight docs gate', () => {
   test('reports readable docs and no missing files in repo state', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'qcvl-teamai-'))
     try {
-      writeFileSync(join(tempDir, 'WORKER-NOW.md'), '# TeamAI Worker Now\n\n- Status: ready\n', 'utf8')
+      writeFileSync(join(tempDir, 'WORKER-NOW.md'), validTeamAiBoard, 'utf8')
       const report = collectPreflightReport(process.cwd(), {
         env: { QCVL_TEAMAI_DIR: tempDir },
       })
@@ -54,7 +68,7 @@ describe('preflight docs gate', () => {
   test('passes shared TeamAI work board when the board exists', () => {
     const tempDir = mkdtempSync(join(tmpdir(), 'qcvl-teamai-'))
     try {
-      writeFileSync(join(tempDir, 'WORKER-NOW.md'), '# TeamAI Worker Now\n\n- Status: test\n', 'utf8')
+      writeFileSync(join(tempDir, 'WORKER-NOW.md'), validTeamAiBoard, 'utf8')
 
       const report = collectPreflightReport(process.cwd(), {
         env: { QCVL_TEAMAI_DIR: tempDir },
@@ -84,6 +98,23 @@ describe('preflight docs gate', () => {
 
   test('uses Y drive TeamAI folder as default board location', () => {
     expect(resolveTeamAiBoardPath({})).toBe(join('Y:\\TeamAI', 'WORKER-NOW.md'))
+  })
+
+  test('rejects shared TeamAI board when required coordination sections are missing', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'qcvl-teamai-'))
+    try {
+      writeFileSync(join(tempDir, 'WORKER-NOW.md'), '# TeamAI Worker Now\n\n- Status: stale\n', 'utf8')
+
+      const report = collectPreflightReport(process.cwd(), {
+        env: { QCVL_TEAMAI_DIR: tempDir },
+      })
+
+      expect(report.teamAi.ok).toBe(false)
+      expect(report.teamAi.reason).toContain('missing required sections')
+      expect(report.missing).toContain(join(tempDir, 'WORKER-NOW.md'))
+    } finally {
+      rmSync(tempDir, { force: true, recursive: true })
+    }
   })
 })
 

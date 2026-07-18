@@ -1,66 +1,93 @@
-# TeamAI Coordination
+# TeamAI Shared Status
 
 Updated: 2026-07-18
 
-This folder documents the live coordination channel for the two QCVL Codex workers.
+`Y:\TeamAI` is a shared status notebook for the two QCVL Codex workers. It is not a task assignment board.
 
-## Shared NAS Folder
+Use it so each worker knows:
 
-Use:
+- what the other worker already changed
+- which files are currently being touched
+- which commit needs to be pulled
+- whether NAS/runtime was restarted or only copied
+- what must be checked before editing the same area
 
-```text
-Y:\TeamAI
-```
-
-Live board:
+Live status file:
 
 ```text
 Y:\TeamAI\WORKER-NOW.md
 ```
 
-## Rule
+## Before Editing Repo
 
-Before taking work:
+1. Read `Y:\TeamAI\WORKER-NOW.md`.
+2. Run `git pull --ff-only`.
+3. Run `npm run preflight`.
+4. Update `WORKER-NOW.md` with your active scope before editing files.
+5. If another worker has an active file/module, avoid that area.
+6. If `WORKER-NOW.md` says a commit was pushed, pull it before editing.
 
-1. `git pull --ff-only`
-2. `npm run preflight`
-3. Read `Y:\TeamAI\WORKER-NOW.md`
-4. Write your worker, scope, files, page/API, and next step
-5. Work only after the board shows no conflict
+`preflight` fails outside CI if `WORKER-NOW.md` is missing or malformed.
 
-After finishing:
+Required board markers:
 
-1. run focused tests
-2. commit and push when Owner asks or when the slice must be shared
-3. update `Y:\TeamAI\WORKER-NOW.md` with commit hash and next owner
+- `# TeamAI Worker Now`
+- `## Shared Repo State`
+- `Latest pushed commit to pull`
+- `## Worker Status`
+- `| outside-LAN |`
+- `| inside-LAN |`
 
-## Roles
+## While Working
 
-- outside-LAN worker: current thread unless updated on the board
-- inside-LAN worker: LAN/NAS runtime work unless updated on the board
+Update `WORKER-NOW.md` only as status:
+
+- worker name
+- module/page/API being touched
+- files being touched
+- current state: active, completed, blocked, or idle
+- latest commit/hash if pushed
+- pull/restart/smoke note for the other worker
+
+Do not use this folder to assign work to the other worker. Owner decides scope. Workers use this folder to avoid overlap and keep shared context.
+
+## After Finishing
+
+1. Run focused verification.
+2. If code was pushed, write the commit hash.
+3. If NAS was deployed/copied/restarted, write that fact.
+4. Mark status idle when no file is being held.
+5. Leave a short note if the other worker must pull before touching repo.
 
 ## Git Still Wins
 
-`Y:\TeamAI` is for live coordination only. Git remains the source for history, merge, and code/doc truth.
+`Y:\TeamAI` is a live coordination notebook only. Git remains the source of truth for code, docs, history, and merge safety.
 
-## Board Template
+## Status Template
 
 ```markdown
 # TeamAI Worker Now
 
 Updated: YYYY-MM-DD HH:mm
 
-## Active Scopes
+## Shared Repo State
 
-| Worker | Scope | Files | Page/API | Status | Next | Commit |
-| --- | --- | --- | --- | --- | --- | --- |
-| outside-LAN | idle | - | - | ready | pull before work | - |
-| inside-LAN | idle | - | - | ready | pull before work | - |
+- Latest pushed commit to pull:
+- NAS/runtime note:
+- DB note:
+
+## Worker Status
+
+| Worker | Current state | Area | Files being touched | Last pushed commit | Other worker must know |
+| --- | --- | --- | --- | --- | --- |
+| outside-LAN | idle | - | - | - | pull before editing |
+| inside-LAN | idle | - | - | - | pull before editing |
 
 ## Rules
 
-- Read this file before editing.
-- Do not edit another worker's active files.
+- This is status, not task assignment.
+- Read before editing.
+- Pull listed commits before editing repo.
+- Do not touch files another worker marks active.
 - If conflict appears, stop and ask Owner.
-- After push, write commit hash here.
 ```

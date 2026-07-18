@@ -46,7 +46,26 @@ function readTeamAiBoard(env) {
   }
 
   const content = readFileSync(boardPath, 'utf8')
-  return { ok: true, path: boardPath, required, heading: firstHeading(content) ?? '(no heading)' }
+  const missingSections = [
+    '# TeamAI Worker Now',
+    '## Shared Repo State',
+    'Latest pushed commit to pull',
+    '## Worker Status',
+    '| outside-LAN |',
+    '| inside-LAN |',
+  ].filter((marker) => !content.includes(marker))
+
+  if (missingSections.length > 0) {
+    return {
+      ok: false,
+      path: boardPath,
+      required,
+      heading: firstHeading(content) ?? '(no heading)',
+      reason: `missing required sections: ${missingSections.join(', ')}`,
+    }
+  }
+
+  return { ok: true, path: boardPath, required, heading: firstHeading(content) ?? '(no heading)', reason: null }
 }
 
 export function collectPreflightReport(baseDir = process.cwd(), options = {}) {
