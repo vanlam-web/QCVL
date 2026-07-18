@@ -1110,10 +1110,84 @@
 }
 
 .customer-selected {
-  display: flex;
+  display: grid;
+  justify-self: start;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.customer-selected-row {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 14.5rem) auto;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-2);
+}
+
+.customer-selected-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  width: 100%;
+  min-height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-border) 24%, var(--color-surface));
+  color: var(--color-primary);
+  padding: 0 0.35rem 0 0.65rem;
+  font-weight: 800;
+}
+
+.customer-selected-chip strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 800;
+}
+
+.customer-selected-chip button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-primary);
+  padding: 0;
+}
+
+.customer-selected-chip button:hover,
+.customer-selected-chip button:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  outline: 0;
+}
+
+.customer-selected-group {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem;
+  min-height: 2.25rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-border) 24%, var(--color-surface));
+  color: var(--color-text);
+  font-size: 0.9375rem;
+  font-weight: 800;
+  padding: 0 0.55rem;
+  white-space: nowrap;
+}
+
+.customer-selected-debt {
+  width: fit-content;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-danger) 14%, var(--color-surface));
+  color: var(--color-danger);
+  font-size: 0.8125rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
 }
 
 .customer-panel p {

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { Search } from 'lucide-react'
+import { ChevronDown, Search, UserRound, X } from 'lucide-react'
 import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
+import { formatMoney } from '../../lib/number-format'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer } from '../catalog/types'
 
@@ -25,6 +26,8 @@ export function CustomerPanel({
   const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
   const searchQuery = search.trim()
   const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
+  const selectedCustomerDebt = selectedCustomer?.total_debt_amount ?? 0
+  const selectedCustomerGroupName = selectedCustomer?.customer_group?.name?.trim() ?? ''
 
   useEffect(() => {
     if (!suggestionsOpen) return undefined
@@ -79,6 +82,13 @@ export function CustomerPanel({
     onSelectCustomer(customer)
   }
 
+  function clearSelectedCustomer() {
+    setSearch('')
+    setResults([])
+    setSuggestionsOpen(false)
+    onSelectCustomer(null)
+  }
+
   async function createCustomer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
@@ -104,36 +114,63 @@ export function CustomerPanel({
     <section ref={searchPanelRef} aria-label="Khách hàng" className="customer-panel">
       {error ? <p role="alert">{error}</p> : null}
 
-      <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
-        <ManagementCompactSearch
-          label="Tìm khách"
-          placeholder="Tìm khách hàng (F4)"
-          value={search}
-          leadingIcon={<Search aria-hidden="true" size={16} />}
-          trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
-          onFocus={() => {
-            const query = search.trim()
-            setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
-          }}
-          suggestions={
-            suggestionsOpen && searchQuery.length > 0 && !searchShowsSelectedCustomer
-              ? results.map((customer) => ({
-                  id: customer.id,
-                  primary: customer.name,
-                  secondary: `Mã: ${customer.code}`,
-                  ariaLabel: `Chọn ${customer.code} ${customer.name}`,
-                }))
-              : undefined
-          }
-          suggestionsLabel="Gợi ý khách hàng"
-          emptySuggestion="Không có kết quả phù hợp"
-          onChange={(nextSearch) => void suggestCustomers(nextSearch)}
-          onSuggestionSelect={(suggestion) => {
-            const customer = results.find((item) => item.id === suggestion.id)
-            if (customer) selectCustomer(customer)
-          }}
-        />
-      </form>
+      {selectedCustomer ? (
+        <div aria-label="Khách đã chọn" className="customer-selected" role="group">
+          <span className="customer-selected-row">
+            <span className="customer-selected-chip">
+              <UserRound aria-hidden="true" size={16} />
+              <strong>{selectedCustomer.name}</strong>
+              <button
+                aria-label={`Bỏ khách ${selectedCustomer.name}`}
+                type="button"
+                onClick={clearSelectedCustomer}
+              >
+                <X aria-hidden="true" size={16} />
+              </button>
+            </span>
+            {selectedCustomerGroupName ? (
+              <span aria-label={`Bảng giá ${selectedCustomerGroupName}`} className="customer-selected-group">
+                {selectedCustomerGroupName}
+                <ChevronDown aria-hidden="true" size={14} />
+              </span>
+            ) : null}
+          </span>
+          {selectedCustomerDebt > 0 ? (
+            <span className="customer-selected-debt">Nợ: {formatMoney(selectedCustomerDebt)}</span>
+          ) : null}
+        </div>
+      ) : (
+        <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
+          <ManagementCompactSearch
+            label="Tìm khách"
+            placeholder="Tìm khách hàng (F4)"
+            value={search}
+            leadingIcon={<Search aria-hidden="true" size={16} />}
+            trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
+            onFocus={() => {
+              const query = search.trim()
+              setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
+            }}
+            suggestions={
+              suggestionsOpen && searchQuery.length > 0 && !searchShowsSelectedCustomer
+                ? results.map((customer) => ({
+                    id: customer.id,
+                    primary: customer.name,
+                    secondary: `Mã: ${customer.code}`,
+                    ariaLabel: `Chọn ${customer.code} ${customer.name}`,
+                  }))
+                : undefined
+            }
+            suggestionsLabel="Gợi ý khách hàng"
+            emptySuggestion="Không có kết quả phù hợp"
+            onChange={(nextSearch) => void suggestCustomers(nextSearch)}
+            onSuggestionSelect={(suggestion) => {
+              const customer = results.find((item) => item.id === suggestion.id)
+              if (customer) selectCustomer(customer)
+            }}
+          />
+        </form>
+      )}
 
       {createOpen ? (
         <form aria-label="Tạo khách nhanh" className="customer-create-popover" onSubmit={createCustomer}>

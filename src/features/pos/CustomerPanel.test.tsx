@@ -79,8 +79,29 @@ describe('CustomerPanel', () => {
   it('hides suggestions when the selected customer name is shown', () => {
     render(<CustomerPanel service={serviceStub()} selectedCustomer={customer} onSelectCustomer={vi.fn()} />)
 
-    expect(screen.getByDisplayValue('Khach le')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Khách đã chọn' })).toBeInTheDocument()
+    expect(screen.getByText('Khach le')).toBeInTheDocument()
+    expect(screen.queryByText('Nợ: 0')).not.toBeInTheDocument()
+    expect(screen.queryByPlaceholderText('Tìm khách hàng (F4)')).not.toBeInTheDocument()
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  })
+
+  it('shows debt badge and can clear selected customer', async () => {
+    const onSelectCustomer = vi.fn()
+    const debtCustomer = {
+      ...customer,
+      customer_group_id: 'group-35',
+      customer_group: { id: 'group-35', code: '35', name: '35' },
+      total_debt_amount: 17647014,
+    }
+
+    render(<CustomerPanel service={serviceStub()} selectedCustomer={debtCustomer} onSelectCustomer={onSelectCustomer} />)
+
+    expect(screen.getByLabelText('Bảng giá 35')).toHaveTextContent('35')
+    expect(screen.getByText('Nợ: 17 647 014')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Bỏ khách Khach le' }))
+
+    expect(onSelectCustomer).toHaveBeenCalledWith(null)
   })
 
   it('creates and selects a quick customer without requiring phone', async () => {
@@ -115,6 +136,6 @@ describe('CustomerPanel', () => {
       customer_group_id: null,
     })
     expect(onSelectCustomer).toHaveBeenCalledWith(created)
-    expect(await screen.findByDisplayValue('Cong ty ABC')).toBeInTheDocument()
+    expect(await screen.findByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Cong ty ABC')
   })
 })

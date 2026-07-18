@@ -1317,7 +1317,7 @@ it('resolves prices again with the selected customer', async () => {
   await userEvent.keyboard('{Enter}')
   await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-  expect(await screen.findByDisplayValue('Khach le')).toBeInTheDocument()
+  expect(await screen.findByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Khach le')
   expect(service.resolvePrices).toHaveBeenCalledWith(['p-1'], 'customer-1')
 })
 
@@ -1857,7 +1857,7 @@ it('updates automatic cart prices on customer change but preserves manual prices
   await userEvent.keyboard('{Enter}')
   await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-  expect(await screen.findByDisplayValue('Khach le')).toBeInTheDocument()
+  expect(await screen.findByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Khach le')
   expect(screen.getByLabelText('Đơn giá Mica 3mm')).toHaveValue('100 000')
   expect(screen.getByLabelText('Đơn giá Mica 3mm')).toHaveValue('100 000')
 
@@ -1930,7 +1930,7 @@ it('adds a production queue payload to the local draft cart without checkout', a
   expect(await within(cart).findByText('Decal PP')).toBeInTheDocument()
   expect(within(cart).getByLabelText('Diện tích Decal PP')).toHaveTextContent('= 1.2')
   expect(within(cart).getAllByText('78 000').length).toBeGreaterThan(0)
-  expect(screen.getByDisplayValue('Khach le')).toBeInTheDocument()
+  expect(screen.getByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Khach le')
   expect(orderService.checkout).not.toHaveBeenCalled()
 })
 
