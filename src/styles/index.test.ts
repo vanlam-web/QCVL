@@ -621,7 +621,7 @@ it('keeps purchase receipt workspace table header on shared management colors', 
 })
 
 it('keeps purchase receipt workspace side panel aligned with shared filter width and spacing', () => {
-  expect(cssRule('.purchase-receipt-workspace-form')).toContain('grid-template-columns: minmax(0, 1fr) minmax(16rem, 19.25rem)')
+  expect(cssRule('.purchase-receipt-workspace-form')).toContain('grid-template-columns: minmax(0, 1fr) minmax(17.6rem, 21.175rem)')
   expect(cssRule('.purchase-receipt-workspace-form')).toContain('gap: var(--space-4)')
   expect(cssRule('.purchase-receipt-product-search-toolbar')).toBe('')
   expect(cssRule('.purchase-receipt-product-search-toolbar .pos-topbar-search-control')).toContain('width: min(33vw, 24rem)')

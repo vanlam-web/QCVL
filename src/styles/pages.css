@@ -1275,7 +1275,7 @@ td:has(.money-text) {
 
 .purchase-receipt-workspace-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(16rem, 19.25rem);
+  grid-template-columns: minmax(0, 1fr) minmax(17.6rem, 21.175rem);
   gap: var(--space-4);
   height: 100%;
   min-height: inherit;
