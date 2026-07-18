@@ -318,7 +318,7 @@ export function PosShell({
             return clampLineDiscount({
               ...line,
               product,
-              unitPrice: convertSaleUnitPrice(product, resolved.unit_price, undefined, selectedSaleUnitText(line)),
+              unitPrice: resolvedSaleUnitPrice(product, resolved, selectedSaleUnitText(line), line.unitPrice),
               priceSource: resolved.price_source,
             })
           }),
@@ -655,17 +655,17 @@ export function PosShell({
         if (option === undefined || option.unitName === product.unit_name) {
           const nextLine = { ...line, product, saleUnitName: undefined, stockQtyPerSaleUnit: undefined }
           if (line.isManualPrice) return nextLine
-          const baseUnitPrice = prices[product.id]?.unit_price
-          const unitPrice = baseUnitPrice !== undefined
-            ? convertSaleUnitPrice(product, baseUnitPrice, undefined, undefined)
+          const resolvedPrice = prices[product.id]
+          const unitPrice = resolvedPrice !== undefined
+            ? resolvedSaleUnitPrice(product, resolvedPrice, undefined, line.unitPrice)
             : convertSaleUnitPrice(product, line.unitPrice, selectedSaleUnitText(line), undefined)
           return clampLineDiscount({ ...nextLine, unitPrice })
         }
         const nextLine = { ...line, product, saleUnitName: option.unitName, stockQtyPerSaleUnit: option.stockQtyPerUnit }
         if (line.isManualPrice) return nextLine
-        const baseUnitPrice = prices[product.id]?.unit_price
-        const unitPrice = baseUnitPrice !== undefined
-          ? convertSaleUnitPrice(product, baseUnitPrice, undefined, option.unitName)
+        const resolvedPrice = prices[product.id]
+        const unitPrice = resolvedPrice !== undefined
+          ? resolvedSaleUnitPrice(product, resolvedPrice, option.unitName, line.unitPrice)
           : convertSaleUnitPrice(product, line.unitPrice, selectedSaleUnitText(line), option.unitName)
         return clampLineDiscount({ ...nextLine, unitPrice })
       }),
@@ -1758,6 +1758,21 @@ function moneyInputWidthCh(value: number, min = 4, max = 24) {
   const digits = text.replace(/\s/g, '').length
   const spaces = text.length - digits
   return Math.min(Math.max(digits + spaces * 0.45 + 1.3, min), max)
+}
+
+function resolvedSaleUnitPrice(
+  product: Product,
+  price: ResolvedPrice,
+  saleUnitName: string | undefined,
+  currentUnitPrice: number,
+) {
+  const option = saleUnitOptions(product).find((candidate) => candidate.unitName === saleUnitName)
+  const sourceCode = product.unit_conversions?.find((conversion) => conversion.unit_name === option?.unitName)?.source_code
+  if (sourceCode && price.unit_prices_by_source_code?.[sourceCode] !== undefined) {
+    return price.unit_prices_by_source_code[sourceCode]
+  }
+  const converted = convertSaleUnitPrice(product, price.unit_price, undefined, saleUnitName ?? product.unit_name)
+  return Number.isFinite(converted) ? converted : currentUnitPrice
 }
 
 function cartColumnStyle(lines: CheckoutCartLine[]): CSSProperties {

@@ -673,6 +673,7 @@ it('converts automatic unit price when sale unit changes', async () => {
     unit_conversions: [
       {
         unit_id: 'unit-half',
+        source_code: 'TS1-HALF',
         unit_name: 'Half Sheet',
         stock_qty_per_unit: 0.5,
         is_default_purchase_unit: false,
@@ -680,6 +681,7 @@ it('converts automatic unit price when sale unit changes', async () => {
       },
       {
         unit_id: 'unit-quarter',
+        source_code: 'TS1-QUARTER',
         unit_name: 'Quarter Sheet',
         stock_qty_per_unit: 0.25,
         is_default_purchase_unit: false,
@@ -693,6 +695,10 @@ it('converts automatic unit price when sale unit changes', async () => {
       items: [{
         product_id: 'p-unit',
         unit_price: 20000,
+        unit_prices_by_source_code: {
+          'TS1-HALF': 17388,
+          'TS1-QUARTER': 342350,
+        },
         price_source: 'default_price_list' as const,
         price_list_id: 'pl-1',
       }],
@@ -707,10 +713,10 @@ it('converts automatic unit price when sale unit changes', async () => {
   expect(priceInput).toHaveValue('20 000')
 
   await userEvent.selectOptions(unitSelect, 'Half Sheet')
-  expect(priceInput).toHaveValue('10 000')
+  expect(priceInput).toHaveValue('17 388')
 
   await userEvent.selectOptions(unitSelect, 'Quarter Sheet')
-  expect(priceInput).toHaveValue('5 000')
+  expect(priceInput).toHaveValue('342 350')
 })
 
 it('hydrates restored POS draft lines with current catalog unit conversions', async () => {
@@ -795,6 +801,7 @@ it('keeps converted unit prices when customer change refreshes automatic prices'
           unit_conversions: [
             {
               unit_id: 'unit-half',
+              source_code: 'TS1-HALF',
               unit_name: 'Half Sheet',
               stock_qty_per_unit: 0.5,
               is_default_purchase_unit: false,
@@ -813,6 +820,9 @@ it('keeps converted unit prices when customer change refreshes automatic prices'
         items: [{
           product_id: 'p-unit',
           unit_price: 20000,
+          unit_prices_by_source_code: {
+            'TS1-HALF': 12000,
+          },
           price_source: 'default_price_list' as const,
           price_list_id: 'pl-default',
         }],
@@ -821,6 +831,9 @@ it('keeps converted unit prices when customer change refreshes automatic prices'
         items: [{
           product_id: 'p-unit',
           unit_price: 10000,
+          unit_prices_by_source_code: {
+            'TS1-HALF': 7000,
+          },
           price_source: 'customer_group_price_list' as const,
           price_list_id: 'pl-customer',
         }],
@@ -832,13 +845,13 @@ it('keeps converted unit prices when customer change refreshes automatic prices'
   await userEvent.click(await screen.findByRole('button', { name: /Test Sheet/ }))
   await userEvent.selectOptions(screen.getByRole('combobox', { name: /Test Sheet/ }), 'Half Sheet')
   const priceInput = screen.getByLabelText(/Đơn giá Test Sheet/) as HTMLInputElement
-  expect(priceInput).toHaveValue('10 000')
+  expect(priceInput).toHaveValue('12 000')
 
   await userEvent.type(screen.getByLabelText('Tìm khách'), 'khach')
   await userEvent.keyboard('{Enter}')
   await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-  expect(priceInput).toHaveValue('5 000')
+  expect(priceInput).toHaveValue('7 000')
 })
 
 it('lets the cashier choose a converted sale unit for m2 products', async () => {

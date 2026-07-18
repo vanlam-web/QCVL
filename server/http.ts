@@ -480,6 +480,7 @@ export interface ServerRepository {
   }): Promise<Array<{
     product_id: string
     unit_price: number
+    unit_prices_by_source_code?: Record<string, number>
     price_source: 'default_price_list' | 'customer_group_price_list' | 'fallback_default_price_list'
     price_list_id: string
   }>>

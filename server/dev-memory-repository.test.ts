@@ -846,6 +846,65 @@ describe('createDevMemoryRepository persistence', () => {
     }])
   })
 
+  it('returns unit-conversion alias prices for POS price resolution', async () => {
+    const repository = await createDevMemoryRepository()
+    const baseRow = {
+      name: 'Fomex 8mm',
+      status: 'active' as const,
+      product_group_id: null,
+      unit_name: 'Tam',
+      sell_method: 'quantity' as const,
+      product_kind: 'goods' as const,
+      inventory_shape: 'normal' as const,
+      track_inventory: true,
+      latest_purchase_cost: 100000,
+      source_created_at: null,
+      source: {} as never,
+    }
+
+    await repository.upsertProductsByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [
+        {
+          ...baseRow,
+          code: 'F8',
+          unit_conversions: [
+            {
+              source_code: 'F8-TAC',
+              unit_name: 'Tac',
+              stock_qty_per_unit: 0.05,
+              is_default_purchase_unit: false,
+              is_default_sale_unit: false,
+            },
+          ],
+        },
+        { ...baseRow, code: 'F8-TAC', unit_name: 'Tac', unit_conversions: [] },
+      ],
+    })
+    await repository.upsertPriceListItemsByName?.({
+      organizationId: 'org-dev-memory',
+      defaultPriceListId: 'pl-default',
+      rows: [
+        { product_code: 'F8', price_list_name: 'Bảng giá chung', unit_price: 217350 },
+        { product_code: 'F8-TAC', price_list_name: 'Bảng giá chung', unit_price: 17388 },
+      ],
+    })
+
+    const [price] = await repository.resolvePrices?.({
+      organizationId: 'org-dev-memory',
+      productIds: ['product-f8'],
+      customerId: null,
+    }) ?? []
+
+    expect(price).toEqual(expect.objectContaining({
+      product_id: 'product-f8',
+      unit_price: 217350,
+      unit_prices_by_source_code: {
+        'F8-TAC': 17388,
+      },
+    }))
+  })
+
   it('matches KiotViet unit-conversion source codes to the parent product in dev memory', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
     const stateFile = join(dir, 'state.json')

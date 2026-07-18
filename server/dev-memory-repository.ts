@@ -463,10 +463,23 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         const productCode = product?.code ?? productId
         const defaultPrice = defaultSalePrices.get(productCode) ?? product?.default_sale_price ?? 0
         const customerPrice = customerPriceList?.get(productCode)
+        const unit_prices_by_source_code = Object.fromEntries(
+          (product?.unit_conversions ?? [])
+            .map((conversion) => {
+              const sourceCode = typeof conversion.source_code === 'string' && conversion.source_code.trim()
+                ? conversion.source_code
+                : null
+              if (!sourceCode) return null
+              const price = customerPriceList?.get(sourceCode) ?? defaultSalePrices.get(sourceCode)
+              return price === undefined ? null : [sourceCode, price]
+            })
+            .filter((entry): entry is [string, number] => entry !== null),
+        )
         if (customerPrice !== undefined && customerPriceListMeta) {
           return {
             product_id: productId,
             unit_price: customerPrice,
+            unit_prices_by_source_code,
             price_source: 'customer_group_price_list' as const,
             price_list_id: customerPriceListMeta.id,
           }
@@ -474,6 +487,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         return {
           product_id: productId,
           unit_price: defaultPrice,
+          unit_prices_by_source_code,
           price_source: customerPriceList ? (defaultPrice > 0 ? 'fallback_default_price_list' as const : 'default_price_list' as const) : 'default_price_list' as const,
           price_list_id: defaultPriceList.id,
         }

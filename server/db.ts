@@ -835,6 +835,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           select
             requested.product_id::text,
             coalesce(customer_item.unit_price, default_item.unit_price, 0) as unit_price,
+            coalesce(unit_price_data.unit_prices_by_source_code, '{}'::jsonb) as unit_prices_by_source_code,
             case
               when customer_item.unit_price is not null then 'customer_group_price_list'
               when (select id from customer_list) is not null and default_item.unit_price is not null then 'fallback_default_price_list'
@@ -854,6 +855,26 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             on default_item.organization_id = $1
            and default_item.price_list_id = (select id from default_list)
            and default_item.product_id = p.id
+          left join lateral (
+            select jsonb_object_agg(puc.source_code, coalesce(customer_alias_item.unit_price, default_alias_item.unit_price)) as unit_prices_by_source_code
+            from product_unit_conversions puc
+            join products alias_product
+              on alias_product.organization_id = $1
+             and alias_product.code = puc.source_code
+            left join price_list_items customer_alias_item
+              on customer_alias_item.organization_id = $1
+             and customer_alias_item.price_list_id = (select id from customer_list)
+             and customer_alias_item.product_id = alias_product.id
+            left join price_list_items default_alias_item
+              on default_alias_item.organization_id = $1
+             and default_alias_item.price_list_id = (select id from default_list)
+             and default_alias_item.product_id = alias_product.id
+            where puc.organization_id = $1
+              and puc.product_id = p.id
+              and puc.is_active = true
+              and puc.source_code is not null
+              and coalesce(customer_alias_item.unit_price, default_alias_item.unit_price) is not null
+          ) unit_price_data on true
           order by requested.ordinality
         `,
         [input.organizationId, input.productIds, input.customerId],
@@ -861,6 +882,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows.map((row) => ({
         product_id: String(row.product_id),
         unit_price: Number(row.unit_price),
+        unit_prices_by_source_code: priceListPriceMap(row.unit_prices_by_source_code),
         price_source: row.price_source as 'default_price_list' | 'customer_group_price_list' | 'fallback_default_price_list',
         price_list_id: row.price_list_id === null ? '' : String(row.price_list_id),
       }))
