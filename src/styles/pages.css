@@ -109,7 +109,8 @@
   gap: var(--space-3);
 }
 
-.customer-history-type-toggle {
+.customer-history-type-toggle,
+.customer-debt-view-toggle {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
@@ -120,7 +121,8 @@
   padding: 0.125rem;
 }
 
-.customer-history-type-toggle button {
+.customer-history-type-toggle button,
+.customer-debt-view-toggle button {
   min-height: 2rem;
   border: 0;
   border-radius: calc(var(--radius-md) - 2px);
@@ -132,19 +134,23 @@
   font-weight: 700;
 }
 
-.customer-history-type-toggle button[aria-pressed='true'] {
+.customer-history-type-toggle button[aria-pressed='true'],
+.customer-debt-view-toggle button[aria-pressed='true'] {
   background: var(--color-surface);
   color: var(--color-primary);
   box-shadow: var(--shadow-sm);
 }
 
-.customer-history-table {
+.customer-history-table,
+.customer-debt-summary-table {
   table-layout: fixed;
   width: 100%;
 }
 
 .customer-history-table th,
-.customer-history-table td {
+.customer-history-table td,
+.customer-debt-summary-table th,
+.customer-debt-summary-table td {
   width: 20%;
   overflow-wrap: anywhere;
   word-break: normal;

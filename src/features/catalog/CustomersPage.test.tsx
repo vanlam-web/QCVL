@@ -670,6 +670,20 @@ it('expands customer details directly under the selected row and closes on secon
     page: 1,
     page_size: 1000,
   })
+  expect(within(detail).getByRole('button', { name: 'Tóm tắt' })).toHaveAttribute('aria-pressed', 'true')
+  expect(within(detail).getByRole('button', { name: 'Chi tiết' })).toHaveAttribute('aria-pressed', 'false')
+  const debtSummaryTable = within(detail).getByRole('table', { name: 'Tóm tắt công nợ' })
+  expect(within(debtSummaryTable).getByText('HD010985')).toBeInTheDocument()
+  expect(within(debtSummaryTable).getByText('HD010986')).toBeInTheDocument()
+  expect(within(debtSummaryTable).queryByText('HD010987')).not.toBeInTheDocument()
+  expect(within(debtSummaryTable).queryByText('TT000001')).not.toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Còn nợ' })).toBeInTheDocument()
+  expect(within(debtSummaryTable).getAllByText('Nợ 1 phần')).toHaveLength(2)
+
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))
+  expect(within(detail).getByRole('button', { name: 'Tóm tắt' })).toHaveAttribute('aria-pressed', 'false')
+  expect(within(detail).getByRole('button', { name: 'Chi tiết' })).toHaveAttribute('aria-pressed', 'true')
   expect(await within(detail).findByText('HD010987')).toBeInTheDocument()
   expect(await within(detail).findByText('TT000001')).toBeInTheDocument()
   const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử công nợ' })
@@ -1005,8 +1019,12 @@ it('derives open receivable totals from invoice history when the debt endpoint h
   await waitFor(() => expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 }))
   expect(within(detail).getByText('1 hóa đơn mở')).toBeInTheDocument()
   expect(detail).toHaveTextContent('44 800')
+  const debtSummaryTable = within(detail).getByRole('table', { name: 'Tóm tắt công nợ' })
+  expect(within(debtSummaryTable).getByText('HD-OPEN')).toBeInTheDocument()
+  expect(within(debtSummaryTable).queryByText('HD-PAID-OLD')).not.toBeInTheDocument()
+
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))
   const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử công nợ' })
-  expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('100 000')
   expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('100 000')
   expect(within(debtHistoryTable).queryByText('HD-CANCELLED')).not.toBeInTheDocument()
 })
@@ -1079,6 +1097,7 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
   const detail = screen.getByRole('region', { name: /KH000123/ })
   await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
 
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))
   const debtHistoryTable = await within(detail).findByRole('table', { name: 'Lịch sử công nợ' })
   const adjustmentRow = within(debtHistoryTable).getByRole('row', { name: /CB000001/ })
   await userEvent.click(within(adjustmentRow).getByRole('button', { name: 'CB000001' }))
