@@ -678,7 +678,10 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(debtSummaryTable).queryByText('HD010987')).not.toBeInTheDocument()
   expect(within(debtSummaryTable).queryByText('TT000001')).not.toBeInTheDocument()
   expect(within(detail).getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
-  expect(within(detail).getByRole('columnheader', { name: 'Còn nợ' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Công nợ' })).toBeInTheDocument()
+  expect(within(debtSummaryTable).getByText('Tổng')).toBeInTheDocument()
+  expect(within(debtSummaryTable).getByText('350 000')).toBeInTheDocument()
+  expect(within(debtSummaryTable).getByText('300 000')).toBeInTheDocument()
   expect(within(debtSummaryTable).getAllByText('Nợ 1 phần')).toHaveLength(2)
 
   await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))

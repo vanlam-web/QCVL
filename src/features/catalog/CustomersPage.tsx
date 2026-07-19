@@ -1152,6 +1152,13 @@ function CustomerDebtPanel({
         seller: { id: '', name: '' },
       }))
   const summaryRows = invoiceRows.filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
+  const summaryTotals = summaryRows.reduce(
+    (totals, invoice) => ({
+      totalAmount: totals.totalAmount + invoice.total_amount,
+      debtAmount: totals.debtAmount + ('debt_amount' in invoice ? invoice.debt_amount : 0),
+    }),
+    { totalAmount: 0, debtAmount: 0 },
+  )
   const ledgerRows = buildCustomerDebtLedgerRows(
     invoiceRows,
     debtLedger.cashbookHistory,
@@ -1191,7 +1198,7 @@ function CustomerDebtPanel({
                   <th>Mã hóa đơn</th>
                   <th>Thời gian</th>
                   <th>Tổng cộng</th>
-                  <th>Còn nợ</th>
+                  <th>Công nợ</th>
                   <th>Trạng thái</th>
                 </tr>
               </thead>
@@ -1210,6 +1217,14 @@ function CustomerDebtPanel({
                   </tr>
                 ))}
               </tbody>
+              <tfoot>
+                <tr>
+                  <th colSpan={2} scope="row">Tổng</th>
+                  <td><MoneyText value={summaryTotals.totalAmount} /></td>
+                  <td><MoneyText value={summaryTotals.debtAmount} /></td>
+                  <td />
+                </tr>
+              </tfoot>
             </table>
           </ManagementTableViewport>
         ) : <ManagementDetailInlineNote>Không có hóa đơn chưa thanh toán.</ManagementDetailInlineNote>
