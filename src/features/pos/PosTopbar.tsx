@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from 'react'
-import { PackageOpen, Plus, Search } from 'lucide-react'
+import { Clock3, PackageOpen, Plus, Search } from 'lucide-react'
 import { ConnectionStatus } from '../../components/ConnectionStatus'
 import { ThemeToggle } from '../../components/ui-shell/ThemeProvider'
 import type { CurrentUserData } from '../../lib/api/types'
@@ -34,6 +34,7 @@ interface PosTopbarProps {
   onCreateInvoiceTab: () => void
   onCloseInvoiceTab: (tabId: string) => void
   onSetActiveTab: (tabId: string) => void
+  onOpenRecentInvoices: () => void
   onOpenManualMaterialOpening: () => void
 }
 
@@ -57,6 +58,7 @@ export function PosTopbar({
   onCreateInvoiceTab,
   onCloseInvoiceTab,
   onSetActiveTab,
+  onOpenRecentInvoices,
   onOpenManualMaterialOpening,
 }: PosTopbarProps) {
   const hasProductSearch = productSearch.trim().length > 0
@@ -214,8 +216,8 @@ export function PosTopbar({
         >
           <PackageOpen aria-hidden="true" size={18} />
         </button>
-        <button aria-label="Lịch sử 10 đơn gần nhất" className="pos-icon-button" type="button">
-          🕒
+        <button aria-label="Lịch sử 10 đơn gần nhất" className="pos-icon-button" type="button" onClick={onOpenRecentInvoices}>
+          <Clock3 aria-hidden="true" size={18} />
         </button>
         <ConnectionStatus connected={connected} />
         <div aria-label="Tài khoản và giao diện" className="shell-user-actions pos-user-actions">

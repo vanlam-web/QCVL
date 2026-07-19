@@ -6,6 +6,7 @@ import type { CatalogService } from '../catalog/catalog-service'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { OrderService } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
+import type { SalesDocumentService } from '../sales-documents/sales-document-service'
 import { saveInvoiceRevisionHandoffPayload } from './invoice-revision-handoff'
 import { saveQuoteReopenPayload } from './quote-draft-handoff'
 import { posDraftStorageKey } from './pos-core'
@@ -85,6 +86,7 @@ function renderPosShell(overrides: {
   catalogService?: CatalogService
   inventoryService?: InventoryService
   orderService?: OrderService
+  salesDocumentService?: SalesDocumentService
   productionQueueService?: ProductionQueueService
   currentUser?: Parameters<typeof PosShell>[0]['currentUser']
   onOpenDashboard?: () => void
@@ -95,6 +97,7 @@ function renderPosShell(overrides: {
         catalogService={overrides.catalogService ?? makeCatalogService()}
         inventoryService={overrides.inventoryService ?? makeInventoryService()}
         orderService={overrides.orderService ?? makeOrderService()}
+        salesDocumentService={overrides.salesDocumentService}
         productionQueueService={overrides.productionQueueService ?? makeProductionQueueService()}
         currentUser={
           overrides.currentUser ?? {
@@ -128,6 +131,109 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
     listFinanceAccounts: vi.fn(async () => ({ items: [] })),
     getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-1', total_debt: 0, invoices: [] })),
     listRecentCustomerProductPrices: vi.fn(async () => ({ items: [] })),
+    ...overrides,
+  }
+}
+
+function makeSalesDocumentService(overrides: Partial<SalesDocumentService> = {}): SalesDocumentService {
+  const invoiceRows = [
+    {
+      id: 'order-1',
+      code: 'HD011262',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-07-19T10:11:00.000Z',
+      customer: { id: 'customer-1', code: 'KH000001', name: 'Vo Cong Tuan', phone: null },
+      seller: { id: 'u-1', name: 'Pham Nhat Linh' },
+      subtotal_amount: 179775,
+      discount_amount: 0,
+      total_amount: 179775,
+      paid_amount: 179775,
+      debt_amount: 0,
+      payment_status: 'paid' as const,
+      note: null,
+    },
+    {
+      id: 'order-2',
+      code: 'HD011261',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-07-19T09:55:00.000Z',
+      customer: { id: 'customer-2', code: 'KH000002', name: 'Vo Cong Hai', phone: null },
+      seller: { id: 'u-1', name: 'Pham Nhat Linh' },
+      subtotal_amount: 114500,
+      discount_amount: 0,
+      total_amount: 114500,
+      paid_amount: 114500,
+      debt_amount: 0,
+      payment_status: 'paid' as const,
+      note: null,
+    },
+  ]
+  return {
+    listSalesDocuments: vi.fn(async (input = {}) => ({
+      items: input.page === 2 ? invoiceRows.slice(1) : invoiceRows.slice(0, 1),
+      page: input.page ?? 1,
+      page_size: input.page_size ?? 10,
+      total: 11,
+    })),
+    getSalesDocument: vi.fn(async () => ({
+      id: 'order-1',
+      code: 'HD011262',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-07-19T10:11:00.000Z',
+      customer: { id: 'customer-1', code: 'KH000001', name: 'Vo Cong Tuan', phone: null },
+      seller: { id: 'u-1', name: 'Pham Nhat Linh' },
+      subtotal_amount: 179775,
+      discount_amount: 0,
+      total_amount: 179775,
+      paid_amount: 179775,
+      debt_amount: 0,
+      payment_status: 'paid' as const,
+      note: null,
+      price_list: null,
+      change_returned_amount: 0,
+      items: [
+        {
+          id: 'item-1',
+          line_no: 1,
+          product: {
+            id: 'p-1',
+            code: 'MICA-3MM',
+            name: 'Mica 3mm',
+            unit_name: 'm2',
+            sell_method: 'linear_m' as const,
+          },
+          quantity: 1,
+          unit_price: 179775,
+          line_subtotal_amount: 179775,
+          discount_amount: 0,
+          line_total: 179775,
+          price_source: 'default_price_list',
+          note: null,
+        },
+      ],
+      payment_receipts: [],
+      debt_entries: [],
+      stock_movements: [],
+      history: [],
+    })),
+    cancelSalesDocument: vi.fn(async () => {
+      throw new Error('cancelSalesDocument not implemented in test helper')
+    }),
+    updateSalesDocumentNote: vi.fn(async () => {
+      throw new Error('updateSalesDocumentNote not implemented in test helper')
+    }),
+    previewKiotVietInvoiceImport: vi.fn(async () => {
+      throw new Error('previewKiotVietInvoiceImport not implemented in test helper')
+    }),
+    importKiotVietInvoices: vi.fn(async () => {
+      throw new Error('importKiotVietInvoices not implemented in test helper')
+    }),
+    deleteImportedKiotVietInvoices: vi.fn(async () => {
+      throw new Error('deleteImportedKiotVietInvoices not implemented in test helper')
+    }),
     ...overrides,
   }
 }
@@ -1198,6 +1304,50 @@ it('keeps K01 utility actions visible beside connection and profile', async () =
   const userActions = within(actions).getByLabelText('Tài khoản và giao diện')
   expect(within(userActions).getByRole('button', { name: 'Đổi sang giao diện sáng' })).toBeInTheDocument()
   expect(within(userActions).getByRole('button', { name: 'Tài khoản' })).toBeInTheDocument()
+})
+
+it('opens recent invoice history and selects an invoice for editing', async () => {
+  const salesDocumentService = makeSalesDocumentService()
+  renderPosShell({ salesDocumentService })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Lịch sử 10 đơn gần nhất' }))
+
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ type: 'invoice', page: 1, page_size: 10 })
+  const dialog = await screen.findByRole('dialog', { name: 'Lịch sử 10 đơn gần nhất' })
+  expect(within(dialog).getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
+  expect(within(dialog).getByText('HD011262')).toBeInTheDocument()
+  expect(within(dialog).getByText('19/07/2026 10:11')).toBeInTheDocument()
+  expect(within(dialog).getByText('Pham Nhat Linh')).toBeInTheDocument()
+  expect(within(dialog).getByText('Vo Cong Tuan')).toBeInTheDocument()
+  expect(within(dialog).getByText('179 775')).toBeInTheDocument()
+
+  await userEvent.click(within(dialog).getByRole('link', { name: 'HD011262' }))
+
+  expect(salesDocumentService.getSalesDocument).toHaveBeenCalledWith('order-1')
+  expect(await screen.findByRole('button', { name: /Sửa HD011262/ })).toBeInTheDocument()
+  expect(screen.queryByRole('dialog', { name: 'Lịch sử 10 đơn gần nhất' })).not.toBeInTheDocument()
+})
+
+it('moves recent invoice history to next page from footer', async () => {
+  const salesDocumentService = makeSalesDocumentService()
+  renderPosShell({ salesDocumentService })
+
+  await userEvent.click(screen.getByRole('button', { name: 'Lịch sử 10 đơn gần nhất' }))
+
+  const dialog = await screen.findByRole('dialog', { name: 'Lịch sử 10 đơn gần nhất' })
+  expect(within(dialog).getByText('HD011262')).toBeInTheDocument()
+  expect(within(dialog).queryByText('HD011261')).not.toBeInTheDocument()
+
+  const footer = within(dialog).getByRole('navigation', { name: 'Phân trang lịch sử hóa đơn' })
+  expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('1')
+
+  await userEvent.click(within(footer).getByRole('button', { name: 'Trang sau' }))
+
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ type: 'invoice', page: 2, page_size: 10 })
+  expect(await within(dialog).findByText('HD011261')).toBeInTheDocument()
+  await waitFor(() =>
+    expect(within(dialog).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('2'),
+  )
 })
 
 it('uses the QC brand button as a dashboard shortcut', async () => {

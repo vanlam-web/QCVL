@@ -13,12 +13,13 @@ import type { CurrentUserData } from '../../lib/api/types'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { FinanceService } from '../finance/finance-service'
 import type { Product, ResolvedPrice, SellMethod } from '../catalog/types'
+import { customerDateTime } from '../catalog/customer-presenter'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShortageMaterial, PosShortagePreview } from '../inventory/types'
-import type { CheckoutCartLine, OrderService, RecentPriceList } from '../orders/order-service'
+import type { CheckoutCartLine, InvoiceRevisionHandoffPayload, OrderService, RecentPriceList } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
 import type { ProductionQueueDraftPayload } from '../production-queue/types'
-import type { SalesDocumentService } from '../sales-documents/sales-document-service'
+import type { SalesDocumentDetail, SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
@@ -74,6 +75,7 @@ const sellMethodLabels: Record<SellMethod, string> = {
 }
 
 const productSearchPageSize = 20
+const recentInvoicePageSize = 10
 
 function productMatchesSearch(product: Product, query: string) {
   const normalizedText = normalizeSearch(`${product.code} ${product.name}`)
@@ -101,6 +103,46 @@ function uniqueProductsById(products: Product[]) {
     seen.add(product.id)
     return true
   })
+}
+
+function salesDocumentToRevisionPayload(document: SalesDocumentDetail): InvoiceRevisionHandoffPayload {
+  return {
+    mode: 'invoice-revision',
+    original_order: { id: document.id, code: document.code },
+    customer: {
+      customer_id: document.customer.id,
+      snapshot: {
+        code: document.customer.code,
+        name: document.customer.name,
+        phone: document.customer.phone,
+      },
+    },
+    items: document.items.map((item) => ({
+      order_item_id: item.id,
+      product_id: item.product.id,
+      product_snapshot: {
+        code: item.product.code,
+        name: item.product.name,
+        unit_name: item.product.unit_name,
+        sell_method: item.product.sell_method,
+      },
+      quantity: item.quantity,
+      width_m: item.width_m,
+      height_m: item.height_m,
+      linear_m: item.linear_m,
+      unit_price: item.unit_price,
+      discount_amount: item.discount_amount,
+      price_source: item.price_source,
+      note: item.note,
+    })),
+    summary: {
+      subtotal_amount: document.subtotal_amount,
+      discount_amount: document.discount_amount,
+      total_amount: document.total_amount,
+    },
+    note: document.note,
+    created_at: document.created_at,
+  }
 }
 
 export function PosShell({
@@ -132,6 +174,9 @@ export function PosShell({
     salesDocumentService ??
     ({
       listSalesDocuments: async () => ({ items: [], page: 1, page_size: 10, total: 0 }),
+      getSalesDocument: async () => {
+        throw new Error('Sales document service unavailable')
+      },
     } as unknown as SalesDocumentService)
   const [products, setProducts] = useState<Product[]>([])
   const [prices, setPrices] = useState<Record<string, ResolvedPrice>>({})
@@ -178,6 +223,13 @@ export function PosShell({
   const [materialOpeningOptions, setMaterialOpeningOptions] = useState<Record<string, MaterialOpeningOptions>>({})
   const [materialOpeningSaving, setMaterialOpeningSaving] = useState(false)
   const [materialOpeningError, setMaterialOpeningError] = useState<string | null>(null)
+  const [recentInvoicesOpen, setRecentInvoicesOpen] = useState(false)
+  const [recentInvoicesLoading, setRecentInvoicesLoading] = useState(false)
+  const [recentInvoicesError, setRecentInvoicesError] = useState<string | null>(null)
+  const [recentInvoices, setRecentInvoices] = useState<SalesDocumentListItem[]>([])
+  const [recentInvoicesPage, setRecentInvoicesPage] = useState(1)
+  const [recentInvoicesTotal, setRecentInvoicesTotal] = useState(0)
+  const [recentInvoiceSelectingId, setRecentInvoiceSelectingId] = useState<string | null>(null)
   const [manualOpeningOpen, setManualOpeningOpen] = useState(false)
   const [manualOpeningProductId, setManualOpeningProductId] = useState('')
   const [manualOpeningUnitId, setManualOpeningUnitId] = useState('')
@@ -228,6 +280,55 @@ export function PosShell({
       current.map((tab) => (tab.id === activeTabId ? updater(tab) : tab)),
     )
   }, [activeTabId])
+  const loadRecentInvoices = useCallback((page: number) => {
+    const nextPage = Math.max(1, page)
+    setRecentInvoicesError(null)
+    setRecentInvoicesLoading(true)
+    customerSalesDocumentService
+      .listSalesDocuments({ type: 'invoice', page: nextPage, page_size: recentInvoicePageSize })
+      .then((result) => {
+        setRecentInvoices(result.items)
+        setRecentInvoicesPage(result.page)
+        setRecentInvoicesTotal(result.total)
+      })
+      .catch((cause) => {
+        setRecentInvoicesError(formatApiError(cause, 'Khong tai duoc lich su hoa don.'))
+      })
+      .finally(() => {
+        setRecentInvoicesLoading(false)
+      })
+  }, [customerSalesDocumentService])
+  const openRecentInvoices = useCallback(() => {
+    setRecentInvoicesOpen(true)
+    loadRecentInvoices(1)
+  }, [loadRecentInvoices])
+  const openRecentInvoice = useCallback(async (document: SalesDocumentListItem) => {
+    setRecentInvoiceSelectingId(document.id)
+    setRecentInvoicesError(null)
+    try {
+      const detail = await customerSalesDocumentService.getSalesDocument(document.id)
+      const revisionTab = initialInvoiceRevisionPayloadToTabs(salesDocumentToRevisionPayload(detail))[0]
+      setTabs((current) => {
+        const existingIndex = current.findIndex((tab) => tab.id === revisionTab.id)
+        if (existingIndex >= 0) {
+          const next = [...current]
+          next[existingIndex] = revisionTab
+          return next
+        }
+        if (current.length >= maxInvoiceTabs) {
+          return [...current.slice(1), revisionTab]
+        }
+        return [...current, revisionTab]
+      })
+      setActiveTabId(revisionTab.id)
+      setCheckoutOpen(false)
+      setRecentInvoicesOpen(false)
+    } catch (cause) {
+      setRecentInvoicesError(formatApiError(cause, 'Khong mo duoc hoa don nay.'))
+    } finally {
+      setRecentInvoiceSelectingId(null)
+    }
+  }, [customerSalesDocumentService])
   const productSearchResults = useMemo(() => {
     const search = productSearch.trim()
     const query = normalizeSearch(productSearch)
@@ -1016,6 +1117,7 @@ export function PosShell({
         onOpenDashboard={onOpenDashboard}
         onOpenManualMaterialOpening={() => setManualOpeningOpen(true)}
         onOpenProductCreate={() => setProductCreateOpen(true)}
+        onOpenRecentInvoices={openRecentInvoices}
         onProductSearchChange={setProductSearch}
         onProductSearchFocus={() => {
           setHoveredCartLineId(null)
@@ -1462,6 +1564,118 @@ export function PosShell({
         service={productionQueueService}
         onAddToDraft={handleProductionQueueDraft}
       />
+      {recentInvoicesOpen ? (
+        <div
+          className="management-modal-backdrop pos-recent-invoices-backdrop"
+          onMouseDown={() => setRecentInvoicesOpen(false)}
+        >
+          <section
+            aria-label="Lịch sử 10 đơn gần nhất"
+            aria-modal="true"
+            className="management-modal-dialog pos-recent-invoices-dialog"
+            role="dialog"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header className="pos-recent-invoices-header">
+              <button
+                aria-label="Đóng lịch sử 10 đơn gần nhất"
+                className="management-icon-button"
+                type="button"
+                onClick={() => setRecentInvoicesOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            {recentInvoicesError ? <p role="alert">{recentInvoicesError}</p> : null}
+            {recentInvoicesLoading ? (
+              <p>Đang tải lịch sử hóa đơn...</p>
+            ) : recentInvoices.length === 0 ? (
+              <p>Chưa có hóa đơn gần đây.</p>
+            ) : (
+              <>
+                <div className="pos-recent-invoices-table-wrap">
+                  <table className="pos-recent-invoices-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">Mã hóa đơn</th>
+                        <th scope="col">Thời gian</th>
+                        <th scope="col">Nhân viên</th>
+                        <th scope="col">Khách hàng</th>
+                        <th scope="col">Tổng cộng</th>
+                        <th scope="col" aria-label="Thao tác" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentInvoices.map((document) => (
+                        <tr key={document.id}>
+                          <td>
+                            <a
+                              className="pos-recent-invoices-code-link"
+                              href={`/sales-documents?open=${document.id}`}
+                              onClick={(event) => {
+                                event.preventDefault()
+                                void openRecentInvoice(document)
+                              }}
+                            >
+                              {document.code}
+                            </a>
+                          </td>
+                          <td>{customerDateTime(document.created_at)}</td>
+                          <td>{document.seller.name}</td>
+                          <td>{document.customer.name}</td>
+                          <td>{formatMoney(document.total_amount)}</td>
+                          <td>
+                            <button
+                              aria-label={`Chọn ${document.code}`}
+                              className="button button-secondary pos-recent-invoices-select"
+                              disabled={recentInvoiceSelectingId === document.id}
+                              type="button"
+                              onClick={() => void openRecentInvoice(document)}
+                            >
+                              Chọn
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <footer aria-label="Phân trang lịch sử hóa đơn" className="management-table-footer pos-recent-invoices-footer" role="navigation">
+                  <span className="management-table-footer-size" aria-hidden="true" />
+                  <div className="management-table-footer-actions pos-recent-invoices-footer-actions">
+                    <button
+                      aria-label="Trang trước"
+                      disabled={recentInvoicesPage <= 1}
+                      type="button"
+                      onClick={() => loadRecentInvoices(recentInvoicesPage - 1)}
+                    >
+                      ‹
+                    </button>
+                    <input
+                      aria-label="Trang hiện tại"
+                      readOnly
+                      value={String(recentInvoicesPage)}
+                    />
+                    <button
+                      aria-label="Trang sau"
+                      disabled={recentInvoicesPage * recentInvoicePageSize >= recentInvoicesTotal}
+                      type="button"
+                      onClick={() => loadRecentInvoices(recentInvoicesPage + 1)}
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <span className="management-table-footer-summary">
+                    {recentInvoicesTotal > 0
+                      ? `${Math.min((recentInvoicesPage - 1) * recentInvoicePageSize + 1, recentInvoicesTotal)} - ${Math.min(recentInvoicesPage * recentInvoicePageSize, recentInvoicesTotal)} trong ${recentInvoicesTotal}`
+                      : ''}
+                  </span>
+                </footer>
+              </>
+            )}
+          </section>
+        </div>
+      ) : null}
       {productCreateOpen ? (
         <aside aria-label="Tạo hàng hóa" className="pos-product-create-popover">
           <form onSubmit={createProductFromPos}>
