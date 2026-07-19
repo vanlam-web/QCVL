@@ -169,14 +169,14 @@ describe('CustomerPanel', () => {
       address: '123 Đường Lớn',
       note: 'Khách QCVL',
       tax_code: '0123456789',
-      total_debt_amount: 4866121,
+      total_debt_amount: 50130458,
       total_sales_amount: 147692016,
       linked_supplier: { id: 'supplier-1', code: 'NCC001', name: 'Nhà cung cấp 1' },
     }
     const orderService = orderServiceStub({
       getCustomerDebt: vi.fn(async () => ({
         customer_id: detailedCustomer.id,
-        total_debt: 4866121,
+        total_debt: 50130458,
         invoices: [
           {
             order_id: 'order-1',
@@ -197,7 +197,7 @@ describe('CustomerPanel', () => {
             amount_delta: 21159562,
             paid_amount: 0,
             remaining_amount: 21159562,
-            balance_after: 21025683,
+            balance_after: 50130458,
             source_file: 'BaoCaoCongNoTheoKhachHang_KV.xlsx',
           },
         ],
@@ -236,7 +236,7 @@ describe('CustomerPanel', () => {
             code: 'TT001838',
             status: 'posted' as const,
             direction: 'in' as const,
-            amount_delta: 500000,
+            amount_delta: 29104775,
             finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
             is_business_accounted: true,
             source_type: 'kiotviet_cashbook' as const,
@@ -256,15 +256,15 @@ describe('CustomerPanel', () => {
         page: 1,
         page_size: 1000,
         total: 1,
-        summary: { opening_balance: 0, total_in: 500000, total_out: 0, ending_balance: 500000 },
+        summary: { opening_balance: 0, total_in: 29104775, total_out: 0, ending_balance: 29104775 },
       })),
     })
     const updatedCustomer = {
       ...detailedCustomer,
       name: 'Út Tèo mới',
       address: 'Địa chỉ mới',
-      customer_group_id: 'group-vip',
-      customer_group: { id: 'group-vip', code: 'VIP', name: 'VIP' },
+      customer_group_id: 'group-35',
+      customer_group: { id: 'group-35', code: '35', name: '35' },
       customer_type: 'company' as const,
     }
     const service = serviceStub({ updateCustomer: vi.fn(async () => updatedCustomer) })
@@ -280,6 +280,8 @@ describe('CustomerPanel', () => {
         onSelectCustomer={onSelectCustomer}
       />,
     )
+
+    await waitFor(() => expect(screen.getByText('Còn nợ:', { exact: false })).toHaveTextContent('21 025 683'))
 
     await userEvent.click(screen.getByRole('button', { name: 'Mở chi tiết khách Khach le' }))
 
@@ -305,8 +307,9 @@ describe('CustomerPanel', () => {
     expect(within(dialog).getByLabelText('Địa chỉ')).toHaveValue('123 Đường Lớn')
     await userEvent.clear(within(dialog).getByLabelText('Tên khách hàng'))
     await userEvent.type(within(dialog).getByLabelText('Tên khách hàng'), 'Út Tèo mới')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Nhóm'), 'group-vip')
-    await userEvent.selectOptions(within(dialog).getByLabelText('Loại khách'), 'company')
+    await userEvent.click(within(dialog).getByRole('button', { name: '35' }))
+    await userEvent.click(within(dialog).getAllByRole('menuitemradio')[0])
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Tổ chức' }))
     await userEvent.clear(within(dialog).getByLabelText('Địa chỉ'))
     await userEvent.type(within(dialog).getByLabelText('Địa chỉ'), 'Địa chỉ mới')
     await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
@@ -316,7 +319,7 @@ describe('CustomerPanel', () => {
       name: 'Út Tèo mới',
       phone: '0909000000',
       tax_code: '0123456789',
-      customer_group_id: 'group-vip',
+      customer_group_id: 'group-35',
       customer_type: 'company',
       company_name: 'Công ty Hoàng Lợi',
       address: 'Địa chỉ mới',
@@ -324,12 +327,16 @@ describe('CustomerPanel', () => {
     })
     expect(onSelectCustomer).toHaveBeenCalledWith(updatedCustomer)
 
-    await userEvent.click(within(dialog).getByRole('tab', { name: 'Công nợ' }))
-    expect(await within(dialog).findByText('Tổng nợ')).toBeInTheDocument()
-    expect(within(dialog).getAllByText('21 025 683').length).toBeGreaterThan(0)
-    expect(await within(dialog).findByRole('table', { name: 'Lịch sử công nợ POS' })).toBeInTheDocument()
-    expect(within(dialog).getByText('CB000001')).toBeInTheDocument()
-    expect(within(dialog).getByText('TT001838')).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chi tiết khách KH000001' })).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Mở chi tiết khách Khach le' }))
+    const reopenedDialog = await screen.findByRole('dialog', { name: 'Chi tiết khách KH000001' })
+    await userEvent.click(within(reopenedDialog).getByRole('tab', { name: 'Công nợ' }))
+    await within(reopenedDialog).findByRole('table', { name: 'Lịch sử công nợ POS' })
+    expect(within(reopenedDialog).queryByText('Tổng nợ')).not.toBeInTheDocument()
+    expect(within(reopenedDialog).getAllByText('21 025 683').length).toBeGreaterThan(0)
+    expect(within(reopenedDialog).getByText('CB000001')).toBeInTheDocument()
+    expect(within(reopenedDialog).getByText('TT001838')).toBeInTheDocument()
     expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
       search: detailedCustomer.name,
       search_scope: 'counterparty',
@@ -338,12 +345,12 @@ describe('CustomerPanel', () => {
       page_size: 1000,
     })
 
-    await userEvent.click(within(dialog).getByRole('tab', { name: 'Lịch sử' }))
-    expect(await within(dialog).findByRole('table', { name: 'Lịch sử hóa đơn POS' })).toBeInTheDocument()
-    expect(within(dialog).getByText('HD011146')).toBeInTheDocument()
-    expect(within(dialog).getAllByText('Nợ').length).toBeGreaterThan(0)
+    await userEvent.click(within(reopenedDialog).getByRole('tab', { name: 'Lịch sử' }))
+    expect(await within(reopenedDialog).findByRole('table', { name: 'Lịch sử hóa đơn POS' })).toBeInTheDocument()
+    expect(within(reopenedDialog).getByText('HD011146')).toBeInTheDocument()
+    expect(within(reopenedDialog).getAllByText('Nợ').length).toBeGreaterThan(0)
 
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Đóng chi tiết khách' }))
+    await userEvent.click(within(reopenedDialog).getByRole('button', { name: 'Đóng chi tiết khách' }))
 
     expect(screen.queryByRole('dialog', { name: 'Chi tiết khách KH000001' })).not.toBeInTheDocument()
   })

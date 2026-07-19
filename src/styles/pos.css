@@ -1227,6 +1227,7 @@
   left: 50%;
   width: min(34rem, calc(100vw - var(--space-4)));
   max-height: calc(100vh - 5.25rem);
+  overflow: visible;
   gap: var(--space-3);
   padding: var(--space-3);
   transform: translateX(-50%);
@@ -1274,7 +1275,6 @@
 }
 
 .customer-pos-detail-summary strong,
-.customer-pos-detail-money-row strong,
 .customer-pos-detail-table td strong {
   color: var(--color-text);
   font-weight: 800;
@@ -1338,20 +1338,105 @@
 
 .customer-pos-detail-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-3) var(--space-4);
+  gap: var(--space-2) var(--space-4);
 }
 
 .customer-pos-detail-form label {
   display: grid;
-  gap: var(--space-1);
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
   min-width: 0;
   color: var(--color-text);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 400;
 }
 
-.customer-pos-detail-form input,
-.customer-pos-detail-form select,
+.customer-pos-detail-dropdown {
+  display: grid;
+  grid-template-columns: 6.5rem minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.customer-pos-detail-dropdown-trigger-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.customer-pos-detail-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 2.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0 var(--space-2);
+  font: inherit;
+}
+
+.customer-pos-detail-dropdown-trigger:hover,
+.customer-pos-detail-dropdown-trigger:focus-visible,
+.customer-pos-detail-dropdown-trigger-wrap:focus-within .customer-pos-detail-dropdown-trigger {
+  border-color: var(--color-selected-border);
+  outline: 0;
+  box-shadow: inset 0 0 0 1px var(--color-selected-border);
+}
+
+.customer-pos-detail-dropdown-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-pos-detail-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: calc(var(--z-shell) + 80);
+  display: grid;
+  min-width: 100%;
+  max-width: min(18rem, calc(100vw - 2rem));
+  max-height: min(16rem, calc(100vh - 6rem));
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+}
+
+.customer-pos-detail-dropdown-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 2.5rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  padding: 0 var(--space-2);
+  font: inherit;
+  text-align: left;
+}
+
+.customer-pos-detail-dropdown-menu button:hover,
+.customer-pos-detail-dropdown-menu button:focus-visible,
+.customer-pos-detail-dropdown-menu button.is-selected {
+  background: color-mix(in srgb, var(--color-primary) 14%, var(--color-surface));
+  color: var(--color-primary);
+}
+
+.customer-panel .customer-pos-detail-form input,
 .customer-pos-detail-form textarea {
   width: 100%;
   min-width: 0;
@@ -1360,22 +1445,19 @@
   border-radius: 0;
   background: transparent;
   color: var(--color-text);
-  padding: 0 0 var(--space-1);
+  min-height: 1.7rem;
+  padding: 0 0 0.2rem;
   font: inherit;
+  overflow-wrap: anywhere;
 }
 
 .customer-pos-detail-form textarea {
+  min-height: 1.9rem;
   resize: vertical;
 }
 
-.customer-pos-detail-form-wide,
-.customer-pos-detail-form-actions {
+.customer-pos-detail-form-wide {
   grid-column: 1 / -1;
-}
-
-.customer-pos-detail-form-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .customer-pos-detail-panel {
@@ -1385,21 +1467,6 @@
 
 .customer-pos-detail-panel p {
   margin: 0;
-  color: var(--color-text-muted);
-}
-
-.customer-pos-detail-money-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  padding: var(--space-2);
-}
-
-.customer-pos-detail-money-row span {
   color: var(--color-text-muted);
 }
 
@@ -2872,6 +2939,12 @@
 
   .customer-pos-detail-list div {
     grid-template-columns: 1fr;
+  }
+
+  .customer-pos-detail-form label,
+  .customer-pos-detail-dropdown {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
   }
 }
 

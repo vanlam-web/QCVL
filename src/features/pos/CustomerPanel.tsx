@@ -36,7 +36,31 @@ type CustomerDetailForm = {
   address: string
   note: string
 }
+type CustomerDetailDropdownKey = 'group' | 'type' | null
 const customerDebtLedgerFetchPageSize = 1000
+const hiddenPosCustomerGroupNames = new Set(['khach le', 'khach si'])
+
+function customerPosCurrentDebtFromLedger(debtLedger: Exclude<CustomerPosDebtLedgerState, 'loading' | 'error'>, fallbackDebt: number) {
+  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
+  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
+  const invoiceRows = debtLedger.invoiceHistory.length > 0
+    ? debtLedger.invoiceHistory
+    : debtLedger.debt.invoices.map((invoice) => ({
+        id: invoice.order_id,
+        code: invoice.order_code,
+        created_at: invoice.created_at,
+        total_amount: invoice.total_amount,
+        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
+      }))
+  const ledgerRows = buildCustomerDebtLedgerRows(
+    invoiceRows,
+    debtLedger.cashbookHistory,
+    debtLedger.debt.adjustments ?? [],
+    debtLedger.debt.linked_supplier_receipts ?? [],
+  )
+  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
+  return ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+}
 
 export function CustomerPanel({
   service,
@@ -64,6 +88,7 @@ export function CustomerPanel({
   const [detailForm, setDetailForm] = useState<CustomerDetailForm>(() => customerDetailFormFromCustomer(selectedCustomer))
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [detailSaving, setDetailSaving] = useState(false)
+  const [detailDropdownOpen, setDetailDropdownOpen] = useState<CustomerDetailDropdownKey>(null)
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
@@ -73,7 +98,19 @@ export function CustomerPanel({
   const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
   const searchQuery = search.trim()
   const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
-  const selectedCustomerDebt = selectedCustomer?.total_debt_amount ?? 0
+  const hasSelectedCustomerDebtLedger =
+    selectedCustomer !== null
+    && detailDebt !== undefined
+    && detailDebt !== 'loading'
+    && detailDebt !== 'error'
+    && detailDebt.customer_id === selectedCustomer.id
+    && detailDebtLedger !== undefined
+    && detailDebtLedger !== 'loading'
+    && detailDebtLedger !== 'error'
+  const selectedCustomerDebt =
+    hasSelectedCustomerDebtLedger
+      ? customerPosCurrentDebtFromLedger(detailDebtLedger, selectedCustomer?.total_debt_amount ?? 0)
+      : orderService === undefined ? selectedCustomer?.total_debt_amount ?? 0 : null
   const selectedCustomerGroupName = selectedCustomer?.customer_group?.name?.trim() ?? ''
 
   useEffect(() => {
@@ -90,7 +127,7 @@ export function CustomerPanel({
   }, [suggestionsOpen])
 
   useEffect(() => {
-    if (!detailOpen || selectedCustomer === null) return
+    if (selectedCustomer === null) return
     const requestId = detailRequestId.current + 1
     detailRequestId.current = requestId
     setDetailDebt(orderService ? 'loading' : undefined)
@@ -147,7 +184,7 @@ export function CustomerPanel({
           if (detailRequestId.current === requestId) setDetailHistory('error')
         })
     }
-  }, [detailOpen, financeService, orderService, salesDocumentService, selectedCustomer])
+  }, [financeService, orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
     if (!detailOpen || selectedCustomer === null) return
@@ -235,6 +272,8 @@ export function CustomerPanel({
       onSelectCustomer(updated)
       setSearch(updated.name)
       setDetailForm(customerDetailFormFromCustomer(updated))
+      setDetailDropdownOpen(null)
+      setDetailOpen(false)
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được khách hàng.'))
     } finally {
@@ -296,7 +335,7 @@ export function CustomerPanel({
               </span>
             ) : null}
           </span>
-          {selectedCustomerDebt > 0 ? (
+          {selectedCustomerDebt !== null && selectedCustomerDebt > 0 ? (
           <span className="customer-selected-debt">Còn nợ: <strong>{formatMoney(selectedCustomerDebt)}</strong></span>
           ) : null}
           {detailOpen ? (
@@ -309,10 +348,20 @@ export function CustomerPanel({
               form={detailForm}
               history={detailHistory}
               saving={detailSaving}
-              onClose={() => setDetailOpen(false)}
+              summaryDebt={selectedCustomerDebt}
+              detailDropdownOpen={detailDropdownOpen}
+              onClose={() => {
+                setDetailDropdownOpen(null)
+                setDetailOpen(false)
+              }}
+              onCloseDropdown={() => setDetailDropdownOpen(null)}
               onFormChange={setDetailForm}
               onSaveInfo={saveCustomerDetail}
-              onSelectTab={setDetailTab}
+              onSelectTab={(tab) => {
+                setDetailDropdownOpen(null)
+                setDetailTab(tab)
+              }}
+              onToggleDropdown={(key) => setDetailDropdownOpen((current) => (current === key ? null : key))}
             />
           ) : null}
         </div>
@@ -379,10 +428,14 @@ function SelectedCustomerDetailDialog({
   form,
   history,
   saving,
+  summaryDebt,
   onClose,
   onFormChange,
   onSaveInfo,
   onSelectTab,
+  detailDropdownOpen,
+  onToggleDropdown,
+  onCloseDropdown,
 }: {
   activeTab: CustomerDetailTab
   customer: Customer
@@ -392,12 +445,15 @@ function SelectedCustomerDetailDialog({
   form: CustomerDetailForm
   history: CustomerHistoryState | undefined
   saving: boolean
+  summaryDebt: number | null
   onClose: () => void
   onFormChange: (form: CustomerDetailForm) => void
   onSaveInfo: (event: React.FormEvent<HTMLFormElement>) => void
   onSelectTab: (tab: CustomerDetailTab) => void
+  detailDropdownOpen: CustomerDetailDropdownKey
+  onToggleDropdown: (key: Exclude<CustomerDetailDropdownKey, null>) => void
+  onCloseDropdown: () => void
 }) {
-  const summaryDebt = customer.total_debt_amount ?? 0
   const totalSales = customer.total_sales_amount ?? 0
   return (
     <div className="management-modal-backdrop customer-pos-detail-backdrop" onMouseDown={onClose}>
@@ -406,7 +462,12 @@ function SelectedCustomerDetailDialog({
         aria-modal="true"
         className="management-modal-dialog customer-pos-detail-dialog"
         role="dialog"
-        onMouseDown={(event) => event.stopPropagation()}
+        onMouseDown={(event) => {
+          event.stopPropagation()
+          const target = event.target
+          if (target instanceof Element && target.closest('.customer-pos-detail-dropdown')) return
+          onCloseDropdown()
+        }}
       >
         <header className="management-modal-header customer-pos-detail-header">
           <div>
@@ -418,7 +479,7 @@ function SelectedCustomerDetailDialog({
         </header>
 
         <div className="customer-pos-detail-summary" aria-label="Tổng quan khách hàng">
-          <span>Còn nợ: <strong>{formatMoney(summaryDebt)}</strong></span>
+          {summaryDebt !== null ? <span>Còn nợ: <strong>{formatMoney(summaryDebt)}</strong></span> : null}
           <span>Tổng bán: <strong>{formatMoney(totalSales)}</strong></span>
           {customer.linked_supplier ? (
             <span>NCC liên kết: <span>{customer.linked_supplier.code} {customer.linked_supplier.name}</span></span>
@@ -445,7 +506,7 @@ function SelectedCustomerDetailDialog({
         </div>
 
         {activeTab === 'info' ? (
-          <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" onSubmit={onSaveInfo}>
+          <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" id="customer-pos-detail-form" onSubmit={onSaveInfo}>
             <label>
               <span>Mã khách hàng</span>
               <input required value={form.code} onChange={(event) => onFormChange({ ...form, code: event.target.value })} />
@@ -462,43 +523,54 @@ function SelectedCustomerDetailDialog({
               <span>MST</span>
               <input value={form.tax_code} onChange={(event) => onFormChange({ ...form, tax_code: event.target.value })} />
             </label>
-            <label>
-              <span>Nhóm</span>
-              <select value={form.customer_group_id} onChange={(event) => onFormChange({ ...form, customer_group_id: event.target.value })}>
-                <option value="">Không có nhóm</option>
-                {customerGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Loại khách</span>
-              <select value={form.customer_type} onChange={(event) => onFormChange({ ...form, customer_type: event.target.value })}>
-                <option value="individual">Cá nhân</option>
-                <option value="company">Tổ chức</option>
-                <option value="other">Khác</option>
-              </select>
-            </label>
+            <CustomerPosDetailDropdownField
+              label="Nhóm"
+              open={detailDropdownOpen === 'group'}
+              options={customerGroups
+                .filter((group) => !isHiddenPosCustomerGroup(group))
+                .map((group) => ({ label: group.name, value: group.id }))}
+              value={form.customer_group_id}
+              onClose={onCloseDropdown}
+              onOpen={() => onToggleDropdown('group')}
+              onChange={(value) => onFormChange({ ...form, customer_group_id: value })}
+            />
+            <CustomerPosDetailDropdownField
+              label="Loại khách"
+              open={detailDropdownOpen === 'type'}
+              options={[
+                { label: 'Cá nhân', value: 'individual' },
+                { label: 'Tổ chức', value: 'company' },
+                { label: 'Khác', value: 'other' },
+              ]}
+              value={form.customer_type}
+              onClose={onCloseDropdown}
+              onOpen={() => onToggleDropdown('type')}
+              onChange={(value) => onFormChange({ ...form, customer_type: value })}
+            />
             <label>
               <span>Công ty</span>
               <input value={form.company_name} onChange={(event) => onFormChange({ ...form, company_name: event.target.value })} />
             </label>
             <label className="customer-pos-detail-form-wide">
               <span>Địa chỉ</span>
-              <textarea rows={2} value={form.address} onChange={(event) => onFormChange({ ...form, address: event.target.value })} />
+              <textarea rows={1} value={form.address} onChange={(event) => onFormChange({ ...form, address: event.target.value })} />
             </label>
             <label className="customer-pos-detail-form-wide">
               <span>Ghi chú</span>
-              <textarea rows={2} value={form.note} onChange={(event) => onFormChange({ ...form, note: event.target.value })} />
+              <textarea rows={1} value={form.note} onChange={(event) => onFormChange({ ...form, note: event.target.value })} />
             </label>
-            <div className="customer-pos-detail-form-actions">
-              <button className="button button-primary" disabled={saving} type="submit">{saving ? 'Đang lưu...' : 'Lưu'}</button>
-            </div>
           </form>
         ) : null}
 
-        {activeTab === 'debt' ? <CustomerPosDebtPanel debt={debt} debtLedger={debtLedger} fallbackDebt={summaryDebt} /> : null}
+        {activeTab === 'debt' ? <CustomerPosDebtPanel debt={debt} debtLedger={debtLedger} /> : null}
         {activeTab === 'history' ? <CustomerPosHistoryPanel history={history} /> : null}
 
-        <footer className="management-modal-footer">
+        <footer className={`management-modal-footer${activeTab === 'info' ? ' management-modal-footer-split' : ''}`}>
+          {activeTab === 'info' ? (
+            <button className="button button-primary" disabled={saving} form="customer-pos-detail-form" type="submit">
+              {saving ? 'Đang lưu...' : 'Lưu'}
+            </button>
+          ) : null}
           <button className="button button-secondary" type="button" onClick={onClose}>Đóng</button>
         </footer>
       </section>
@@ -506,19 +578,72 @@ function SelectedCustomerDetailDialog({
   )
 }
 
+function CustomerPosDetailDropdownField({
+  label,
+  options,
+  open,
+  value,
+  onChange,
+  onClose,
+  onOpen,
+}: {
+  label: string
+  options: Array<{ label: string; value: string }>
+  open: boolean
+  value: string
+  onChange: (value: string) => void
+  onClose: () => void
+  onOpen: () => void
+}) {
+  const selected = options.find((option) => option.value === value)
+  const selectedLabel = selected?.label.trim() ?? ''
+  return (
+    <div className="customer-pos-detail-dropdown">
+      <span>{label}</span>
+      <div className="customer-pos-detail-dropdown-trigger-wrap">
+        <button
+          aria-expanded={open}
+          aria-haspopup="menu"
+          className="customer-pos-detail-dropdown-trigger"
+          type="button"
+          onClick={() => (open ? onClose() : onOpen())}
+        >
+          <span>{selectedLabel}</span>
+          <ChevronDown aria-hidden="true" size={14} />
+        </button>
+        {open ? (
+          <div className="customer-pos-detail-dropdown-menu" role="menu">
+            {options.map((option) => (
+              <button
+                aria-pressed={option.value === value}
+                className={option.value === value ? 'is-selected' : undefined}
+                key={option.value}
+                role="menuitemradio"
+                type="button"
+                onClick={() => {
+                  onChange(option.value)
+                  onClose()
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 function CustomerPosDebtPanel({
   debt,
   debtLedger,
-  fallbackDebt,
 }: {
   debt: CustomerDebtState | undefined
   debtLedger: CustomerPosDebtLedgerState | undefined
-  fallbackDebt: number
 }) {
   if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
   if (debt === 'error' || debtLedger === 'error') return <p role="alert">Không tải được công nợ.</p>
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
-  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
   const invoiceRows = debtLedger.invoiceHistory.length > 0
     ? debtLedger.invoiceHistory
     : debtLedger.debt.invoices.map((invoice) => ({
@@ -534,16 +659,10 @@ function CustomerPosDebtPanel({
     debtLedger.debt.adjustments ?? [],
     debtLedger.debt.linked_supplier_receipts ?? [],
   )
-  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
-  const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
   const visibleLedgerRows = ledgerRows.slice(0, 10)
 
   return (
     <section aria-label="Công nợ khách hàng" className="customer-pos-detail-panel">
-      <div className="customer-pos-detail-money-row">
-        <span>Tổng nợ</span>
-        <strong>{formatMoney(currentDebt)}</strong>
-      </div>
       {ledgerRows.length === 0 ? <p>Chưa có lịch sử công nợ.</p> : (
         <table aria-label="Lịch sử công nợ POS" className="customer-pos-detail-table">
           <thead>
@@ -636,4 +755,13 @@ function mergeSelectedCustomerGroup(groups: CustomerGroup[], customer: Customer)
       is_active: true,
     },
   ]
+}
+
+function isHiddenPosCustomerGroup(group: CustomerGroup) {
+  const normalizedName = group.name
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+  return group.id === 'cg-retail' || group.id === 'cg-vip' || hiddenPosCustomerGroupNames.has(normalizedName)
 }
