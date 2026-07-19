@@ -69,6 +69,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
       total_sales_amount: 0,
       total_debt_amount: 0,
     })),
+    updateCustomer: vi.fn(),
     resolvePrices: vi.fn(async () => ({ items: [] })),
     listPriceLists: vi.fn(async () => ({ items: [] })),
     previewPriceFormula: vi.fn(),

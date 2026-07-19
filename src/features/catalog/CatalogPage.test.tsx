@@ -191,6 +191,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     importKiotVietCustomers: vi.fn(),
     deleteImportedKiotVietCustomers: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     createCustomer: vi.fn(),
+    updateCustomer: vi.fn(),
     resolvePrices: vi.fn(async () => ({ items: [] })),
     listPriceLists: vi.fn(async () => ({
       items: [

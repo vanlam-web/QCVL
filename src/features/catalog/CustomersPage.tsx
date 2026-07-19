@@ -1186,7 +1186,7 @@ function CustomerDebtPanel({
                 {visibleLedgerRows.map((row) => (
                   <tr key={row.id}>
                     <td>
-                      {row.adjustment && /^CB/i.test(row.code) ? (
+                      {'adjustment' in row && row.adjustment && /^CB/i.test(row.code) ? (
                         <button className="management-record-link customer-debt-record-button" type="button" onClick={() => onOpenAdjustment(row.adjustment)}>
                           {row.code}
                         </button>
