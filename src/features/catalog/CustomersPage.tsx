@@ -61,6 +61,7 @@ interface CustomerState {
 }
 
 type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
+type CustomerDebtAdjustment = NonNullable<CustomerDebtDetail['adjustments']>[number]
 type CustomerDebtLedgerState = {
   debt: CustomerDebtDetail
   invoiceHistory: SalesDocumentListItem[]
@@ -610,9 +611,9 @@ export function CustomersPage({
     </MetricGrid>
   )
 
-  function openDebtAdjustmentDialog(customer: Customer) {
+  function openDebtAdjustmentDialog(customer: Customer, form?: CustomerDebtAdjustmentForm) {
     setDebtAdjustmentCustomer(customer)
-    setDebtAdjustmentForm({ adjustedAt: '', amount: '', note: '' })
+    setDebtAdjustmentForm(form ?? { adjustedAt: '', amount: '', note: '' })
   }
 
   return (
@@ -1010,6 +1011,11 @@ export function CustomersPage({
                             fallbackDebt={customer.total_debt_amount ?? 0}
                             ledgerPage={debtLedgerPage}
                             ledgerPageSize={customerDebtLedgerPageSize}
+                            onOpenAdjustment={(adjustment) => openDebtAdjustmentDialog(customer, {
+                              adjustedAt: dateTime(adjustment.created_at),
+                              amount: formatMoney(adjustment.amount_delta),
+                              note: adjustment.source_file ?? adjustment.transaction_type ?? '',
+                            })}
                             onLedgerPageChange={(nextPage) => setCustomerDebtLedgerPages((pages) => ({ ...pages, [customer.id]: nextPage }))}
                           />
                         </ManagementDetailSection>
@@ -1109,6 +1115,7 @@ function CustomerDebtPanel({
   fallbackDebt,
   ledgerPage,
   ledgerPageSize,
+  onOpenAdjustment,
   onLedgerPageChange,
 }: {
   debt: CustomerDebtState | undefined
@@ -1116,6 +1123,7 @@ function CustomerDebtPanel({
   fallbackDebt: number
   ledgerPage: number
   ledgerPageSize: number
+  onOpenAdjustment: (adjustment: CustomerDebtAdjustment) => void
   onLedgerPageChange: (page: number) => void
 }) {
   if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
@@ -1178,7 +1186,11 @@ function CustomerDebtPanel({
                 {visibleLedgerRows.map((row) => (
                   <tr key={row.id}>
                     <td>
-                      {row.href ? (
+                      {row.adjustment && /^CB/i.test(row.code) ? (
+                        <button className="management-record-link customer-debt-record-button" type="button" onClick={() => onOpenAdjustment(row.adjustment)}>
+                          {row.code}
+                        </button>
+                      ) : row.href ? (
                         <ManagementRecordLink href={row.href}>
                           {row.code}
                         </ManagementRecordLink>
@@ -1248,6 +1260,7 @@ function buildCustomerDebtLedgerRows(
       value_delta: adjustment.amount_delta,
       running_debt: adjustment.balance_after,
       href: customerDebtAdjustmentHref(adjustment.source_code),
+      adjustment,
     })),
     ...linkedSupplierReceipts.map((receipt) => ({
       id: `linked-supplier-receipt:${receipt.id}`,

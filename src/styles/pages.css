@@ -161,6 +161,12 @@
   min-width: 36rem;
 }
 
+.customer-debt-record-button {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
 .customer-debt-adjustment-dialog {
   width: min(32.5rem, calc(100vw - var(--space-4)));
   gap: var(--space-2);

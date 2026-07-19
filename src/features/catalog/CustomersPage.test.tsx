@@ -1078,6 +1078,12 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
 
   const debtHistoryTable = await within(detail).findByRole('table', { name: 'Lịch sử công nợ' })
   const adjustmentRow = within(debtHistoryTable).getByRole('row', { name: /CB000001/ })
+  await userEvent.click(within(adjustmentRow).getByRole('button', { name: 'CB000001' }))
+  const adjustmentDialog = screen.getByRole('dialog', { name: 'Điều chỉnh công nợ KH000123' })
+  expect(within(adjustmentDialog).getByLabelText('Ngày điều chỉnh')).toHaveValue('12/07/2023 16:27')
+  expect(within(adjustmentDialog).getByLabelText('Giá trị nợ điều chỉnh')).toHaveValue('1 000 000')
+  expect(within(adjustmentDialog).getByLabelText('Mô tả')).toHaveValue('BaoCaoCongNoTheoKhachHang_KV13072026-150538-065.xlsx')
+  await userEvent.click(within(adjustmentDialog).getByRole('button', { name: 'Bỏ qua' }))
   expect(within(adjustmentRow).getAllByRole('cell')[4]).toHaveTextContent('1 000 000')
   const invoiceRow = within(debtHistoryTable).getByRole('row', { name: /HD000007\.03/ })
   expect(within(invoiceRow).getAllByRole('cell')[4]).toHaveTextContent('1 790 400')
