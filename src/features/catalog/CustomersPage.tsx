@@ -47,6 +47,7 @@ import {
   customerDebtHasLiveLedger,
   customerDebtLedgerDefinesCurrentDebt,
   type CustomerDebtAdjustment,
+  type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
 import {
   customerDate,
@@ -76,6 +77,13 @@ type CustomerDebtLedgerState = {
 type CustomerHistoryState = { items: SalesDocumentListItem[]; page: number; pageSize: number; total: number } | 'loading' | 'error'
 type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerDebtView = 'summary' | 'detail'
+type CustomerDebtSummaryRow = {
+  id: string
+  code: string
+  created_at: string
+  remaining_debt: number
+  running_debt: number
+}
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerHistoryPageSize = 10
 const customerDebtLedgerPageSize = 10
@@ -1116,6 +1124,54 @@ export function CustomersPage({
 }
 
 
+function buildCustomerDebtSummaryRows(
+  invoices: Array<{
+    id: string
+    code: string
+    created_at: string
+    total_amount: number
+    paid_amount?: number
+    debt_amount?: number
+    payment_status?: string
+    status?: SalesDocumentListItem['status']
+  }>,
+  ledgerRows: CustomerDebtLedgerRow[],
+  currentDebt: number,
+): CustomerDebtSummaryRow[] {
+  const runningDebtByInvoiceCode = new Map<string, number>()
+  for (const row of ledgerRows) {
+    if (row.type === 'Bán hàng') runningDebtByInvoiceCode.set(row.code, row.running_debt)
+  }
+
+  const openRows = invoices
+    .filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
+    .map((invoice) => ({
+      id: invoice.id,
+      code: invoice.code,
+      created_at: invoice.created_at,
+      remaining_debt: Math.max(typeof invoice.debt_amount === 'number' ? invoice.debt_amount : invoice.total_amount - (invoice.paid_amount ?? 0), 0),
+      running_debt: runningDebtByInvoiceCode.get(invoice.code) ?? 0,
+    }))
+    .filter((invoice) => invoice.remaining_debt > 0)
+
+  const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
+  let unassignedPayment = Math.max(openDebtTotal - Math.max(currentDebt, 0), 0)
+  const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
+  const oldestRows = [...openRows].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
+
+  for (const invoice of oldestRows) {
+    if (unassignedPayment <= 0) break
+    const remainingDebt = remainingDebtById.get(invoice.id) ?? 0
+    const allocated = Math.min(remainingDebt, unassignedPayment)
+    remainingDebtById.set(invoice.id, remainingDebt - allocated)
+    unassignedPayment -= allocated
+  }
+
+  return openRows
+    .map((invoice) => ({ ...invoice, remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt }))
+    .filter((invoice) => invoice.remaining_debt > 0)
+}
+
 function CustomerDebtPanel({
   debt,
   debtLedger,
@@ -1134,6 +1190,7 @@ function CustomerDebtPanel({
   onLedgerPageChange: (page: number) => void
 }) {
   const [debtView, setDebtView] = useState<CustomerDebtView>('summary')
+  const [summaryPage, setSummaryPage] = useState(1)
   if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
   if (debt === 'error' || debtLedger === 'error') return <p role="alert">Không tải được công nợ.</p>
   const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
@@ -1151,14 +1208,6 @@ function CustomerDebtPanel({
         status: 'completed' as const,
         seller: { id: '', name: '' },
       }))
-  const summaryRows = invoiceRows.filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
-  const summaryTotals = summaryRows.reduce(
-    (totals, invoice) => ({
-      totalAmount: totals.totalAmount + invoice.total_amount,
-      debtAmount: totals.debtAmount + ('debt_amount' in invoice ? invoice.debt_amount : 0),
-    }),
-    { totalAmount: 0, debtAmount: 0 },
-  )
   const ledgerRows = buildCustomerDebtLedgerRows(
     invoiceRows,
     debtLedger.cashbookHistory,
@@ -1170,6 +1219,11 @@ function CustomerDebtPanel({
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
   const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
+  const summaryDebtTotal = summaryRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
+  const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
+  const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)
+  const visibleSummaryRows = summaryRows.slice((safeSummaryPage - 1) * ledgerPageSize, safeSummaryPage * ledgerPageSize)
 
   return (
     <section aria-label="Công nợ" className="customer-debt-panel">
@@ -1191,42 +1245,55 @@ function CustomerDebtPanel({
       />
       {debtView === 'summary' ? (
         summaryRows.length > 0 ? (
-          <ManagementTableViewport>
-            <table aria-label="Tóm tắt công nợ" className="customer-debt-summary-table">
-              <thead>
-                <tr>
-                  <th>Mã hóa đơn</th>
-                  <th>Thời gian</th>
-                  <th>Tổng cộng</th>
-                  <th>Công nợ</th>
-                  <th>Trạng thái</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summaryRows.map((invoice) => (
-                  <tr key={invoice.id}>
-                    <td>
-                      <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' })}>
-                        {invoice.code}
-                      </ManagementRecordLink>
-                    </td>
-                    <td>{dateTime(invoice.created_at)}</td>
-                    <td><MoneyText value={invoice.total_amount} /></td>
-                    <td><MoneyText value={'debt_amount' in invoice ? invoice.debt_amount : 0} /></td>
-                    <td>{invoice.payment_status === 'partial' ? 'Nợ 1 phần' : 'Nợ'}</td>
+          <>
+            <ManagementTableViewport>
+              <table aria-label="Tóm tắt công nợ" className="customer-debt-summary-table">
+                <thead>
+                  <tr>
+                    <th>Mã hóa đơn</th>
+                    <th>Thời gian</th>
+                    <th>Còn nợ</th>
+                    <th>Công nợ</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th colSpan={2} scope="row">Tổng</th>
-                  <td><MoneyText value={summaryTotals.totalAmount} /></td>
-                  <td><MoneyText value={summaryTotals.debtAmount} /></td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </ManagementTableViewport>
+                </thead>
+                <tbody>
+                  {visibleSummaryRows.map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td>
+                        <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' })}>
+                          {invoice.code}
+                        </ManagementRecordLink>
+                      </td>
+                      <td>{dateTime(invoice.created_at)}</td>
+                      <td><MoneyText value={invoice.remaining_debt} /></td>
+                      <td><MoneyText value={invoice.running_debt} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <th colSpan={2} scope="row">Tổng</th>
+                    <td><MoneyText value={summaryDebtTotal} /></td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </ManagementTableViewport>
+            <ManagementTableFooter
+              ariaLabel="Phân trang tóm tắt công nợ"
+              entityLabel="hóa đơn mở"
+              page={safeSummaryPage}
+              pageSize={ledgerPageSize}
+              pageSizeOptions={[ledgerPageSize]}
+              total={summaryRows.length}
+              canGoPrevious={safeSummaryPage > 1}
+              canGoNext={safeSummaryPage < summaryTotalPages}
+              onFirst={() => setSummaryPage(1)}
+              onPrevious={() => setSummaryPage(Math.max(1, safeSummaryPage - 1))}
+              onNext={() => setSummaryPage(Math.min(summaryTotalPages, safeSummaryPage + 1))}
+              onLast={() => setSummaryPage(summaryTotalPages)}
+            />
+          </>
         ) : <ManagementDetailInlineNote>Không có hóa đơn chưa thanh toán.</ManagementDetailInlineNote>
       ) : ledgerRows.length > 0 ? (
         <>

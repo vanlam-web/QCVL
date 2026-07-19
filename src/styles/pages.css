@@ -156,6 +156,11 @@
   word-break: normal;
 }
 
+.customer-debt-summary-table th,
+.customer-debt-summary-table td {
+  width: 25%;
+}
+
 .customer-debt-panel dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
