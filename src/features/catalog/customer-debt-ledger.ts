@@ -15,6 +15,11 @@ export interface CustomerDebtLedgerRow {
   running_debt: number
   href: string | null
   adjustment?: CustomerDebtAdjustment
+  related_code?: string
+}
+
+type CustomerDebtLedgerSortableRow = Omit<CustomerDebtLedgerRow, 'running_debt'> & {
+  running_debt?: number
 }
 
 export function buildCustomerDebtLedgerRows(
@@ -23,7 +28,7 @@ export function buildCustomerDebtLedgerRows(
   adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
   linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
 ): CustomerDebtLedgerRow[] {
-  const rows = [
+  const rows: CustomerDebtLedgerSortableRow[] = [
     ...invoiceHistory
       .filter((invoice) => salesDocumentAffectsCustomerDebt(invoice))
       .map((invoice) => ({
@@ -43,6 +48,7 @@ export function buildCustomerDebtLedgerRows(
         type: entry.direction === 'in' ? 'Thanh toán' : 'Điều chỉnh',
         value_delta: entry.direction === 'in' ? -Math.abs(entry.amount_delta) : Math.abs(entry.amount_delta),
         href: managementRecordOpenHref('/finance', entry.code),
+        related_code: customerDebtCashbookRelatedCode(entry),
       })),
     ...adjustments.map((adjustment) => ({
       id: `adjustment:${adjustment.id}`,
@@ -53,6 +59,7 @@ export function buildCustomerDebtLedgerRows(
       running_debt: adjustment.balance_after,
       href: customerDebtAdjustmentHref(adjustment.source_code),
       adjustment,
+      related_code: adjustment.source_code,
     })),
     ...linkedSupplierReceipts.map((receipt) => ({
       id: `linked-supplier-receipt:${receipt.id}`,
@@ -61,20 +68,54 @@ export function buildCustomerDebtLedgerRows(
       type: 'Nhập hàng',
       value_delta: -Math.abs(receipt.remaining_amount),
       href: managementRecordOpenHref('/purchase/receipts', receipt.code),
+      related_code: receipt.code,
     })),
-  ].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
+  ].sort((left, right) => {
+    const leftRelated = customerDebtLedgerRelatedCode(left)
+    const rightRelated = customerDebtLedgerRelatedCode(right)
+    if (leftRelated === rightRelated) {
+      const priority = customerDebtLedgerChronologyPriority(left) - customerDebtLedgerChronologyPriority(right)
+      if (priority !== 0) return priority
+    }
+    const timeOrder = left.created_at.localeCompare(right.created_at)
+    if (timeOrder !== 0) return timeOrder
+    return left.code.localeCompare(right.code)
+  })
 
   let runningDebt = 0
-  const rowsWithRunningDebt = rows.map((row) => {
+  const rowsWithRunningDebt: CustomerDebtLedgerRow[] = rows.map((row) => {
     if ('running_debt' in row && typeof row.running_debt === 'number') {
       runningDebt = row.running_debt
-      return { ...row }
+      return { ...row, running_debt: row.running_debt }
     }
     runningDebt += row.value_delta
     return { ...row, running_debt: runningDebt }
   })
 
   return rowsWithRunningDebt.reverse()
+}
+
+function customerDebtLedgerRelatedCode(row: CustomerDebtLedgerSortableRow) {
+  return row.related_code ?? row.code
+}
+
+function customerDebtLedgerChronologyPriority(row: CustomerDebtLedgerSortableRow) {
+  if (row.type === 'Bán hàng') return 0
+  if (row.type === 'Thanh toán') return 1
+  if (row.type === 'Điều chỉnh') return 2
+  return 3
+}
+
+function customerDebtCashbookRelatedCode(entry: CashbookEntry) {
+  if (entry.source?.order_code) return entry.source.order_code
+  const noteDocumentMatch = entry.note?.match(/\b(?:HD|PN)\d+(?:\.\d+)?\b/i)
+  if (noteDocumentMatch) return noteDocumentMatch[0].toUpperCase()
+  const normalizedCode = entry.code.trim().toUpperCase()
+  const invoicePaymentMatch = normalizedCode.match(/^(?:TTHD|TTMHD|TNHHD)(\d+(?:\.\d+)?)$/)
+  if (invoicePaymentMatch) return `HD${invoicePaymentMatch[1]}`
+  const purchasePaymentMatch = normalizedCode.match(/^PCPN(\d+(?:\.\d+)?)$/)
+  if (purchasePaymentMatch) return `PN${purchasePaymentMatch[1]}`
+  return entry.code
 }
 
 export function customerDebtLedgerDefinesCurrentDebt(input: {
@@ -113,14 +154,17 @@ function salesDocumentAffectsCustomerDebt(document: { status?: SalesDocumentList
 }
 
 function cashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
+  if (entry.source_type === 'kiotviet_cashbook') return kiotVietCashbookEntryAffectsCustomerDebt(entry)
   return entry.source_type === 'payment_receipt_method'
-    || kiotVietCashbookEntryAffectsCustomerDebt(entry)
     || entry.source?.type === 'payment_receipt'
 }
 
 function kiotVietCashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
   if (entry.source_type !== 'kiotviet_cashbook') return false
-  return /^TTHD/i.test(entry.code) || /^TT\d/i.test(entry.code)
+  return /^TTHD/i.test(entry.code)
+    || /^TT\d/i.test(entry.code)
+    || /^TTM(?:HD)?\d/i.test(entry.code)
+    || /^TNHHD\d/i.test(entry.code)
 }
 
 function normalizeCustomerDebtText(value: string) {

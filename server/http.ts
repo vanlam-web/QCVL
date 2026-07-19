@@ -698,6 +698,11 @@ export interface ServerRepository {
     organizationId: string
     customerId: string
     amount: number
+    allocations?: Array<{
+      order_id: string
+      order_code: string
+      allocated_amount: number
+    }>
     cashAmount: number
     bankAmount: number
     bankAccountId?: string | null
@@ -2024,6 +2029,11 @@ async function collectCustomerDebt(request: Request) {
   const body = await readJson(request) as {
     customer_id?: string
     amount?: number
+    allocations?: Array<{
+      order_id?: string
+      order_code?: string
+      allocated_amount?: number
+    }>
     payment_method?: {
       cash_amount?: number
       bank_amount?: number
@@ -2037,6 +2047,13 @@ async function collectCustomerDebt(request: Request) {
   const cashAmount = Math.max(Number(body.payment_method?.cash_amount ?? 0), 0)
   const bankAmount = Math.max(Number(body.payment_method?.bank_amount ?? 0), 0)
   const receivedAmount = cashAmount + bankAmount
+  const requestedAllocations = Array.isArray(body.allocations)
+    ? body.allocations.map((allocation) => ({
+        order_id: String(allocation.order_id ?? ''),
+        order_code: String(allocation.order_code ?? ''),
+        allocated_amount: Math.max(Number(allocation.allocated_amount ?? 0), 0),
+      })).filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+    : []
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
   if (!debt || requestedAmount <= 0 || receivedAmount !== requestedAmount) {
     return { payment_receipt_id: '', allocated_amount: 0 }
@@ -2051,12 +2068,19 @@ async function collectCustomerDebt(request: Request) {
     remaining_after: number
   }> = []
   let remainingPayment = Math.min(requestedAmount, debt.total_debt)
-  const invoices = [...debt.invoices].reverse()
+  const invoices = requestedAllocations.length > 0
+    ? requestedAllocations
+        .map((allocation) => ({
+          allocation,
+          invoice: debt.invoices.find((invoice) => invoice.order_id === allocation.order_id || invoice.order_code === allocation.order_code),
+        }))
+        .filter((item): item is { allocation: typeof requestedAllocations[number]; invoice: typeof debt.invoices[number] } => Boolean(item.invoice))
+    : [...debt.invoices].reverse().map((invoice) => ({ allocation: null, invoice }))
 
-  for (const invoice of invoices) {
+  for (const { allocation, invoice } of invoices) {
     if (remainingPayment <= 0) break
     if (invoice.remaining_debt <= 0) continue
-    const allocated = Math.min(invoice.remaining_debt, remainingPayment)
+    const allocated = Math.min(invoice.remaining_debt, remainingPayment, allocation?.allocated_amount ?? remainingPayment)
     const document = salesDocuments.find((item) => item.id === invoice.order_id)
     const collectedBefore = document ? document.paid_amount : invoice.paid_amount
 
@@ -3406,6 +3430,11 @@ async function getDevApiResponse(
           const body = await readJson(request) as {
             customer_id?: string
             amount?: number
+            allocations?: Array<{
+              order_id?: string
+              order_code?: string
+              allocated_amount?: number
+            }>
             payment_method?: {
               cash_amount?: number
               bank_amount?: number
@@ -3420,6 +3449,13 @@ async function getDevApiResponse(
               organizationId: currentUser.organization.id,
               customerId: body.customer_id ?? '',
               amount: Math.max(Number(body.amount ?? 0), 0),
+              allocations: Array.isArray(body.allocations)
+                ? body.allocations.map((allocation) => ({
+                    order_id: String(allocation.order_id ?? ''),
+                    order_code: String(allocation.order_code ?? ''),
+                    allocated_amount: Math.max(Number(allocation.allocated_amount ?? 0), 0),
+                  })).filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+                : undefined,
               cashAmount: Math.max(Number(body.payment_method?.cash_amount ?? 0), 0),
               bankAmount: Math.max(Number(body.payment_method?.bank_amount ?? 0), 0),
               bankAccountId: body.payment_method?.bank_account_id,

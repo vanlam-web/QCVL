@@ -3559,7 +3559,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 on cbe.organization_id = $1
                and cbe.status = 'posted'
                and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(TTHD|TT[0-9])'
+               and cbe.code ~* '^(TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
                and cbe.source->>'counterparty_code' = la.customer_code
                and cbe.created_at > la.created_at
               group by la.customer_id
@@ -3671,6 +3671,13 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           ),
         ])
 
+        const requestedAllocations = (input.allocations ?? [])
+          .map((allocation) => ({
+            order_id: allocation.order_id,
+            order_code: allocation.order_code,
+            allocated_amount: Math.max(Number(allocation.allocated_amount), 0),
+          }))
+          .filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
         let remainingPayment = input.amount
         const allocations: Array<{
           order_id: string
@@ -3680,10 +3687,18 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           allocated_amount: number
           remaining_after: number
         }> = []
+        const debtAllocationRows = requestedAllocations.length > 0
+          ? requestedAllocations
+              .map((allocation) => ({
+                allocation,
+                row: debtRows.rows.find((row) => row.order_id === allocation.order_id || row.order_code === allocation.order_code),
+              }))
+              .filter((item): item is { allocation: typeof requestedAllocations[number]; row: typeof debtRows.rows[number] } => Boolean(item.row))
+          : debtRows.rows.map((row) => ({ allocation: null, row }))
 
-        for (const row of debtRows.rows) {
+        for (const { allocation, row } of debtAllocationRows) {
           if (remainingPayment <= 0) break
-          const allocated = Math.min(Number(row.remaining_debt), remainingPayment)
+          const allocated = Math.min(Number(row.remaining_debt), remainingPayment, allocation?.allocated_amount ?? remainingPayment)
           const nextDebt = Math.max(Number(row.remaining_debt) - allocated, 0)
           const nextPaid = Number(row.paid_amount) + allocated
           const paymentStatus = nextDebt <= 0 ? 'paid' : nextPaid <= 0 ? 'unpaid' : 'partial'
@@ -4093,7 +4108,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 on cbe.organization_id = $1
                and cbe.status = 'posted'
                and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(TTHD|TT[0-9])'
+               and cbe.code ~* '^(TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
                and cbe.source->>'counterparty_code' = la.customer_code
                and cbe.created_at > la.created_at
               group by la.customer_id

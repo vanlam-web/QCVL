@@ -216,8 +216,9 @@ function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 
   } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
 }
 
-function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries'>> = {}) {
+function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries' | 'collectCustomerDebt' | 'listAccounts'>> = {}) {
   return {
+    listAccounts: vi.fn(async () => ({ items: [] })),
     listCashbookEntries: vi.fn(async () => ({
       items: [
         {
@@ -241,8 +242,9 @@ function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashboo
       total: 1,
       summary: { opening_balance: 0, total_in: 190000, total_out: 0, ending_balance: 190000 },
     })),
+    collectCustomerDebt: vi.fn(async () => ({ payment_receipt_id: 'TT000001', allocated_amount: 250000 })),
     ...overrides,
-  } satisfies Pick<FinanceService, 'listCashbookEntries'>
+  } satisfies Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt'>
 }
 
 it('lists customers in the shared management layout', async () => {
@@ -650,7 +652,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).queryByRole('button', { name: 'Tạo QR' })).not.toBeInTheDocument()
   expect(within(detail).getByRole('button', { name: 'Xuất file công nợ' })).toBeDisabled()
   expect(within(detail).getByRole('button', { name: 'Xuất file' })).toBeDisabled()
-  expect(within(detail).getByRole('button', { name: 'Thanh toán' })).toBeDisabled()
+  expect(within(detail).getByRole('button', { name: 'Thanh toán' })).toBeEnabled()
   expect(within(detail).getByRole('button', { name: 'Điều chỉnh' })).toBeEnabled()
   expect(within(detail).getByRole('button', { name: 'Chiết khấu thanh toán' })).toBeDisabled()
   await userEvent.click(within(detail).getByRole('button', { name: 'Điều chỉnh' }))
@@ -696,6 +698,27 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('290 000')).toBeInTheDocument()
   expect(within(debtSummaryTable).queryByText('Tổng')).not.toBeInTheDocument()
   expect(within(detail).getByRole('navigation', { name: 'Phân trang tóm tắt công nợ' })).toHaveTextContent('1 - 2 trong 2 hóa đơn mở')
+
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán' }))
+  const paymentDialog = screen.getByRole('dialog', { name: 'Thanh toán công nợ KH000123' })
+  expect(within(paymentDialog).getByText(/Người thu: Admin/)).toBeInTheDocument()
+  expect(within(paymentDialog).getByLabelText('Phương thức thanh toán')).toHaveValue('cash')
+  expect(within(paymentDialog).getByRole('table', { name: 'Danh sách phân bổ hóa đơn công nợ' })).toBeInTheDocument()
+  expect(within(paymentDialog).getByLabelText('Số tiền')).toHaveValue('')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('')
+  expect(within(paymentDialog).getByRole('button', { name: 'Tạo phiếu thu' })).toBeDisabled()
+  await userEvent.type(within(paymentDialog).getByLabelText('Tiền thu HD010986'), '90000')
+  expect(within(paymentDialog).getByLabelText('Số tiền')).toHaveValue('90 000')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('90 000')
+  expect(within(paymentDialog).getByRole('button', { name: 'Tạo phiếu thu' })).toBeEnabled()
+  await userEvent.clear(within(paymentDialog).getByLabelText('Số tiền'))
+  await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '250000')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('150 000')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('100 000')
+  expect(within(paymentDialog).getByText('Tiền chưa phân bổ:')).toBeInTheDocument()
+  await userEvent.click(within(paymentDialog).getByRole('button', { name: 'Bỏ qua' }))
+  expect(screen.queryByRole('dialog', { name: 'Thanh toán công nợ KH000123' })).not.toBeInTheDocument()
 
   await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))
   expect(within(detail).getByRole('button', { name: 'Tóm tắt' })).toHaveAttribute('aria-pressed', 'false')

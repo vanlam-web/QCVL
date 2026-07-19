@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatMoney } from '../../lib/number-format'
+import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import {
   ManagementCompactCreateAction,
@@ -98,8 +98,21 @@ type CustomerDebtSummaryRow = {
   id: string
   code: string
   created_at: string
+  total_amount: number
   remaining_debt: number
   running_debt: number
+}
+type CustomerDebtPaymentForm = {
+  paidAt: string
+  method: 'cash' | 'bank_transfer'
+  amount: string
+  note: string
+  allocateToInvoices: boolean
+  invoicePayments: Record<string, string>
+}
+type CustomerDebtPaymentRow = CustomerDebtSummaryRow & {
+  paid_before: number
+  payment_amount: number
 }
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerHistoryPageSize = 10
@@ -166,15 +179,17 @@ function CustomerSupplierLinkIcon() {
 }
 
 export function CustomersPage({
+  currentUserName = '',
   service,
   orderService,
   salesDocumentService,
   financeService,
 }: {
+  currentUserName?: string
   service: CatalogService
   orderService: Pick<OrderService, 'getCustomerDebt'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
-  financeService?: Pick<FinanceService, 'listCashbookEntries'>
+  financeService?: Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt'>
 }) {
   const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
   const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
@@ -195,6 +210,17 @@ export function CustomersPage({
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
   const [debtAdjustmentCustomer, setDebtAdjustmentCustomer] = useState<Customer | null>(null)
   const [debtAdjustmentForm, setDebtAdjustmentForm] = useState({ adjustedAt: '', amount: '', note: '' })
+  const [debtPaymentCustomer, setDebtPaymentCustomer] = useState<Customer | null>(null)
+  const [debtPaymentForm, setDebtPaymentForm] = useState<CustomerDebtPaymentForm>(() => ({
+    paidAt: formatCustomerDebtAdjustmentDateTime(new Date()),
+    method: 'cash',
+    amount: '',
+    note: '',
+    allocateToInvoices: true,
+    invoicePayments: {},
+  }))
+  const [savingDebtPayment, setSavingDebtPayment] = useState(false)
+  const [debtPaymentError, setDebtPaymentError] = useState<string | null>(null)
   const customerDebtLedgerRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
   const [showFilters, setShowFilters] = useState(true)
@@ -548,6 +574,74 @@ export function CustomersPage({
     setCustomerDebtLedgerPages((pages) => ({ ...pages, [customer.id]: pages[customer.id] ?? 1 }))
     loadCustomerDebtLedger(customer, { force: true })
     loadCustomerHistory(customer.id, 'invoice')
+  }
+
+  function openDebtPaymentDialog(customer: Customer) {
+    setDebtPaymentCustomer(customer)
+    setDebtPaymentError(null)
+    setDebtPaymentForm({
+      paidAt: formatCustomerDebtAdjustmentDateTime(new Date()),
+      method: 'cash',
+      amount: '',
+      note: '',
+      allocateToInvoices: true,
+      invoicePayments: {},
+    })
+    loadCustomerDebtLedger(customer, { force: true })
+  }
+
+  async function collectCustomerDebt(customer: Customer, form: CustomerDebtPaymentForm, currentDebt: number, paymentRows: CustomerDebtPaymentRow[] = []) {
+    if (!financeService?.collectCustomerDebt) return
+    const amount = parseMoneyInput(form.amount)
+    if (amount <= 0) {
+      setDebtPaymentError('Số tiền thu phải lớn hơn 0.')
+      return
+    }
+    if (amount > currentDebt) {
+      setDebtPaymentError('Số tiền thu không được lớn hơn công nợ hiện tại.')
+      return
+    }
+    setSavingDebtPayment(true)
+    setDebtPaymentError(null)
+    try {
+      const result = await financeService.collectCustomerDebt({
+        customer_id: customer.id,
+        amount,
+        allocations: paymentRows
+          .filter((row) => row.payment_amount > 0)
+          .map((row) => ({
+            order_id: row.id,
+            order_code: row.code,
+            allocated_amount: row.payment_amount,
+          })),
+        payment_method: {
+          cash_amount: form.method === 'cash' ? amount : 0,
+          bank_amount: form.method === 'bank_transfer' ? amount : 0,
+        },
+        ...(form.note.trim() ? { note: form.note.trim() } : {}),
+      })
+      setState((current) => {
+        if (!current) return current
+        const nextDebt = Math.max((current.summary?.total_debt_amount ?? 0) - result.allocated_amount, 0)
+        return {
+          ...current,
+          customers: current.customers.map((item) => (
+            item.id === customer.id
+              ? { ...item, total_debt_amount: Math.max((item.total_debt_amount ?? 0) - result.allocated_amount, 0) }
+              : item
+          )),
+          summary: current.summary
+            ? { ...current.summary, total_debt_amount: nextDebt }
+            : current.summary,
+        }
+      })
+      setDebtPaymentCustomer(null)
+      loadCustomerDebtLedger(customer, { force: true })
+    } catch (cause) {
+      setDebtPaymentError(formatApiError(cause, 'Không tạo được phiếu thu công nợ.'))
+    } finally {
+      setSavingDebtPayment(false)
+    }
   }
 
   function selectCustomerHistoryType(customerId: string, historyType: CustomerHistoryType) {
@@ -961,6 +1055,7 @@ export function CustomersPage({
                   const debt = customerDebts[customer.id]
                   const debtLedger = customerDebtLedgers[customer.id]
                   const debtLedgerPage = customerDebtLedgerPages[customer.id] ?? 1
+                  const payableDebtAmount = customerDebtCurrentAmount(debtLedger, customer.total_debt_amount ?? 0)
                   const historyKey = customerHistoryKey(customer.id, customerHistoryType)
                   const history = customerHistories[historyKey]
                   return (
@@ -1079,13 +1174,13 @@ export function CustomersPage({
                           rightActions={[
                             {
                               label: 'Thanh toán',
-                              disabled: true,
+                              disabled: !(payableDebtAmount > 0 && financeService?.collectCustomerDebt),
                               variant: 'primary',
                               icon: <CircleDollarSign aria-hidden="true" size={15} />,
+                              onClick: () => openDebtPaymentDialog(customer),
                             },
                             {
                               label: 'Điều chỉnh',
-                              variant: 'primary',
                               icon: <Edit3 aria-hidden="true" size={15} />,
                               onClick: () => openDebtAdjustmentDialog(customer),
                             },
@@ -1162,6 +1257,21 @@ export function CustomersPage({
           onClose={() => setDebtAdjustmentCustomer(null)}
         />
       ) : null}
+      {debtPaymentCustomer ? (
+        <CustomerDebtPaymentDialog
+          collectorName={currentUserName}
+          customer={debtPaymentCustomer}
+          debt={customerDebtLedgers[debtPaymentCustomer.id]}
+          fallbackDebt={debtPaymentCustomer.total_debt_amount ?? 0}
+          form={debtPaymentForm}
+          saving={savingDebtPayment}
+          error={debtPaymentError}
+          canSave={Boolean(financeService?.collectCustomerDebt)}
+          onChange={setDebtPaymentForm}
+          onClose={() => setDebtPaymentCustomer(null)}
+          onSubmit={(form, currentDebt, paymentRows) => void collectCustomerDebt(debtPaymentCustomer, form, currentDebt, paymentRows)}
+        />
+      ) : null}
       <CustomerImportDialog
         open={customerImportOpen}
         service={service}
@@ -1201,6 +1311,7 @@ function buildCustomerDebtSummaryRows(
       id: invoice.id,
       code: invoice.code,
       created_at: invoice.created_at,
+      total_amount: invoice.total_amount,
       remaining_debt: Math.max(typeof invoice.debt_amount === 'number' ? invoice.debt_amount : invoice.total_amount - (invoice.paid_amount ?? 0), 0),
       running_debt: runningDebtByInvoiceCode.get(invoice.code) ?? 0,
     }))
@@ -1222,6 +1333,45 @@ function buildCustomerDebtSummaryRows(
   return openRows
     .map((invoice) => ({ ...invoice, remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt }))
     .filter((invoice) => invoice.remaining_debt > 0)
+}
+
+function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {
+  let remainingPayment = Math.max(paymentAmount, 0)
+  return summaryRows.map((row) => {
+    const paymentAmountForRow = Math.min(row.remaining_debt, remainingPayment)
+    remainingPayment -= paymentAmountForRow
+    return {
+      ...row,
+      paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
+      payment_amount: paymentAmountForRow,
+    }
+  })
+}
+
+function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerState | undefined, fallbackDebt: number) {
+  if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
+  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
+  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
+  const invoiceRows = debtLedger.invoiceHistory.length > 0
+    ? debtLedger.invoiceHistory
+    : debtLedger.debt.invoices.map((invoice) => ({
+        id: invoice.order_id,
+        code: invoice.order_code,
+        created_at: invoice.created_at,
+        total_amount: invoice.total_amount,
+        paid_amount: invoice.paid_amount,
+        debt_amount: invoice.remaining_debt,
+        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
+        status: 'completed' as const,
+        seller: { id: '', name: '' },
+      }))
+  const ledgerRows = buildCustomerDebtLedgerRows(
+    invoiceRows,
+    debtLedger.cashbookHistory,
+    debtLedger.debt.adjustments ?? [],
+    debtLedger.debt.linked_supplier_receipts ?? [],
+  )
+  return customerDebtLedgerDefinesCurrentDebt(debtLedger) ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
 }
 
 function CustomerDebtPanel({
@@ -1508,6 +1658,288 @@ const customerDebtAdjustmentTimeOptions = Array.from({ length: 48 }, (_, index) 
   const minute = index % 2 === 0 ? '00' : '30'
   return `${String(hour).padStart(2, '0')}:${minute}`
 })
+
+function CustomerDebtPaymentDialog({
+  customer,
+  collectorName,
+  debt,
+  fallbackDebt,
+  form,
+  saving,
+  error,
+  canSave,
+  onChange,
+  onClose,
+  onSubmit,
+}: {
+  customer: Customer
+  collectorName: string
+  debt: CustomerDebtLedgerState | undefined
+  fallbackDebt: number
+  form: CustomerDebtPaymentForm
+  saving: boolean
+  error: string | null
+  canSave: boolean
+  onChange: (form: CustomerDebtPaymentForm) => void
+  onClose: () => void
+  onSubmit: (form: CustomerDebtPaymentForm, currentDebt: number, paymentRows: CustomerDebtPaymentRow[]) => void
+}) {
+  const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
+  const selectedPaidDateTime = parseCustomerDebtAdjustmentDateTime(form.paidAt)
+  const calendarDays = customerDebtAdjustmentCalendarDays(calendarMonth)
+  const updateField = (field: keyof CustomerDebtPaymentForm, value: string | boolean | Record<string, string>) => {
+    onChange({ ...form, [field]: value })
+  }
+  const selectPaidDate = (date: Date) => {
+    const base = selectedPaidDateTime ?? new Date()
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
+    updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
+    setPickerOpen(null)
+  }
+  const selectPaidTime = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number)
+    const base = selectedPaidDateTime ?? new Date()
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
+    updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
+    setPickerOpen(null)
+  }
+  const currentDebt = customerDebtCurrentAmount(debt, fallbackDebt)
+  const invoiceRows = typeof debt === 'object'
+    ? debt.invoiceHistory.length > 0
+      ? debt.invoiceHistory
+      : debt.debt.invoices.map((invoice) => ({
+          id: invoice.order_id,
+          code: invoice.order_code,
+          created_at: invoice.created_at,
+          total_amount: invoice.total_amount,
+          paid_amount: invoice.paid_amount,
+          debt_amount: invoice.remaining_debt,
+          payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
+          status: 'completed' as const,
+          seller: { id: '', name: '' },
+        }))
+    : []
+  const ledgerRows = typeof debt === 'object'
+    ? buildCustomerDebtLedgerRows(
+        invoiceRows,
+        debt.cashbookHistory,
+        debt.debt.adjustments ?? [],
+        debt.debt.linked_supplier_receipts ?? [],
+      )
+    : []
+  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
+  const hasManualInvoicePayments = Object.values(form.invoicePayments).some((value) => parseMoneyInput(value) > 0)
+  const manualPaymentAmount = summaryRows.reduce((sum, row) => sum + Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt), 0)
+  const paymentAmount = hasManualInvoicePayments ? manualPaymentAmount : parseMoneyInput(form.amount)
+  const paymentRows = hasManualInvoicePayments
+    ? summaryRows.map((row) => ({
+        ...row,
+        paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
+        payment_amount: Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt),
+      }))
+    : buildCustomerDebtPaymentRows(summaryRows, paymentAmount)
+  const allocatedAmount = paymentRows.reduce((sum, row) => sum + row.payment_amount, 0)
+  const unallocatedAmount = Math.max(paymentAmount - allocatedAmount, 0)
+  const collectorLabel = collectorName.trim() || customer.created_by?.name || 'Chưa xác định'
+  const updateAmount = (value: string) => {
+    const digits = value.replace(/\D/g, '')
+    onChange({ ...form, amount: digits === '' ? '' : formatMoney(Number(digits)), invoicePayments: {} })
+  }
+  const updateInvoicePayment = (row: CustomerDebtPaymentRow, value: string) => {
+    const digits = value.replace(/\D/g, '')
+    const nextAmount = digits === '' ? 0 : Math.min(Number(digits), row.remaining_debt)
+    const nextInvoicePayments = {
+      ...form.invoicePayments,
+      [row.id]: nextAmount > 0 ? formatMoney(nextAmount) : '',
+    }
+    const nextTotal = summaryRows.reduce((sum, summaryRow) => {
+      const rawValue = summaryRow.id === row.id ? nextInvoicePayments[summaryRow.id] : form.invoicePayments[summaryRow.id] ?? ''
+      return sum + Math.min(parseMoneyInput(rawValue), summaryRow.remaining_debt)
+    }, 0)
+    onChange({ ...form, amount: nextTotal > 0 ? formatMoney(nextTotal) : '', invoicePayments: nextInvoicePayments })
+  }
+  const canSubmit = canSave
+    && !saving
+    && paymentAmount > 0
+    && paymentAmount <= currentDebt
+    && debt !== undefined
+    && debt !== 'loading'
+    && debt !== 'error'
+    && summaryRows.length > 0
+
+  return (
+    <div className="management-modal-backdrop">
+      <section aria-label={`Thanh toán công nợ ${customer.code}`} aria-modal="true" className="management-modal-dialog customer-debt-payment-dialog" role="dialog">
+        <header className="management-modal-header">
+          <div>
+            <h2>Thanh toán</h2>
+            <p>{customer.name} · Nợ hiện tại: {formatMoney(currentDebt)} · Người thu: {collectorLabel}</p>
+          </div>
+          <button aria-label="Đóng thanh toán công nợ" className="management-icon-button" type="button" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <form
+          aria-label="Thanh toán công nợ"
+          className="management-modal-form customer-debt-payment-form"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSubmit(form, currentDebt, paymentRows)
+          }}
+        >
+          {error ? <p role="alert" className="form-error">{error}</p> : null}
+          {debt === undefined || debt === 'loading' ? <p>Đang tải hóa đơn công nợ...</p> : null}
+          {debt === 'error' ? <p role="alert">Không tải được hóa đơn công nợ.</p> : null}
+          <div className="customer-debt-payment-grid">
+            <label>
+              <span>Thời gian</span>
+              <span className="customer-debt-adjustment-input-shell">
+                <input
+                  placeholder="dd/mm/yyyy hh:mm"
+                  value={form.paidAt}
+                  onChange={(event) => updateField('paidAt', event.target.value)}
+                />
+                <button aria-expanded={pickerOpen === 'date'} aria-label="Chọn ngày thanh toán" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-date" type="button" onClick={() => setPickerOpen((current) => current === 'date' ? null : 'date')}>
+                  <CalendarDays size={15} />
+                </button>
+                <button aria-expanded={pickerOpen === 'time'} aria-label="Chọn giờ thanh toán" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-time" type="button" onClick={() => setPickerOpen((current) => current === 'time' ? null : 'time')}>
+                  <Clock3 size={15} />
+                </button>
+                {pickerOpen === 'date' ? (
+                  <section aria-label="Lịch chọn ngày thanh toán" className="customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
+                    <header>
+                      <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
+                        ‹
+                      </button>
+                      <strong>Tháng {calendarMonth.getMonth() + 1} {calendarMonth.getFullYear()}</strong>
+                      <button aria-label="Tháng sau" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
+                        ›
+                      </button>
+                    </header>
+                    <div className="customer-debt-adjustment-weekdays" aria-hidden="true">
+                      {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
+                    </div>
+                    <div className="customer-debt-adjustment-calendar-grid">
+                      {calendarDays.map((date) => {
+                        const selected = selectedPaidDateTime ? date.toDateString() === selectedPaidDateTime.toDateString() : false
+                        return (
+                          <button
+                            aria-pressed={selected}
+                            className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'customer-debt-adjustment-muted-day'}
+                            key={date.toISOString()}
+                            type="button"
+                            onClick={() => selectPaidDate(date)}
+                          >
+                            {date.getDate()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+                {pickerOpen === 'time' ? (
+                  <section aria-label="Chọn giờ thanh toán" className="customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
+                    {customerDebtAdjustmentTimeOptions.map((time) => (
+                      <button key={time} type="button" onClick={() => selectPaidTime(time)}>
+                        {time}
+                      </button>
+                    ))}
+                  </section>
+                ) : null}
+              </span>
+            </label>
+            <label>
+              <span>Phương thức thanh toán</span>
+              <select value={form.method} onChange={(event) => updateField('method', event.target.value)}>
+                <option value="cash">Tiền mặt</option>
+                <option value="bank_transfer">Chuyển khoản</option>
+              </select>
+            </label>
+          </div>
+          <label className="customer-debt-payment-full">
+            <span>Số tiền</span>
+            <input
+              aria-label="Số tiền"
+              autoFocus
+              inputMode="numeric"
+              value={form.amount}
+              onChange={(event) => updateAmount(event.target.value)}
+            />
+            <small>Nợ còn: {formatMoney(Math.max(currentDebt - Math.min(paymentAmount, currentDebt), 0))}</small>
+          </label>
+          <label className="customer-debt-payment-full">
+            <span>Ghi chú</span>
+            <input placeholder="Nhập ghi chú" value={form.note} onChange={(event) => updateField('note', event.target.value)} />
+          </label>
+          <label className="customer-debt-payment-checkbox">
+            <input checked={form.allocateToInvoices} type="checkbox" onChange={(event) => updateField('allocateToInvoices', event.target.checked)} />
+            <span>Phân bổ vào hóa đơn</span>
+          </label>
+          {form.allocateToInvoices ? (
+            <section aria-label="Phân bổ hóa đơn công nợ" className="customer-debt-payment-allocation">
+              <ManagementTableViewport>
+                <table aria-label="Danh sách phân bổ hóa đơn công nợ" className="customer-debt-payment-table">
+                  <thead>
+                    <tr>
+                      <th>Mã hóa đơn</th>
+                      <th>Thời gian</th>
+                      <th>Giá trị hóa đơn</th>
+                      <th>Đã thu trước</th>
+                      <th>Còn cần thu</th>
+                      <th>Tiền thu</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentRows.map((row) => (
+                      <tr key={row.id}>
+                        <td>
+                          <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', row.code, { type: 'invoice' })}>
+                            {row.code}
+                          </ManagementRecordLink>
+                        </td>
+                        <td>{dateTime(row.created_at)}</td>
+                        <td><MoneyText value={row.total_amount} /></td>
+                        <td><MoneyText value={row.paid_before} /></td>
+                        <td><MoneyText value={row.remaining_debt} /></td>
+                        <td>
+                          <input
+                            aria-label={`Tiền thu ${row.code}`}
+                            inputMode="numeric"
+                            value={row.payment_amount > 0 ? formatMoney(row.payment_amount) : ''}
+                            onChange={(event) => updateInvoicePayment(row, event.target.value)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ManagementTableViewport>
+              <div className="customer-debt-payment-unallocated">
+                <span>Tiền chưa phân bổ:</span>
+                <strong>{formatMoney(unallocatedAmount)}</strong>
+              </div>
+            </section>
+          ) : null}
+          <footer className="management-modal-footer">
+            <button className="button button-secondary" type="button" onClick={onClose}>
+              Bỏ qua
+            </button>
+            <button className="button button-secondary" disabled={!canSubmit} type="submit">
+              Tạo phiếu thu & In
+            </button>
+            <button className="button button-primary" disabled={!canSubmit} type="submit">
+              Tạo phiếu thu
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  )
+}
 
 function CustomerDebtAdjustmentDialog({
   customer,
