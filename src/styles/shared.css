@@ -2451,6 +2451,23 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   overflow: visible;
 }
 
+.catalog-product-group-dialog .management-filter-product-group-picker.management-filter-sidebar-popover-open {
+  margin-bottom: 0;
+}
+
+.catalog-product-group-dialog .management-filter-product-group-popover {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  width: 100%;
+  max-height: min(18rem, calc(100vh - 18rem));
+  overflow: hidden;
+}
+
+.catalog-product-group-dialog .management-filter-product-group-list {
+  max-height: min(13rem, calc(100vh - 25rem));
+}
+
 .management-modal-header,
 .management-modal-footer,
 .management-field-heading {
