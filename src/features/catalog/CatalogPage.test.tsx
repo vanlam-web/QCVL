@@ -287,6 +287,22 @@ it('lists products and creates a product', async () => {
   })
 })
 
+it('closes the parent group dropdown when clicking its trigger again', async () => {
+  const service = makeService()
+  render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('MICA-3MM')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo mới nhóm hàng' }))
+
+  const dialog = screen.getByRole('dialog', { name: 'Tạo nhóm hàng' })
+  const trigger = within(dialog).getByRole('button', { name: 'Chọn nhóm hàng' })
+  await userEvent.click(trigger)
+  expect(within(dialog).getByRole('dialog', { name: 'Chọn nhóm hàng' })).toBeInTheDocument()
+
+  await userEvent.click(trigger)
+  expect(within(dialog).queryByRole('dialog', { name: 'Chọn nhóm hàng' })).not.toBeInTheDocument()
+})
+
 it('switches the shared create product modal for service, roll, sheet, and combo goods', async () => {
   const service = makeService()
   render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)

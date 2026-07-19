@@ -102,7 +102,11 @@ export function ProductGroupTreeSelect({
     return () => document.removeEventListener('pointerdown', closeWhenOutside, true)
   }, [open])
 
-  function openPicker() {
+  function togglePicker() {
+    if (open) {
+      setOpen(false)
+      return
+    }
     setOpen(true)
     requestAnimationFrame(() => inputRef.current?.focus())
   }
@@ -114,7 +118,7 @@ export function ProductGroupTreeSelect({
 
   return (
     <div ref={pickerRef} className={`management-filter-product-group-picker${open ? ' management-filter-sidebar-popover-open' : ''}`}>
-      <button aria-expanded={open} className="management-chip-picker-selected management-filter-group-picker-trigger" type="button" onClick={openPicker}>
+      <button aria-expanded={open} className="management-chip-picker-selected management-filter-group-picker-trigger" type="button" onClick={togglePicker}>
         <span className={`management-chip-picker-input ${selectedGroup ? '' : 'management-chip-picker-input-placeholder'}`}>
           {selectedGroup ? productGroupDisplayName(selectedGroup.name) : placeholder}
         </span>
