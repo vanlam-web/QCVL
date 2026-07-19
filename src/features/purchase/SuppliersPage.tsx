@@ -619,7 +619,7 @@ export function SuppliersPage({
                   <tr>
                     <th>Mã phiếu</th>
                     <th>Thời gian</th>
-                    <th>Thời gian</th>
+                    <th>Người tạo</th>
                     <th>Cần trả</th>
                     <th>Đã trả</th>
                     <th>Còn nợ</th>
@@ -635,7 +635,7 @@ export function SuppliersPage({
                         </ManagementRecordLink>
                       </td>
                       <td>{formatKvDateTime(receipt.received_at)}</td>
-                      <td>{receipt.supplier_document_no ?? ''}</td>
+                      <td>{receipt.created_by.name}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
                       <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
@@ -669,7 +669,7 @@ export function SuppliersPage({
                   <tr>
                     <th>Mã phiếu</th>
                     <th>Thời gian</th>
-                    <th>Thời gian</th>
+                    <th>Người tạo</th>
                     <th>Cần trả</th>
                     <th>Đã trả</th>
                     <th>Còn nợ</th>
@@ -684,7 +684,7 @@ export function SuppliersPage({
                         </ManagementRecordLink>
                       </td>
                       <td>{formatKvDateTime(receipt.received_at)}</td>
-                      <td>{receipt.supplier_document_no ?? ''}</td>
+                      <td>{receipt.created_by.name}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
                       <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
