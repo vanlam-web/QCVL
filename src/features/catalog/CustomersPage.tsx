@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
 import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
+import { formatMoney } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import {
   ManagementCompactCreateAction,
@@ -159,6 +160,8 @@ export function CustomersPage({
   const [customerHistoryPages, setCustomerHistoryPages] = useState<Record<string, number>>({})
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
+  const [debtAdjustmentCustomer, setDebtAdjustmentCustomer] = useState<Customer | null>(null)
+  const [debtAdjustmentForm, setDebtAdjustmentForm] = useState({ adjustedAt: '', amount: '', note: '' })
   const customerDebtLedgerRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
   const [showFilters, setShowFilters] = useState(true)
@@ -607,6 +610,11 @@ export function CustomersPage({
     </MetricGrid>
   )
 
+  function openDebtAdjustmentDialog(customer: Customer) {
+    setDebtAdjustmentCustomer(customer)
+    setDebtAdjustmentForm({ adjustedAt: '', amount: '', note: '' })
+  }
+
   return (
     <ManagementPage
       title="Khách hàng"
@@ -1027,10 +1035,11 @@ export function CustomersPage({
                         ]}
                         rightActions={[
                           {
-                            label: 'Chỉnh sửa',
-                            disabled: true,
+                            label: activeDetailTab === 'debt' ? 'Điều chỉnh' : 'Chỉnh sửa',
+                            disabled: activeDetailTab !== 'debt',
                             variant: 'primary',
                             icon: <Edit3 aria-hidden="true" size={15} />,
+                            onClick: activeDetailTab === 'debt' ? () => openDebtAdjustmentDialog(customer) : undefined,
                           },
                           {
                             label: customer.status === 'inactive' ? 'Kích hoạt' : 'Ngừng hoạt động',
@@ -1070,6 +1079,15 @@ export function CustomersPage({
       </ManagementListSurface>
       {analysisCustomer ? (
         <CustomerAnalysisDialog customer={analysisCustomer} onClose={() => setAnalysisCustomer(null)} />
+      ) : null}
+      {debtAdjustmentCustomer ? (
+        <CustomerDebtAdjustmentDialog
+          customer={debtAdjustmentCustomer}
+          form={debtAdjustmentForm}
+          currentDebt={debtAdjustmentCustomer.total_debt_amount ?? 0}
+          onChange={setDebtAdjustmentForm}
+          onClose={() => setDebtAdjustmentCustomer(null)}
+        />
       ) : null}
       <CustomerImportDialog
         open={customerImportOpen}
@@ -1374,6 +1392,90 @@ function CustomerHistoryPanel({
         </>
       ) : null}
     </section>
+  )
+}
+
+type CustomerDebtAdjustmentForm = {
+  adjustedAt: string
+  amount: string
+  note: string
+}
+
+function CustomerDebtAdjustmentDialog({
+  customer,
+  currentDebt,
+  form,
+  onChange,
+  onClose,
+}: {
+  customer: Customer
+  currentDebt: number
+  form: CustomerDebtAdjustmentForm
+  onChange: (form: CustomerDebtAdjustmentForm) => void
+  onClose: () => void
+}) {
+  const updateField = (field: keyof CustomerDebtAdjustmentForm, value: string) => {
+    onChange({ ...form, [field]: value })
+  }
+
+  return (
+    <div className="management-modal-backdrop">
+      <section aria-label={`Điều chỉnh công nợ ${customer.code}`} aria-modal="true" className="management-modal-dialog management-modal-dialog-compact customer-debt-adjustment-dialog" role="dialog">
+        <header className="management-modal-header">
+          <h2>
+            Điều chỉnh
+            <span aria-label="Thông tin điều chỉnh công nợ" className="customer-debt-adjustment-info" title="Điều chỉnh công nợ khách hàng">
+              i
+            </span>
+          </h2>
+          <button aria-label="Đóng điều chỉnh công nợ" className="management-icon-button" type="button" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <form
+          aria-label="Điều chỉnh công nợ"
+          className="management-modal-form customer-debt-adjustment-form"
+          onSubmit={(event) => event.preventDefault()}
+        >
+          <div className="customer-debt-adjustment-row">
+            <span>Nợ cần thu hiện tại</span>
+            <strong>{formatMoney(currentDebt)}</strong>
+          </div>
+          <label>
+            <span>Ngày điều chỉnh</span>
+            <input
+              type="datetime-local"
+              value={form.adjustedAt}
+              onChange={(event) => updateField('adjustedAt', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Giá trị nợ điều chỉnh</span>
+            <input
+              autoFocus
+              inputMode="numeric"
+              value={form.amount}
+              onChange={(event) => updateField('amount', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>Mô tả</span>
+            <input
+              value={form.note}
+              onChange={(event) => updateField('note', event.target.value)}
+            />
+          </label>
+          <footer className="management-modal-footer">
+            <button className="button button-secondary" type="button" onClick={onClose}>
+              Bỏ qua
+            </button>
+            <button className="button button-primary" disabled title="Chưa nối lưu phiếu điều chỉnh" type="submit">
+              Cập nhật
+            </button>
+          </footer>
+        </form>
+      </section>
+    </div>
   )
 }
 
