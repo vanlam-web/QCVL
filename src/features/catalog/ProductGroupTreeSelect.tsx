@@ -87,6 +87,7 @@ export function ProductGroupTreeSelect({
     [flatGroups, normalizedQuery],
   )
   const selectedGroup = displayGroups.find((group) => group.id === value) ?? null
+  const triggerLabel = selectedGroup ? productGroupDisplayName(selectedGroup.name) : placeholder || 'Chọn nhóm hàng'
 
   useEffect(() => {
     if (!open) return undefined
@@ -102,7 +103,11 @@ export function ProductGroupTreeSelect({
     return () => document.removeEventListener('pointerdown', closeWhenOutside, true)
   }, [open])
 
-  function openPicker() {
+  function togglePicker() {
+    if (open) {
+      setOpen(false)
+      return
+    }
     setOpen(true)
     requestAnimationFrame(() => inputRef.current?.focus())
   }
@@ -114,7 +119,7 @@ export function ProductGroupTreeSelect({
 
   return (
     <div ref={pickerRef} className={`management-filter-product-group-picker${open ? ' management-filter-sidebar-popover-open' : ''}`}>
-      <button aria-expanded={open} className="management-chip-picker-selected management-filter-group-picker-trigger" type="button" onClick={openPicker}>
+      <button aria-expanded={open} aria-label={triggerLabel} className="management-chip-picker-selected management-filter-group-picker-trigger" type="button" onClick={togglePicker}>
         <span className={`management-chip-picker-input ${selectedGroup ? '' : 'management-chip-picker-input-placeholder'}`}>
           {selectedGroup ? productGroupDisplayName(selectedGroup.name) : placeholder}
         </span>
@@ -135,16 +140,9 @@ export function ProductGroupTreeSelect({
             />
           </label>
           <div className="management-filter-product-group-list">
-            <button
-              className={`management-filter-product-group-option${value === '' ? ' is-selected' : ''}`}
-              type="button"
-              onClick={() => selectGroup('')}
-            >
-              {placeholder}
-            </button>
             {visibleGroups.map(({ node, depth }) => (
               <button
-                className={`management-filter-product-group-option${selectedGroup?.id === node.group?.id ? ' is-selected' : ''}`}
+                className={`management-filter-product-group-option${node.group && selectedGroup?.id === node.group.id ? ' is-selected' : ''}`}
                 key={node.key}
                 style={{ paddingLeft: `${1 + depth * 1.75}rem` }}
                 type="button"

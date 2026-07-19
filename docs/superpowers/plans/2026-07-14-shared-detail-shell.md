@@ -107,7 +107,7 @@ Addendum 2026-07-16:
 - [x] Step 3: Refactor `PurchaseReceiptsPage` detail to use the same shell and split `Thông tin` vs `Lịch sử thanh toán` tab content.
 - [x] Step 4: Run `npx vitest run src/features/purchase/SuppliersPage.test.tsx src/features/purchase/PurchaseReceiptsPage.test.tsx`.
 - [x] Step 5: Run `npm run typecheck`.
-- [x] Step 6: Browser-check `/purchase/receipts` and `/suppliers` on `http://127.0.0.1:3202`; no console errors/warnings found.
+- [x] Step 6: Browser-check `/receipts` and `/suppliers` on `http://127.0.0.1:3202`; no console errors/warnings found.
 
 ### Task 6: 2026-07-15 Detail Shell Hardening
 
@@ -133,4 +133,4 @@ Addendum 2026-07-16:
 - [x] Step 5: For imported posted receipts with `paid_amount` but no explicit `supplier_payments`, synthesize read-only history row `PC` + receipt code, e.g. `PCPN000684`, so KV paid receipts can be reconciled.
 - [x] Step 6: Verify `npx vitest run src/features/purchase/PurchaseReceiptsPage.test.tsx` and `npm run build`.
 - [x] Step 7: Deploy-copy to NAS `3200` with `QCVL_NAS_RESTART=false`; `build:nas`, `verify:nas-bundle`, `db:migrate`, and `health:nas` pass.
-- [x] Step 8: Browser-check NAS `3200` `/purchase/receipts`: `PN000684` shows `PCPN000684` + chip `Đã thanh toán`; `PN000677` has only `Thông tin`, no empty history tab, and footer action `Thanh toán NCC`.
+- [x] Step 8: Browser-check NAS `3200` `/receipts`: `PN000684` shows `PCPN000684` + chip `Đã thanh toán`; `PN000677` has only `Thông tin`, no empty history tab, and footer action `Thanh toán NCC`.

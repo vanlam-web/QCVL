@@ -23,7 +23,7 @@ const corePages = [
   { path: "/finance", name: "finance", waitFor: async (page: Page) => expect(page.locator('.management-list-surface[aria-label="Sổ quỹ"]')).toBeVisible() },
   { path: "/reports", name: "reports", waitFor: async (page: Page) => expect(page.getByRole("heading", { name: "Báo cáo" })).toBeVisible() },
   { path: "/suppliers", name: "suppliers", waitFor: async (page: Page) => expect(page.getByRole("region", { name: "Danh sách nhà cung cấp" })).toBeVisible() },
-  { path: "/purchase/receipts", name: "purchase-receipts", waitFor: async (page: Page) => expect(page.getByRole("region", { name: "Danh sách phiếu nhập" })).toBeVisible() },
+  { path: "/receipts", name: "purchase-receipts", waitFor: async (page: Page) => expect(page.getByRole("region", { name: "Danh sách phiếu nhập" })).toBeVisible() },
   { path: "/admin", name: "admin", waitFor: async (page: Page) => expect(page.getByRole("heading", { name: "Quản trị" })).toBeVisible() },
 ] as const;
 

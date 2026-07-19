@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { ForbiddenPage } from './ForbiddenPage'
 import { useAuth } from '../features/auth/auth-context'
 import { lazy, Suspense, useEffect, useMemo } from 'react'
@@ -81,8 +81,8 @@ export function AppRoutes() {
           <Route path={appRoutes.priceBook} element={<PriceBookRoute />} />
           <Route path={appRoutes.customers} element={<CustomersRoute />} />
           <Route path={appRoutes.suppliers} element={<SuppliersRoute />} />
-          <Route path={appRoutes.purchaseReceipts} element={<PurchaseReceiptsRoute />} />
           <Route path={appRoutes.purchaseReceiptCreate} element={<PurchaseReceiptsRoute createMode />} />
+          <Route path={appRoutes.purchaseReceipts} element={<PurchaseReceiptsRoute />} />
           <Route path={appRoutes.inventory} element={<InventoryRoute />} />
           <Route path={appRoutes.finance} element={<FinanceRoute />} />
           <Route path={appRoutes.reports} element={<ReportsRoute />} />
@@ -288,8 +288,10 @@ function SuppliersRoute() {
 
 function PurchaseReceiptsRoute({ createMode = false }: { createMode?: boolean }) {
   const { currentUser, initialized, getAccessToken, signOut } = useAuth()
+  const location = useLocation()
   const navigate = useNavigate()
   const service = useMemo(() => createBrowserPurchaseReceiptService(getAccessToken), [getAccessToken])
+  const effectiveCreateMode = createMode || location.pathname === appRoutes.purchaseReceiptCreate
 
   if (!initialized) return <BootstrapScreen />
   if (!currentUser) return <Navigate to={appRoutes.login} replace />
@@ -300,7 +302,8 @@ function PurchaseReceiptsRoute({ createMode = false }: { createMode?: boolean })
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
       <PurchaseReceiptsPage
-        createMode={createMode}
+        key={effectiveCreateMode ? 'purchase-receipts-create' : 'purchase-receipts-list'}
+        createMode={effectiveCreateMode}
         currentUser={currentUser}
         service={service}
         onCloseCreateReceipt={() => navigate(appRoutes.purchaseReceipts)}

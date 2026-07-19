@@ -134,7 +134,8 @@ Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm
 
 ### Header
 
-- Khi bấm `Tạo phiếu nhập`, trang chuyển sang `/purchase/receipts/new` để mở màn `Nhập hàng`, có nút mũi tên trái quay lại danh sách phiếu nhập ở `/purchase/receipts`.
+- Danh sách nhập hàng dùng route `/receipts`.
+- Khi bấm `Tạo phiếu nhập`, trang chuyển sang `/receipts/new` để mở màn `Nhập hàng`, có nút mũi tên trái quay lại danh sách phiếu nhập ở `/receipts`.
 - Header màn tạo phiếu có thanh `Tìm hàng (F3)` nằm ngay bên phải chữ `Nhập hàng`, dùng visual/cơ chế giống thanh tìm hàng POS nhưng chỉ tìm theo mã hàng và tên hàng, không tìm combo.
 - Thanh tìm hàng phải gọi search từ catalog khi gõ để bắt được mã ngoài cache nạp sẵn; gợi ý merge cache + remote, ưu tiên khớp mã hàng/tên hàng giống POS.
 - Gõ mã/tên hàng rồi Enter hoặc bấm một gợi ý sẽ thêm hàng đó vào phiếu ở vùng dòng hàng bên dưới.

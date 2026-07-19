@@ -1465,7 +1465,7 @@ td:has(.money-text) {
 
 .purchase-receipt-workspace-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 16rem);
+  grid-template-columns: minmax(0, 1fr) minmax(17.6rem, 21.175rem);
   gap: var(--space-4);
   height: 100%;
   min-height: inherit;
@@ -1477,6 +1477,7 @@ td:has(.money-text) {
 }
 
 .purchase-receipt-workspace-main {
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-width: 0;
@@ -1518,8 +1519,35 @@ td:has(.money-text) {
 }
 
 .purchase-receipt-workspace-table-wrap {
+  position: relative;
   background: var(--color-surface-muted);
   padding: var(--space-2);
+}
+
+.management-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-content: center;
+  place-items: center;
+  gap: var(--space-3);
+  background: color-mix(in srgb, var(--color-surface) 90%, transparent);
+  color: var(--color-text-muted);
+  text-align: center;
+  pointer-events: none;
+}
+
+.management-loading-overlay-spinner {
+  display: inline-flex;
+  animation: spin 1s linear infinite;
+  color: var(--color-primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .purchase-receipt-workspace-table {
@@ -1544,14 +1572,19 @@ td:has(.money-text) {
   padding-right: var(--space-5);
 }
 
-.purchase-receipt-line-card-row,
-.purchase-receipt-line-card-header {
-  grid-template-columns: 2.5rem 7.5rem minmax(14rem, 1.7fr) 5rem 7rem 7.5rem 7.5rem 8rem;
+.purchase-receipt-workspace .purchase-receipt-line-card-row,
+.purchase-receipt-workspace .purchase-receipt-line-card-header {
+  grid-template-columns: 2.5rem minmax(6rem, 7.5rem) minmax(16rem, 1.5fr) 4.5rem 5.75rem 7rem 6.75rem 8rem;
   column-gap: var(--space-2);
 }
 
-.purchase-receipt-line-card-header span {
+.purchase-receipt-workspace .purchase-receipt-line-card-header span {
   text-align: center;
+  white-space: nowrap;
+}
+
+.purchase-receipt-workspace .purchase-receipt-line-card-row .pos-cart-line-name {
+  min-width: 0;
 }
 
 .purchase-receipt-line-code {
@@ -1615,9 +1648,17 @@ td:has(.money-text) {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
-  color: var(--color-text);
+  color: #fff;
+  font-weight: 400;
+  -webkit-text-fill-color: #fff;
   min-height: 2.15rem;
   padding: 0.35rem 0.5rem;
+}
+
+.purchase-receipt-workspace-side input::placeholder,
+.purchase-receipt-workspace-side textarea::placeholder {
+  color: #fff;
+  opacity: 1;
 }
 
 .purchase-receipt-physical-row td {
@@ -1648,6 +1689,25 @@ td:has(.money-text) {
   padding-right: var(--space-1);
 }
 
+.purchase-receipt-workspace-side-top-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 0.9fr);
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.purchase-receipt-workspace-account-display {
+  min-height: 2.15rem;
+  display: flex;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 400;
+  padding: 0.35rem 0;
+}
+
 .purchase-receipt-workspace-side-rail {
   border-left: 1px solid var(--color-border-muted);
   background: var(--color-surface);
@@ -1675,9 +1735,13 @@ td:has(.money-text) {
 .purchase-receipt-workspace-side label {
   display: grid;
   gap: var(--space-2);
-  color: var(--color-text-muted);
+  color: #fff;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 400;
+}
+
+.purchase-receipt-workspace-side-top-row label {
+  gap: var(--space-1);
 }
 
 .purchase-receipt-workspace-side textarea {
@@ -1702,14 +1766,15 @@ td:has(.money-text) {
 }
 
 .purchase-receipt-workspace-totals dt {
-  color: var(--color-text);
-  font-weight: 800;
+  color: #fff;
+  font-weight: 400;
 }
 
 .purchase-receipt-workspace-totals dd {
+  color: #fff;
   margin: 0;
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 800;
 }
 
 .purchase-receipt-workspace-side > .purchase-receipt-workspace-actions.management-filter-actions {
@@ -1720,6 +1785,11 @@ td:has(.money-text) {
   border-top: 1px solid var(--color-border-muted);
   background: var(--color-surface);
   padding-top: var(--space-3);
+}
+
+.purchase-receipt-workspace-side > .purchase-receipt-workspace-actions.management-filter-actions button {
+  color: #fff;
+  font-weight: 400;
 }
 
 @media (max-width: 960px) {

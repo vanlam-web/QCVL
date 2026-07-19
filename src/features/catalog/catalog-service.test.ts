@@ -195,6 +195,39 @@ describe('catalog-service', () => {
     ])
   })
 
+  it('updates a customer through a dedicated patch endpoint', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'customer-1', name: 'Khach moi' } as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.updateCustomer('customer-1', {
+      name: 'Khach moi',
+      phone: '0909000000',
+      tax_code: '0312345678',
+      address: '12 Nguyen Trai',
+      note: 'Khach VIP',
+    })
+
+    expect(calls).toEqual([
+      [
+        '/api/v1/customers/customer-1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            name: 'Khach moi',
+            phone: '0909000000',
+            tax_code: '0312345678',
+            address: '12 Nguyen Trai',
+            note: 'Khach VIP',
+          }),
+        },
+      ],
+    ])
+  })
+
   it('gets and saves product BOM', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

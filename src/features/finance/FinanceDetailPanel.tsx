@@ -9,6 +9,7 @@ import {
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
 import { ManagementRecordLink, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { appRoutes } from '../../app/routes'
 import {
   cashbookDetailAmountLabel,
   cashbookDetailCategoryText,
@@ -35,7 +36,7 @@ interface FinanceDetailPanelProps {
 
 function linkedDocumentHref(code: string) {
   if (code.startsWith('HD')) return managementRecordOpenHref('/sales-documents', code, { type: 'invoice' })
-  if (code.startsWith('PN')) return managementRecordOpenHref('/purchase/receipts', code)
+  if (code.startsWith('PN')) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
   return null
 }
 

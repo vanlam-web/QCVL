@@ -13,7 +13,7 @@
 ## Reality Update 2026-07-12: Filter Summary KPI
 
 - Management KPI totals must represent the whole current filtered result set, not only the visible page.
-- Applied to /sales-documents, /customers, /suppliers, /purchase/receipts, and /inventory/products.
+- Applied to /sales-documents, /customers, /suppliers, /receipts, and /inventory/products.
 - API list responses now may include summary; UI must prefer the response summary and only fall back to summing current page items when talking to an older response shape.
 - Keep POS outside this shared management cleanup.
 

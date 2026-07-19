@@ -224,6 +224,17 @@ export function createCatalogService(api: CatalogApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    updateCustomer: (id: string, input: {
+      name: string
+      phone?: string | null
+      tax_code?: string | null
+      address?: string | null
+      note?: string | null
+    }) =>
+      api.request<Customer>(`/api/v1/customers/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     resolvePrices: (productIds: string[], customerId?: string) =>
       api.request<ResolvePricesResponse>('/api/v1/pricing/resolve', {
         method: 'POST',

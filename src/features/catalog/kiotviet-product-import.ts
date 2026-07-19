@@ -70,7 +70,7 @@ export function mapKiotVietProductRows(rows: KiotVietRawProductRow[]): KiotVietM
     }
     const validCode = code as string
     const validName = name as string
-    const validUnitName = unitName ?? 'Cần cập nhật'
+    const validUnitName = unitName ?? ''
 
     const bomText = text(valueByHeader(row, 'Hàng thành phần', 'Vật tư cấu thành'))
     const productKind = mapProductKind(text(valueByHeader(row, 'Loại hàng')), bomText)

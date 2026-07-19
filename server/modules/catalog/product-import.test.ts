@@ -152,7 +152,7 @@ describe('product import server flow', () => {
     const result = await previewKiotVietProductImport({
       organizationId: 'org-1',
       repository: { findProductsByCodes: vi.fn(async () => new Set()) },
-      rows: [{ ...rows[0], code: 'NO-UNIT', unit_name: 'Cần cập nhật', unit_name_needs_review: true }],
+      rows: [{ ...rows[0], code: 'NO-UNIT', unit_name: '', unit_name_needs_review: true }],
       invalidRows: [],
       cleanupDemo: false,
     })
