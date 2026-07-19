@@ -508,11 +508,11 @@ function SelectedCustomerDetailDialog({
         {activeTab === 'info' ? (
           <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" id="customer-pos-detail-form" onSubmit={onSaveInfo}>
             <label>
-              <span>Mã khách hàng</span>
+              <span>Mã KH</span>
               <input required value={form.code} onChange={(event) => onFormChange({ ...form, code: event.target.value })} />
             </label>
             <label>
-              <span>Tên khách hàng</span>
+              <span>Tên KH</span>
               <input required value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} />
             </label>
             <label>
@@ -547,7 +547,7 @@ function SelectedCustomerDetailDialog({
               onOpen={() => onToggleDropdown('type')}
               onChange={(value) => onFormChange({ ...form, customer_type: value })}
             />
-            <label>
+            <label className="customer-pos-detail-form-wide">
               <span>Công ty</span>
               <input value={form.company_name} onChange={(event) => onFormChange({ ...form, company_name: event.target.value })} />
             </label>

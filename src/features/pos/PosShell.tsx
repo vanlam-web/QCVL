@@ -153,7 +153,6 @@ export function PosShell({
   salesDocumentService,
   productionQueueService,
   currentUser,
-  connected = true,
   onSignOut,
   onOpenAdmin,
   onOpenDashboard,
@@ -165,7 +164,6 @@ export function PosShell({
   salesDocumentService?: SalesDocumentService
   productionQueueService: ProductionQueueService
   currentUser: CurrentUserData
-  connected?: boolean
   onSignOut: () => void
   onOpenAdmin: () => void
   onOpenDashboard: () => void
@@ -1104,7 +1102,6 @@ export function PosShell({
     <main className="pos-shell">
       <PosTopbar
         activeTabId={activeTabId}
-        connected={connected}
         currentUser={currentUser}
         prices={prices}
         productSearch={productSearch}

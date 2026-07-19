@@ -238,27 +238,6 @@
   justify-content: flex-end;
 }
 
-.pos-topbar-actions [aria-label="connection status"] {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 0.75rem;
-  min-width: 0.75rem;
-  height: 0.75rem;
-  min-height: 0.75rem;
-  border: 1px solid color-mix(in srgb, var(--color-success) 70%, white);
-  border-radius: 999px;
-  background: var(--color-success);
-  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--color-success) 16%, transparent);
-  padding: 0;
-}
-
-.pos-topbar-actions [aria-label="connection status"][data-connected="false"] {
-  border-color: color-mix(in srgb, var(--color-danger) 70%, white);
-  background: var(--color-danger);
-  box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--color-danger) 16%, transparent);
-}
-
 .pos-user-actions {
   flex: 0 0 auto;
   min-height: 2.5rem;
@@ -1337,13 +1316,14 @@
 }
 
 .customer-pos-detail-form {
+  --customer-pos-detail-label-width: 4.25rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-2) var(--space-4);
 }
 
 .customer-pos-detail-form label {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-columns: var(--customer-pos-detail-label-width) minmax(0, 1fr);
   gap: var(--space-2);
   align-items: baseline;
   min-width: 0;
@@ -1354,7 +1334,7 @@
 
 .customer-pos-detail-dropdown {
   display: grid;
-  grid-template-columns: 6.5rem minmax(0, 1fr);
+  grid-template-columns: var(--customer-pos-detail-label-width) minmax(0, 1fr);
   gap: var(--space-2);
   align-items: baseline;
   min-width: 0;

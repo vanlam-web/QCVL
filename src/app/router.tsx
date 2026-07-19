@@ -160,7 +160,7 @@ function AccountRoute() {
 }
 
 function PosRoute() {
-  const { currentUser, initialized, accessConnection, signOut, getAccessToken } = useAuth()
+  const { currentUser, initialized, signOut, getAccessToken } = useAuth()
   const navigate = useNavigate()
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const inventoryService = useMemo(() => createBrowserInventoryService(getAccessToken), [getAccessToken])
@@ -183,7 +183,6 @@ function PosRoute() {
       salesDocumentService={salesDocumentService}
       productionQueueService={productionQueueService}
       currentUser={currentUser}
-      connected={accessConnection === 'connected'}
       onSignOut={() => void signOut()}
       onOpenAdmin={() => navigate(appRoutes.admin)}
       onOpenDashboard={() => navigate(appRoutes.dashboard)}
