@@ -210,6 +210,184 @@
   cursor: pointer;
 }
 
+.customer-debt-payment-dialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(50rem, calc(100vw - var(--space-4)));
+  gap: var(--space-2);
+  max-height: calc(100vh - var(--space-4));
+  overflow: hidden;
+  padding: var(--space-3);
+  border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
+  box-shadow: var(--shadow-md);
+}
+
+.customer-debt-payment-dialog .management-modal-header h2 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+
+.customer-debt-payment-dialog .management-modal-header p {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.customer-debt-payment-form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: 0.45rem;
+  overflow: hidden;
+}
+
+.customer-debt-payment-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.customer-debt-payment-grid label,
+.customer-debt-payment-full {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.customer-debt-payment-full {
+  grid-column: 1 / -1;
+}
+
+.customer-debt-payment-grid label > span,
+.customer-debt-payment-full > span {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.customer-debt-payment-grid input,
+.customer-debt-payment-grid select,
+.customer-debt-payment-full input {
+  min-height: 1.875rem !important;
+  height: 1.875rem !important;
+  border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+  background: var(--color-surface);
+}
+
+.customer-debt-payment-form .customer-debt-adjustment-input-shell input {
+  min-height: 1.875rem !important;
+  height: 1.875rem !important;
+}
+
+.customer-debt-payment-full small {
+  justify-self: end;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.customer-debt-payment-form .customer-debt-payment-checkbox {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  gap: var(--space-2);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+.customer-debt-payment-form .customer-debt-payment-checkbox input {
+  width: 1rem;
+  height: 1rem;
+}
+
+.customer-debt-payment-form .customer-debt-payment-checkbox span {
+  white-space: nowrap;
+}
+
+.customer-debt-payment-allocation {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--space-1);
+  overflow: hidden;
+}
+
+.customer-debt-payment-allocation .management-table-viewport {
+  max-height: clamp(7rem, calc(100vh - 30rem), 24rem);
+  overflow: auto;
+}
+
+.customer-debt-payment-table {
+  min-width: 44rem;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.customer-debt-payment-table th,
+.customer-debt-payment-table td {
+  padding: 0.2rem 0.3rem;
+  font-size: 0.75rem;
+}
+
+.customer-debt-payment-table th {
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.customer-debt-payment-table th:nth-child(1),
+.customer-debt-payment-table td:nth-child(1) {
+  width: 16%;
+}
+
+.customer-debt-payment-table th:nth-child(2),
+.customer-debt-payment-table td:nth-child(2) {
+  width: 19%;
+}
+
+.customer-debt-payment-table th:nth-child(n+3),
+.customer-debt-payment-table td:nth-child(n+3) {
+  text-align: right;
+}
+
+.customer-debt-payment-table th:nth-child(6),
+.customer-debt-payment-table td:nth-child(6) {
+  width: 5.5rem;
+}
+
+.customer-debt-payment-form .customer-debt-payment-table input {
+  width: 4.5rem;
+  min-height: 1.5rem !important;
+  height: 1.5rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1;
+  text-align: right;
+}
+
+.customer-debt-payment-unallocated {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 1.5rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.customer-debt-payment-unallocated strong {
+  min-width: 3.5rem;
+  color: var(--color-text);
+  text-align: right;
+}
+
+.customer-debt-payment-form .management-modal-footer {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  border-top: 1px solid color-mix(in srgb, var(--color-border) 65%, transparent);
+  margin: var(--space-1) calc(var(--space-3) * -1) 0;
+  padding: var(--space-2) var(--space-3) 0;
+  background: var(--color-surface);
+}
+
 .customer-debt-adjustment-dialog {
   width: min(32.5rem, calc(100vw - var(--space-4)));
   gap: var(--space-2);

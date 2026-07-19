@@ -104,6 +104,11 @@ export interface CustomerDebtDetail {
 export interface DebtCollectionInput {
   customer_id: string
   amount: number
+  allocations?: Array<{
+    order_id: string
+    order_code: string
+    allocated_amount: number
+  }>
   payment_method: {
     cash_amount: number
     bank_amount: number

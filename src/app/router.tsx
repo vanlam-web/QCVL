@@ -260,6 +260,7 @@ function CustomersRoute() {
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
       <CustomersPage
+        currentUserName={currentUser.user.display_name || currentUser.user.email}
         service={catalogService}
         orderService={orderService}
         salesDocumentService={salesDocumentService}
