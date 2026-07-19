@@ -638,6 +638,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(analysisButton).toHaveClass('management-icon-button')
   expect(detailTablist).toBeInTheDocument()
   expect(analysisButton.closest('.inline-detail-tabbar')).toBe(detailTablist.closest('.inline-detail-tabbar'))
+  expect(within(detailTablist).getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Thông tin', 'Lịch sử', 'Công nợ'])
   expect(within(detail).getByRole('tab', { name: 'Thông tin' })).toHaveAttribute('aria-selected', 'true')
   expect(within(detail).getByRole('tab', { name: 'Công nợ' })).toHaveAttribute('aria-selected', 'false')
   expect(within(detail).getByRole('tab', { name: 'Lịch sử' })).toHaveAttribute('aria-selected', 'false')
@@ -932,14 +933,15 @@ it('reloads customer debt when the debt tab is opened again', async () => {
 
   await userEvent.click(await screen.findByText('KH000123'))
   const detail = screen.getByRole('region', { name: /KH000123/ })
-  const tabs = within(detail).getAllByRole('tab')
+  const infoTab = within(detail).getByRole('tab', { name: 'Thông tin' })
+  const debtTab = within(detail).getByRole('tab', { name: 'Công nợ' })
 
-  await userEvent.click(tabs[1])
+  await userEvent.click(debtTab)
   await waitFor(() => expect(getCustomerDebt).toHaveBeenCalledTimes(1))
   expect(within(detail).getByText('0 hóa đơn mở')).toBeInTheDocument()
 
-  await userEvent.click(tabs[0])
-  await userEvent.click(tabs[1])
+  await userEvent.click(infoTab)
+  await userEvent.click(debtTab)
 
   await waitFor(() => expect(getCustomerDebt).toHaveBeenCalledTimes(2))
   expect(within(detail).getByText('HD-BANK-PARTIAL')).toBeInTheDocument()

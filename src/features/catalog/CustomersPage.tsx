@@ -950,14 +950,14 @@ export function CustomersPage({
                         tabs={[
                           { key: 'info', label: 'Thông tin' },
                           {
-                            key: 'debt',
-                            label: 'Công nợ',
-                            onSelect: () => openCustomerDebt(customer),
-                          },
-                          {
                             key: 'history',
                             label: 'Lịch sử',
                             onSelect: () => openCustomerHistory(customer.id),
+                          },
+                          {
+                            key: 'debt',
+                            label: 'Công nợ',
+                            onSelect: () => openCustomerDebt(customer),
                           },
                         ]}
                         onSelect={(key) => setActiveDetailTab(key as CustomerDetailTab)}
