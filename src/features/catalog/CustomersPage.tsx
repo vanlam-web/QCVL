@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Edit3, Info, Lock, Network, Pencil, Search, StickyNote, Trash2 } from 'lucide-react'
+import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Info, Lock, Network, Pencil, Search, StickyNote, Trash2 } from 'lucide-react'
 import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -1424,7 +1424,7 @@ function CustomerDebtAdjustmentDialog({
         <header className="management-modal-header">
           <h2>
             Điều chỉnh
-            <span aria-label="Thông tin điều chỉnh công nợ" className="customer-debt-adjustment-info" title="Điều chỉnh công nợ khách hàng">
+            <span aria-label="Thông tin điều chỉnh công nợ" className="customer-debt-adjustment-info">
               <Info aria-hidden="true" size={13} />
             </span>
           </h2>
@@ -1443,11 +1443,17 @@ function CustomerDebtAdjustmentDialog({
           </div>
           <label>
             <span>Ngày điều chỉnh</span>
-            <input
-              type="datetime-local"
-              value={form.adjustedAt}
-              onChange={(event) => updateField('adjustedAt', event.target.value)}
-            />
+            <span className="customer-debt-adjustment-input-shell">
+              <input
+                placeholder="dd/mm/yyyy hh:mm"
+                value={form.adjustedAt}
+                onChange={(event) => updateField('adjustedAt', event.target.value)}
+              />
+              <span aria-hidden="true" className="customer-debt-adjustment-input-icons customer-debt-adjustment-input-icons-right">
+                <CalendarDays size={15} />
+                <Clock3 size={15} />
+              </span>
+            </span>
           </label>
           <label>
             <span>Giá trị nợ điều chỉnh</span>
