@@ -621,7 +621,6 @@ export function SuppliersPage({
                     <th>Thời gian</th>
                     <th>Người tạo</th>
                     <th>Cần trả</th>
-                    <th>Đã trả</th>
                     <th>Còn nợ</th>
                     <th>Trạng thái</th>
                   </tr>
@@ -637,7 +636,6 @@ export function SuppliersPage({
                       <td>{formatKvDateTime(receipt.received_at)}</td>
                       <td>{receipt.created_by.name}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
-                      <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
                       <td>
                         <StatusChip tone={receipt.status === 'posted' ? 'success' : receipt.status === 'cancelled' ? 'danger' : 'neutral'}>
@@ -671,7 +669,6 @@ export function SuppliersPage({
                     <th>Thời gian</th>
                     <th>Người tạo</th>
                     <th>Cần trả</th>
-                    <th>Đã trả</th>
                     <th>Còn nợ</th>
                   </tr>
                 </thead>
@@ -686,7 +683,6 @@ export function SuppliersPage({
                       <td>{formatKvDateTime(receipt.received_at)}</td>
                       <td>{receipt.created_by.name}</td>
                       <td><MoneyText value={receipt.payable_amount} /></td>
-                      <td><MoneyText value={receipt.paid_amount} /></td>
                       <td><MoneyText value={supplierReceiptOutstanding(receipt)} /></td>
                     </tr>
                   ))}
