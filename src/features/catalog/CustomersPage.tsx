@@ -1220,7 +1220,6 @@ function CustomerDebtPanel({
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
   const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
-  const summaryDebtTotal = summaryRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
   const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
   const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)
   const visibleSummaryRows = summaryRows.slice((safeSummaryPage - 1) * ledgerPageSize, safeSummaryPage * ledgerPageSize)
@@ -1270,13 +1269,6 @@ function CustomerDebtPanel({
                     </tr>
                   ))}
                 </tbody>
-                <tfoot>
-                  <tr>
-                    <th colSpan={2} scope="row">Tổng</th>
-                    <td><MoneyText value={summaryDebtTotal} /></td>
-                    <td />
-                  </tr>
-                </tfoot>
               </table>
             </ManagementTableViewport>
             <ManagementTableFooter
