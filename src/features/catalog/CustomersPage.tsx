@@ -1286,14 +1286,6 @@ function CustomerDebtPanel({
           Chi tiết
         </button>
       </div>
-      <ManagementDetailInfoList
-        columns="three"
-        items={[
-          { label: 'Công nợ', value: <MoneyText value={currentDebt} /> },
-          { label: 'Hóa đơn mở', value: `${summaryRows.length} hóa đơn mở` },
-          { label: 'Lịch sử công nợ', value: `${ledgerRows.length} dòng` },
-        ]}
-      />
       {debtView === 'summary' ? (
         summaryRows.length > 0 ? (
           <>

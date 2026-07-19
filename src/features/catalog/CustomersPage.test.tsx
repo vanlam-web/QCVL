@@ -667,7 +667,8 @@ it('expands customer details directly under the selected row and closes on secon
   expect(screen.queryByRole('dialog', { name: 'Điều chỉnh công nợ KH000123' })).not.toBeInTheDocument()
   await waitFor(() => expect(detail).toHaveTextContent('250 000'))
   expect(detail).toHaveTextContent('250 000')
-  expect(within(detail).getByText('2 hóa đơn mở')).toBeInTheDocument()
+  expect(within(detail).queryByText('Hóa đơn mở')).not.toBeInTheDocument()
+  expect(within(detail).queryByText('Lịch sử công nợ')).not.toBeInTheDocument()
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 })
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 1000 })
   expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
@@ -967,7 +968,7 @@ it('reloads customer debt when the debt tab is opened again', async () => {
 
   await userEvent.click(debtTab)
   await waitFor(() => expect(getCustomerDebt).toHaveBeenCalledTimes(1))
-  expect(within(detail).getByText('0 hóa đơn mở')).toBeInTheDocument()
+  expect(within(detail).getByText('Không có hóa đơn chưa thanh toán.')).toBeInTheDocument()
 
   await userEvent.click(infoTab)
   await userEvent.click(debtTab)
@@ -1032,7 +1033,7 @@ it('derives open receivable totals from invoice history when the debt endpoint h
   await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
 
   await waitFor(() => expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 }))
-  expect(within(detail).getByText('1 hóa đơn mở')).toBeInTheDocument()
+  expect(within(detail).getByRole('navigation', { name: 'Phân trang tóm tắt công nợ' })).toHaveTextContent('1 - 1 trong 1 hóa đơn mở')
   expect(detail).toHaveTextContent('44 800')
   const debtSummaryTable = within(detail).getByRole('table', { name: 'Tóm tắt công nợ' })
   expect(within(debtSummaryTable).getByText('HD-OPEN')).toBeInTheDocument()
