@@ -1,5 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
-import { BarChart3, CalendarDays, ChevronLeft, ChevronRight, Clock3, Edit3, Info, Lock, Network, Pencil, Search, StickyNote, Trash2 } from 'lucide-react'
+import {
+  BarChart3,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  CircleDollarSign,
+  Clock3,
+  Edit3,
+  FileDown,
+  Info,
+  Lock,
+  Network,
+  Pencil,
+  Percent,
+  Search,
+  StickyNote,
+  Trash2,
+} from 'lucide-react'
 import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -1045,30 +1062,65 @@ export function CustomersPage({
                           />
                         </ManagementDetailSection>
                       )}
-                      <ManagementDetailActionFooter
-                        leftActions={[
-                          {
-                            label: 'Xóa',
-                            danger: true,
-                            disabled: true,
-                            icon: <Trash2 aria-hidden="true" size={15} />,
-                          },
-                        ]}
-                        rightActions={[
-                          {
-                            label: activeDetailTab === 'debt' ? 'Điều chỉnh' : 'Chỉnh sửa',
-                            disabled: activeDetailTab !== 'debt',
-                            variant: 'primary',
-                            icon: <Edit3 aria-hidden="true" size={15} />,
-                            onClick: activeDetailTab === 'debt' ? () => openDebtAdjustmentDialog(customer) : undefined,
-                          },
-                          {
-                            label: customer.status === 'inactive' ? 'Kích hoạt' : 'Ngừng hoạt động',
-                            disabled: true,
-                            icon: <Lock aria-hidden="true" size={15} />,
-                          },
-                        ]}
-                      />
+                      {activeDetailTab === 'debt' ? (
+                        <ManagementDetailActionFooter
+                          leftActions={[
+                            {
+                              label: 'Xuất file công nợ',
+                              disabled: true,
+                              icon: <FileDown aria-hidden="true" size={15} />,
+                            },
+                            {
+                              label: 'Xuất file',
+                              disabled: true,
+                              icon: <FileDown aria-hidden="true" size={15} />,
+                            },
+                          ]}
+                          rightActions={[
+                            {
+                              label: 'Thanh toán',
+                              disabled: true,
+                              variant: 'primary',
+                              icon: <CircleDollarSign aria-hidden="true" size={15} />,
+                            },
+                            {
+                              label: 'Điều chỉnh',
+                              variant: 'primary',
+                              icon: <Edit3 aria-hidden="true" size={15} />,
+                              onClick: () => openDebtAdjustmentDialog(customer),
+                            },
+                            {
+                              label: 'Chiết khấu thanh toán',
+                              disabled: true,
+                              icon: <Percent aria-hidden="true" size={15} />,
+                            },
+                          ]}
+                        />
+                      ) : (
+                        <ManagementDetailActionFooter
+                          leftActions={[
+                            {
+                              label: 'Xóa',
+                              danger: true,
+                              disabled: true,
+                              icon: <Trash2 aria-hidden="true" size={15} />,
+                            },
+                          ]}
+                          rightActions={[
+                            {
+                              label: 'Chỉnh sửa',
+                              disabled: true,
+                              variant: 'primary',
+                              icon: <Edit3 aria-hidden="true" size={15} />,
+                            },
+                            {
+                              label: customer.status === 'inactive' ? 'Kích hoạt' : 'Ngừng hoạt động',
+                              disabled: true,
+                              icon: <Lock aria-hidden="true" size={15} />,
+                            },
+                          ]}
+                        />
+                      )}
                     </ManagementDetailPanel>
                   )
                 }}
