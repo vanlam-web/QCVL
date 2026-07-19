@@ -620,6 +620,40 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         .map((customer) => hydrateCustomerLinkedSupplier(hydrateCustomerCreator(customerWithDisplaySalesAmount(customer), users), suppliers))
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
     },
+    async getCustomerFinancialTotals() {
+      const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
+      for (const customer of customers.values()) {
+        totals.set(customer.id, {
+          total_sales_amount: 0,
+          total_debt_amount: customer.total_debt_amount ?? 0,
+          last_activity_at: customer.last_transaction_at ?? customer.created_at,
+        })
+      }
+      const customersWithLiveInvoices = new Set<string>()
+      for (const document of salesDocuments.values()) {
+        if (document.order_type !== 'invoice' || document.status === 'cancelled') continue
+        const customer = resolveDocumentCustomer(document, customers)
+        if (!customer) continue
+        const firstLiveInvoice = !customersWithLiveInvoices.has(customer.id)
+        customersWithLiveInvoices.add(customer.id)
+        const current = totals.get(customer.id) ?? {
+          total_sales_amount: 0,
+          total_debt_amount: 0,
+          last_activity_at: customer.last_transaction_at ?? customer.created_at,
+        }
+        const existing = firstLiveInvoice
+          ? { ...current, total_sales_amount: 0, total_debt_amount: 0 }
+          : current
+        totals.set(customer.id, {
+          total_sales_amount: existing.total_sales_amount + document.total_amount,
+          total_debt_amount: existing.total_debt_amount + Math.max(document.debt_amount, 0),
+          last_activity_at: !existing.last_activity_at || Date.parse(document.created_at) > Date.parse(existing.last_activity_at)
+            ? document.created_at
+            : existing.last_activity_at,
+        })
+      }
+      return totals
+    },
     async findCustomerByCode(input) {
       const customer = customers.get(input.code)
         ?? [...customers.values()].find((item) => normalize(item.code) === normalize(input.code))

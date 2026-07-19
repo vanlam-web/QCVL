@@ -71,6 +71,62 @@ describe('createDevMemoryRepository persistence', () => {
     expect(currentUser?.user.display_name).toBe('Phạm Nhật Linh')
   })
 
+  it('uses live invoice debt instead of stale imported customer debt in financial totals', async () => {
+    const repository = await createDevMemoryRepository()
+
+    await repository.upsertCustomersByCode?.({
+      organizationId: 'org-dev-memory',
+      rows: [{
+        rowNumber: 2,
+        code: 'DT',
+        name: 'Dao Tuan',
+        phone: null,
+        email: null,
+        address: null,
+        area_name: null,
+        ward_name: null,
+        tax_code: null,
+        customer_group_name: null,
+        customer_group_id: null,
+        note: null,
+        customer_type: 'individual',
+        company_name: null,
+        source_creator_name: null,
+        source_created_at: '2026-07-01T00:00:00.000Z',
+        last_transaction_at: null,
+        kiotviet_current_debt: 96000,
+        kiotviet_total_sales: 4329360,
+        kiotviet_net_sales: 4329360,
+        status: 'active',
+      }],
+    })
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: {
+        id: 'order-dt-live',
+        code: 'HD011155',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-13T12:21:00.000Z',
+        customer: { id: 'customer-kv-dt', code: 'DT', name: 'Dao Tuan', phone: null },
+        seller: { id: 'user-dev-admin', name: 'Admin' },
+        subtotal_amount: 2919120,
+        discount_amount: 0,
+        total_amount: 2919120,
+        paid_amount: 0,
+        debt_amount: 2919120,
+        payment_status: 'unpaid',
+        note: null,
+        items: [],
+      },
+      cashbookEntries: [],
+    })
+
+    const totals = await repository.getCustomerFinancialTotals?.('org-dev-memory')
+
+    expect(totals?.get('customer-kv-dt')?.total_debt_amount).toBe(2919120)
+  })
+
   it('filters sales documents by the displayed source date instead of shifting UTC into local date', async () => {
     const repository = await createDevMemoryRepository()
 
