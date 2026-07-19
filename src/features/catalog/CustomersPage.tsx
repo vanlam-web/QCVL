@@ -1401,6 +1401,20 @@ type CustomerDebtAdjustmentForm = {
   note: string
 }
 
+function dateTimePickerValueFromDisplay(value: string) {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+  if (!match) return ''
+  const [, day, month, year, hour, minute] = match
+  return `${year}-${month}-${day}T${String(Number(hour)).padStart(2, '0')}:${minute}`
+}
+
+function displayDateTimePickerValue(value: string) {
+  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
+  if (!match) return value.trim()
+  const [, year, month, day, hour, minute] = match
+  return `${day}/${month}/${year} ${hour}:${minute}`
+}
+
 function CustomerDebtAdjustmentDialog({
   customer,
   currentDebt,
@@ -1414,8 +1428,19 @@ function CustomerDebtAdjustmentDialog({
   onChange: (form: CustomerDebtAdjustmentForm) => void
   onClose: () => void
 }) {
+  const nativeDateTimeInputRef = useRef<HTMLInputElement>(null)
   const updateField = (field: keyof CustomerDebtAdjustmentForm, value: string) => {
     onChange({ ...form, [field]: value })
+  }
+  const openNativeDateTimePicker = () => {
+    const input = nativeDateTimeInputRef.current
+    if (!input) return
+    input.focus()
+    if (typeof input.showPicker === 'function') {
+      input.showPicker()
+      return
+    }
+    input.click()
   }
 
   return (
@@ -1445,14 +1470,24 @@ function CustomerDebtAdjustmentDialog({
             <span>Ngày điều chỉnh</span>
             <span className="customer-debt-adjustment-input-shell">
               <input
+                readOnly
                 placeholder="dd/mm/yyyy hh:mm"
                 value={form.adjustedAt}
-                onChange={(event) => updateField('adjustedAt', event.target.value)}
+                onClick={openNativeDateTimePicker}
               />
-              <span aria-hidden="true" className="customer-debt-adjustment-input-icons customer-debt-adjustment-input-icons-right">
+              <input
+                aria-hidden="true"
+                className="customer-debt-adjustment-native-picker"
+                ref={nativeDateTimeInputRef}
+                tabIndex={-1}
+                type="datetime-local"
+                value={dateTimePickerValueFromDisplay(form.adjustedAt)}
+                onChange={(event) => updateField('adjustedAt', displayDateTimePickerValue(event.currentTarget.value))}
+              />
+              <button aria-label="Chọn ngày giờ điều chỉnh" className="customer-debt-adjustment-input-button" type="button" onClick={openNativeDateTimePicker}>
                 <CalendarDays size={15} />
                 <Clock3 size={15} />
-              </span>
+              </button>
             </span>
           </label>
           <label>
@@ -1471,7 +1506,7 @@ function CustomerDebtAdjustmentDialog({
                 value={form.note}
                 onChange={(event) => updateField('note', event.target.value)}
               />
-              <span aria-hidden="true" className="customer-debt-adjustment-input-icons customer-debt-adjustment-input-icons-left">
+              <span aria-hidden="true" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-left">
                 <Pencil size={15} />
               </span>
             </span>

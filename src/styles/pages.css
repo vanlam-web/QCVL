@@ -231,23 +231,36 @@
   padding-right: 3.25rem;
 }
 
-.customer-debt-adjustment-input-icons {
+.customer-debt-adjustment-native-picker {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.customer-debt-adjustment-input-button {
   position: absolute;
   right: 0.75rem;
   top: 50%;
   display: inline-flex;
+  align-items: center;
   gap: 0.25rem;
+  border: 0;
+  background: transparent;
   color: var(--color-text-muted);
+  cursor: pointer;
   transform: translateY(-50%);
-  pointer-events: none;
 }
 
-.customer-debt-adjustment-input-icons-left {
+.customer-debt-adjustment-input-button-left {
   right: auto;
   left: 0.75rem;
 }
 
-.customer-debt-adjustment-input-shell:has(.customer-debt-adjustment-input-icons-left) input {
+.customer-debt-adjustment-input-shell:has(.customer-debt-adjustment-input-button-left) input {
   padding-left: 2rem;
   padding-right: 0.75rem;
 }
