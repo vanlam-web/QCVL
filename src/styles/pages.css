@@ -177,6 +177,33 @@
   display: none;
 }
 
+.customer-history-panel .management-table-footer,
+.customer-debt-panel .management-table-footer {
+  grid-template-columns: auto auto 1fr;
+  justify-content: start;
+  margin-top: 0;
+  min-height: 2rem;
+  padding: 0 var(--space-1);
+  border-top: 0;
+}
+
+.customer-history-panel .management-table-footer-actions,
+.customer-debt-panel .management-table-footer-actions,
+.customer-history-panel .management-table-footer-summary,
+.customer-debt-panel .management-table-footer-summary {
+  justify-self: start;
+}
+
+.customer-history-panel .management-table-footer-actions,
+.customer-debt-panel .management-table-footer-actions {
+  gap: var(--space-1);
+}
+
+.customer-history-panel .management-table-footer-actions input,
+.customer-debt-panel .management-table-footer-actions input {
+  min-height: 1.625rem;
+}
+
 .customer-debt-record-button {
   border: 0;
   background: transparent;
