@@ -1336,6 +1336,48 @@
   overflow-wrap: anywhere;
 }
 
+.customer-pos-detail-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3) var(--space-4);
+}
+
+.customer-pos-detail-form label {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 400;
+}
+
+.customer-pos-detail-form input,
+.customer-pos-detail-form select,
+.customer-pos-detail-form textarea {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  padding: 0 0 var(--space-1);
+  font: inherit;
+}
+
+.customer-pos-detail-form textarea {
+  resize: vertical;
+}
+
+.customer-pos-detail-form-wide,
+.customer-pos-detail-form-actions {
+  grid-column: 1 / -1;
+}
+
+.customer-pos-detail-form-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .customer-pos-detail-panel {
   display: grid;
   gap: var(--space-3);

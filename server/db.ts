@@ -958,6 +958,48 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return new Set(result.rows.map((row) => String(row.code)))
     },
 
+    async updateCustomer(input) {
+      await ensureImportedSnapshotTables(pool)
+      const existing = await pool.query(
+        `
+          select data
+          from customer_snapshots
+          where organization_id = $1 and (id = $2 or lower(code) = lower($2))
+          limit 1
+        `,
+        [input.organizationId, input.id],
+      )
+      const current = existing.rows[0]?.data as CustomerListData | undefined
+      if (!current) return null
+      const group = input.patch.customer_group_id === undefined
+        ? current.customer_group
+        : input.patch.customer_group_id === null
+          ? null
+          : await findCustomerGroupSnapshot(pool, input.organizationId, input.patch.customer_group_id)
+      const data: CustomerListData = {
+        ...current,
+        code: input.patch.code ?? current.code,
+        name: input.patch.name,
+        phone: input.patch.phone === undefined ? current.phone : input.patch.phone,
+        tax_code: input.patch.tax_code === undefined ? current.tax_code : input.patch.tax_code,
+        address: input.patch.address === undefined ? current.address : input.patch.address,
+        note: input.patch.note === undefined ? current.note : input.patch.note,
+        customer_group_id: input.patch.customer_group_id === undefined ? current.customer_group_id : input.patch.customer_group_id,
+        customer_group: group,
+        customer_type: input.patch.customer_type === undefined ? current.customer_type : input.patch.customer_type,
+        company_name: input.patch.company_name === undefined ? current.company_name : input.patch.company_name,
+      }
+      await pool.query(
+        `
+          update customer_snapshots
+          set code = $3, data = $4::jsonb, updated_at = now()
+          where organization_id = $1 and id = $2
+        `,
+        [input.organizationId, current.id, data.code, JSON.stringify(data)],
+      )
+      return hydrateCustomerLinkedSupplier(data, [])
+    },
+
     async upsertCustomerGroupsByName(input) {
       return new Map(input.names
         .map((name) => name.trim())
@@ -6194,6 +6236,22 @@ async function ensureImportedSnapshotTables(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists purchase_receipt_snapshots_org_updated_idx on purchase_receipt_snapshots (organization_id, updated_at desc)')
+}
+
+async function findCustomerGroupSnapshot(pool: pg.Pool, organizationId: string, groupId: string) {
+  const result = await pool.query(
+    `
+      select data->'customer_group' as customer_group
+      from customer_snapshots
+      where organization_id = $1
+        and data->>'customer_group_id' = $2
+        and data->'customer_group' is not null
+      limit 1
+    `,
+    [organizationId, groupId],
+  )
+  const group = result.rows[0]?.customer_group as CustomerListData['customer_group'] | undefined
+  return group ?? { id: groupId, code: groupId, name: groupId }
 }
 
 function hashText(value: string) {

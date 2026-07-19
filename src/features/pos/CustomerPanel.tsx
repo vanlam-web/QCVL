@@ -11,7 +11,7 @@ import {
   customerDebtLedgerDefinesCurrentDebt,
 } from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
-import type { Customer } from '../catalog/types'
+import type { Customer, CustomerGroup } from '../catalog/types'
 import type { FinanceService } from '../finance/finance-service'
 import type { CashbookEntry } from '../finance/types'
 import type { OrderService, CustomerDebtDetail } from '../orders/order-service'
@@ -25,6 +25,17 @@ type CustomerPosDebtLedgerState = {
   cashbookHistory: CashbookEntry[]
 } | 'loading' | 'error'
 type CustomerHistoryState = { items: SalesDocumentListItem[]; total: number } | 'loading' | 'error'
+type CustomerDetailForm = {
+  code: string
+  name: string
+  phone: string
+  tax_code: string
+  customer_group_id: string
+  customer_type: string
+  company_name: string
+  address: string
+  note: string
+}
 const customerDebtLedgerFetchPageSize = 1000
 
 export function CustomerPanel({
@@ -50,6 +61,9 @@ export function CustomerPanel({
   const [detailDebt, setDetailDebt] = useState<CustomerDebtState | undefined>(undefined)
   const [detailDebtLedger, setDetailDebtLedger] = useState<CustomerPosDebtLedgerState | undefined>(undefined)
   const [detailHistory, setDetailHistory] = useState<CustomerHistoryState | undefined>(undefined)
+  const [detailForm, setDetailForm] = useState<CustomerDetailForm>(() => customerDetailFormFromCustomer(selectedCustomer))
+  const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
+  const [detailSaving, setDetailSaving] = useState(false)
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
@@ -135,6 +149,15 @@ export function CustomerPanel({
     }
   }, [detailOpen, financeService, orderService, salesDocumentService, selectedCustomer])
 
+  useEffect(() => {
+    if (!detailOpen || selectedCustomer === null) return
+    setDetailForm(customerDetailFormFromCustomer(selectedCustomer))
+    service
+      .listCustomerGroups()
+      .then((response) => setCustomerGroups(response.items))
+      .catch(() => setCustomerGroups([]))
+  }, [detailOpen, selectedCustomer, service])
+
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
@@ -190,6 +213,33 @@ export function CustomerPanel({
   function openCustomerDetail() {
     setDetailTab('info')
     setDetailOpen(true)
+  }
+
+  async function saveCustomerDetail(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (selectedCustomer === null) return
+    setError(null)
+    setDetailSaving(true)
+    try {
+      const updated = await service.updateCustomer(selectedCustomer.id, {
+        code: detailForm.code.trim(),
+        name: detailForm.name.trim(),
+        phone: nullableFormText(detailForm.phone),
+        tax_code: nullableFormText(detailForm.tax_code),
+        customer_group_id: detailForm.customer_group_id || null,
+        customer_type: detailForm.customer_type || null,
+        company_name: nullableFormText(detailForm.company_name),
+        address: nullableFormText(detailForm.address),
+        note: nullableFormText(detailForm.note),
+      })
+      onSelectCustomer(updated)
+      setSearch(updated.name)
+      setDetailForm(customerDetailFormFromCustomer(updated))
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không lưu được khách hàng.'))
+    } finally {
+      setDetailSaving(false)
+    }
   }
 
   async function createCustomer(event: React.FormEvent<HTMLFormElement>) {
@@ -253,10 +303,15 @@ export function CustomerPanel({
             <SelectedCustomerDetailDialog
               activeTab={detailTab}
               customer={selectedCustomer}
+              customerGroups={mergeSelectedCustomerGroup(customerGroups, selectedCustomer)}
               debt={detailDebt}
               debtLedger={detailDebtLedger}
+              form={detailForm}
               history={detailHistory}
+              saving={detailSaving}
               onClose={() => setDetailOpen(false)}
+              onFormChange={setDetailForm}
+              onSaveInfo={saveCustomerDetail}
               onSelectTab={setDetailTab}
             />
           ) : null}
@@ -318,35 +373,32 @@ export function CustomerPanel({
 function SelectedCustomerDetailDialog({
   activeTab,
   customer,
+  customerGroups,
   debt,
   debtLedger,
+  form,
   history,
+  saving,
   onClose,
+  onFormChange,
+  onSaveInfo,
   onSelectTab,
 }: {
   activeTab: CustomerDetailTab
   customer: Customer
+  customerGroups: CustomerGroup[]
   debt: CustomerDebtState | undefined
   debtLedger: CustomerPosDebtLedgerState | undefined
+  form: CustomerDetailForm
   history: CustomerHistoryState | undefined
+  saving: boolean
   onClose: () => void
+  onFormChange: (form: CustomerDetailForm) => void
+  onSaveInfo: (event: React.FormEvent<HTMLFormElement>) => void
   onSelectTab: (tab: CustomerDetailTab) => void
 }) {
-  const groupName = customer.customer_group?.name?.trim() ?? ''
   const summaryDebt = customer.total_debt_amount ?? 0
   const totalSales = customer.total_sales_amount ?? 0
-  const detailRows = [
-    { label: 'Mã khách hàng', value: customer.code },
-    { label: 'Tên khách hàng', value: customer.name },
-    { label: 'Điện thoại', value: customer.phone },
-    { label: 'Mã số thuế', value: customer.tax_code },
-    { label: 'Địa chỉ', value: customer.address },
-    { label: 'Nhóm', value: groupName },
-    { label: 'Loại khách', value: customerTypeText(customer.customer_type) },
-    { label: 'Công ty', value: customer.company_name },
-    { label: 'Ghi chú', value: customer.note },
-  ].filter((row) => hasDetailValue(row.value))
-
   return (
     <div className="management-modal-backdrop customer-pos-detail-backdrop" onMouseDown={onClose}>
       <section
@@ -392,16 +444,56 @@ function SelectedCustomerDetailDialog({
           ))}
         </div>
 
-        {activeTab === 'info' ? <section className="customer-pos-detail-section" aria-label="Thông tin khách hàng">
-          <dl className="customer-pos-detail-list">
-            {detailRows.map((row) => (
-              <div key={row.label}>
-                <dt>{row.label}</dt>
-                <dd>{row.value}</dd>
-              </div>
-            ))}
-          </dl>
-        </section> : null}
+        {activeTab === 'info' ? (
+          <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" onSubmit={onSaveInfo}>
+            <label>
+              <span>Mã khách hàng</span>
+              <input required value={form.code} onChange={(event) => onFormChange({ ...form, code: event.target.value })} />
+            </label>
+            <label>
+              <span>Tên khách hàng</span>
+              <input required value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} />
+            </label>
+            <label>
+              <span>SĐT</span>
+              <input value={form.phone} onChange={(event) => onFormChange({ ...form, phone: event.target.value })} />
+            </label>
+            <label>
+              <span>MST</span>
+              <input value={form.tax_code} onChange={(event) => onFormChange({ ...form, tax_code: event.target.value })} />
+            </label>
+            <label>
+              <span>Nhóm</span>
+              <select value={form.customer_group_id} onChange={(event) => onFormChange({ ...form, customer_group_id: event.target.value })}>
+                <option value="">Không có nhóm</option>
+                {customerGroups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Loại khách</span>
+              <select value={form.customer_type} onChange={(event) => onFormChange({ ...form, customer_type: event.target.value })}>
+                <option value="individual">Cá nhân</option>
+                <option value="company">Tổ chức</option>
+                <option value="other">Khác</option>
+              </select>
+            </label>
+            <label>
+              <span>Công ty</span>
+              <input value={form.company_name} onChange={(event) => onFormChange({ ...form, company_name: event.target.value })} />
+            </label>
+            <label className="customer-pos-detail-form-wide">
+              <span>Địa chỉ</span>
+              <textarea rows={2} value={form.address} onChange={(event) => onFormChange({ ...form, address: event.target.value })} />
+            </label>
+            <label className="customer-pos-detail-form-wide">
+              <span>Ghi chú</span>
+              <textarea rows={2} value={form.note} onChange={(event) => onFormChange({ ...form, note: event.target.value })} />
+            </label>
+            <div className="customer-pos-detail-form-actions">
+              <button className="button button-primary" disabled={saving} type="submit">{saving ? 'Đang lưu...' : 'Lưu'}</button>
+            </div>
+          </form>
+        ) : null}
 
         {activeTab === 'debt' ? <CustomerPosDebtPanel debt={debt} debtLedger={debtLedger} fallbackDebt={summaryDebt} /> : null}
         {activeTab === 'history' ? <CustomerPosHistoryPanel history={history} /> : null}
@@ -514,19 +606,34 @@ function CustomerPosHistoryPanel({ history }: { history: CustomerHistoryState | 
   )
 }
 
-function hasDetailValue(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
+function customerDetailFormFromCustomer(customer: Customer | null): CustomerDetailForm {
+  return {
+    code: customer?.code ?? '',
+    name: customer?.name ?? '',
+    phone: customer?.phone ?? '',
+    tax_code: customer?.tax_code ?? '',
+    customer_group_id: customer?.customer_group_id ?? '',
+    customer_type: customer?.customer_type ?? 'individual',
+    company_name: customer?.company_name ?? '',
+    address: customer?.address ?? '',
+    note: customer?.note ?? '',
+  }
 }
 
-function customerTypeText(type: Customer['customer_type']) {
-  switch (type) {
-    case 'individual':
-      return 'Cá nhân'
-    case 'company':
-      return 'Công ty'
-    case 'other':
-      return 'Khác'
-    default:
-      return ''
-  }
+function nullableFormText(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function mergeSelectedCustomerGroup(groups: CustomerGroup[], customer: Customer) {
+  if (!customer.customer_group) return groups
+  if (groups.some((group) => group.id === customer.customer_group?.id)) return groups
+  return [
+    ...groups,
+    {
+      ...customer.customer_group,
+      price_list_id: '',
+      is_active: true,
+    },
+  ]
 }

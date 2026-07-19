@@ -629,6 +629,31 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     async findCustomersByCodes(input) {
       return new Set(input.codes.filter((code) => customers.has(code)))
     },
+    async updateCustomer(input) {
+      const entry = [...customers.entries()].find(([, customer]) => customer.id === input.id || customer.code === input.id)
+      if (!entry) return null
+      const [key, customer] = entry
+      const groupId = input.patch.customer_group_id === undefined ? customer.customer_group_id : input.patch.customer_group_id
+      const groupName = groupId ? customerGroupNamesById.get(groupId) ?? customer.customer_group?.name ?? groupId : null
+      const updated = hydrateCustomerLinkedSupplier(hydrateCustomerCreator({
+        ...customer,
+        code: input.patch.code ?? customer.code,
+        name: input.patch.name,
+        phone: input.patch.phone === undefined ? customer.phone : input.patch.phone,
+        tax_code: input.patch.tax_code === undefined ? customer.tax_code : input.patch.tax_code,
+        address: input.patch.address === undefined ? customer.address : input.patch.address,
+        note: input.patch.note === undefined ? customer.note : input.patch.note,
+        customer_group_id: groupId,
+        customer_group: groupId && groupName ? { id: groupId, code: groupName, name: groupName } : null,
+        customer_type: input.patch.customer_type === undefined ? customer.customer_type : input.patch.customer_type,
+        company_name: input.patch.company_name === undefined ? customer.company_name : input.patch.company_name,
+      }, users), suppliers)
+      if (updated.code !== key) customers.delete(key)
+      customers.set(updated.code, updated)
+      syncExactCustomerSupplierLinks(customers, suppliers)
+      await persist()
+      return updated
+    },
     async upsertCustomerGroupsByName(input) {
       for (const name of input.names) {
         if (!name.trim()) continue

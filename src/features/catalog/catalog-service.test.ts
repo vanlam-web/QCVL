@@ -204,11 +204,15 @@ describe('catalog-service', () => {
     const service = createCatalogService({ request })
 
     await service.updateCustomer('customer-1', {
+      code: 'KH000001',
       name: 'Khach moi',
       phone: '0909000000',
       tax_code: '0312345678',
       address: '12 Nguyen Trai',
       note: 'Khach VIP',
+      customer_group_id: 'cg-vip',
+      customer_type: 'company',
+      company_name: 'Cong ty moi',
     })
 
     expect(calls).toEqual([
@@ -217,11 +221,15 @@ describe('catalog-service', () => {
         {
           method: 'PATCH',
           body: JSON.stringify({
+            code: 'KH000001',
             name: 'Khach moi',
             phone: '0909000000',
             tax_code: '0312345678',
             address: '12 Nguyen Trai',
             note: 'Khach VIP',
+            customer_group_id: 'cg-vip',
+            customer_type: 'company',
+            company_name: 'Cong ty moi',
           }),
         },
       ],

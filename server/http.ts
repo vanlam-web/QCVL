@@ -494,6 +494,21 @@ export interface ServerRepository {
     price_list_id: string
   }>>
   listCustomers?(input: { organizationId: string; url: URL }): Promise<CustomerListData[]>
+  updateCustomer?(input: {
+    organizationId: string
+    id: string
+    patch: {
+      code?: string
+      name: string
+      phone?: string | null
+      tax_code?: string | null
+      address?: string | null
+      note?: string | null
+      customer_group_id?: string | null
+      customer_type?: string | null
+      company_name?: string | null
+    }
+  }): Promise<CustomerListData | null>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
   findCustomersByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   listSuppliers?(input: { organizationId: string; url: URL }): Promise<SupplierListData[]>
@@ -2618,7 +2633,21 @@ async function getDevApiResponse(
       createProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
       updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
       upsertProductBom: async () => ({ found: true, data: { id: randomUUID(), product_id: path.split('/')[4], version: 1, status: 'active', notes: null, created_at: nowIso, items: [] } }),
-      customerGroups: async () => ({ found: true, data: { items: customerGroups } }),
+      customerGroups: async () => {
+        const repositoryCustomers = await repository.listCustomers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/customers?page_size=1000') })
+        const groupsById = new Map(customerGroups.map((group) => [group.id, group]))
+        for (const customer of repositoryCustomers ?? []) {
+          if (!customer.customer_group) continue
+          groupsById.set(customer.customer_group.id, {
+            id: customer.customer_group.id,
+            code: customer.customer_group.code,
+            name: customer.customer_group.name,
+            price_list_id: '',
+            is_active: true,
+          })
+        }
+        return { found: true, data: { items: [...groupsById.values()].sort((left, right) => left.name.localeCompare(right.name, 'vi', { numeric: true })) } }
+      },
       listCustomers: async () => {
         const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
         const userList = await repository.listUsers?.({
@@ -2656,15 +2685,51 @@ async function getDevApiResponse(
       updateCustomer: async () => {
         const body = await readJson(request)
         const id = getIdFromPath(path) ?? ''
+        const patch: {
+          code?: string
+          name: string
+          phone?: string | null
+          tax_code?: string | null
+          address?: string | null
+          note?: string | null
+          customer_group_id?: string | null
+          customer_type?: string | null
+          company_name?: string | null
+        } = {
+          name: requiredString(body.name, 'name'),
+        }
+        if (body.code !== undefined) patch.code = requiredString(body.code, 'code')
+        if (body.phone !== undefined) patch.phone = nullableString(body.phone)
+        if (body.tax_code !== undefined) patch.tax_code = nullableString(body.tax_code)
+        if (body.address !== undefined) patch.address = nullableString(body.address)
+        if (body.note !== undefined) patch.note = nullableString(body.note)
+        if (body.customer_group_id !== undefined) patch.customer_group_id = nullableString(body.customer_group_id)
+        if (body.customer_type !== undefined) patch.customer_type = nullableString(body.customer_type)
+        if (body.company_name !== undefined) patch.company_name = nullableString(body.company_name)
+        const repositoryCustomer = await repository.updateCustomer?.({
+          organizationId: currentUser.organization.id,
+          id,
+          patch,
+        })
+        if (repositoryCustomer) return { found: true, data: repositoryCustomer }
+
         const index = customers.findIndex((customer) => customer.id === id)
         if (index < 0) return { found: true, data: { message: 'Customer not found' }, status: 404 }
+        const group = patch.customer_group_id
+          ? customerGroups.find((item) => item.id === patch.customer_group_id) ?? null
+          : null
         const updated = {
           ...customers[index],
-          name: typeof body.name === 'string' ? body.name : customers[index].name,
-          phone: body.phone === undefined ? customers[index].phone : nullableString(body.phone),
-          tax_code: body.tax_code === undefined ? customers[index].tax_code : nullableString(body.tax_code),
-          address: body.address === undefined ? customers[index].address : nullableString(body.address),
-          note: body.note === undefined ? customers[index].note : nullableString(body.note),
+          code: patch.code ?? customers[index].code,
+          name: patch.name,
+          phone: patch.phone === undefined ? customers[index].phone : patch.phone,
+          tax_code: patch.tax_code === undefined ? customers[index].tax_code : patch.tax_code,
+          address: patch.address === undefined ? customers[index].address : patch.address,
+          note: patch.note === undefined ? customers[index].note : patch.note,
+          customer_group_id: patch.customer_group_id === undefined ? customers[index].customer_group_id : patch.customer_group_id,
+          customer_group: patch.customer_group_id === undefined ? customers[index].customer_group : group,
+          customer_type: patch.customer_type === undefined ? customers[index].customer_type : patch.customer_type,
+          company_name: patch.company_name === undefined ? customers[index].company_name : patch.company_name,
         }
         customers[index] = updated
         return { found: true, data: updated }

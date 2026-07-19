@@ -27,7 +27,31 @@ function serviceStub(overrides: Partial<CatalogService> = {}): CatalogService {
     updateProduct: vi.fn(),
     resolvePrices: vi.fn(),
     listCustomers: vi.fn(async () => ({ items: [customer], page: 1, page_size: 20, total: 1 })),
+    listCustomerGroups: vi.fn(async () => ({
+      items: [
+        { id: 'group-35', code: '35', name: '35', price_list_id: '', is_active: true },
+        { id: 'group-vip', code: 'VIP', name: 'VIP', price_list_id: '', is_active: true },
+      ],
+    })),
     createCustomer: vi.fn(async () => customer),
+    updateCustomer: vi.fn(async (_id, input) => ({
+      ...customer,
+      id: _id,
+      code: input.code ?? customer.code,
+      name: input.name,
+      phone: input.phone ?? null,
+      tax_code: input.tax_code ?? null,
+      address: input.address ?? null,
+      note: input.note ?? null,
+      customer_group_id: input.customer_group_id ?? null,
+      customer_group: input.customer_group_id === 'group-vip'
+        ? { id: 'group-vip', code: 'VIP', name: 'VIP' }
+        : input.customer_group_id === 'group-35'
+          ? { id: 'group-35', code: '35', name: '35' }
+          : null,
+      customer_type: input.customer_type,
+      company_name: input.company_name ?? null,
+    })),
     ...overrides,
   } as CatalogService
 }
@@ -235,15 +259,25 @@ describe('CustomerPanel', () => {
         summary: { opening_balance: 0, total_in: 500000, total_out: 0, ending_balance: 500000 },
       })),
     })
+    const updatedCustomer = {
+      ...detailedCustomer,
+      name: 'Út Tèo mới',
+      address: 'Địa chỉ mới',
+      customer_group_id: 'group-vip',
+      customer_group: { id: 'group-vip', code: 'VIP', name: 'VIP' },
+      customer_type: 'company' as const,
+    }
+    const service = serviceStub({ updateCustomer: vi.fn(async () => updatedCustomer) })
+    const onSelectCustomer = vi.fn()
 
     render(
       <CustomerPanel
-        service={serviceStub()}
+        service={service}
         orderService={orderService}
         financeService={financeService}
         salesDocumentService={salesDocumentService}
         selectedCustomer={detailedCustomer}
-        onSelectCustomer={vi.fn()}
+        onSelectCustomer={onSelectCustomer}
       />,
     )
 
@@ -252,12 +286,12 @@ describe('CustomerPanel', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Chi tiết khách KH000001' })
     expect(within(dialog).getByText('Mã khách hàng')).toBeInTheDocument()
     expect(within(dialog).getByText('Tên khách hàng')).toBeInTheDocument()
-    expect(within(dialog).getByText('Điện thoại')).toBeInTheDocument()
-    expect(within(dialog).getByText('Mã số thuế')).toBeInTheDocument()
+    expect(within(dialog).getByText('SĐT')).toBeInTheDocument()
+    expect(within(dialog).getByText('MST')).toBeInTheDocument()
     expect(within(dialog).getByText('Địa chỉ')).toBeInTheDocument()
     expect(within(dialog).getByText('Nhóm')).toBeInTheDocument()
     expect(within(dialog).getByText('Loại khách')).toBeInTheDocument()
-    expect(within(dialog).getAllByText('Công ty').length).toBeGreaterThan(0)
+    expect(within(dialog).getByText('Công ty')).toBeInTheDocument()
     expect(within(dialog).getByText('Ghi chú')).toBeInTheDocument()
     expect(within(dialog).getByText('NCC liên kết:', { exact: false })).toBeInTheDocument()
     expect(within(dialog).getByRole('tab', { name: 'Thông tin' })).toBeInTheDocument()
@@ -268,6 +302,27 @@ describe('CustomerPanel', () => {
     expect(within(dialog).queryByText('Giới tính')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('avatar', { exact: false })).not.toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Đóng chi tiết khách' })).toBeInTheDocument()
+    expect(within(dialog).getByLabelText('Địa chỉ')).toHaveValue('123 Đường Lớn')
+    await userEvent.clear(within(dialog).getByLabelText('Tên khách hàng'))
+    await userEvent.type(within(dialog).getByLabelText('Tên khách hàng'), 'Út Tèo mới')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Nhóm'), 'group-vip')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Loại khách'), 'company')
+    await userEvent.clear(within(dialog).getByLabelText('Địa chỉ'))
+    await userEvent.type(within(dialog).getByLabelText('Địa chỉ'), 'Địa chỉ mới')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+
+    expect(service.updateCustomer).toHaveBeenCalledWith(detailedCustomer.id, {
+      code: 'KH000001',
+      name: 'Út Tèo mới',
+      phone: '0909000000',
+      tax_code: '0123456789',
+      customer_group_id: 'group-vip',
+      customer_type: 'company',
+      company_name: 'Công ty Hoàng Lợi',
+      address: 'Địa chỉ mới',
+      note: 'Khách QCVL',
+    })
+    expect(onSelectCustomer).toHaveBeenCalledWith(updatedCustomer)
 
     await userEvent.click(within(dialog).getByRole('tab', { name: 'Công nợ' }))
     expect(await within(dialog).findByText('Tổng nợ')).toBeInTheDocument()

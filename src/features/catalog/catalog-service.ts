@@ -225,11 +225,15 @@ export function createCatalogService(api: CatalogApiRequester) {
         body: JSON.stringify(input),
       }),
     updateCustomer: (id: string, input: {
+      code?: string
       name: string
       phone?: string | null
       tax_code?: string | null
       address?: string | null
       note?: string | null
+      customer_group_id?: string | null
+      customer_type?: string | null
+      company_name?: string | null
     }) =>
       api.request<Customer>(`/api/v1/customers/${encodeURIComponent(id)}`, {
         method: 'PATCH',
