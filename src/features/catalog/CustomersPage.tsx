@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { BarChart3, ChevronLeft, ChevronRight, Edit3, Lock, Network, Search, StickyNote, Trash2 } from 'lucide-react'
+import { BarChart3, ChevronLeft, ChevronRight, Edit3, Info, Lock, Network, Pencil, Search, StickyNote, Trash2 } from 'lucide-react'
 import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -1425,7 +1425,7 @@ function CustomerDebtAdjustmentDialog({
           <h2>
             Điều chỉnh
             <span aria-label="Thông tin điều chỉnh công nợ" className="customer-debt-adjustment-info" title="Điều chỉnh công nợ khách hàng">
-              i
+              <Info aria-hidden="true" size={13} />
             </span>
           </h2>
           <button aria-label="Đóng điều chỉnh công nợ" className="management-icon-button" type="button" onClick={onClose}>
@@ -1460,10 +1460,15 @@ function CustomerDebtAdjustmentDialog({
           </label>
           <label>
             <span>Mô tả</span>
-            <input
-              value={form.note}
-              onChange={(event) => updateField('note', event.target.value)}
-            />
+            <span className="customer-debt-adjustment-input-shell">
+              <input
+                value={form.note}
+                onChange={(event) => updateField('note', event.target.value)}
+              />
+              <span aria-hidden="true" className="customer-debt-adjustment-input-icons customer-debt-adjustment-input-icons-left">
+                <Pencil size={15} />
+              </span>
+            </span>
           </label>
           <footer className="management-modal-footer">
             <button className="button button-secondary" type="button" onClick={onClose}>

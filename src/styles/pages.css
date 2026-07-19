@@ -218,6 +218,26 @@
   min-height: 2.25rem;
 }
 
+.customer-debt-adjustment-input-shell {
+  position: relative;
+  display: block;
+}
+
+.customer-debt-adjustment-input-shell input {
+  width: 100%;
+  padding-left: 2rem;
+}
+
+.customer-debt-adjustment-input-icons-left {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  display: inline-flex;
+  color: var(--color-text-muted);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
 .customer-debt-adjustment-form .management-modal-footer {
   border-top: 1px solid var(--color-border);
   margin-inline: calc(var(--space-3) * -1);
