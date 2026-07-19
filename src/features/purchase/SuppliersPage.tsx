@@ -558,8 +558,8 @@ export function SuppliersPage({
             ariaLabel="Chi tiết nhà cung cấp"
             tabs={[
               { key: 'info', label: 'Thông tin' },
-              { key: 'history', label: 'Lịch sử NCC này' },
-              { key: 'debt', label: 'Nợ NCC này' },
+              { key: 'history', label: 'Lịch sử' },
+              { key: 'debt', label: 'Nợ' },
             ]}
             onSelect={(key) => setSupplierDetailTab(key as SupplierDetailTab)}
           />
