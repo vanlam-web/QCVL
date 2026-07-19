@@ -164,6 +164,7 @@
 .customer-debt-adjustment-dialog {
   width: min(32.5rem, calc(100vw - var(--space-4)));
   gap: var(--space-2);
+  overflow: visible;
   padding: var(--space-3);
   border-color: color-mix(in srgb, var(--color-border) 65%, transparent);
   box-shadow: var(--shadow-md);
