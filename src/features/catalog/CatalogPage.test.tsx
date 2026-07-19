@@ -296,8 +296,11 @@ it('closes the parent group dropdown when clicking its trigger again', async () 
 
   const dialog = screen.getByRole('dialog', { name: 'Tạo nhóm hàng' })
   const trigger = within(dialog).getByRole('button', { name: 'Chọn nhóm hàng' })
+  expect(trigger).toHaveTextContent('Chọn nhóm hàng')
   await userEvent.click(trigger)
-  expect(within(dialog).getByRole('dialog', { name: 'Chọn nhóm hàng' })).toBeInTheDocument()
+  const picker = within(dialog).getByRole('dialog', { name: 'Chọn nhóm hàng' })
+  expect(within(picker).queryByRole('button', { name: 'Chọn nhóm hàng' })).not.toBeInTheDocument()
+  expect(within(picker).getAllByRole('button')[0]).not.toHaveClass('is-selected')
 
   await userEvent.click(trigger)
   expect(within(dialog).queryByRole('dialog', { name: 'Chọn nhóm hàng' })).not.toBeInTheDocument()
