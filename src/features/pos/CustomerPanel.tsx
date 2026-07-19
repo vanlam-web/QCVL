@@ -4,24 +4,40 @@ import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../co
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
 import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/customer-presenter'
+import {
+  buildCustomerDebtLedgerRows,
+  customerDebtCounterpartyMatches,
+  customerDebtHasLiveLedger,
+  customerDebtLedgerDefinesCurrentDebt,
+} from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer } from '../catalog/types'
+import type { FinanceService } from '../finance/finance-service'
+import type { CashbookEntry } from '../finance/types'
 import type { OrderService, CustomerDebtDetail } from '../orders/order-service'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 
 type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
+type CustomerPosDebtLedgerState = {
+  debt: CustomerDebtDetail
+  invoiceHistory: SalesDocumentListItem[]
+  cashbookHistory: CashbookEntry[]
+} | 'loading' | 'error'
 type CustomerHistoryState = { items: SalesDocumentListItem[]; total: number } | 'loading' | 'error'
+const customerDebtLedgerFetchPageSize = 1000
 
 export function CustomerPanel({
   service,
   orderService,
+  financeService,
   salesDocumentService,
   selectedCustomer,
   onSelectCustomer,
 }: {
   service: CatalogService
   orderService?: Pick<OrderService, 'getCustomerDebt'>
+  financeService?: Pick<FinanceService, 'listCashbookEntries'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer | null) => void
@@ -32,6 +48,7 @@ export function CustomerPanel({
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<CustomerDetailTab>('info')
   const [detailDebt, setDetailDebt] = useState<CustomerDebtState | undefined>(undefined)
+  const [detailDebtLedger, setDetailDebtLedger] = useState<CustomerPosDebtLedgerState | undefined>(undefined)
   const [detailHistory, setDetailHistory] = useState<CustomerHistoryState | undefined>(undefined)
   const [form, setForm] = useState({ code: '', name: '', phone: '' })
   const [error, setError] = useState<string | null>(null)
@@ -63,16 +80,46 @@ export function CustomerPanel({
     const requestId = detailRequestId.current + 1
     detailRequestId.current = requestId
     setDetailDebt(orderService ? 'loading' : undefined)
+    setDetailDebtLedger(orderService ? 'loading' : undefined)
     setDetailHistory(salesDocumentService ? 'loading' : undefined)
 
     if (orderService) {
-      orderService
-        .getCustomerDebt(selectedCustomer.id)
-        .then((debt) => {
-          if (detailRequestId.current === requestId) setDetailDebt(debt)
+      const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
+      Promise.all([
+        orderService.getCustomerDebt(selectedCustomer.id),
+        salesDocumentService?.listSalesDocuments({
+          customer_id: selectedCustomer.id,
+          type: 'invoice',
+          page: 1,
+          page_size: customerDebtLedgerFetchPageSize,
+        }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
+        financeService?.listCashbookEntries({
+          search: counterpartySearch || undefined,
+          search_scope: 'counterparty',
+          status: 'posted',
+          page: 1,
+          page_size: customerDebtLedgerFetchPageSize,
+        }) ?? Promise.resolve({
+          items: [],
+          page: 1,
+          page_size: customerDebtLedgerFetchPageSize,
+          total: 0,
+          summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+        }),
+      ])
+        .then(([debt, invoiceHistory, cashbookHistory]) => {
+          if (detailRequestId.current !== requestId) return
+          setDetailDebt(debt)
+          setDetailDebtLedger({
+            debt,
+            invoiceHistory: invoiceHistory.items,
+            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer)),
+          })
         })
         .catch(() => {
-          if (detailRequestId.current === requestId) setDetailDebt('error')
+          if (detailRequestId.current !== requestId) return
+          setDetailDebt('error')
+          setDetailDebtLedger('error')
         })
     }
 
@@ -86,7 +133,7 @@ export function CustomerPanel({
           if (detailRequestId.current === requestId) setDetailHistory('error')
         })
     }
-  }, [detailOpen, orderService, salesDocumentService, selectedCustomer])
+  }, [detailOpen, financeService, orderService, salesDocumentService, selectedCustomer])
 
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -135,6 +182,7 @@ export function CustomerPanel({
     setDetailOpen(false)
     setDetailTab('info')
     setDetailDebt(undefined)
+    setDetailDebtLedger(undefined)
     setDetailHistory(undefined)
     onSelectCustomer(null)
   }
@@ -206,6 +254,7 @@ export function CustomerPanel({
               activeTab={detailTab}
               customer={selectedCustomer}
               debt={detailDebt}
+              debtLedger={detailDebtLedger}
               history={detailHistory}
               onClose={() => setDetailOpen(false)}
               onSelectTab={setDetailTab}
@@ -270,6 +319,7 @@ function SelectedCustomerDetailDialog({
   activeTab,
   customer,
   debt,
+  debtLedger,
   history,
   onClose,
   onSelectTab,
@@ -277,6 +327,7 @@ function SelectedCustomerDetailDialog({
   activeTab: CustomerDetailTab
   customer: Customer
   debt: CustomerDebtState | undefined
+  debtLedger: CustomerPosDebtLedgerState | undefined
   history: CustomerHistoryState | undefined
   onClose: () => void
   onSelectTab: (tab: CustomerDetailTab) => void
@@ -352,7 +403,7 @@ function SelectedCustomerDetailDialog({
           </dl>
         </section> : null}
 
-        {activeTab === 'debt' ? <CustomerPosDebtPanel debt={debt} fallbackDebt={summaryDebt} /> : null}
+        {activeTab === 'debt' ? <CustomerPosDebtPanel debt={debt} debtLedger={debtLedger} fallbackDebt={summaryDebt} /> : null}
         {activeTab === 'history' ? <CustomerPosHistoryPanel history={history} /> : null}
 
         <footer className="management-modal-footer">
@@ -363,35 +414,63 @@ function SelectedCustomerDetailDialog({
   )
 }
 
-function CustomerPosDebtPanel({ debt, fallbackDebt }: { debt: CustomerDebtState | undefined; fallbackDebt: number }) {
-  if (debt === undefined || debt === 'loading') return <p>Đang tải công nợ...</p>
-  if (debt === 'error') return <p role="alert">Không tải được công nợ.</p>
-  const totalDebt = Math.max(debt.total_debt, fallbackDebt)
+function CustomerPosDebtPanel({
+  debt,
+  debtLedger,
+  fallbackDebt,
+}: {
+  debt: CustomerDebtState | undefined
+  debtLedger: CustomerPosDebtLedgerState | undefined
+  fallbackDebt: number
+}) {
+  if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
+  if (debt === 'error' || debtLedger === 'error') return <p role="alert">Không tải được công nợ.</p>
+  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
+  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
+  const invoiceRows = debtLedger.invoiceHistory.length > 0
+    ? debtLedger.invoiceHistory
+    : debtLedger.debt.invoices.map((invoice) => ({
+        id: invoice.order_id,
+        code: invoice.order_code,
+        created_at: invoice.created_at,
+        total_amount: invoice.total_amount,
+        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
+      }))
+  const ledgerRows = buildCustomerDebtLedgerRows(
+    invoiceRows,
+    debtLedger.cashbookHistory,
+    debtLedger.debt.adjustments ?? [],
+    debtLedger.debt.linked_supplier_receipts ?? [],
+  )
+  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
+  const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  const visibleLedgerRows = ledgerRows.slice(0, 10)
+
   return (
     <section aria-label="Công nợ khách hàng" className="customer-pos-detail-panel">
       <div className="customer-pos-detail-money-row">
         <span>Tổng nợ</span>
-        <strong>{formatMoney(totalDebt)}</strong>
+        <strong>{formatMoney(currentDebt)}</strong>
       </div>
-      {debt.invoices.length === 0 ? <p>Chưa có hóa đơn còn nợ.</p> : (
-        <table aria-label="Hóa đơn còn nợ POS" className="customer-pos-detail-table">
+      {ledgerRows.length === 0 ? <p>Chưa có lịch sử công nợ.</p> : (
+        <table aria-label="Lịch sử công nợ POS" className="customer-pos-detail-table">
           <thead>
             <tr>
               <th>Mã</th>
               <th>Ngày</th>
-              <th>Tổng</th>
-              <th>Đã thu</th>
-              <th>Còn nợ</th>
+              <th>Loại</th>
+              <th>Giá trị</th>
+              <th>Công nợ</th>
             </tr>
           </thead>
           <tbody>
-            {debt.invoices.map((invoice) => (
-              <tr key={invoice.order_id}>
-                <td>{invoice.order_code}</td>
-                <td>{customerDateTime(invoice.created_at)}</td>
-                <td>{formatMoney(invoice.total_amount)}</td>
-                <td>{formatMoney(invoice.paid_amount)}</td>
-                <td><strong>{formatMoney(invoice.remaining_debt)}</strong></td>
+            {visibleLedgerRows.map((row) => (
+              <tr key={row.id}>
+                <td>{row.code}</td>
+                <td>{customerDateTime(row.created_at)}</td>
+                <td>{row.type}</td>
+                <td>{formatMoney(row.value_delta)}</td>
+                <td><strong>{formatMoney(row.running_debt)}</strong></td>
               </tr>
             ))}
           </tbody>

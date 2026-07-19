@@ -11,6 +11,7 @@ import {
 } from 'react'
 import type { CurrentUserData } from '../../lib/api/types'
 import type { CatalogService } from '../catalog/catalog-service'
+import type { FinanceService } from '../finance/finance-service'
 import type { Product, ResolvedPrice, SellMethod } from '../catalog/types'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShortageMaterial, PosShortagePreview } from '../inventory/types'
@@ -106,6 +107,7 @@ export function PosShell({
   catalogService,
   inventoryService,
   orderService,
+  financeService,
   salesDocumentService,
   productionQueueService,
   currentUser,
@@ -117,6 +119,7 @@ export function PosShell({
   catalogService: CatalogService
   inventoryService: InventoryService
   orderService: OrderService
+  financeService?: FinanceService
   salesDocumentService?: SalesDocumentService
   productionQueueService: ProductionQueueService
   currentUser: CurrentUserData
@@ -1412,6 +1415,7 @@ export function PosShell({
             key={selectedCustomer?.id ?? 'no-customer'}
             service={catalogService}
             orderService={orderService}
+            financeService={financeService}
             salesDocumentService={customerSalesDocumentService}
             selectedCustomer={selectedCustomer}
             onSelectCustomer={(customer) =>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer } from '../catalog/types'
+import type { FinanceService } from '../finance/finance-service'
 import type { OrderService } from '../orders/order-service'
 import type { SalesDocumentService } from '../sales-documents/sales-document-service'
 import { CustomerPanel } from './CustomerPanel'
@@ -43,6 +44,19 @@ function salesDocumentServiceStub(overrides: Partial<Pick<SalesDocumentService, 
     listSalesDocuments: vi.fn(async () => ({ items: [], page: 1, page_size: 10, total: 0 })),
     ...overrides,
   } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
+}
+
+function financeServiceStub(overrides: Partial<Pick<FinanceService, 'listCashbookEntries'>> = {}) {
+  return {
+    listCashbookEntries: vi.fn(async () => ({
+      items: [],
+      page: 1,
+      page_size: 1000,
+      total: 0,
+      summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+    })),
+    ...overrides,
+  } satisfies Pick<FinanceService, 'listCashbookEntries'>
 }
 
 describe('CustomerPanel', () => {
@@ -150,6 +164,19 @@ describe('CustomerPanel', () => {
             remaining_debt: 4866121,
           },
         ],
+        adjustments: [
+          {
+            id: 'adjustment-1',
+            source_code: 'CB000001',
+            created_at: '2026-07-14T08:30:00.000Z',
+            transaction_type: 'Điều chỉnh',
+            amount_delta: 21159562,
+            paid_amount: 0,
+            remaining_amount: 21159562,
+            balance_after: 21025683,
+            source_file: 'BaoCaoCongNoTheoKhachHang_KV.xlsx',
+          },
+        ],
       })),
     })
     const salesDocumentService = salesDocumentServiceStub({
@@ -177,11 +204,43 @@ describe('CustomerPanel', () => {
         total: 1,
       })),
     })
+    const financeService = financeServiceStub({
+      listCashbookEntries: vi.fn(async () => ({
+        items: [
+          {
+            id: 'cashbook-1',
+            code: 'TT001838',
+            status: 'posted' as const,
+            direction: 'in' as const,
+            amount_delta: 500000,
+            finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+            is_business_accounted: true,
+            source_type: 'kiotviet_cashbook' as const,
+            created_at: '2026-07-15T10:00:00.000Z',
+            note: null,
+            counterparty: { type: 'customer' as const, name: detailedCustomer.name, phone: detailedCustomer.phone },
+            created_by: null,
+            source: {
+              type: 'payment_receipt',
+              id: 'payment-1',
+              code: 'TT001838',
+              order_code: null,
+              counterparty_code: detailedCustomer.code,
+            },
+          },
+        ],
+        page: 1,
+        page_size: 1000,
+        total: 1,
+        summary: { opening_balance: 0, total_in: 500000, total_out: 0, ending_balance: 500000 },
+      })),
+    })
 
     render(
       <CustomerPanel
         service={serviceStub()}
         orderService={orderService}
+        financeService={financeService}
         salesDocumentService={salesDocumentService}
         selectedCustomer={detailedCustomer}
         onSelectCustomer={vi.fn()}
@@ -212,7 +271,17 @@ describe('CustomerPanel', () => {
 
     await userEvent.click(within(dialog).getByRole('tab', { name: 'Công nợ' }))
     expect(await within(dialog).findByText('Tổng nợ')).toBeInTheDocument()
-    expect(within(dialog).getAllByText('4 866 121').length).toBeGreaterThan(0)
+    expect(within(dialog).getAllByText('21 025 683').length).toBeGreaterThan(0)
+    expect(await within(dialog).findByRole('table', { name: 'Lịch sử công nợ POS' })).toBeInTheDocument()
+    expect(within(dialog).getByText('CB000001')).toBeInTheDocument()
+    expect(within(dialog).getByText('TT001838')).toBeInTheDocument()
+    expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
+      search: detailedCustomer.name,
+      search_scope: 'counterparty',
+      status: 'posted',
+      page: 1,
+      page_size: 1000,
+    })
 
     await userEvent.click(within(dialog).getByRole('tab', { name: 'Lịch sử' }))
     expect(await within(dialog).findByRole('table', { name: 'Lịch sử hóa đơn POS' })).toBeInTheDocument()

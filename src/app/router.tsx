@@ -165,6 +165,7 @@ function PosRoute() {
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const inventoryService = useMemo(() => createBrowserInventoryService(getAccessToken), [getAccessToken])
   const orderService = useMemo(() => createBrowserOrderService(getAccessToken), [getAccessToken])
+  const financeService = useMemo(() => createBrowserFinanceService(getAccessToken), [getAccessToken])
   const salesDocumentService = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const productionQueueService = useMemo(
     () => createBrowserProductionQueueService(getAccessToken),
@@ -178,6 +179,7 @@ function PosRoute() {
       catalogService={catalogService}
       inventoryService={inventoryService}
       orderService={orderService}
+      financeService={financeService}
       salesDocumentService={salesDocumentService}
       productionQueueService={productionQueueService}
       currentUser={currentUser}
