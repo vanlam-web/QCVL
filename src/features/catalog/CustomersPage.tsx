@@ -1401,19 +1401,36 @@ type CustomerDebtAdjustmentForm = {
   note: string
 }
 
-function dateTimePickerValueFromDisplay(value: string) {
-  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
-  if (!match) return ''
-  const [, day, month, year, hour, minute] = match
-  return `${year}-${month}-${day}T${String(Number(hour)).padStart(2, '0')}:${minute}`
+function parseCustomerDebtAdjustmentDateTime(value: string) {
+  const match = value.trim().match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/)
+  if (!match) return null
+  const [, day, month, year, hour = '0', minute = '00'] = match
+  const parsed = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed
 }
 
-function displayDateTimePickerValue(value: string) {
-  const match = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
-  if (!match) return value.trim()
-  const [, year, month, day, hour, minute] = match
-  return `${day}/${month}/${year} ${hour}:${minute}`
+function formatCustomerDebtAdjustmentDateTime(value: Date) {
+  return `${String(value.getDate()).padStart(2, '0')}/${String(value.getMonth() + 1).padStart(2, '0')}/${value.getFullYear()} ${String(value.getHours()).padStart(2, '0')}:${String(value.getMinutes()).padStart(2, '0')}`
 }
+
+function customerDebtAdjustmentCalendarDays(month: Date) {
+  const firstDate = new Date(month.getFullYear(), month.getMonth(), 1)
+  const offset = (firstDate.getDay() + 6) % 7
+  const startDate = new Date(firstDate)
+  startDate.setDate(firstDate.getDate() - offset)
+  return Array.from({ length: 35 }, (_, index) => {
+    const date = new Date(startDate)
+    date.setDate(startDate.getDate() + index)
+    return date
+  })
+}
+
+const customerDebtAdjustmentTimeOptions = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2)
+  const minute = index % 2 === 0 ? '00' : '30'
+  return `${String(hour).padStart(2, '0')}:${minute}`
+})
 
 function CustomerDebtAdjustmentDialog({
   customer,
@@ -1428,19 +1445,28 @@ function CustomerDebtAdjustmentDialog({
   onChange: (form: CustomerDebtAdjustmentForm) => void
   onClose: () => void
 }) {
-  const nativeDateTimeInputRef = useRef<HTMLInputElement>(null)
+  const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
+  const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const now = new Date()
+    return new Date(now.getFullYear(), now.getMonth(), 1)
+  })
+  const calendarDays = customerDebtAdjustmentCalendarDays(calendarMonth)
   const updateField = (field: keyof CustomerDebtAdjustmentForm, value: string) => {
     onChange({ ...form, [field]: value })
   }
-  const openNativeDateTimePicker = () => {
-    const input = nativeDateTimeInputRef.current
-    if (!input) return
-    input.focus()
-    if (typeof input.showPicker === 'function') {
-      input.showPicker()
-      return
-    }
-    input.click()
+  const selectAdjustmentDate = (date: Date) => {
+    const base = selectedAdjustmentDateTime ?? new Date()
+    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
+    updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
+    setPickerOpen(null)
+  }
+  const selectAdjustmentTime = (time: string) => {
+    const [hour, minute] = time.split(':').map(Number)
+    const base = selectedAdjustmentDateTime ?? new Date()
+    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
+    updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
+    setPickerOpen(null)
   }
 
   return (
@@ -1470,24 +1496,59 @@ function CustomerDebtAdjustmentDialog({
             <span>Ngày điều chỉnh</span>
             <span className="customer-debt-adjustment-input-shell">
               <input
-                readOnly
                 placeholder="dd/mm/yyyy hh:mm"
                 value={form.adjustedAt}
-                onClick={openNativeDateTimePicker}
+                onChange={(event) => updateField('adjustedAt', event.target.value)}
               />
-              <input
-                aria-hidden="true"
-                className="customer-debt-adjustment-native-picker"
-                ref={nativeDateTimeInputRef}
-                tabIndex={-1}
-                type="datetime-local"
-                value={dateTimePickerValueFromDisplay(form.adjustedAt)}
-                onChange={(event) => updateField('adjustedAt', displayDateTimePickerValue(event.currentTarget.value))}
-              />
-              <button aria-label="Chọn ngày giờ điều chỉnh" className="customer-debt-adjustment-input-button" type="button" onClick={openNativeDateTimePicker}>
+              <button aria-expanded={pickerOpen === 'date'} aria-label="Chọn ngày điều chỉnh" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-date" type="button" onClick={() => setPickerOpen((current) => current === 'date' ? null : 'date')}>
                 <CalendarDays size={15} />
+              </button>
+              <button aria-expanded={pickerOpen === 'time'} aria-label="Chọn giờ điều chỉnh" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-time" type="button" onClick={() => setPickerOpen((current) => current === 'time' ? null : 'time')}>
                 <Clock3 size={15} />
               </button>
+              {pickerOpen === 'date' ? (
+                <section aria-label="Lịch chọn ngày điều chỉnh" className="customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
+                  <header>
+                    <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
+                      ‹
+                    </button>
+                    <strong>Tháng {calendarMonth.getMonth() + 1} {calendarMonth.getFullYear()}</strong>
+                    <button aria-label="Tháng sau" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
+                      ›
+                    </button>
+                  </header>
+                  <div className="customer-debt-adjustment-weekdays" aria-hidden="true">
+                    {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
+                  </div>
+                  <div className="customer-debt-adjustment-calendar-grid">
+                    {calendarDays.map((date) => {
+                      const selected = selectedAdjustmentDateTime
+                        ? date.toDateString() === selectedAdjustmentDateTime.toDateString()
+                        : false
+                      return (
+                        <button
+                          aria-pressed={selected}
+                          className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'customer-debt-adjustment-muted-day'}
+                          key={date.toISOString()}
+                          type="button"
+                          onClick={() => selectAdjustmentDate(date)}
+                        >
+                          {date.getDate()}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </section>
+              ) : null}
+              {pickerOpen === 'time' ? (
+                <section aria-label="Chọn giờ điều chỉnh" className="customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
+                  {customerDebtAdjustmentTimeOptions.map((time) => (
+                    <button key={time} type="button" onClick={() => selectAdjustmentTime(time)}>
+                      {time}
+                    </button>
+                  ))}
+                </section>
+              ) : null}
             </span>
           </label>
           <label>

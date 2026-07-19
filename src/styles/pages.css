@@ -228,26 +228,15 @@
 
 .customer-debt-adjustment-input-shell input {
   width: 100%;
-  padding-right: 3.25rem;
-}
-
-.customer-debt-adjustment-native-picker {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+  padding-right: 4rem;
 }
 
 .customer-debt-adjustment-input-button {
   position: absolute;
-  right: 0.75rem;
   top: 50%;
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  justify-content: center;
   border: 0;
   background: transparent;
   color: var(--color-text-muted);
@@ -255,14 +244,98 @@
   transform: translateY(-50%);
 }
 
-.customer-debt-adjustment-input-button-left {
-  right: auto;
-  left: 0.75rem;
+.customer-debt-adjustment-input-button-date {
+  right: 1.8rem;
 }
 
-.customer-debt-adjustment-input-shell:has(.customer-debt-adjustment-input-button-left) input {
-  padding-left: 2rem;
-  padding-right: 0.75rem;
+.customer-debt-adjustment-input-button-time {
+  right: 0.5rem;
+}
+
+.customer-debt-adjustment-picker {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  z-index: 2;
+  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+}
+
+.customer-debt-adjustment-date-picker {
+  left: 0;
+  width: 17rem;
+}
+
+.customer-debt-adjustment-date-picker header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.customer-debt-adjustment-date-picker header button {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.customer-debt-adjustment-date-picker strong {
+  font-size: 0.9rem;
+}
+
+.customer-debt-adjustment-weekdays,
+.customer-debt-adjustment-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.125rem;
+}
+
+.customer-debt-adjustment-weekdays {
+  margin-bottom: 0.25rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.customer-debt-adjustment-calendar-grid button,
+.customer-debt-adjustment-time-picker button {
+  min-height: 2rem;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+}
+
+.customer-debt-adjustment-calendar-grid button:hover,
+.customer-debt-adjustment-time-picker button:hover {
+  background: color-mix(in srgb, var(--color-primary) 10%, var(--color-surface));
+}
+
+.customer-debt-adjustment-muted-day {
+  color: var(--color-text-muted);
+}
+
+.customer-debt-adjustment-time-picker {
+  left: 0;
+  width: 11rem;
+  max-height: 13rem;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.125rem;
+}
+
+.customer-debt-adjustment-time-picker button {
+  text-align: left;
+  padding: 0 0.5rem;
 }
 
 .customer-debt-adjustment-form .management-modal-footer {
