@@ -677,6 +677,105 @@ describe('createPgRepository product units', () => {
     ]))
   })
 
+  test('replaces existing imported invoice items when KiotViet invoice is reimported', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from customer_snapshots')) return { rows: [{ data: { id: 'customer-1', code: 'KH001', name: 'Khach test', phone: null } }], rowCount: 1 }
+      if (sql.includes('from products p') && sql.includes('product_unit_conversions puc')) {
+        return {
+          rows: [{
+            id: 'product-ib',
+            code: 'IB',
+            name: 'In bat',
+            status: 'active',
+            product_kind: 'service',
+            unit_name: 'm2',
+            sell_method: 'area_m2',
+            latest_purchase_cost: 0,
+            latest_purchase_cost_at: null,
+            default_sale_price: null,
+            product_group_id: null,
+            product_group: null,
+            inventory_shape: 'normal',
+            track_inventory: false,
+            unit_conversions: [],
+            kiotviet_provisional_stock: null,
+            operating_stock: null,
+            latest_kiotviet_stocktake: null,
+            draft_bom: null,
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id from orders where')) return { rows: [{ id: 'existing-order' }], rowCount: 1 }
+      if (sql.includes('insert into orders')) return { rows: [{ id: 'existing-order' }], rowCount: 1 }
+      if (sql.includes('delete from order_items')) return { rows: [], rowCount: 1 }
+      if (sql.includes('insert into order_items')) return { rows: [], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.upsertImportedKiotVietInvoices?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      rows: [{
+        rowNumber: 646,
+        source_code: 'HD010729',
+        created_at: '2026-06-10T15:26:26.083Z',
+        updated_at: null,
+        customer_code: 'KH001',
+        customer_name: 'Khach test',
+        customer_phone: null,
+        customer_address: null,
+        price_list_name: '40',
+        source_user_name: 'Admin',
+        channel_name: null,
+        note: null,
+        subtotal_amount: 600000,
+        invoice_discount_amount: 0,
+        other_income_amount: 0,
+        total_amount: 600000,
+        paid_amount: 420604,
+        cash_amount: 0,
+        bank_amount: 420604,
+        status: 'completed',
+        product_code: 'IB',
+        product_name: 'In bat',
+        unit_name: 'm2',
+        stock_qty_per_sale_unit: null,
+        product_note: '3m x 2.5m x 2',
+        quantity: 15,
+        list_unit_price: 40000,
+        line_discount_percent: null,
+        line_discount_amount: 0,
+        unit_price: 40000,
+        line_amount: 600000,
+      }],
+    })
+
+    const calls = pgMock.query.mock.calls
+    const deleteItemIndex = calls.findIndex(([sql]) => String(sql).includes('delete from order_items'))
+    const insertItemIndex = calls.findIndex(([sql]) => String(sql).includes('insert into order_items'))
+    const orderSql = String(calls.find(([sql]) => String(sql).includes('insert into orders'))?.[0])
+    const itemInsertCall = calls[insertItemIndex]
+
+    expect(result).toMatchObject({ invoices_updated: 1, items_updated: 1 })
+    expect(orderSql).toContain('do update set')
+    expect(deleteItemIndex).toBeGreaterThan(-1)
+    expect(insertItemIndex).toBeGreaterThan(deleteItemIndex)
+    expect(itemInsertCall?.[1]).toEqual([
+      '11111111-1111-1111-1111-111111111111',
+      'existing-order',
+      expect.any(String),
+      15,
+      40000,
+      0,
+      600000,
+      1,
+    ])
+  })
+
   test('writes PostgreSQL stock movements from POS invoices saved through saveSalesDocument', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {

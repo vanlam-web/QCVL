@@ -5664,7 +5664,7 @@ type PgCashbookRow = {
 }
 
 async function insertSalesDocument(pool: pg.Pool, organizationId: string, document: SalesDocumentData) {
-  await pool.query(
+  const orderResult = await pool.query(
     `
       insert into orders (
         id, organization_id, code, order_type, status, customer_id,
@@ -5673,7 +5673,30 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
         revised_from_order_id, replaced_by_order_id, cancel_reason_type, revision_reason_code, revision_reason_note, created_at, updated_at
       )
       values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now())
-      on conflict (organization_id, code) do nothing
+      on conflict (organization_id, code)
+      do update set
+        order_type = excluded.order_type,
+        status = excluded.status,
+        customer_id = excluded.customer_id,
+        customer_snapshot = excluded.customer_snapshot,
+        seller_snapshot = excluded.seller_snapshot,
+        subtotal_amount = excluded.subtotal_amount,
+        discount_amount = excluded.discount_amount,
+        total_amount = excluded.total_amount,
+        paid_amount = excluded.paid_amount,
+        debt_amount = excluded.debt_amount,
+        payment_status = excluded.payment_status,
+        note = excluded.note,
+        base_code = excluded.base_code,
+        revision_no = excluded.revision_no,
+        revised_from_order_id = excluded.revised_from_order_id,
+        replaced_by_order_id = excluded.replaced_by_order_id,
+        cancel_reason_type = excluded.cancel_reason_type,
+        revision_reason_code = excluded.revision_reason_code,
+        revision_reason_note = excluded.revision_reason_note,
+        created_at = excluded.created_at,
+        updated_at = now()
+      returning id::text
     `,
     [
       document.id,
@@ -5701,6 +5724,16 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
       document.created_at,
     ],
   )
+  const orderId = String(orderResult.rows[0]?.id ?? document.id)
+
+  await pool.query(
+    `
+      delete from order_items
+      where organization_id = $1
+        and order_id = $2
+    `,
+    [organizationId, orderId],
+  )
 
   for (const [index, item] of document.items.entries()) {
     const detailItem = item as {
@@ -5722,9 +5755,8 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
           organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order
         )
         values ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7, $8)
-        on conflict do nothing
       `,
-      [organizationId, document.id, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1],
+      [organizationId, orderId, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1],
     )
   }
 
@@ -5738,7 +5770,7 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
         values ($1, $2, $3, $4, 0, $4, 'open', $5, now())
         on conflict (organization_id, order_id) do nothing
       `,
-      [organizationId, document.customer.id, document.id, document.debt_amount, document.created_at],
+      [organizationId, document.customer.id, orderId, document.debt_amount, document.created_at],
     )
   }
 }

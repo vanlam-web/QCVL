@@ -1320,6 +1320,7 @@ function buildCustomerDebtSummaryRows(
   const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
   let unassignedPayment = Math.max(openDebtTotal - Math.max(currentDebt, 0), 0)
   const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
+  const allocatedDebtById = new Map<string, number>()
   const oldestRows = [...openRows].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
 
   for (const invoice of oldestRows) {
@@ -1328,11 +1329,25 @@ function buildCustomerDebtSummaryRows(
     const allocated = Math.min(remainingDebt, unassignedPayment)
     remainingDebtById.set(invoice.id, remainingDebt - allocated)
     unassignedPayment -= allocated
+    allocatedDebtById.set(invoice.id, allocated)
   }
 
-  return openRows
-    .map((invoice) => ({ ...invoice, remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt }))
+  const adjustedRows = openRows
+    .map((invoice) => ({
+      ...invoice,
+      remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt,
+      running_debt: Math.max(invoice.running_debt - (allocatedDebtById.get(invoice.id) ?? 0), 0),
+    }))
     .filter((invoice) => invoice.remaining_debt > 0)
+
+  if (adjustedRows.length === 1) {
+    return adjustedRows.map((invoice) => ({
+      ...invoice,
+      running_debt: invoice.remaining_debt,
+    }))
+  }
+
+  return adjustedRows
 }
 
 function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {

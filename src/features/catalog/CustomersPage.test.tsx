@@ -695,7 +695,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
   expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010985/ })).getByText('150 000')).toBeInTheDocument()
   expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('100 000')).toBeInTheDocument()
-  expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('290 000')).toBeInTheDocument()
+  expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('240 000')).toBeInTheDocument()
   expect(within(debtSummaryTable).queryByText('Tổng')).not.toBeInTheDocument()
   expect(within(detail).getByRole('navigation', { name: 'Phân trang tóm tắt công nợ' })).toHaveTextContent('1 - 2 trong 2 hóa đơn mở')
 
@@ -1066,6 +1066,87 @@ it('derives open receivable totals from invoice history when the debt endpoint h
   const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử công nợ' })
   expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('100 000')
   expect(within(debtHistoryTable).queryByText('HD-CANCELLED')).not.toBeInTheDocument()
+})
+
+it('keeps debt summary running balance aligned with applied payments', async () => {
+  const orderService = makeOrderService({
+    getCustomerDebt: vi.fn(async () => ({
+      customer_id: 'customer-1',
+      total_debt: 179396,
+      invoices: [
+        {
+          order_id: 'order-open',
+          order_code: 'HD-OPEN',
+          created_at: '2026-07-02T09:12:00Z',
+          total_amount: 719396,
+          paid_amount: 0,
+          debt_amount: 719396,
+          remaining_debt: 719396,
+        },
+      ],
+    })),
+  })
+  const salesDocumentService = makeSalesDocumentService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [
+        {
+          id: 'order-open',
+          code: 'HD-OPEN',
+          order_type: 'invoice' as const,
+          status: 'completed' as const,
+          created_at: '2026-07-02T09:12:00Z',
+          customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: null },
+          seller: { id: 'seller-1', name: 'Admin' },
+          subtotal_amount: 719396,
+          discount_amount: 0,
+          total_amount: 719396,
+          paid_amount: 0,
+          debt_amount: 719396,
+          payment_status: 'partial' as const,
+          note: null,
+        },
+      ],
+      page: 1,
+      page_size: 10,
+      total: 1,
+    })),
+  })
+  const financeService = makeFinanceService({
+    listCashbookEntries: vi.fn(async () => ({
+      items: [
+        {
+          id: 'cashbook-payment',
+          code: 'TTHDOPEN',
+          status: 'posted' as const,
+          direction: 'in' as const,
+          amount_delta: 540000,
+          finance_account: { id: 'cash-main', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+          is_business_accounted: true,
+          source_type: 'payment_receipt_method' as const,
+          created_at: '2026-07-02T09:20:00Z',
+          note: null,
+          counterparty: { type: 'customer' as const, name: 'Công ty Phong Cảnh', phone: null },
+          created_by: { id: 'user-admin', name: 'Admin' },
+          source: { type: 'payment_receipt', id: 'cashbook-payment', code: 'TTHDOPEN', order_code: 'HD-OPEN' },
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+      summary: { opening_balance: 0, total_in: 540000, total_out: 0, ending_balance: 540000 },
+    })),
+  })
+
+  render(<CustomersPage service={makeService()} orderService={orderService} salesDocumentService={salesDocumentService} financeService={financeService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+
+  const debtSummaryTable = await within(detail).findByRole('table', { name: 'Tóm tắt công nợ' })
+  const summaryRow = within(debtSummaryTable).getByRole('row', { name: /HD-OPEN/ })
+  expect(within(summaryRow).getAllByText('179 396')).toHaveLength(2)
+  expect(within(summaryRow).queryByText('719 396')).not.toBeInTheDocument()
 })
 
 it('shows KiotViet adjustment balance as the debt running balance', async () => {
