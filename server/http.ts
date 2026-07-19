@@ -2653,6 +2653,22 @@ async function getDevApiResponse(
         customers.push(created)
         return { found: true, data: created, status: 201 }
       },
+      updateCustomer: async () => {
+        const body = await readJson(request)
+        const id = getIdFromPath(path) ?? ''
+        const index = customers.findIndex((customer) => customer.id === id)
+        if (index < 0) return { found: true, data: { message: 'Customer not found' }, status: 404 }
+        const updated = {
+          ...customers[index],
+          name: typeof body.name === 'string' ? body.name : customers[index].name,
+          phone: body.phone === undefined ? customers[index].phone : nullableString(body.phone),
+          tax_code: body.tax_code === undefined ? customers[index].tax_code : nullableString(body.tax_code),
+          address: body.address === undefined ? customers[index].address : nullableString(body.address),
+          note: body.note === undefined ? customers[index].note : nullableString(body.note),
+        }
+        customers[index] = updated
+        return { found: true, data: updated }
+      },
       previewKiotVietCustomerImport: async () => {
         const body = await readJson(request)
         const mapped = mapKiotVietCustomerRows(customerImportRowsFromBody(body))

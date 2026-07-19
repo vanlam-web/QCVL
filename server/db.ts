@@ -3452,6 +3452,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           : invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0),
         invoices,
         adjustments,
+        linked_supplier_receipts: [],
       }
     },
 
