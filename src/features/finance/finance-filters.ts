@@ -1,4 +1,4 @@
-import { quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatKvDateTime } from '../../lib/date-format'
 import { normalizeManagementSearchText } from '../../components/ui-shell/management-search'
 import type { CashbookDirection, CashbookEntry, CashbookStatus } from './types'
@@ -90,7 +90,5 @@ export function cashbookQuickTimeRange(preset: Exclude<CashbookTimeFilter, 'cust
 }
 
 export function displayDate(value: string) {
-  if (!value) return '--/--/----'
-  const [year, month, day] = value.split('-')
-  return `${day}/${month}/${year}`
+  return toDisplayDateInput(value) || '--/--/----'
 }

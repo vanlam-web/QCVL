@@ -1,3 +1,5 @@
+import { currentSystemDate } from './system-clock'
+
 export type QuickDateRangePreset =
   | 'all'
   | 'today'
@@ -18,8 +20,7 @@ export function localDateString(date: Date) {
   return local.toISOString().slice(0, 10)
 }
 
-export function currentMonthRange() {
-  const now = new Date()
+export function currentMonthRange(now = currentSystemDate()) {
   const firstDay = new Date(now.getFullYear(), now.getMonth(), 1)
   const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0)
   return { from: localDateString(firstDay), to: localDateString(lastDay) }
@@ -76,7 +77,7 @@ export function displayDateRangeForData(selectedRange: DateRangeValue, dataRange
   if (dataRange === null) return selectedRange
   if (selectedRange.from === '' && selectedRange.to === '') return dataRange
 
-  const today = localDateString(new Date())
+  const today = localDateString(currentSystemDate())
   if (selectedRange.from !== '' && selectedRange.from <= today && selectedRange.to > today) {
     return { from: selectedRange.from, to: today }
   }
@@ -89,8 +90,7 @@ function addDays(date: Date, amount: number) {
   return next
 }
 
-export function quickDateRange(preset: QuickDateRangePreset) {
-  const now = new Date()
+export function quickDateRange(preset: QuickDateRangePreset, now = currentSystemDate()) {
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
   const day = today.getDay()
   const mondayOffset = day === 0 ? -6 : 1 - day
@@ -111,7 +111,7 @@ export function quickDateRange(preset: QuickDateRangePreset) {
     return { from: localDateString(firstDay), to: localDateString(addDays(firstDay, 6)) }
   }
   if (preset === 'last_7_days') return { from: localDateString(addDays(today, -6)), to: localDateString(today) }
-  if (preset === 'month') return currentMonthRange()
+  if (preset === 'month') return currentMonthRange(now)
   if (preset === 'last_month') {
     const firstDay = new Date(today.getFullYear(), today.getMonth() - 1, 1)
     const lastDay = new Date(today.getFullYear(), today.getMonth(), 0)

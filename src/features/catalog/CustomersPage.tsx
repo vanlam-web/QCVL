@@ -21,6 +21,7 @@ import { ManagementRecordLink, MetricCard, MetricGrid, MoneyText, managementReco
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { currentSystemDate } from '../../lib/system-clock'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -212,7 +213,7 @@ export function CustomersPage({
   const [debtAdjustmentForm, setDebtAdjustmentForm] = useState({ adjustedAt: '', amount: '', note: '' })
   const [debtPaymentCustomer, setDebtPaymentCustomer] = useState<Customer | null>(null)
   const [debtPaymentForm, setDebtPaymentForm] = useState<CustomerDebtPaymentForm>(() => ({
-    paidAt: formatCustomerDebtAdjustmentDateTime(new Date()),
+    paidAt: formatCustomerDebtAdjustmentDateTime(currentSystemDate()),
     method: 'cash',
     amount: '',
     note: '',
@@ -580,7 +581,7 @@ export function CustomersPage({
     setDebtPaymentCustomer(customer)
     setDebtPaymentError(null)
     setDebtPaymentForm({
-      paidAt: formatCustomerDebtAdjustmentDateTime(new Date()),
+      paidAt: formatCustomerDebtAdjustmentDateTime(currentSystemDate()),
       method: 'cash',
       amount: '',
       note: '',
@@ -1701,7 +1702,7 @@ function CustomerDebtPaymentDialog({
 }) {
   const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = new Date()
+    const now = currentSystemDate()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
   const selectedPaidDateTime = parseCustomerDebtAdjustmentDateTime(form.paidAt)
@@ -1710,14 +1711,14 @@ function CustomerDebtPaymentDialog({
     onChange({ ...form, [field]: value })
   }
   const selectPaidDate = (date: Date) => {
-    const base = selectedPaidDateTime ?? new Date()
+    const base = selectedPaidDateTime ?? currentSystemDate()
     const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
     updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
     setPickerOpen(null)
   }
   const selectPaidTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number)
-    const base = selectedPaidDateTime ?? new Date()
+    const base = selectedPaidDateTime ?? currentSystemDate()
     const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
     updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
     setPickerOpen(null)
@@ -1972,7 +1973,7 @@ function CustomerDebtAdjustmentDialog({
   const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
   const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
   const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = new Date()
+    const now = currentSystemDate()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
   const calendarDays = customerDebtAdjustmentCalendarDays(calendarMonth)
@@ -1980,14 +1981,14 @@ function CustomerDebtAdjustmentDialog({
     onChange({ ...form, [field]: value })
   }
   const selectAdjustmentDate = (date: Date) => {
-    const base = selectedAdjustmentDateTime ?? new Date()
+    const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
     updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
     setPickerOpen(null)
   }
   const selectAdjustmentTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number)
-    const base = selectedAdjustmentDateTime ?? new Date()
+    const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
     updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
     setPickerOpen(null)

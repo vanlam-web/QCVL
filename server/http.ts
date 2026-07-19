@@ -2399,6 +2399,9 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
           traceId,
         )
       }
+      if (request.method === 'GET' && url.pathname === '/api/v1/system/clock') {
+        return success({ now: runtimeIso() }, traceId)
+      }
 
       const authRoute = await handleAuthRoute({ request, repository: options.repository, traceId })
       if (authRoute.found) return authRoute.response

@@ -154,6 +154,29 @@ describe('dashboard-service', () => {
     ])
   })
 
+  it('buckets revenue chart days by displayed API date instead of browser timezone', () => {
+    const now = new Date('2026-07-19T09:00:00.000Z')
+    const monthDocuments = [
+      documentItem({
+        id: 'late-july-11',
+        code: 'HD011143',
+        created_at: '2026-07-11T17:24:14.633Z',
+        total_amount: 70_000,
+      }),
+    ]
+
+    const data = buildDashboardData({
+      now,
+      todayDocuments: [],
+      monthDocuments,
+      recentDocuments: [],
+      detailedDocuments: [],
+    })
+
+    expect(data.monthRevenuePoints[10]).toBe(70_000)
+    expect(data.monthRevenuePoints[11]).toBe(0)
+  })
+
   it('compares selected sales result period against the previous matching period', () => {
     const now = new Date('2026-07-17T09:00:00.000Z')
     const data = buildDashboardData({
@@ -315,6 +338,40 @@ describe('dashboard-service', () => {
         from: '2026-07-01',
         page: 2,
         page_size: 100,
+      }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses the server clock for dashboard date ranges instead of the browser clock', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-17T09:00:00.000Z'))
+
+    const listSalesDocuments = vi.fn(async (input = {}) => ({
+      items: [],
+      page: input.page ?? 1,
+      page_size: input.page_size ?? 100,
+      total: 0,
+    })) satisfies SalesDocumentService['listSalesDocuments']
+    const service = createDashboardService({
+      listSalesDocuments,
+      getSalesDocument: vi.fn(async (id: string) => documentDetail({ id })),
+      cancelSalesDocument: vi.fn(),
+      updateSalesDocumentNote: vi.fn(),
+      previewKiotVietInvoiceImport: vi.fn(),
+      importKiotVietInvoices: vi.fn(),
+      deleteImportedKiotVietInvoices: vi.fn(),
+    }, undefined, undefined, {
+      now: vi.fn(async () => new Date('2026-07-19T02:00:00.000Z')),
+    })
+
+    try {
+      await service.loadDashboardData({ salesResultPeriod: 'today' })
+
+      expect(listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
+        from: '2026-07-19',
+        to: '2026-07-19',
       }))
     } finally {
       vi.useRealTimers()

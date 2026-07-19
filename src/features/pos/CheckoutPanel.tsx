@@ -12,6 +12,7 @@ import type {
 } from '../orders/order-service'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
+import { currentSystemDate, currentSystemISOString } from '../../lib/system-clock'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { checkoutSummary, linesToCheckoutItems } from './pos-core'
 
@@ -762,7 +763,7 @@ function MoneyInput({
 }
 
 function formatCheckoutDateTime(value: string | undefined) {
-  const formatted = formatKvDateTime(value ?? new Date(), '')
+  const formatted = formatKvDateTime(value ?? currentSystemDate(), '')
   if (!formatted) {
     return { date: '', time: '' }
   }
@@ -776,16 +777,16 @@ function formatCheckoutDateTime(value: string | undefined) {
 function checkoutDateInputValue(value: string | undefined) {
   const formatted = formatCheckoutDateTime(value).date
   if (formatted) return formatted
-  return formatCheckoutDateTime(new Date().toISOString()).date
+  return formatCheckoutDateTime(currentSystemISOString()).date
 }
 
 function checkoutCalendarMonth(value: string | undefined) {
-  const parsed = parseCheckoutDisplayDate(checkoutDateInputValue(value)) ?? new Date()
+  const parsed = parseCheckoutDisplayDate(checkoutDateInputValue(value)) ?? currentSystemDate()
   return new Date(parsed.getFullYear(), parsed.getMonth(), 1)
 }
 
 function checkoutCreatedAt(orderCreatedAt: string | undefined, invoiceDate: string, invoiceTime: string) {
-  const source = orderCreatedAt ?? new Date().toISOString()
+  const source = orderCreatedAt ?? currentSystemISOString()
   const date = parseCheckoutDateInput(invoiceDate)
   const time = parseCheckoutTimeInput(invoiceTime)
   if (!date || !time) return source

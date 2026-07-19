@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   currentMonthRange,
   dateRangeFromItems,
@@ -8,10 +8,30 @@ import {
   quickDateRange,
   toDisplayDateInput,
 } from './date-ranges'
+import { resetSystemClockForTests, setSystemClockForTests } from './system-clock'
 
 describe('date-ranges', () => {
+  beforeEach(() => {
+    resetSystemClockForTests()
+  })
+
+  afterEach(() => {
+    resetSystemClockForTests()
+  })
+
   it('formats local dates as yyyy-mm-dd', () => {
     expect(localDateString(new Date('2026-07-09T10:30:00+07:00'))).toBe('2026-07-09')
+  })
+
+  it('uses the shared system clock for quick ranges', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-17T09:00:00.000Z'))
+    setSystemClockForTests('2026-07-19T02:30:00.000Z')
+
+    expect(quickDateRange('today')).toEqual({ from: '2026-07-19', to: '2026-07-19' })
+    expect(currentMonthRange()).toEqual({ from: '2026-07-01', to: '2026-07-31' })
+
+    vi.useRealTimers()
   })
 
   it('returns current month boundaries', () => {

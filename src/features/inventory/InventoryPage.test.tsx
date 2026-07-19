@@ -596,7 +596,7 @@ describe('InventoryPage', () => {
     await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })
 
     expect(screen.getByLabelText('Từ ngày')).toHaveValue(toDisplayDateInput(currentStocktakeDefaultRange.from))
-    expect(screen.getByLabelText('Đến ngày')).toHaveValue(toDisplayDateInput(new Date().toISOString().slice(0, 10)))
+    expect(screen.getByLabelText('Đến ngày')).toHaveValue(toDisplayDateInput(quickDateRange('today').to))
     await waitFor(() =>
       expect(service.listStocktakes).toHaveBeenLastCalledWith({
         status: 'draft,balanced,cancelled',

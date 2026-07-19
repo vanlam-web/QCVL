@@ -3,6 +3,8 @@ import type { SalesDocumentDetail, SalesDocumentListItem } from '../sales-docume
 import { createBrowserPurchaseReceiptService, type PurchaseReceiptService } from '../purchase/purchase-receipt-service'
 import type { PurchaseReceipt } from '../purchase/purchase-receipt-types'
 import { createBrowserCatalogService, type CatalogService } from '../catalog/catalog-service'
+import { displayDateKey } from '../../lib/date-format'
+import { currentSystemDate } from '../../lib/system-clock'
 
 export interface DashboardRankItem {
   label: string
@@ -69,6 +71,10 @@ export interface DashboardService {
   loadDashboardActivities?(input?: DashboardActivityLoadInput): Promise<DashboardActivityPage>
 }
 
+export interface DashboardClockProvider {
+  now(): Promise<Date>
+}
+
 export interface DashboardActivityLoadInput {
   page?: number
   pageSize?: number
@@ -111,10 +117,11 @@ export function createDashboardService(
   salesDocumentService: SalesDocumentService,
   purchaseReceiptService?: PurchaseReceiptService,
   catalogService?: DashboardProductCatalogService,
+  clockProvider: DashboardClockProvider = localDashboardClock,
 ): DashboardService {
   return {
     async loadDashboardData(input = {}) {
-      const today = new Date()
+      const today = await clockProvider.now()
       const todayText = dateInputText(today)
       const salesResultPeriod = input.salesResultPeriod ?? 'month'
       const revenuePeriod = input.revenuePeriod ?? 'month'
@@ -191,6 +198,7 @@ export function createDashboardService(
     async loadDashboardActivities(input = {}) {
       const page = input.page ?? 1
       const pageSize = input.pageSize ?? dashboardActivityPageSize
+      const now = await clockProvider.now()
       const [result, purchaseResult] = await Promise.all([
         listDashboardSalesDocumentsPage(salesDocumentService, {
           type: 'invoice',
@@ -204,13 +212,19 @@ export function createDashboardService(
         }) : emptyDashboardPurchaseReceiptPage(),
       ])
       return buildDashboardActivityPage({
-        now: new Date(),
+        now,
         documents: activeDocuments(result.items),
         purchaseReceipts: activePurchaseReceipts(purchaseResult.items),
         hasMore: result.hasMore || purchaseResult.hasMore,
       })
     },
   }
+}
+
+const localDashboardClock: DashboardClockProvider = {
+  async now() {
+    return currentSystemDate()
+  },
 }
 
 interface DashboardDateRange {
@@ -536,22 +550,26 @@ function netDocumentAmount(document: SalesDocumentListItem) {
 function monthRevenuePoints(now: Date, documents: SalesDocumentListItem[]) {
   const currentDayOfMonth = now.getDate()
   const buckets = Array.from({ length: currentDayOfMonth }, () => 0)
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
   for (const document of documents) {
-    const createdAt = new Date(document.created_at)
-    if (createdAt.getMonth() !== now.getMonth() || createdAt.getFullYear() !== now.getFullYear()) continue
-    if (createdAt.getDate() > currentDayOfMonth) continue
-    buckets[createdAt.getDate() - 1] += netDocumentAmount(document)
+    const createdAtKey = displayDateKey(document.created_at)
+    if (!createdAtKey.startsWith(`${currentMonthKey}-`)) continue
+    const day = Number(createdAtKey.slice(8, 10))
+    if (!Number.isFinite(day) || day < 1 || day > currentDayOfMonth) continue
+    buckets[day - 1] += netDocumentAmount(document)
   }
   return buckets.length > 1 ? buckets : [0, buckets[0] ?? 0]
 }
 
 function periodRevenuePoints(range: DashboardDateRange, documents: SalesDocumentListItem[]) {
-  const from = dateOnly(range.from)
-  const to = dateOnly(range.to)
+  const fromKey = displayDateKey(range.from)
+  const toKey = displayDateKey(range.to)
+  const from = dateKeyToUtcDate(fromKey)
+  const to = dateKeyToUtcDate(toKey)
   const days = Math.max(1, Math.round((to.getTime() - from.getTime()) / 86_400_000) + 1)
   const buckets = Array.from({ length: days }, () => 0)
   for (const document of documents) {
-    const createdAt = dateOnly(document.created_at)
+    const createdAt = dateKeyToUtcDate(displayDateKey(document.created_at))
     const index = Math.round((createdAt.getTime() - from.getTime()) / 86_400_000)
     if (index < 0 || index >= buckets.length) continue
     buckets[index] += netDocumentAmount(document)
@@ -559,15 +577,18 @@ function periodRevenuePoints(range: DashboardDateRange, documents: SalesDocument
   return buckets.length > 1 ? buckets : [0, buckets[0] ?? 0]
 }
 
-function dateOnly(value: string) {
-  const date = new Date(value)
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+function dateKeyToUtcDate(value: string) {
+  if (!value) return new Date(NaN)
+  const [year, month, day] = value.split('-').map((part) => Number(part))
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return new Date(NaN)
+  return new Date(Date.UTC(year, month - 1, day))
 }
 
 function weekdayRevenueBars(documents: SalesDocumentListItem[]) {
   const totals = new Map(weekdayLabels.map((label) => [label, 0]))
   for (const document of documents) {
-    const label = weekdayLabels[new Date(document.created_at).getDay()]
+    const dateKey = displayDateKey(document.created_at)
+    const label = weekdayLabels[dateKeyToUtcDate(dateKey).getUTCDay()]
     totals.set(label, (totals.get(label) ?? 0) + netDocumentAmount(document))
   }
   const maxValue = Math.max(...totals.values(), 0)

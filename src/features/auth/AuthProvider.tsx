@@ -16,6 +16,7 @@ import { AccessSync } from './AccessSync'
 import type { AccessConnectionState, RealtimeClient } from '../../lib/realtime/access-channel'
 import { AuthContext, type AuthContextValue } from './auth-context'
 import { runtimeConfig } from '../../lib/config/runtime'
+import { createBrowserSystemClockApi, syncSystemClock } from '../../lib/system-clock'
 
 const bootstrapTimeoutMs = 8000
 const currentUserCacheKey = 'qc-oms.auth.current-user.v2'
@@ -46,6 +47,11 @@ export function AuthProvider({
     })
     return createFoundationService(client)
   }, [api, authService])
+  const clockApi = useMemo(
+    () => api ?? createBrowserSystemClockApi(authService.getAccessToken),
+    [api, authService],
+  )
+  const shouldSyncClock = api === undefined
   const [initialized, setInitialized] = useState(false)
   const [accessConnection, setAccessConnection] = useState<AccessConnectionState>('disconnected')
   const [currentUser, setCurrentUser] = useState<CurrentUserData | null>(null)
@@ -60,6 +66,7 @@ export function AuthProvider({
   const refreshMe = useCallback(async () => {
     try {
       const me = await foundation.getMe()
+      if (shouldSyncClock) await withTimeout(syncSystemClock(clockApi), bootstrapTimeoutMs).catch(() => undefined)
       setCurrentUser(me)
       writeCachedCurrentUser(me)
     } catch (cause) {
@@ -75,7 +82,7 @@ export function AuthProvider({
     } finally {
       setInitialized(true)
     }
-  }, [foundation, signOut])
+  }, [clockApi, foundation, shouldSyncClock, signOut])
 
   const signIn = useCallback(
     async (email: string, password: string) => {
@@ -107,6 +114,7 @@ export function AuthProvider({
         const cachedCurrentUser = readCachedCurrentUser()
         if (cachedCurrentUser !== null) {
           setCurrentUser(cachedCurrentUser.data)
+          if (shouldSyncClock) await withTimeout(syncSystemClock(clockApi), bootstrapTimeoutMs).catch(() => undefined)
           setInitialized(true)
           if (cachedCurrentUser.fresh) {
             void withTimeout(refreshMe(), bootstrapTimeoutMs).catch(() => undefined)
@@ -123,7 +131,7 @@ export function AuthProvider({
     return () => {
       active = false
     }
-  }, [authService, refreshMe])
+  }, [authService, clockApi, refreshMe, shouldSyncClock])
 
   const value = useMemo<AuthContextValue>(
     () => ({

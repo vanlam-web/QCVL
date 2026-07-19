@@ -1,6 +1,7 @@
 import { Fragment, cloneElement, isValidElement, useEffect, useRef, useState, type AriaRole, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref, type SyntheticEvent } from 'react'
 import { ArrowDownToLine, CalendarDays, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
+import { currentSystemDate } from '../../lib/system-clock'
 import { managementPageSizeOptions } from '../../lib/management-page-size'
 
 const managementDetailMetaGridStackedClass = 'management-detail-meta-grid-stacked'
@@ -279,7 +280,7 @@ type DateInputField = 'from' | 'to'
 
 function dateKeyToLocalDate(value: string) {
   const normalized = normalizeDateInput(value)
-  if (!normalized) return new Date()
+  if (!normalized) return currentSystemDate()
   const [year, month, day] = normalized.split('-').map(Number)
   return new Date(year, month - 1, day)
 }

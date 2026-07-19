@@ -1,5 +1,5 @@
 import type { SalesDocumentService } from './sales-document-service'
-import { currentMonthRange, localDateString, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
+import { currentMonthRange, localDateString, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 
 export { currentMonthRange, localDateString }
 
@@ -64,9 +64,7 @@ export function quickTimeRange(preset: Exclude<TimeFilter, 'custom'>) {
 }
 
 export function displayDate(value: string) {
-  if (!value) return '--/--/----'
-  const [year, month, day] = value.split('-')
-  return `${day}/${month}/${year}`
+  return toDisplayDateInput(value) || '--/--/----'
 }
 
 export function filterQuery<T extends string>(selected: readonly T[], allValues: readonly T[]) {

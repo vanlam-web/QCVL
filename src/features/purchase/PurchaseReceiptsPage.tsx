@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatKvDateTime } from '../../lib/date-format'
+import { dateTimeLocalInputValue, formatKvDateTime } from '../../lib/date-format'
+import { currentSystemDate } from '../../lib/system-clock'
 import type {
   PurchaseReceipt,
   PurchaseReceiptFinanceAccount,
@@ -62,8 +63,6 @@ import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
 
-const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-
 const blankLine = {
   product_id: '',
   inventory_shape: 'normal' as const,
@@ -74,15 +73,17 @@ const blankLine = {
   physical_payload: null,
 }
 
-const blankForm: PurchaseReceiptInput = {
-  code: '',
-  supplier_id: '',
-  received_at: nowLocal,
-  supplier_document_no: '',
-  notes: '',
-  discount_amount: 0,
-  paid_amount: 0,
-  items: [],
+function blankForm(): PurchaseReceiptInput {
+  return {
+    code: '',
+    supplier_id: '',
+    received_at: dateTimeLocalInputValue(currentSystemDate()),
+    supplier_document_no: '',
+    notes: '',
+    discount_amount: 0,
+    paid_amount: 0,
+    items: [],
+  }
 }
 
 function formatReceiptDateTimeInput(value: string) {
@@ -192,7 +193,7 @@ function readReceiptCreateDraft() {
       const parsed = historyDraft as Partial<PurchaseReceiptCreateDraft>
       if (!parsed.form || !Array.isArray(parsed.form.items)) return null
       return {
-        form: { ...blankForm, ...parsed.form },
+        form: { ...blankForm(), ...parsed.form },
         paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
         financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
         rollLengthTexts: parsed.rollLengthTexts ?? {},
@@ -208,7 +209,7 @@ function readReceiptCreateDraft() {
       const parsed = JSON.parse(rawSession) as Partial<PurchaseReceiptCreateDraft>
       if (!parsed.form || !Array.isArray(parsed.form.items)) return null
       return {
-        form: { ...blankForm, ...parsed.form },
+        form: { ...blankForm(), ...parsed.form },
         paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
         financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
         rollLengthTexts: parsed.rollLengthTexts ?? {},
@@ -224,7 +225,7 @@ function readReceiptCreateDraft() {
       const parsed = JSON.parse(raw) as Partial<PurchaseReceiptCreateDraft>
       if (!parsed.form || !Array.isArray(parsed.form.items)) return null
       return {
-        form: { ...blankForm, ...parsed.form },
+        form: { ...blankForm(), ...parsed.form },
         paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
         financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
         rollLengthTexts: parsed.rollLengthTexts ?? {},
@@ -240,7 +241,7 @@ function readReceiptCreateDraft() {
     const parsed = JSON.parse(raw) as Partial<PurchaseReceiptCreateDraft>
     if (!parsed.form || !Array.isArray(parsed.form.items)) return null
     return {
-      form: { ...blankForm, ...parsed.form },
+      form: { ...blankForm(), ...parsed.form },
       paymentMethod: parsed.paymentMethod === 'bank_transfer' ? 'bank_transfer' : 'cash',
       financeAccountId: typeof parsed.financeAccountId === 'string' ? parsed.financeAccountId : '',
       rollLengthTexts: parsed.rollLengthTexts ?? {},
@@ -363,8 +364,8 @@ export function PurchaseReceiptsPage({
   const [editingStatus, setEditingStatus] = useState<PurchaseReceiptStatus | null>(null)
   const [selectedReceipt, setSelectedReceipt] = useState<PurchaseReceipt | null>(null)
   const [receiptDetailTab, setReceiptDetailTab] = useState<ReceiptDetailTab>('info')
-  const [form, setForm] = useState<PurchaseReceiptInput>(blankForm)
-  const [receiptReceivedAtText, setReceiptReceivedAtText] = useState(() => formatReceiptDateTimeInput(blankForm.received_at))
+  const [form, setForm] = useState<PurchaseReceiptInput>(() => blankForm())
+  const [receiptReceivedAtText, setReceiptReceivedAtText] = useState(() => formatReceiptDateTimeInput(blankForm().received_at))
   const [receiptProductSearch, setReceiptProductSearch] = useState('')
   const [receiptWorkspaceSideCollapsed, setReceiptWorkspaceSideCollapsed] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -944,7 +945,7 @@ function clearReceiptCreateDraft() {
       setSelectedReceipt(null)
       setReceiptDetailTab('info')
       setDetailOpen(false)
-      setForm(blankForm)
+      setForm(blankForm())
       await loadReceipts()
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được phiếu nhập.'))
@@ -974,7 +975,7 @@ function clearReceiptCreateDraft() {
       setSelectedReceipt(null)
       setReceiptDetailTab('info')
       setDetailOpen(false)
-      setForm(blankForm)
+      setForm(blankForm())
       clearReceiptCreateDraft()
       if (createMode && onCloseCreateReceipt) {
         onCloseCreateReceipt()
@@ -1129,10 +1130,11 @@ function clearReceiptCreateDraft() {
     setSelectedReceipt(null)
     setReceiptDetailTab('info')
     setDetailOpen(true)
-    setForm(blankForm)
+    const nextBlankForm = blankForm()
+    setForm(nextBlankForm)
     setPaymentMethod('cash')
     setFinanceAccountId('')
-    setReceiptReceivedAtText(formatReceiptDateTimeInput(blankForm.received_at))
+    setReceiptReceivedAtText(formatReceiptDateTimeInput(nextBlankForm.received_at))
     setSupplierPaymentOpen(false)
     setSupplierPaymentAmount(0)
     setSupplierPaymentMethod('cash')
@@ -1168,7 +1170,7 @@ function clearReceiptCreateDraft() {
     setSelectedReceipt(null)
     setReceiptDetailTab('info')
     setDetailOpen(false)
-    setForm(blankForm)
+    setForm(blankForm())
     setPaymentMethod('cash')
     setFinanceAccountId('')
     setSupplierPaymentOpen(false)

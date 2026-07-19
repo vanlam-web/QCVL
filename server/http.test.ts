@@ -305,6 +305,25 @@ describe('createHttpHandler', () => {
     })
   })
 
+  test('returns server clock for browser date ranges', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-19T02:30:00.000Z'))
+    const handler = createHttpHandler({
+      repository: repository(await hashPassword('ChangeMe123!')),
+      persistence: 'postgres',
+    })
+
+    try {
+      const response = await handler(new Request('http://api.local/api/v1/system/clock'))
+      const body = await response.json() as { success: true; data: { now: string } }
+
+      expect(response.status).toBe(200)
+      expect(body.data.now).toBe('2026-07-19T02:30:00.000Z')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('logs in with a password and returns the current user with the session token', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

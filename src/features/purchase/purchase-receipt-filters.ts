@@ -1,9 +1,10 @@
 import { currentMonthRange, localDateString } from '../../lib/date-ranges'
+import { currentSystemDate } from '../../lib/system-clock'
 
 export { currentMonthRange, localDateString }
 
 export function purchaseReceiptTimeQuickOptions() {
-  const today = localDateString(new Date())
+  const today = localDateString(currentSystemDate())
   const monthRange = currentMonthRange()
   return [
     { id: 'all', label: 'Toàn thời gian', from: '', to: '' },

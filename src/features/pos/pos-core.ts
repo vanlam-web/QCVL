@@ -1,6 +1,7 @@
 import type { Customer, Product, SellMethod } from '../catalog/types'
 import type { CheckoutCartLine, InvoiceRevisionHandoffPayload, QuoteReopenPayload } from '../orders/order-service'
 import { parseMoneyInput } from '../../lib/number-format'
+import { currentSystemISOString } from '../../lib/system-clock'
 
 export const posDraftStorageKey = 'qc-oms.pos.invoice-tabs.v1'
 export const maxInvoiceTabs = 10
@@ -51,7 +52,7 @@ export function initialInvoiceRevisionPayloadToTabs(payload: InvoiceRevisionHand
     {
       ...makeInvoiceTab(1),
       id: `invoice-revision-${payload.original_order.id}`,
-      createdAt: payload.created_at ?? new Date().toISOString(),
+      createdAt: payload.created_at ?? currentSystemISOString(),
       cartLines: invoiceRevisionPayloadToCartLines(payload),
       selectedCustomer: invoiceRevisionPayloadToCustomer(payload),
       orderNote: payload.note ?? `Sua hoa don ${payload.original_order.code}`,
@@ -64,7 +65,7 @@ export function makeInvoiceTab(number: number): PosInvoiceTab {
   return {
     id: `invoice-${number}`,
     number,
-    createdAt: new Date().toISOString(),
+    createdAt: currentSystemISOString(),
     cartLines: [],
     selectedCustomer: null,
     orderNote: '',
@@ -122,7 +123,7 @@ export function restoreInvoiceTabs(): PosInvoiceTab[] {
       .map((tab) => ({
         ...makeInvoiceTab(tab.number),
         id: typeof tab.id === 'string' ? tab.id : `invoice-${tab.number}`,
-        createdAt: typeof tab.createdAt === 'string' ? tab.createdAt : new Date().toISOString(),
+        createdAt: typeof tab.createdAt === 'string' ? tab.createdAt : currentSystemISOString(),
         cartLines: tab.cartLines.map(normalizeRestoredCartLine),
         selectedCustomer: tab.selectedCustomer ?? null,
         orderNote: typeof tab.orderNote === 'string' ? tab.orderNote : '',

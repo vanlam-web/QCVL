@@ -23,6 +23,8 @@ import type { SalesDocumentDetail, SalesDocumentListItem, SalesDocumentService }
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
+import { dateTimeLocalInputValue } from '../../lib/date-format'
+import { currentSystemDate } from '../../lib/system-clock'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
 import { ProductGrid } from './ProductGrid'
 import { PosCartPanel } from './PosCartPanel'
@@ -2030,11 +2032,5 @@ function columnWidthRem(widthCh: number) {
 }
 
 function systemInvoiceCreatedAt() {
-  const now = new Date()
-  const year = String(now.getFullYear())
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  const hour = String(now.getHours()).padStart(2, '0')
-  const minute = String(now.getMinutes()).padStart(2, '0')
-  return `${year}-${month}-${day}T${hour}:${minute}:00.000Z`
+  return `${dateTimeLocalInputValue(currentSystemDate())}:00.000Z`
 }

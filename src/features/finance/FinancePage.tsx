@@ -37,6 +37,7 @@ import type {
 import type { FinanceService } from './finance-service'
 import { buildCashbookCsv } from './finance-service'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
+import { currentSystemDate } from '../../lib/system-clock'
 import { vietnamBankOptionLabel, vietnamBankOptions } from './vietnam-bank-catalog'
 import {
   accountTypeText,
@@ -209,7 +210,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [voucherAccountId, setVoucherAccountId] = useState('')
   const [voucherType, setVoucherType] = useState<CreateCashbookVoucherInput['voucher_type']>('other_income')
   const [voucherAmount, setVoucherAmount] = useState('')
-  const [voucherIssuedAt, setVoucherIssuedAt] = useState(() => dateTimeInputText(new Date()))
+  const [voucherIssuedAt, setVoucherIssuedAt] = useState(() => dateTimeInputText(currentSystemDate()))
   const [voucherPaymentMethod, setVoucherPaymentMethod] = useState<CashbookEntryDetail['payment_method']>('cash')
   const [voucherPartnerDebtMode, setVoucherPartnerDebtMode] = useState<PartnerDebtMode>('no_partner_debt')
   const [voucherBusinessAccounted, setVoucherBusinessAccounted] = useState(true)
@@ -287,7 +288,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     setVoucherAccountId(defaultAccount?.id ?? '')
     setVoucherType(options[0].value)
     setVoucherAmount('')
-    setVoucherIssuedAt(dateTimeInputText(new Date()))
+    setVoucherIssuedAt(dateTimeInputText(currentSystemDate()))
     setVoucherPaymentMethod(defaultAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
     setVoucherPartnerDebtMode('no_partner_debt')
     setVoucherBusinessAccounted(direction === 'out')
@@ -307,7 +308,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
     setVoucherAccountId(defaultAccount?.id ?? '')
     setVoucherType(direction === 'in' ? 'other_income' : 'operating_expense')
     setVoucherAmount(formatVoucherAmountInput(String(voucher.amount)))
-    setVoucherIssuedAt(dateTimeInputText(new Date()))
+    setVoucherIssuedAt(dateTimeInputText(currentSystemDate()))
     setVoucherPaymentMethod(defaultAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
     setVoucherPartnerDebtMode('no_partner_debt')
     setVoucherBusinessAccounted(true)
