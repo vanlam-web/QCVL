@@ -2886,6 +2886,59 @@ describe('createHttpHandler', () => {
     })
   })
 
+  test('uses live finance totals for KiotViet customer debt', async () => {
+    const base = repository(await hashPassword('ChangeMe123!'))
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        async listCustomers() {
+          return [
+            {
+              id: 'customer-kv-1',
+              code: 'KH-KV-001',
+              name: 'Khach KV',
+              phone: null,
+              tax_code: null,
+              address: null,
+              customer_group_id: null,
+              customer_group: null,
+              created_by: null,
+              created_at: '2026-07-01T00:00:00.000Z',
+              total_sales_amount: 192259148,
+              total_debt_amount: 17647014,
+              kiotviet_net_sales: 192259148,
+              status: 'active',
+            },
+          ]
+        },
+        async getCustomerFinancialTotals() {
+          return new Map([
+            ['customer-kv-1', { total_sales_amount: 192259148, total_debt_amount: 504708, last_activity_at: '2026-07-18T00:00:00.000Z' }],
+          ])
+        },
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(new Request('http://api.local/api/v1/customers?page=1&page_size=10', { headers: { authorization } }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items[0].total_debt_amount).toBe(504708)
+    expect(body.data.items[0].total_sales_amount).toBe(192259148)
+    expect(body.data.summary).toMatchObject({
+      total_debt_amount: 504708,
+      total_sales_amount: 192259148,
+    })
+  })
+
   test('searches demo management lists by the fields advertised in each search box', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

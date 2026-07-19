@@ -17,6 +17,7 @@ import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShorta
 import type { CheckoutCartLine, OrderService, RecentPriceList } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
 import type { ProductionQueueDraftPayload } from '../production-queue/types'
+import type { SalesDocumentService } from '../sales-documents/sales-document-service'
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
@@ -105,6 +106,7 @@ export function PosShell({
   catalogService,
   inventoryService,
   orderService,
+  salesDocumentService,
   productionQueueService,
   currentUser,
   connected = true,
@@ -115,6 +117,7 @@ export function PosShell({
   catalogService: CatalogService
   inventoryService: InventoryService
   orderService: OrderService
+  salesDocumentService?: SalesDocumentService
   productionQueueService: ProductionQueueService
   currentUser: CurrentUserData
   connected?: boolean
@@ -122,6 +125,11 @@ export function PosShell({
   onOpenAdmin: () => void
   onOpenDashboard: () => void
 }) {
+  const customerSalesDocumentService =
+    salesDocumentService ??
+    ({
+      listSalesDocuments: async () => ({ items: [], page: 1, page_size: 10, total: 0 }),
+    } as unknown as SalesDocumentService)
   const [products, setProducts] = useState<Product[]>([])
   const [prices, setPrices] = useState<Record<string, ResolvedPrice>>({})
   const [initialRevisionPayload] = useState(() => consumeInvoiceRevisionHandoffPayload())
@@ -1403,6 +1411,8 @@ export function PosShell({
           <CustomerPanel
             key={selectedCustomer?.id ?? 'no-customer'}
             service={catalogService}
+            orderService={orderService}
+            salesDocumentService={customerSalesDocumentService}
             selectedCustomer={selectedCustomer}
             onSelectCustomer={(customer) =>
               updateActiveTab((tab) => ({ ...tab, selectedCustomer: customer }))

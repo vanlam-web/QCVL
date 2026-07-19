@@ -268,6 +268,8 @@ export interface Customer {
   status?: string | null
   total_sales_amount?: number
   total_debt_amount?: number
+  kiotviet_current_debt?: number | null
+  kiotviet_net_sales?: number | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
 }
 

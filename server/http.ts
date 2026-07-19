@@ -26,6 +26,14 @@ import {
   type CashbookImportRepository,
   type KiotVietCashbookImportRow,
 } from './modules/finance/kiotviet-cashbook-import.js'
+import {
+  applyKiotVietCustomerDebtAdjustmentImport,
+  mapKiotVietCustomerDebtAdjustmentRows,
+  parseKiotVietCustomerDebtAdjustmentWorkbookBuffer,
+  previewKiotVietCustomerDebtAdjustmentImport,
+  type CustomerDebtAdjustmentImportRepository,
+  type KiotVietCustomerDebtAdjustmentImportRow,
+} from './modules/finance/kiotviet-customer-debt-adjustment-import.js'
 import { handleInventoryRoute } from './modules/inventory/inventory-routes.js'
 import {
   mapKiotVietStocktakeRows,
@@ -267,6 +275,7 @@ export interface CustomerListData {
   note?: string | null
   source_creator_name?: string | null
   last_transaction_at?: string | null
+  kiotviet_current_debt?: number | null
   kiotviet_net_sales?: number | null
   status?: string | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
@@ -659,6 +668,14 @@ export interface ServerRepository {
     entries_created: number
     entries_updated: number
     skipped_rows: number
+  }>
+  upsertImportedKiotVietCustomerDebtAdjustments?(input: {
+    organizationId: string
+    rows: KiotVietCustomerDebtAdjustmentImportRow[]
+  }): Promise<{
+    created: number
+    updated: number
+    skipped: number
   }>
   listCustomerDebts?(input: { organizationId: string; url: URL }): Promise<CustomerDebtSummaryData[]>
   getCustomerDebt?(input: { organizationId: string; customerId: string }): Promise<CustomerDebtDetailData>
@@ -1347,6 +1364,17 @@ type CustomerDebtItem = {
     debt_amount: number
     remaining_debt: number
   }>
+  adjustments?: Array<{
+    id: string
+    source_code: string
+    created_at: string
+    transaction_type: string
+    amount_delta: number
+    paid_amount: number
+    remaining_amount: number
+    balance_after: number
+    source_file: string | null
+  }>
 }
 
 function buildCustomerDebtItems() {
@@ -1398,6 +1426,7 @@ function addCustomerDebtDocument(debts: CustomerDebtItem[], document: DebtInvoic
     oldest_order_code: document.code,
     open_invoice_count: 1,
     invoices: [invoice],
+    adjustments: [],
   })
 }
 
@@ -1475,6 +1504,7 @@ function customerImportRepository(repository: ServerRepository) {
           note: row.note,
           source_creator_name: row.source_creator_name,
           last_transaction_at: row.last_transaction_at,
+          kiotviet_current_debt: row.kiotviet_current_debt,
           kiotviet_net_sales: row.kiotviet_net_sales,
           status: row.status,
         }
@@ -1713,8 +1743,8 @@ function filterCashbookEntries(url: URL) {
         code: entry.code,
         note: entry.note,
         transfer_content: entry.source?.transfer_content ?? '',
-        counterparty: `${entry.counterparty.name} ${entry.counterparty.phone ?? ''}`,
-        all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.finance_account.code} ${entry.finance_account.name} ${entry.source?.transfer_content ?? ''}`,
+        counterparty: `${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.source?.counterparty_code ?? ''}`,
+        all: `${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.source?.counterparty_code ?? ''} ${entry.finance_account.code} ${entry.finance_account.name} ${entry.source?.transfer_content ?? ''}`,
       }
       const haystack = normalizeSearchText(scopedHaystacks[searchScope as keyof typeof scopedHaystacks] ?? scopedHaystacks.all)
       if (!haystack.includes(search)) return false
@@ -2253,11 +2283,13 @@ function makeCashbookEntry(number: number): CashbookEntryData {
 
 function makeCustomerDebtDetail(customerId: string) {
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
-  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [] }
+  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [] }
   return {
     customer_id: customerId,
     total_debt: debt.total_debt,
     invoices: debt.invoices,
+    adjustments: debt.adjustments ?? [],
+    linked_supplier_receipts: [],
   }
 }
 
@@ -2605,7 +2637,12 @@ async function getDevApiResponse(
         const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer) => {
           const totals = financialTotals?.get(customer.id)
           const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
-          return { ...customer, ...totals, created_by: resolveCustomerCreatedBy(customer, userList), last_activity_at: lastActivityAt }
+          return {
+            ...customer,
+            ...customerDisplayTotals(customer, totals),
+            created_by: resolveCustomerCreatedBy(customer, userList),
+            last_activity_at: lastActivityAt,
+          }
         })
         const sortedCustomers = newestFirst(hydrateLinkedSuppliers(filteredCustomers, repositorySuppliers ?? suppliers))
         return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
@@ -3345,6 +3382,36 @@ async function getDevApiResponse(
         const result = await repository.deleteImportedKiotVietCashbook?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
         return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
       },
+      previewKiotVietCustomerDebtAdjustmentImport: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCustomerDebtAdjustmentRows(customerDebtAdjustmentImportRowsFromBody(body), {
+          sourceFile: typeof body.source_file === 'string' ? body.source_file : typeof body.file_name === 'string' ? body.file_name : null,
+        })
+        return {
+          found: true,
+          data: await previewKiotVietCustomerDebtAdjustmentImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as CustomerDebtAdjustmentImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
+      importKiotVietCustomerDebtAdjustments: async () => {
+        const body = await readJson(request)
+        const mapped = mapKiotVietCustomerDebtAdjustmentRows(customerDebtAdjustmentImportRowsFromBody(body), {
+          sourceFile: typeof body.source_file === 'string' ? body.source_file : typeof body.file_name === 'string' ? body.file_name : null,
+        })
+        return {
+          found: true,
+          data: await applyKiotVietCustomerDebtAdjustmentImport({
+            organizationId: currentUser.organization.id,
+            repository: repository as CustomerDebtAdjustmentImportRepository,
+            rows: mapped.valid,
+            invalidRows: mapped.invalid,
+          }),
+        }
+      },
       listCashbook: async () => {
         const entriesUrl = cashbookEntriesUrl(url)
         if (repository.listCashbookEntriesPage) {
@@ -3494,6 +3561,18 @@ function customerListSummary(items: readonly CustomerListData[]) {
   return {
     total_debt_amount: items.reduce((sum, item) => sum + item.total_debt_amount, 0),
     total_sales_amount: items.reduce((sum, item) => sum + item.total_sales_amount, 0),
+  }
+}
+
+function customerDisplayTotals(
+  customer: CustomerListData,
+  totals: { total_sales_amount: number; total_debt_amount: number } | undefined,
+) {
+  const isKiotVietCustomer = customer.id.startsWith('customer-kv-')
+  const hasKiotVietSales = isKiotVietCustomer || (customer.kiotviet_net_sales !== null && customer.kiotviet_net_sales !== undefined)
+  return {
+    total_debt_amount: totals?.total_debt_amount ?? customer.total_debt_amount,
+    total_sales_amount: hasKiotVietSales ? customer.total_sales_amount : totals?.total_sales_amount ?? customer.total_sales_amount,
   }
 }
 
@@ -3768,6 +3847,14 @@ function cashbookImportRowsFromBody(body: Record<string, unknown>) {
   if (Array.isArray(body.rows)) return body.rows
   if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
     return parseKiotVietCashbookWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
+  }
+  return []
+}
+
+function customerDebtAdjustmentImportRowsFromBody(body: Record<string, unknown>) {
+  if (Array.isArray(body.rows)) return body.rows
+  if (typeof body.file_base64 === 'string' && body.file_base64.trim() !== '') {
+    return parseKiotVietCustomerDebtAdjustmentWorkbookBuffer(Buffer.from(body.file_base64, 'base64'))
   }
   return []
 }

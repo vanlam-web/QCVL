@@ -514,6 +514,7 @@ Scope:
 
 - Work on local `127.0.0.1:3202` first.
 - Read KiotViet `SoQuy_KV*.xlsx` exports.
+- Historical KV export archive for manual verification lives in `Y:\DuLieuKV`.
 - Create/update real `finance_accounts` from the import source before writing cashbook rows.
 - Do not deploy to NAS until the imported totals and filters have been compared with KiotViet.
 
@@ -558,6 +559,7 @@ Rules:
 - Imported rows must be traceable by `source_system = kiotviet`, source file, and source row/code.
 - KiotViet cashbook Excel does not include linked invoice/purchase receipt allocation, and that is normal: payment of invoice/purchase receipt creates the cashbook row. The allocation belongs to payment/source-document detail, not to the flat cashbook export.
 - Full KiotViet cashbook export columns currently seen: `Ma phieu`, `Thoi gian`, `Thoi gian tao`, `Nguoi tao`, `Nhan vien`, `Loai thu chi`, `Ten tai khoan`, `So tai khoan`, `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, `So dien thoai`, `Dia chi`, `Gia tri`, `Noi dung chuyen khoan`, `Ghi chu`, `Loai so quy`, `Trang thai`. Import must preserve `Thoi gian tao`, `Dia chi`, `Noi dung chuyen khoan`, and `Ghi chu`.
+- `CB...` does not come from `SoQuy_KV*.xlsx`. It comes from `BaoCaoCongNoTheoKhachHang_KV*.xlsx` as a customer-debt balancing/adjustment voucher. Store and show it as a debt adjustment document with its original `CB...` code, not as a generic import row, not as a sales invoice, and not as a cashbook voucher.
 - KiotViet sales/purchase exports contain `Khach da tra`, `Tien mat`, `Chuyen khoan`, and `Tien da tra NCC`, but those values are paid totals at export time and may already include later cashbook debt payments. When rebuilding cashbook/debt relations, imported KiotViet invoices and purchase receipts must be reset to original payable/debt first, then cashbook rows rebuild `paid_amount`, `debt_amount`, and `remaining_amount`. Never add the export paid totals again after cashbook allocations, because that double-counts payments.
 - Direct allocations are safe by code pattern: `TTHD...`/`TTHDO...` allocate to `HD...`; `PCPN...` allocates to `PN...`. Only hydrate full allocation amounts from QCVL sales/purchase data when that source document already exists. Do not infer links from amount, customer name, or time alone.
 - If cashbook for a day has been imported but sales/purchase documents for the same day have not, cashbook totals may be right while document relationships are incomplete. Do not delete those rows unless the delete scope is explicitly confirmed; prefer importing the missing source documents first.

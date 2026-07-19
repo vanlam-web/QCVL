@@ -30,7 +30,7 @@ Then state:
 - scope: module, files, page/API
 - target: `3202`, `3200`, docs only, or deploy
 
-Before editing files, read and update `Y:\TeamAI\WORKER-NOW.md` with your active scope. `preflight` also validates this board so a missing or malformed shared status file blocks local test/build/deploy scripts.
+Before editing files, read and update `Y:\TeamAI\WORKER-NOW.md` with your active scope. After finishing a task, read it again before starting the next task so new pull / restart / overlap notes are not missed. `preflight` also validates this board so a missing or malformed shared status file blocks local test/build/deploy scripts.
 
 ## Read Order
 

@@ -24,6 +24,7 @@
     "deploy:nas": "node scripts/deploy-nas.mjs",
     "restart:nas": "node scripts/restart-nas.mjs",
     "import:dev-memory-to-postgres": "tsx scripts/import-dev-memory-state-to-postgres.ts",
+    "import:kiotviet-customer-debt-adjustments": "tsx scripts/import-kiotviet-customer-debt-adjustments.ts",
     "verify:sales-finance-persistence": "node scripts/verify-sales-finance-persistence.mjs",
     "smoke:nas": "node scripts/smoke-nas-ui.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",

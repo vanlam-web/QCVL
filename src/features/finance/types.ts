@@ -18,7 +18,7 @@ export type CashbookVoucherType =
   | 'other_expense'
 export type PartnerDebtMode = 'affects_partner_debt' | 'not_affect_partner_debt' | 'no_partner_debt'
 export type CashbookBusinessAccountedFilter = 'all' | 'true' | 'false'
-export type CashbookSearchScope = 'all' | 'code' | 'note' | 'transfer_content'
+export type CashbookSearchScope = 'all' | 'code' | 'note' | 'transfer_content' | 'counterparty'
 export type CashbookColumnKey =
   | 'code'
   | 'created_at'
@@ -76,6 +76,28 @@ export interface CustomerDebtDetail {
     paid_amount: number
     debt_amount: number
     remaining_debt: number
+  }>
+  adjustments?: Array<{
+    id: string
+    source_code: string
+    created_at: string
+    transaction_type: string
+    amount_delta: number
+    paid_amount: number
+    remaining_amount: number
+    balance_after: number
+    source_file: string | null
+  }>
+  linked_supplier_receipts?: Array<{
+    id: string
+    code: string
+    created_at: string
+    supplier_id: string
+    supplier_code: string
+    supplier_name: string
+    payable_amount: number
+    paid_amount: number
+    remaining_amount: number
   }>
 }
 
@@ -143,6 +165,7 @@ export interface CashbookEntry {
     source_creator_name?: string | null
     source_note?: string | null
     transfer_content?: string | null
+    counterparty_code?: string | null
     counterparty_address?: string | null
   }
 }

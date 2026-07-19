@@ -23,7 +23,7 @@ npm run preflight
 
 After reading them, state the scope you are taking in chat: module, files, page/API, and environment.
 
-Also read and update `Y:\TeamAI\WORKER-NOW.md` before editing files. `preflight` validates that board outside CI.
+Also read and update `Y:\TeamAI\WORKER-NOW.md` before editing files. When you finish a task, read it again before starting next task so you pick up new pull / restart / overlap notes. `preflight` validates that board outside CI.
 
 ## 2. Current Project
 

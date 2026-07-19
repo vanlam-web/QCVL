@@ -151,17 +151,18 @@ Thao tác:
 
 Tab này là lối xem nhanh công nợ theo khách. Nguồn dữ liệu vẫn phải khớp với module Finance/Customer Debt và phiếu thu trong Sổ quỹ.
 
-Lát MVP hiện tại chỉ cần readonly công nợ theo hóa đơn còn nợ:
+Lát MVP hiện tại chỉ cần readonly công nợ theo hóa đơn còn nợ và phiếu điều chỉnh KiotViet mã `CB...`:
 
 - tổng nợ hiện tại
 - số hóa đơn còn nợ
 - danh sách hóa đơn còn nợ gồm mã, thời gian, tổng tiền, đã trả, còn nợ
+- phiếu cân bằng/điều chỉnh công nợ `CB...` nếu dữ liệu đối chiếu lấy từ `BaoCaoCongNoTheoKhachHang_KV*.xlsx`
 
 Trên danh sách khách, cột `Công nợ` tải tự động cho các khách đang hiển thị trên trang hiện tại bằng Finance Customer Debt API. Nếu chưa tải xong hoặc tải lỗi, hiển thị `-` thay vì đoán số.
 
 Nếu hóa đơn phát sinh nợ khi POS chưa chọn khách, khoản nợ thuộc khách mã `khachle`. Ghi chú khách lẻ nếu có chỉ là thông tin nhận diện phụ của hóa đơn/khoản nợ, không tạo bucket công nợ `customer_id = null`.
 
-Thu nợ độc lập, điều chỉnh công nợ, chiết khấu thanh toán và QR thanh toán là scope Finance/POS sau, không tự mở trong lát khách hàng này.
+Thu nợ độc lập, điều chỉnh công nợ, chiết khấu thanh toán và QR thanh toán là scope Finance/POS sau, không tự mở trong lát khách hàng này. Dữ liệu lịch sử `CB...` từ KiotViet phải hiển thị bằng chính mã `CB...`, không ghi là `import`.
 
 Trong mục tiêu hiện tại là hoàn thiện `Hàng hóa` để tồn vận hành đúng, `Nợ cần thu` không nằm trên đường găng. Chỉ giữ readonly cơ bản nếu Finance API đã có dữ liệu thật; các dòng thanh toán, chiết khấu thanh toán, QR, điều chỉnh công nợ và xuất file công nợ làm sau.
 

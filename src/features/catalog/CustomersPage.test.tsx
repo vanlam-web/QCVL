@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CustomersPage } from './CustomersPage'
 import type { CatalogService } from './catalog-service'
+import type { FinanceService } from '../finance/finance-service'
 import type { OrderService } from '../orders/order-service'
 import type { SalesDocumentService } from '../sales-documents/sales-document-service'
 
@@ -107,85 +108,140 @@ function makeOrderService(overrides: Partial<Pick<OrderService, 'getCustomerDebt
 }
 
 function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 'listSalesDocuments'>> = {}) {
+  const quoteItems = [
+    {
+      id: 'quote-1',
+      code: 'BG000245',
+      order_type: 'quote' as const,
+      status: 'active' as const,
+      created_at: '2026-06-29T09:30:00Z',
+      customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      seller: { id: 'seller-1', name: 'Admin' },
+      subtotal_amount: 120000,
+      discount_amount: 0,
+      total_amount: 120000,
+      paid_amount: 0,
+      debt_amount: 0,
+      payment_status: 'not_applicable' as const,
+      note: null,
+    },
+  ]
+  const invoiceItems = [
+    {
+      id: 'order-1',
+      code: 'HD010985',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-06-30T17:08:00Z',
+      customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      seller: { id: 'seller-1', name: 'Admin' },
+      subtotal_amount: 180000,
+      discount_amount: 30000,
+      total_amount: 150000,
+      paid_amount: 0,
+      debt_amount: 150000,
+      payment_status: 'partial' as const,
+      note: 'Khách lấy sau',
+    },
+    {
+      id: 'order-cancelled',
+      code: 'HD-CANCELLED',
+      order_type: 'invoice' as const,
+      status: 'cancelled' as const,
+      created_at: '2026-06-27T17:08:00Z',
+      customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      seller: { id: 'seller-cancelled', name: 'Hệ thống KV' },
+      subtotal_amount: 90000,
+      discount_amount: 0,
+      total_amount: 90000,
+      paid_amount: 0,
+      debt_amount: 90000,
+      payment_status: 'unpaid' as const,
+      note: null,
+    },
+    {
+      id: 'order-2',
+      code: 'HD010986',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-06-29T17:08:00Z',
+      customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      seller: { id: 'seller-1', name: 'Admin' },
+      subtotal_amount: 200000,
+      discount_amount: 0,
+      total_amount: 200000,
+      paid_amount: 50000,
+      debt_amount: 150000,
+      payment_status: 'partial' as const,
+      note: null,
+    },
+    {
+      id: 'order-3',
+      code: 'HD010987',
+      order_type: 'invoice' as const,
+      status: 'completed' as const,
+      created_at: '2026-06-28T17:08:00Z',
+      customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+      seller: { id: 'seller-1', name: 'Admin' },
+      subtotal_amount: 90000,
+      discount_amount: 0,
+      total_amount: 90000,
+      paid_amount: 90000,
+      debt_amount: 0,
+      payment_status: 'paid' as const,
+      note: null,
+    },
+  ]
   return {
     listSalesDocuments: vi.fn(async (input = {}) => ({
       items: input.type === 'quote'
-        ? [
-            {
-              id: 'quote-1',
-              code: 'BG000245',
-              order_type: 'quote' as const,
-              status: 'active' as const,
-              created_at: '2026-06-29T09:30:00Z',
-              customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
-              seller: { id: 'seller-1', name: 'Admin' },
-              subtotal_amount: 120000,
-              discount_amount: 0,
-              total_amount: 120000,
-              paid_amount: 0,
-              debt_amount: 0,
-              payment_status: 'not_applicable' as const,
-              note: null,
-            },
-          ]
+        ? input.status === 'active'
+          ? quoteItems
+          : []
         : input.type === 'invoice'
-          ? [
-            {
-              id: 'order-1',
-              code: 'HD010985',
-              order_type: 'invoice' as const,
-              status: 'completed' as const,
-              created_at: '2026-06-30T17:08:00Z',
-              customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
-              seller: { id: 'seller-1', name: 'Admin' },
-              subtotal_amount: 180000,
-              discount_amount: 30000,
-              total_amount: 150000,
-              paid_amount: 0,
-              debt_amount: 150000,
-              payment_status: 'partial' as const,
-              note: 'Khách lấy sau',
-            },
-            {
-                id: 'order-2',
-                code: 'HD010986',
-                order_type: 'invoice' as const,
-                status: 'completed' as const,
-                created_at: '2026-06-29T17:08:00Z',
-                customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
-                seller: { id: 'seller-1', name: 'Admin' },
-                subtotal_amount: 200000,
-                discount_amount: 0,
-                total_amount: 200000,
-                paid_amount: 50000,
-                debt_amount: 150000,
-                payment_status: 'partial' as const,
-                note: null,
-              },
-              {
-                id: 'order-3',
-                code: 'HD010987',
-                order_type: 'invoice' as const,
-                status: 'completed' as const,
-                created_at: '2026-06-28T17:08:00Z',
-                customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
-                seller: { id: 'seller-1', name: 'Admin' },
-                subtotal_amount: 90000,
-                discount_amount: 0,
-                total_amount: 90000,
-                paid_amount: 90000,
-                debt_amount: 0,
-                payment_status: 'paid' as const,
-                note: null,
-              },
-            ]
+          ? input.status === 'completed'
+            ? invoiceItems.filter((item) => item.status === 'completed')
+            : invoiceItems
           : [],
       page: 1,
       page_size: 10,
-      total: input.type === 'invoice' ? 3 : 1,
+      total: input.type === 'quote'
+        ? (input.status === 'active' ? quoteItems.length : 0)
+        : input.type === 'invoice'
+          ? (input.status === 'completed' ? invoiceItems.filter((item) => item.status === 'completed').length : invoiceItems.length)
+          : 0,
     })),
     ...overrides,
   } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
+}
+
+function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries'>> = {}) {
+  return {
+    listCashbookEntries: vi.fn(async () => ({
+      items: [
+        {
+          id: 'cashbook-1',
+          code: 'TT000001',
+          status: 'posted' as const,
+          direction: 'in' as const,
+          amount_delta: 190000,
+          finance_account: { id: 'cash-main', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+          is_business_accounted: true,
+          source_type: 'payment_receipt_method' as const,
+          created_at: '2026-06-29T18:00:00Z',
+          note: null,
+          counterparty: { type: 'customer' as const, name: 'Công ty Phong Cảnh', phone: '0909000000' },
+          created_by: { id: 'user-admin', name: 'Admin' },
+          source: { type: 'payment_receipt', id: 'TT000001', code: 'TT000001', order_code: 'HD010986' },
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+      summary: { opening_balance: 0, total_in: 190000, total_out: 0, ending_balance: 190000 },
+    })),
+    ...overrides,
+  } satisfies Pick<FinanceService, 'listCashbookEntries'>
 }
 
 it('lists customers in the shared management layout', async () => {
@@ -519,7 +575,8 @@ it('expands customer details directly under the selected row and closes on secon
   const service = makeService()
   const orderService = makeOrderService()
   const salesDocumentService = makeSalesDocumentService()
-  render(<CustomersPage service={service} orderService={orderService} salesDocumentService={salesDocumentService} />)
+  const financeService = makeFinanceService()
+  render(<CustomersPage service={service} orderService={orderService} salesDocumentService={salesDocumentService} financeService={financeService} />)
 
   await userEvent.click(await screen.findByText('KH000123'))
   const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000123' })
@@ -581,32 +638,44 @@ it('expands customer details directly under the selected row and closes on secon
   expect(detailTablist).toBeInTheDocument()
   expect(analysisButton.closest('.inline-detail-tabbar')).toBe(detailTablist.closest('.inline-detail-tabbar'))
   expect(within(detail).getByRole('tab', { name: 'Thông tin' })).toHaveAttribute('aria-selected', 'true')
-  expect(within(detail).getByRole('tab', { name: 'Nợ cần thu' })).toHaveAttribute('aria-selected', 'false')
+  expect(within(detail).getByRole('tab', { name: 'Công nợ' })).toHaveAttribute('aria-selected', 'false')
   expect(within(detail).getByRole('tab', { name: 'Lịch sử' })).toHaveAttribute('aria-selected', 'false')
-  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ cần thu' }))
-  expect(within(detail).getByRole('tab', { name: 'Nợ cần thu' })).toHaveAttribute('aria-selected', 'true')
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+  expect(within(detail).getByRole('tab', { name: 'Công nợ' })).toHaveAttribute('aria-selected', 'true')
   await waitFor(() => expect(detail).toHaveTextContent('250 000'))
   expect(detail).toHaveTextContent('250 000')
   expect(within(detail).getByText('2 hóa đơn mở')).toBeInTheDocument()
-  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 10 })
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 })
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 1000 })
+  expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
+    search: 'Công ty Phong Cảnh',
+    search_scope: 'counterparty',
+    status: 'posted',
+    page: 1,
+    page_size: 1000,
+  })
   expect(await within(detail).findByText('HD010987')).toBeInTheDocument()
-  const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử nợ cần thu' })
+  expect(await within(detail).findByText('TT000001')).toBeInTheDocument()
+  const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử công nợ' })
   expect(debtHistoryTable).toHaveClass('management-detail-table', 'management-detail-linked-table')
-  expect(within(detail).getByRole('columnheader', { name: 'Mã hóa đơn' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Mã phiếu' })).toBeInTheDocument()
   expect(within(detail).getByRole('columnheader', { name: 'Thời gian' })).toBeInTheDocument()
-  expect(within(detail).getByRole('columnheader', { name: 'Tổng sau giảm' })).toBeInTheDocument()
-  expect(within(detail).getByRole('columnheader', { name: 'Đã thu' })).toBeInTheDocument()
-  expect(within(detail).getByRole('columnheader', { name: 'Còn nợ' })).toBeInTheDocument()
-  expect(within(detail).getByRole('columnheader', { name: 'Trạng thái' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Loại' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Giá trị' })).toBeInTheDocument()
+  expect(within(detail).getByRole('columnheader', { name: 'Công nợ' })).toBeInTheDocument()
   expect(within(debtHistoryTable).getByText('HD010985')).toBeInTheDocument()
   expect(within(debtHistoryTable).getByText('HD010986')).toBeInTheDocument()
   expect(within(debtHistoryTable).getByText('HD010987')).toBeInTheDocument()
-  expect(within(debtHistoryTable).getByText('Hoàn tất')).toBeInTheDocument()
+  expect(within(debtHistoryTable).queryByText('HD-CANCELLED')).not.toBeInTheDocument()
+  expect(within(debtHistoryTable).getByText('Thanh toán')).toBeInTheDocument()
+  expect(within(debtHistoryTable).getByText('-190 000')).toBeInTheDocument()
+  expect(within(debtHistoryTable).getAllByText('Bán hàng').length).toBeGreaterThan(0)
+  expect(within(detail).getByRole('navigation', { name: 'Phân trang công nợ' })).toHaveTextContent('1 - 4 trong 4 dòng công nợ')
   expect(orderService.getCustomerDebt).toHaveBeenCalledWith('customer-1')
   expect(customerRow).toHaveTextContent('250 000')
 
   await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử' }))
-  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 10 })
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 })
   expect(await within(detail).findByText('HD010985')).toBeInTheDocument()
   expect(within(detail).getByText('HD010986')).toBeInTheDocument()
   expect(within(detail).getByText('HD010987')).toBeInTheDocument()
@@ -632,7 +701,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(historyTable).queryByText('Hóa đơn')).not.toBeInTheDocument()
 
   await userEvent.click(within(detail).getByRole('button', { name: 'Báo giá' }))
-  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'quote', page: 1, page_size: 10 })
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'quote', status: 'active', page: 1, page_size: 10 })
   expect(await within(detail).findByText('BG000245')).toBeInTheDocument()
   expect(within(detail).getByRole('button', { name: 'Hóa đơn' })).toHaveAttribute('aria-pressed', 'false')
   expect(within(detail).getByRole('button', { name: 'Báo giá' })).toHaveAttribute('aria-pressed', 'true')
@@ -642,6 +711,52 @@ it('expands customer details directly under the selected row and closes on secon
 
   await userEvent.click(customerRow as HTMLElement)
   expect(screen.queryByRole('region', { name: 'Chi tiết khách hàng KH000123' })).not.toBeInTheDocument()
+})
+
+it('paginates customer sales history from the API', async () => {
+  const listSalesDocuments = vi.fn(async (input: Parameters<SalesDocumentService['listSalesDocuments']>[0] = {}) => {
+    const page = input.page ?? 1
+    return {
+      items: [
+        {
+          id: `history-order-${page}`,
+          code: page === 2 ? 'HD-PAGE-2' : 'HD-PAGE-1',
+          order_type: 'invoice' as const,
+          status: 'completed' as const,
+          created_at: page === 2 ? '2026-07-02T09:00:00Z' : '2026-07-01T09:00:00Z',
+          customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+          seller: { id: 'seller-1', name: 'Admin' },
+          subtotal_amount: 100000,
+          discount_amount: 0,
+          total_amount: page === 2 ? 200000 : 100000,
+          paid_amount: 0,
+          debt_amount: page === 2 ? 200000 : 100000,
+          payment_status: 'unpaid' as const,
+          note: null,
+        },
+      ],
+      page,
+      page_size: input.page_size ?? 10,
+      total: 16,
+    }
+  })
+  const salesDocumentService = makeSalesDocumentService({ listSalesDocuments })
+  render(<CustomersPage service={makeService()} orderService={makeOrderService()} salesDocumentService={salesDocumentService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Lịch sử' }))
+  expect(await within(detail).findByText('HD-PAGE-1')).toBeInTheDocument()
+  let historyPager = within(detail).getByRole('navigation', { name: 'Phân trang lịch sử hóa đơn' })
+  expect(historyPager).toHaveTextContent('1 - 10 trong 16 hóa đơn')
+
+  await userEvent.click(within(historyPager).getByRole('button', { name: 'Trang sau' }))
+  await waitFor(() => expect(listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 2, page_size: 10 }))
+  expect(await within(detail).findByText('HD-PAGE-2')).toBeInTheDocument()
+  expect(within(detail).queryByText('HD-PAGE-1')).not.toBeInTheDocument()
+  historyPager = within(detail).getByRole('navigation', { name: 'Phân trang lịch sử hóa đơn' })
+  expect(historyPager).toHaveTextContent('11 - 16 trong 16 hóa đơn')
 })
 
 it('does not repeat customer group or price list in customer detail', async () => {
@@ -773,7 +888,32 @@ it('reloads customer debt when the debt tab is opened again', async () => {
     })
   const orderService = makeOrderService({ getCustomerDebt })
 
-  render(<CustomersPage service={makeService()} orderService={orderService} />)
+  render(<CustomersPage service={makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-1',
+          code: 'KH000123',
+          name: 'Công ty Phong Cảnh',
+          phone: '0909000000',
+          tax_code: '0312345678',
+          address: '12 Nguyễn Trãi, Quận 1',
+          customer_group_id: null,
+          customer_group: { id: 'cg-1', code: 'VIP', name: 'Khách VIP' },
+          customer_type: 'company',
+          created_by: { id: 'user-admin', name: 'Admin' },
+          created_at: '2026-06-30T17:08:00Z',
+          note: 'Ghi chú khách KV',
+          status: 'active',
+          total_sales_amount: 750000,
+          total_debt_amount: 0,
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+  })} orderService={orderService} />)
 
   await userEvent.click(await screen.findByText('KH000123'))
   const detail = screen.getByRole('region', { name: /KH000123/ })
@@ -843,13 +983,93 @@ it('derives open receivable totals from invoice history when the debt endpoint h
 
   await userEvent.click(await screen.findByText('KH000123'))
   const detail = screen.getByRole('region', { name: /KH000123/ })
-  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ cần thu' }))
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
 
-  await waitFor(() => expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 10 }))
+  await waitFor(() => expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 }))
   expect(within(detail).getByText('1 hóa đơn mở')).toBeInTheDocument()
   expect(detail).toHaveTextContent('44 800')
-  const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử nợ cần thu' })
-  expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('Hoàn tất')
+  const debtHistoryTable = within(detail).getByRole('table', { name: 'Lịch sử công nợ' })
+  expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('100 000')
+  expect(within(debtHistoryTable).getByRole('row', { name: /HD-PAID-OLD/ })).toHaveTextContent('100 000')
+  expect(within(debtHistoryTable).queryByText('HD-CANCELLED')).not.toBeInTheDocument()
+})
+
+it('shows KiotViet adjustment balance as the debt running balance', async () => {
+  const salesDocumentService = makeSalesDocumentService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [
+        {
+          id: 'order-after-cb',
+          code: 'HD000007.03',
+          order_type: 'invoice' as const,
+          status: 'completed' as const,
+          created_at: '2023-07-12T16:31:00.000Z',
+          customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+          seller: { id: 'seller-1', name: 'Admin' },
+          subtotal_amount: 790400,
+          discount_amount: 0,
+          total_amount: 790400,
+          paid_amount: 0,
+          debt_amount: 790400,
+          payment_status: 'unpaid' as const,
+          note: null,
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+    })),
+  })
+  render(
+    <CustomersPage
+      service={makeService()}
+      orderService={makeOrderService({
+        getCustomerDebt: vi.fn(async () => ({
+          customer_id: 'customer-1',
+          total_debt: 1510080,
+          invoices: [],
+          adjustments: [
+            {
+              id: 'customer-debt-adjustment-kv-cb000001',
+              source_code: 'CB000001',
+              created_at: '2023-07-12T16:27:00.000Z',
+              transaction_type: 'Dieu chinh',
+              amount_delta: 1000000,
+              paid_amount: 0,
+              remaining_amount: 1000000,
+              balance_after: 1000000,
+              source_file: 'BaoCaoCongNoTheoKhachHang_KV13072026-150538-065.xlsx',
+            },
+            {
+              id: 'customer-debt-adjustment-kv-pn000449',
+              source_code: 'PN000449',
+              created_at: '2023-07-12T17:00:00.000Z',
+              transaction_type: 'Nhập hàng',
+              amount_delta: -280320,
+              paid_amount: 0,
+              remaining_amount: -280320,
+              balance_after: 1510080,
+              source_file: 'LichSuThanhToanKhachHang_KV19072026-003658-454.xlsx',
+            },
+          ],
+        })),
+      })}
+      salesDocumentService={salesDocumentService}
+    />,
+  )
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+
+  const debtHistoryTable = await within(detail).findByRole('table', { name: 'Lịch sử công nợ' })
+  const adjustmentRow = within(debtHistoryTable).getByRole('row', { name: /CB000001/ })
+  expect(within(adjustmentRow).getAllByRole('cell')[4]).toHaveTextContent('1 000 000')
+  const invoiceRow = within(debtHistoryTable).getByRole('row', { name: /HD000007\.03/ })
+  expect(within(invoiceRow).getAllByRole('cell')[4]).toHaveTextContent('1 790 400')
+  const receiptRow = within(debtHistoryTable).getByRole('row', { name: /PN000449/ })
+  expect(within(receiptRow).getAllByRole('cell')[3]).toHaveTextContent('-280 320')
+  expect(within(receiptRow).getAllByRole('cell')[4]).toHaveTextContent('1 510 080')
 })
 
 it('opens customer detail when legacy cloud data has no created timestamp', async () => {

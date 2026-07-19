@@ -36,6 +36,8 @@ import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
 import type { Customer, CustomerGroup } from './types'
 import type { CustomerDebtDetail, OrderService } from '../orders/order-service'
+import type { FinanceService } from '../finance/finance-service'
+import type { CashbookEntry } from '../finance/types'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType } from './customer-filters'
 import {
@@ -58,10 +60,17 @@ interface CustomerState {
 }
 
 type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
-type CustomerHistoryState = { items: SalesDocumentListItem[]; total: number } | 'loading' | 'error'
+type CustomerDebtLedgerState = {
+  debt: CustomerDebtDetail
+  invoiceHistory: SalesDocumentListItem[]
+  cashbookHistory: CashbookEntry[]
+} | 'loading' | 'error'
+type CustomerHistoryState = { items: SalesDocumentListItem[]; page: number; pageSize: number; total: number } | 'loading' | 'error'
 type CustomerDetailTab = 'info' | 'debt' | 'history'
 type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const customerHistoryPageSize = 10
+const customerDebtLedgerPageSize = 15
+const customerDebtLedgerFetchPageSize = 1000
 type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
 type CustomerStatusFilter = 'active' | 'inactive' | 'all'
 const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
@@ -93,6 +102,10 @@ function customerCreatorLabel(customer: Customer) {
   return customer.source_creator_name?.trim() ? 'Chưa khớp tài khoản' : ''
 }
 
+function customerHistoryStatus(historyType: CustomerHistoryType) {
+  return historyType === 'invoice' ? 'completed' : 'active'
+}
+
 function customerTypeLabel(customer: Customer) {
   switch (customer.customer_type) {
     case 'individual':
@@ -122,10 +135,12 @@ export function CustomersPage({
   service,
   orderService,
   salesDocumentService,
+  financeService,
 }: {
   service: CatalogService
   orderService: Pick<OrderService, 'getCustomerDebt'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
+  financeService?: Pick<FinanceService, 'listCashbookEntries'>
 }) {
   const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
   const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
@@ -138,10 +153,13 @@ export function CustomersPage({
   const [activeDetailTab, setActiveDetailTab] = useState<CustomerDetailTab>('info')
   const [customerHistoryType, setCustomerHistoryType] = useState<CustomerHistoryType>('invoice')
   const [customerDebts, setCustomerDebts] = useState<Record<string, CustomerDebtState>>({})
+  const [customerDebtLedgers, setCustomerDebtLedgers] = useState<Record<string, CustomerDebtLedgerState>>({})
+  const [customerDebtLedgerPages, setCustomerDebtLedgerPages] = useState<Record<string, number>>({})
   const [customerHistories, setCustomerHistories] = useState<Record<string, CustomerHistoryState>>({})
+  const [customerHistoryPages, setCustomerHistoryPages] = useState<Record<string, number>>({})
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
-  const customerDebtRequestsRef = useRef(new Set<string>())
+  const customerDebtLedgerRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
   const [showFilters, setShowFilters] = useState(true)
   const [search, setSearch] = useState(routeSearch)
@@ -403,30 +421,85 @@ export function CustomersPage({
     })
   }
 
-  function loadCustomerDebt(customerId: string, options: { force?: boolean } = {}) {
-    if (!options.force && customerDebts[customerId] !== undefined) return
-    if (customerDebtRequestsRef.current.has(customerId)) return
+  function loadCustomerDebtLedger(customer: Customer, options: { force?: boolean } = {}) {
+    if (!options.force && customerDebtLedgers[customer.id] !== undefined) return
+    if (customerDebtLedgerRequestsRef.current.has(customer.id)) return
 
-    customerDebtRequestsRef.current.add(customerId)
-    setCustomerDebts((debts) => ({ ...debts, [customerId]: 'loading' }))
-    orderService
-      .getCustomerDebt(customerId)
-      .then((debt) => setCustomerDebts((debts) => ({ ...debts, [customerId]: debt })))
-      .catch(() => setCustomerDebts((debts) => ({ ...debts, [customerId]: 'error' })))
-      .finally(() => customerDebtRequestsRef.current.delete(customerId))
+    customerDebtLedgerRequestsRef.current.add(customer.id)
+    setCustomerDebts((debts) => ({ ...debts, [customer.id]: 'loading' }))
+    setCustomerDebtLedgers((ledgers) => ({ ...ledgers, [customer.id]: 'loading' }))
+    const counterpartySearch = customer.name.trim() || customer.code
+
+    Promise.all([
+      orderService.getCustomerDebt(customer.id),
+      salesDocumentService?.listSalesDocuments({
+        customer_id: customer.id,
+        type: 'invoice',
+        page: 1,
+        page_size: customerDebtLedgerFetchPageSize,
+      }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
+      financeService?.listCashbookEntries({
+        search: counterpartySearch || undefined,
+        search_scope: 'counterparty',
+        status: 'posted',
+        page: 1,
+        page_size: customerDebtLedgerFetchPageSize,
+      }) ?? Promise.resolve({
+        items: [],
+        page: 1,
+        page_size: customerDebtLedgerFetchPageSize,
+        total: 0,
+        summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+      }),
+    ])
+      .then(([debt, invoiceHistory, cashbookHistory]) => {
+        setCustomerDebts((debts) => ({ ...debts, [customer.id]: debt }))
+        setCustomerDebtLedgers((ledgers) => ({
+          ...ledgers,
+          [customer.id]: {
+            debt,
+            invoiceHistory: invoiceHistory.items,
+            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, customer)),
+          },
+        }))
+      })
+      .catch(() => setCustomerDebtLedgers((ledgers) => ({ ...ledgers, [customer.id]: 'error' })))
+      .finally(() => customerDebtLedgerRequestsRef.current.delete(customer.id))
   }
 
-  function loadCustomerHistory(customerId: string, historyType: CustomerHistoryType) {
+  function loadCustomerHistory(customerId: string, historyType: CustomerHistoryType, options: { page?: number; force?: boolean } = {}) {
     const key = customerHistoryKey(customerId, historyType)
-    if (salesDocumentService === undefined || customerHistories[key] !== undefined || customerHistoryRequestsRef.current.has(key)) return
+    const nextPage = Math.max(1, options.page ?? customerHistoryPages[key] ?? 1)
+    const currentHistory = customerHistories[key]
+    const requestKey = `${key}:${nextPage}`
+    if (salesDocumentService === undefined) return
+    if (!options.force && typeof currentHistory === 'object' && currentHistory.page === nextPage) return
+    if (customerHistoryRequestsRef.current.has(requestKey)) return
 
-    customerHistoryRequestsRef.current.add(key)
+    customerHistoryRequestsRef.current.add(requestKey)
     setCustomerHistories((histories) => ({ ...histories, [key]: 'loading' }))
     salesDocumentService
-      .listSalesDocuments({ customer_id: customerId, type: historyType, page: 1, page_size: customerHistoryPageSize })
-      .then((history) => setCustomerHistories((histories) => ({ ...histories, [key]: { items: history.items, total: history.total } })))
+      .listSalesDocuments({
+        customer_id: customerId,
+        type: historyType,
+        status: customerHistoryStatus(historyType),
+        page: nextPage,
+        page_size: customerHistoryPageSize,
+      })
+      .then((history) => {
+        setCustomerHistoryPages((pages) => ({ ...pages, [key]: history.page }))
+        setCustomerHistories((histories) => ({
+          ...histories,
+          [key]: {
+            items: history.items,
+            page: history.page,
+            pageSize: history.page_size,
+            total: history.total,
+          },
+        }))
+      })
       .catch(() => setCustomerHistories((histories) => ({ ...histories, [key]: 'error' })))
-      .finally(() => customerHistoryRequestsRef.current.delete(key))
+      .finally(() => customerHistoryRequestsRef.current.delete(requestKey))
   }
 
   function openCustomerHistory(customerId: string) {
@@ -434,14 +507,22 @@ export function CustomersPage({
     loadCustomerHistory(customerId, customerHistoryType)
   }
 
-  function openCustomerDebt(customerId: string) {
-    loadCustomerDebt(customerId, { force: true })
-    loadCustomerHistory(customerId, 'invoice')
+  function openCustomerDebt(customer: Customer) {
+    setActiveDetailTab('debt')
+    setCustomerDebtLedgerPages((pages) => ({ ...pages, [customer.id]: pages[customer.id] ?? 1 }))
+    loadCustomerDebtLedger(customer, { force: true })
+    loadCustomerHistory(customer.id, 'invoice')
   }
 
   function selectCustomerHistoryType(customerId: string, historyType: CustomerHistoryType) {
     setCustomerHistoryType(historyType)
-    loadCustomerHistory(customerId, historyType)
+    loadCustomerHistory(customerId, historyType, { page: customerHistoryPages[customerHistoryKey(customerId, historyType)] ?? 1 })
+  }
+
+  function changeCustomerHistoryPage(customerId: string, historyType: CustomerHistoryType, nextPage: number) {
+    const key = customerHistoryKey(customerId, historyType)
+    setCustomerHistoryPages((pages) => ({ ...pages, [key]: nextPage }))
+    loadCustomerHistory(customerId, historyType, { page: nextPage, force: true })
   }
 
   async function createCustomer(event: React.FormEvent<HTMLFormElement>) {
@@ -837,7 +918,10 @@ export function CustomersPage({
                 selectedRowKey={selectedCustomerId}
                 renderDetail={(customer) => {
                   const debt = customerDebts[customer.id]
-                  const history = customerHistories[customerHistoryKey(customer.id, customerHistoryType)]
+                  const debtLedger = customerDebtLedgers[customer.id]
+                  const debtLedgerPage = customerDebtLedgerPages[customer.id] ?? 1
+                  const historyKey = customerHistoryKey(customer.id, customerHistoryType)
+                  const history = customerHistories[historyKey]
                   return (
                     <ManagementDetailPanel>
                       <ManagementInlineDetailTabs
@@ -858,8 +942,8 @@ export function CustomersPage({
                           { key: 'info', label: 'Thông tin' },
                           {
                             key: 'debt',
-                            label: 'Nợ cần thu',
-                            onSelect: () => openCustomerDebt(customer.id),
+                            label: 'Công nợ',
+                            onSelect: () => openCustomerDebt(customer),
                           },
                           {
                             key: 'history',
@@ -911,15 +995,24 @@ export function CustomersPage({
                           </ManagementDetailInlineNote>
                         </ManagementDetailSection>
                       ) : activeDetailTab === 'debt' ? (
-                        <ManagementDetailSection ariaLabel="Nợ cần thu khách hàng" role="tabpanel">
-                          <CustomerDebtPanel debt={debt} invoiceHistory={customerHistories[customerHistoryKey(customer.id, 'invoice')]} />
+                        <ManagementDetailSection ariaLabel="Công nợ khách hàng" role="tabpanel">
+                          <CustomerDebtPanel
+                            debt={debt}
+                            debtLedger={debtLedger}
+                            fallbackDebt={customer.total_debt_amount ?? 0}
+                            ledgerPage={debtLedgerPage}
+                            ledgerPageSize={customerDebtLedgerPageSize}
+                            onLedgerPageChange={(nextPage) => setCustomerDebtLedgerPages((pages) => ({ ...pages, [customer.id]: nextPage }))}
+                          />
                         </ManagementDetailSection>
                       ) : (
                         <ManagementDetailSection ariaLabel="Lịch sử khách hàng" role="tabpanel">
                           <CustomerHistoryPanel
                             history={history}
                             historyType={customerHistoryType}
+                            historyPage={customerHistoryPages[historyKey] ?? (typeof history === 'object' ? history.page : 1)}
                             onSelectHistoryType={(historyType) => selectCustomerHistoryType(customer.id, historyType)}
+                            onHistoryPageChange={(nextPage) => changeCustomerHistoryPage(customer.id, customerHistoryType, nextPage)}
                           />
                         </ManagementDetailSection>
                       )}
@@ -994,100 +1087,227 @@ export function CustomersPage({
 
 function CustomerDebtPanel({
   debt,
-  invoiceHistory,
+  debtLedger,
+  fallbackDebt,
+  ledgerPage,
+  ledgerPageSize,
+  onLedgerPageChange,
 }: {
   debt: CustomerDebtState | undefined
-  invoiceHistory: CustomerHistoryState | undefined
+  debtLedger: CustomerDebtLedgerState | undefined
+  fallbackDebt: number
+  ledgerPage: number
+  ledgerPageSize: number
+  onLedgerPageChange: (page: number) => void
 }) {
-  if (debt === undefined || debt === 'loading') return <p>Đang tải nợ cần thu...</p>
-  if (debt === 'error') return <p role="alert">Không tải được nợ cần thu.</p>
-  const debtInvoicesByOrderId = new Map(debt.invoices.map((invoice) => [invoice.order_id, invoice]))
-  const invoiceRows = typeof invoiceHistory === 'object'
-    ? invoiceHistory.items.map((invoice) => {
-        const debtInvoice = debtInvoicesByOrderId.get(invoice.id)
-        const remainingDebt = debtInvoice?.remaining_debt
-          ?? (invoice.payment_status === 'paid' ? 0 : Math.max(invoice.debt_amount, 0))
-        const paidAmount = debtInvoice?.paid_amount ?? invoice.paid_amount
-        return {
-          id: invoice.id,
-          code: invoice.code,
-          created_at: invoice.created_at,
-          total_amount: invoice.total_amount,
-          paid_amount: paidAmount,
-          remaining_debt: remainingDebt,
-          status: remainingDebt <= 0 ? 'Hoàn tất' : paidAmount > 0 ? 'Nợ 1 phần' : salesDocumentStatusText(invoice),
-        }
-      })
-    : debt.invoices.map((invoice) => ({
+  if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
+  if (debt === 'error' || debtLedger === 'error') return <p role="alert">Không tải được công nợ.</p>
+  const hasLiveDebtLedger = debtLedger.debt.total_debt !== 0
+    || debtLedger.debt.invoices.length > 0
+    || (debtLedger.debt.adjustments?.length ?? 0) > 0
+    || (debtLedger.debt.linked_supplier_receipts?.length ?? 0) > 0
+  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
+  const invoiceRows = debtLedger.invoiceHistory.length > 0
+    ? debtLedger.invoiceHistory
+    : debtLedger.debt.invoices.map((invoice) => ({
         id: invoice.order_id,
         code: invoice.order_code,
         created_at: invoice.created_at,
         total_amount: invoice.total_amount,
-        paid_amount: invoice.paid_amount,
-        remaining_debt: invoice.remaining_debt,
-        status: invoice.remaining_debt > 0 ? 'Còn nợ' : 'Đã thanh toán',
+        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
       }))
-  const openInvoiceRows = invoiceRows.filter((invoice) => invoice.remaining_debt > 0)
-  const totalDebt = debt.total_debt > 0 || debt.invoices.length > 0
-    ? debt.total_debt
-    : openInvoiceRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
-  const openInvoiceCount = debt.invoices.length > 0 ? debt.invoices.length : openInvoiceRows.length
+  const ledgerRows = buildCustomerDebtLedgerRows(
+    invoiceRows,
+    debtLedger.cashbookHistory,
+    debtLedger.debt.adjustments ?? [],
+    debtLedger.debt.linked_supplier_receipts ?? [],
+  )
+  const ledgerDefinesCurrentDebt = debtLedger.cashbookHistory.length > 0
+    || (debtLedger.debt.adjustments?.length ?? 0) > 0
+    || (debtLedger.debt.linked_supplier_receipts?.length ?? 0) > 0
+  const openInvoiceCount = debtLedger.debt.invoices.length > 0
+    ? debtLedger.debt.invoices.length
+    : invoiceRows.filter((invoice) => invoice.payment_status !== 'paid').length
+  const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
+  const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
+  const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
+  const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
 
   return (
-    <section aria-label="Nợ cần thu" className="customer-debt-panel">
+    <section aria-label="Công nợ" className="customer-debt-panel">
       <ManagementDetailInfoList
         columns="three"
         items={[
-          { label: 'Tổng nợ', value: <MoneyText value={totalDebt} /> },
+          { label: 'Công nợ', value: <MoneyText value={currentDebt} /> },
           { label: 'Hóa đơn mở', value: `${openInvoiceCount} hóa đơn mở` },
-          { label: 'Lịch sử hóa đơn', value: invoiceHistory === 'loading' ? 'Đang tải' : `${invoiceRows.length} hóa đơn` },
+          { label: 'Lịch sử công nợ', value: `${ledgerRows.length} dòng` },
         ]}
       />
-      {invoiceHistory === 'error' ? <p role="alert">Không tải được lịch sử nợ cần thu.</p> : null}
-      {invoiceRows.length > 0 ? (
-        <table aria-label="Lịch sử nợ cần thu" className="management-detail-table management-detail-linked-table">
-          <thead>
-            <tr>
-              <th>Mã hóa đơn</th>
-              <th>Thời gian</th>
-              <th>Tổng sau giảm</th>
-              <th>Đã thu</th>
-              <th>Còn nợ</th>
-              <th>Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody>
-            {invoiceRows.map((invoice) => (
-              <tr key={invoice.id}>
-                <td>
-                  <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' })}>
-                    {invoice.code}
-                  </ManagementRecordLink>
-                </td>
-                <td>{dateTime(invoice.created_at)}</td>
-                <td><MoneyText value={invoice.total_amount} /></td>
-                <td><MoneyText value={invoice.paid_amount} /></td>
-                <td><MoneyText value={invoice.remaining_debt} /></td>
-                <td>{invoice.status}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : <ManagementDetailInlineNote>Chưa có lịch sử nợ cần thu.</ManagementDetailInlineNote>}
+      {ledgerRows.length > 0 ? (
+        <>
+          <ManagementTableViewport>
+            <table aria-label="Lịch sử công nợ" className="management-detail-table management-detail-linked-table">
+              <thead>
+                <tr>
+                  <th>Mã phiếu</th>
+                  <th>Thời gian</th>
+                  <th>Loại</th>
+                  <th>Giá trị</th>
+                  <th>Công nợ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleLedgerRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>
+                      {row.href ? (
+                        <ManagementRecordLink href={row.href}>
+                          {row.code}
+                        </ManagementRecordLink>
+                      ) : <strong>{row.code}</strong>}
+                    </td>
+                    <td>{dateTime(row.created_at)}</td>
+                    <td>{row.type}</td>
+                    <td><MoneyText value={row.value_delta} /></td>
+                    <td><MoneyText value={row.running_debt} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ManagementTableViewport>
+          <ManagementTableFooter
+            ariaLabel="Phân trang công nợ"
+            entityLabel="dòng công nợ"
+            page={safeLedgerPage}
+            pageSize={ledgerPageSize}
+            pageSizeOptions={[ledgerPageSize]}
+            total={ledgerRows.length}
+            canGoPrevious={safeLedgerPage > 1}
+            canGoNext={safeLedgerPage < totalPages}
+            onFirst={() => onLedgerPageChange(1)}
+            onPrevious={() => onLedgerPageChange(Math.max(1, safeLedgerPage - 1))}
+            onNext={() => onLedgerPageChange(Math.min(totalPages, safeLedgerPage + 1))}
+            onLast={() => onLedgerPageChange(totalPages)}
+          />
+        </>
+      ) : <ManagementDetailInlineNote>Chưa có lịch sử công nợ.</ManagementDetailInlineNote>}
     </section>
   )
+}
+
+function buildCustomerDebtLedgerRows(
+  invoiceHistory: Array<{ id: string; code: string; created_at: string; total_amount: number; status?: SalesDocumentListItem['status'] }>,
+  cashbookHistory: CashbookEntry[],
+  adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
+  linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
+) {
+  const rows = [
+    ...invoiceHistory
+      .filter((invoice) => salesDocumentAffectsCustomerDebt(invoice))
+      .map((invoice) => ({
+        id: `invoice:${invoice.id}`,
+        code: invoice.code,
+        created_at: invoice.created_at,
+        type: 'Bán hàng',
+        value_delta: invoice.total_amount,
+        href: managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' }),
+      })),
+    ...cashbookHistory
+      .filter((entry) => cashbookEntryAffectsCustomerDebt(entry))
+      .map((entry) => ({
+        id: `cashbook:${entry.id}`,
+        code: entry.code,
+        created_at: entry.created_at,
+        type: entry.direction === 'in' ? 'Thanh toán' : 'Điều chỉnh',
+        value_delta: entry.direction === 'in' ? -Math.abs(entry.amount_delta) : Math.abs(entry.amount_delta),
+        href: managementRecordOpenHref('/finance', entry.code),
+      })),
+    ...adjustments.map((adjustment) => ({
+      id: `adjustment:${adjustment.id}`,
+      code: adjustment.source_code,
+      created_at: adjustment.created_at,
+      type: adjustment.transaction_type || 'Điều chỉnh',
+      value_delta: adjustment.amount_delta,
+      running_debt: adjustment.balance_after,
+      href: null,
+    })),
+    ...linkedSupplierReceipts.map((receipt) => ({
+      id: `linked-supplier-receipt:${receipt.id}`,
+      code: receipt.code,
+      created_at: receipt.created_at,
+      type: 'Nhập hàng',
+      value_delta: -Math.abs(receipt.remaining_amount),
+      href: managementRecordOpenHref('/receipts', receipt.code),
+    })),
+  ].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
+
+  let runningDebt = 0
+  const rowsWithRunningDebt = rows.map((row) => {
+    if ('running_debt' in row && typeof row.running_debt === 'number') {
+      runningDebt = row.running_debt
+      return { ...row }
+    }
+    runningDebt += row.value_delta
+    return { ...row, running_debt: runningDebt }
+  })
+
+  return rowsWithRunningDebt.reverse()
+}
+
+function salesDocumentAffectsCustomerDebt(document: { status?: SalesDocumentListItem['status'] }) {
+  return document.status !== 'cancelled'
+}
+
+function cashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
+  return entry.source_type === 'payment_receipt_method'
+    || kiotVietCashbookEntryAffectsCustomerDebt(entry)
+    || entry.source?.type === 'payment_receipt'
+}
+
+function kiotVietCashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
+  if (entry.source_type !== 'kiotviet_cashbook') return false
+  return /^TTHD/i.test(entry.code) || /^TT\d/i.test(entry.code)
+}
+
+function customerDebtCounterpartyMatches(entry: CashbookEntry, customer: Customer) {
+  const counterparty = normalizeCustomerDebtText(`${entry.counterparty?.name ?? ''} ${entry.counterparty?.phone ?? ''} ${entry.source?.counterparty_code ?? ''}`)
+  const customerName = normalizeCustomerDebtText(customer.name)
+  const customerCode = normalizeCustomerDebtText(customer.code)
+  const customerPhone = normalizeCustomerDebtText(customer.phone ?? '')
+  return (counterparty.length > 0 && customerName.length > 0 && (counterparty.includes(customerName) || customerName.includes(counterparty)))
+    || (customerCode.length > 0 && counterparty.includes(customerCode))
+    || (customerPhone.length > 0 && counterparty.includes(customerPhone))
+}
+
+function normalizeCustomerDebtText(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/đ/g, 'd')
+    .replace(/\s+/g, ' ')
+    .trim()
 }
 
 function CustomerHistoryPanel({
   history,
   historyType,
+  historyPage,
   onSelectHistoryType,
+  onHistoryPageChange,
 }: {
   history: CustomerHistoryState | undefined
   historyType: CustomerHistoryType
+  historyPage: number
   onSelectHistoryType: (historyType: CustomerHistoryType) => void
+  onHistoryPageChange: (page: number) => void
 }) {
   const codeHeader = historyType === 'invoice' ? 'Mã hóa đơn' : 'Mã báo giá'
+  const historyPageSize = typeof history === 'object' ? history.pageSize : customerHistoryPageSize
+  const historyTotal = typeof history === 'object' ? history.total : 0
+  const totalPages = Math.max(1, Math.ceil(historyTotal / historyPageSize))
+  const safeHistoryPage = Math.min(Math.max(historyPage, 1), totalPages)
+  const historyEntityLabel = historyType === 'invoice' ? 'hóa đơn' : 'báo giá'
 
   return (
     <section aria-label="Lịch sử bán hàng" className="customer-history-panel">
@@ -1103,32 +1323,50 @@ function CustomerHistoryPanel({
       {history === 'error' ? <p role="alert">Không tải được lịch sử khách hàng.</p> : null}
       {typeof history === 'object' && history.items.length === 0 ? <p>Chưa có giao dịch bán hàng.</p> : null}
       {typeof history === 'object' && history.items.length > 0 ? (
-      <table aria-label="Lịch sử chứng từ khách hàng" className="customer-history-table">
-        <thead>
-          <tr>
-            <th>{codeHeader}</th>
-            <th>Thời gian</th>
-            <th>Người bán</th>
-            <th>Tổng cộng</th>
-            <th>Trạng thái</th>
-          </tr>
-        </thead>
-        <tbody>
-          {history.items.map((document) => (
-            <tr key={document.id}>
-              <td>
-                <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', document.code, { type: historyType })}>
-                  {document.code}
-                </ManagementRecordLink>
-              </td>
-              <td>{dateTime(document.created_at)}</td>
-              <td>{document.seller.name || ''}</td>
-              <td><MoneyText value={document.total_amount} /></td>
-              <td>{salesDocumentStatusText(document)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+        <>
+          <ManagementTableViewport>
+            <table aria-label="Lịch sử chứng từ khách hàng" className="customer-history-table">
+              <thead>
+                <tr>
+                  <th>{codeHeader}</th>
+                  <th>Thời gian</th>
+                  <th>Người bán</th>
+                  <th>Tổng cộng</th>
+                  <th>Trạng thái</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.items.map((document) => (
+                  <tr key={document.id}>
+                    <td>
+                      <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', document.code, { type: historyType })}>
+                        {document.code}
+                      </ManagementRecordLink>
+                    </td>
+                    <td>{dateTime(document.created_at)}</td>
+                    <td>{document.seller.name || ''}</td>
+                    <td><MoneyText value={document.total_amount} /></td>
+                    <td>{salesDocumentStatusText(document)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ManagementTableViewport>
+          <ManagementTableFooter
+            ariaLabel={`Phân trang lịch sử ${historyEntityLabel}`}
+            entityLabel={historyEntityLabel}
+            page={safeHistoryPage}
+            pageSize={historyPageSize}
+            pageSizeOptions={[historyPageSize]}
+            total={historyTotal}
+            canGoPrevious={safeHistoryPage > 1}
+            canGoNext={safeHistoryPage < totalPages}
+            onFirst={() => onHistoryPageChange(1)}
+            onPrevious={() => onHistoryPageChange(Math.max(1, safeHistoryPage - 1))}
+            onNext={() => onHistoryPageChange(Math.min(totalPages, safeHistoryPage + 1))}
+            onLast={() => onHistoryPageChange(totalPages)}
+          />
+        </>
       ) : null}
     </section>
   )

@@ -994,6 +994,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           note: row.note,
           source_creator_name: row.source_creator_name,
           last_transaction_at: row.last_transaction_at,
+          kiotviet_current_debt: row.kiotviet_current_debt,
           kiotviet_net_sales: row.kiotviet_net_sales,
           status: row.status,
         }
@@ -2674,6 +2675,86 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
     },
 
+    async upsertImportedKiotVietCustomerDebtAdjustments(input) {
+      await ensureImportedSnapshotTables(pool)
+      await ensureSalesFinanceTables(pool)
+      let created = 0
+      let updated = 0
+      let skipped = 0
+
+      await pool.query('begin')
+      try {
+        for (const row of input.rows) {
+          const customer = await snapshotByCode<CustomerListData>(pool, 'customer_snapshots', input.organizationId, row.customer_code)
+          if (!customer) {
+            skipped += 1
+            continue
+          }
+          const existing = await pool.query(
+            `
+              select id
+              from customer_debt_adjustments
+              where organization_id = $1
+                and source_system = 'kiotviet'
+                and source_code = $2
+              limit 1
+            `,
+            [input.organizationId, row.source_code],
+          )
+          if (existing.rows[0]) updated += 1
+          else created += 1
+
+          await pool.query(
+            `
+              insert into customer_debt_adjustments (
+                id, organization_id, customer_id, customer_snapshot, source_code, source_system,
+                source_file, source_row, transaction_type, amount_delta, paid_amount,
+                remaining_amount, balance_after, status, created_at, updated_at
+              )
+              values (
+                $1, $2, $3, $4::jsonb, $5, 'kiotviet',
+                $6, $7, $8, $9, 0,
+                $10, $11, 'closed', coalesce($12::timestamptz, now()), now()
+              )
+              on conflict (organization_id, source_system, source_code)
+              do update set
+                customer_id = excluded.customer_id,
+                customer_snapshot = excluded.customer_snapshot,
+                source_file = excluded.source_file,
+                source_row = excluded.source_row,
+                transaction_type = excluded.transaction_type,
+                amount_delta = excluded.amount_delta,
+                paid_amount = 0,
+                remaining_amount = excluded.remaining_amount,
+                balance_after = excluded.balance_after,
+                status = excluded.status,
+                created_at = excluded.created_at,
+                updated_at = now()
+            `,
+            [
+              `customer-debt-adjustment-kv-${hashText(row.source_code)}`,
+              input.organizationId,
+              customer.id,
+              JSON.stringify({ id: customer.id, code: customer.code, name: customer.name, phone: customer.phone ?? null }),
+              row.source_code,
+              row.source_file,
+              row.rowNumber,
+              row.transaction_type,
+              row.amount_delta,
+              row.amount_delta,
+              row.balance_after,
+              row.transaction_time,
+            ],
+          )
+        }
+        await pool.query('commit')
+        return { created, updated, skipped }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
     async findSalesDocumentsByCodes(input) {
       await ensureSalesFinanceTables(pool)
       const result = await pool.query(
@@ -3318,19 +3399,32 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async getCustomerDebt(input) {
       await ensureSalesFinanceTables(pool)
-      const result = await pool.query(
-        `
-          select o.id, o.code, o.created_at, o.total_amount, o.paid_amount, o.debt_amount, cde.remaining_debt
-          from customer_debt_entries cde
-          join orders o on o.id = cde.order_id
-          where cde.organization_id = $1
-            and cde.customer_id = $2
-            and cde.status = 'open'
-            and cde.remaining_debt > 0
-          order by cde.updated_at desc, cde.created_at desc
-        `,
-        [input.organizationId, input.customerId],
-      )
+      const [result, adjustmentResult] = await Promise.all([
+        pool.query(
+          `
+            select o.id, o.code, o.created_at, o.total_amount, o.paid_amount, o.debt_amount, cde.remaining_debt
+            from customer_debt_entries cde
+            join orders o on o.id = cde.order_id
+            where cde.organization_id = $1
+              and cde.customer_id = $2
+              and cde.status = 'open'
+              and cde.remaining_debt > 0
+            order by cde.updated_at desc, cde.created_at desc
+          `,
+          [input.organizationId, input.customerId],
+        ),
+        pool.query(
+          `
+            select id, source_code, created_at, transaction_type, amount_delta, paid_amount, remaining_amount, balance_after, source_file
+            from customer_debt_adjustments
+            where organization_id = $1
+              and customer_id = $2
+              and source_system = 'kiotviet'
+            order by created_at desc, source_row desc nulls last, updated_at desc
+          `,
+          [input.organizationId, input.customerId],
+        ),
+      ])
       const invoices = result.rows.map((row) => ({
         order_id: row.id,
         order_code: row.code,
@@ -3340,43 +3434,145 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         debt_amount: Number(row.debt_amount),
         remaining_debt: Number(row.remaining_debt),
       }))
+      const adjustments = adjustmentResult.rows.map((row) => ({
+        id: String(row.id),
+        source_code: String(row.source_code),
+        created_at: row.created_at.toISOString(),
+        transaction_type: String(row.transaction_type),
+        amount_delta: Number(row.amount_delta),
+        paid_amount: Number(row.paid_amount),
+        remaining_amount: Number(row.remaining_amount),
+        balance_after: Number(row.balance_after),
+        source_file: row.source_file === null ? null : String(row.source_file),
+      }))
       return {
         customer_id: input.customerId,
-        total_debt: invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0),
+        total_debt: adjustments.length > 0
+          ? adjustments[0].balance_after
+          : invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0),
         invoices,
+        adjustments,
       }
     },
 
     async listCustomerDebts(input) {
       await ensureSalesFinanceTables(pool)
-      const result = await pool.query(
-        `
-          select
-            cde.customer_id,
-            min(o.customer_snapshot->>'code') as customer_code,
-            min(o.customer_snapshot->>'name') as customer_name,
-            sum(cde.remaining_debt) as total_debt,
-            count(*)::int as open_invoice_count,
-            (array_agg(o.code order by cde.created_at asc))[1] as oldest_order_code
-          from customer_debt_entries cde
-          join orders o on o.id = cde.order_id
-          where cde.organization_id = $1
-            and cde.status = 'open'
-            and cde.remaining_debt > 0
-          group by cde.customer_id
-          order by max(cde.created_at) desc
-        `,
-        [input.organizationId],
-      )
-      return result.rows.map((row) => ({
-        customer_id: row.customer_id,
-        customer_code: row.customer_code,
-        customer_name: row.customer_name,
-        total_debt: Number(row.total_debt),
-        oldest_order_code: row.oldest_order_code,
-        open_invoice_count: Number(row.open_invoice_count),
-        invoices: [],
-      })).filter((debt) => customerDebtMatches(input.url, debt))
+      const [invoiceResult, adjustmentResult] = await Promise.all([
+        pool.query(
+          `
+            select
+              cde.customer_id,
+              min(o.customer_snapshot->>'code') as customer_code,
+              min(o.customer_snapshot->>'name') as customer_name,
+              sum(cde.remaining_debt) as total_debt,
+              count(*)::int as open_invoice_count,
+              (array_agg(o.code order by cde.created_at asc))[1] as oldest_order_code,
+              max(cde.created_at) as latest_created_at
+            from customer_debt_entries cde
+            join orders o on o.id = cde.order_id
+            where cde.organization_id = $1
+              and cde.status = 'open'
+              and cde.remaining_debt > 0
+            group by cde.customer_id
+          `,
+          [input.organizationId],
+        ),
+        pool.query(
+          `
+            with latest_adjustment as (
+              select distinct on (customer_id)
+                customer_id,
+                customer_snapshot->>'code' as customer_code,
+                customer_snapshot->>'name' as customer_name,
+                balance_after,
+                source_code,
+                created_at
+              from customer_debt_adjustments
+              where organization_id = $1
+                and source_system = 'kiotviet'
+              order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
+            ),
+            invoice_after as (
+              select
+                la.customer_id,
+                sum(o.total_amount) as amount_delta,
+                max(o.created_at) as latest_created_at
+              from latest_adjustment la
+              join orders o
+                on o.organization_id = $1
+               and o.customer_id = la.customer_id
+               and o.order_type = 'invoice'
+               and o.status = 'completed'
+               and o.created_at > la.created_at
+              group by la.customer_id
+            ),
+            cashbook_after as (
+              select
+                la.customer_id,
+                sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
+                max(cbe.created_at) as latest_created_at
+              from latest_adjustment la
+              join cashbook_entries cbe
+                on cbe.organization_id = $1
+               and cbe.status = 'posted'
+               and cbe.source_type = 'kiotviet_cashbook'
+               and cbe.code ~* '^(TTHD|TT[0-9])'
+               and cbe.source->>'counterparty_code' = la.customer_code
+               and cbe.created_at > la.created_at
+              group by la.customer_id
+            )
+            select
+              la.customer_id,
+              la.customer_code,
+              la.customer_name,
+              la.balance_after + coalesce(ia.amount_delta, 0) + coalesce(ca.amount_delta, 0) as total_debt,
+              la.source_code as oldest_order_code,
+              greatest(
+                la.created_at,
+                coalesce(ia.latest_created_at, la.created_at),
+                coalesce(ca.latest_created_at, la.created_at)
+              ) as latest_created_at
+            from latest_adjustment la
+            left join invoice_after ia on ia.customer_id = la.customer_id
+            left join cashbook_after ca on ca.customer_id = la.customer_id
+          `,
+          [input.organizationId],
+        ),
+      ])
+      const byCustomer = new Map<string, CustomerDebtSummaryData>()
+      for (const row of invoiceResult.rows) {
+        byCustomer.set(String(row.customer_id), {
+          customer_id: row.customer_id,
+          customer_code: row.customer_code,
+          customer_name: row.customer_name,
+          total_debt: Number(row.total_debt),
+          oldest_order_code: row.oldest_order_code,
+          open_invoice_count: Number(row.open_invoice_count),
+          invoices: [],
+        })
+      }
+      for (const row of adjustmentResult.rows) {
+        const customerId = String(row.customer_id)
+        const existing = byCustomer.get(customerId)
+        if (existing) {
+          byCustomer.set(customerId, {
+            ...existing,
+            total_debt: Number(row.total_debt),
+            oldest_order_code: row.oldest_order_code,
+          })
+          continue
+        }
+        byCustomer.set(customerId, {
+          customer_id: row.customer_id,
+          customer_code: row.customer_code,
+          customer_name: row.customer_name,
+          total_debt: Number(row.total_debt),
+          oldest_order_code: row.oldest_order_code,
+          open_invoice_count: 0,
+          invoices: [],
+        })
+      }
+      return [...byCustomer.values()].filter((debt) => customerDebtMatches(input.url, debt))
     },
 
     async collectCustomerDebt(input) {
@@ -3387,28 +3583,50 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
       await pool.query('begin')
       try {
-        const debtRows = await pool.query(
-          `
-            select
-              cde.id as debt_id,
-              cde.remaining_debt,
-              o.id as order_id,
-              o.code as order_code,
-              o.total_amount,
-              o.paid_amount,
-              o.debt_amount,
-              o.customer_snapshot
-            from customer_debt_entries cde
-            join orders o on o.id = cde.order_id
-            where cde.organization_id = $1
-              and cde.customer_id = $2
-              and cde.status = 'open'
-              and cde.remaining_debt > 0
-            order by cde.created_at asc
-            for update of cde, o
-          `,
-          [input.organizationId, input.customerId],
-        )
+        const [debtRows, adjustmentRows] = await Promise.all([
+          pool.query(
+            `
+              select
+                cde.id as debt_id,
+                cde.remaining_debt,
+                o.id as order_id,
+                o.code as order_code,
+                o.total_amount,
+                o.paid_amount,
+                o.debt_amount,
+                o.customer_snapshot
+              from customer_debt_entries cde
+              join orders o on o.id = cde.order_id
+              where cde.organization_id = $1
+                and cde.customer_id = $2
+                and cde.status = 'open'
+                and cde.remaining_debt > 0
+              order by cde.created_at asc
+              for update of cde, o
+            `,
+            [input.organizationId, input.customerId],
+          ),
+          pool.query(
+            `
+              select
+                id,
+                source_code,
+                amount_delta,
+                paid_amount,
+                remaining_amount,
+                balance_after,
+                customer_snapshot
+              from customer_debt_adjustments
+              where organization_id = $1
+                and customer_id = $2
+                and status = 'open'
+                and remaining_amount > 0
+              order by created_at asc
+              for update
+            `,
+            [input.organizationId, input.customerId],
+          ),
+        ])
 
         let remainingPayment = input.amount
         const allocations: Array<{
@@ -3458,6 +3676,31 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           })
           remainingPayment -= allocated
         }
+        for (const row of adjustmentRows.rows) {
+          if (remainingPayment <= 0) break
+          const allocated = Math.min(Number(row.remaining_amount), remainingPayment)
+          const nextRemaining = Math.max(Number(row.remaining_amount) - allocated, 0)
+          await pool.query(
+            `
+              update customer_debt_adjustments
+              set paid_amount = paid_amount + $1,
+                  remaining_amount = $2,
+                  status = case when $2::numeric <= 0 then 'closed' else 'open' end,
+                  updated_at = now()
+              where id = $3
+            `,
+            [allocated, nextRemaining, row.id],
+          )
+          allocations.push({
+            order_id: row.id,
+            order_code: row.source_code,
+            order_total_amount: Number(row.amount_delta),
+            collected_before: Number(row.paid_amount),
+            allocated_amount: allocated,
+            remaining_after: nextRemaining,
+          })
+          remainingPayment -= allocated
+        }
 
         const allocatedAmount = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
         if (allocatedAmount <= 0) {
@@ -3484,15 +3727,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         )
         const receiptCodeSeq = Number(receiptCodeRow.rows[0]?.max_seq ?? 0) + 1
         const receiptCode = `TT${String(receiptCodeSeq).padStart(6, '0')}`
-        const firstCustomer = debtRows.rows[0]?.customer_snapshot ?? { name: 'Khach hang', phone: null }
+        const firstCustomer = debtRows.rows[0]?.customer_snapshot ?? adjustmentRows.rows[0]?.customer_snapshot ?? { name: 'Khach hang', phone: null }
         const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
         const note = input.note?.trim() ? `${input.note.trim()} - ${allocationCodes}` : `Thu no ${allocationCodes}`
+        const receiptOrderId = allocations.find((allocation) => allocation.order_code.startsWith('HD'))?.order_id ?? null
+        const receiptOrderCode = allocations.find((allocation) => allocation.order_code.startsWith('HD'))?.order_code ?? allocations[0]?.order_code ?? null
         await pool.query(
           `
             insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
             values ($1, $2, $3, $4, $5, $6, $7, now())
           `,
-          [receiptId, input.organizationId, receiptCode, input.customerId, allocations[0]?.order_id ?? null, allocatedAmount, note],
+          [receiptId, input.organizationId, receiptCode, input.customerId, receiptOrderId, allocatedAmount, note],
         )
 
         const entries: CashbookEntryData[] = []
@@ -3514,7 +3759,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             [
               input.organizationId,
               receiptId,
-              allocations[0]?.order_id ?? null,
+              receiptOrderId,
               method.method,
               method.account.id,
               method.amount,
@@ -3534,7 +3779,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             created_at: new Date().toISOString(),
             note: method.method === 'bank_transfer' && input.bankTransactionRef ? `${note} (${input.bankTransactionRef})` : note,
             counterparty: { type: 'customer', name: firstCustomer.name, phone: firstCustomer.phone },
-            source: { type: 'payment_receipt', id: receiptId, code: receiptCode, order_code: allocations[0]?.order_code ?? null },
+            source: { type: 'payment_receipt', id: receiptId, code: receiptCode, order_code: receiptOrderCode },
             allocations,
           } as CashbookEntryData)
         }
@@ -3636,13 +3881,14 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           code: ['ce.code'],
           note: ["coalesce(ce.note, '')"],
           transfer_content: ["coalesce(ce.source->>'transfer_content', '')"],
-          counterparty: ["coalesce(ce.counterparty->>'name', '')", "coalesce(ce.counterparty->>'phone', '')"],
+          counterparty: ["coalesce(ce.counterparty->>'name', '')", "coalesce(ce.counterparty->>'phone', '')", "coalesce(ce.source->>'counterparty_code', '')"],
           finance_account: ["coalesce(fa.account_number, fa.code, ce.finance_account->>'code', '')", "coalesce(fa.name, ce.finance_account->>'name', '')"],
           all: [
             'ce.code',
             "coalesce(ce.note, '')",
             "coalesce(ce.counterparty->>'name', '')",
             "coalesce(ce.counterparty->>'phone', '')",
+            "coalesce(ce.source->>'counterparty_code', '')",
             "coalesce(fa.account_number, fa.code, ce.finance_account->>'code', '')",
             "coalesce(fa.name, ce.finance_account->>'name', '')",
             "coalesce(ce.source->>'transfer_content', '')",
@@ -3755,17 +4001,75 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [organizationId],
       )
-      const debts = await pool.query(
-        `
-          select customer_id, sum(remaining_debt) as total_debt_amount
-          from customer_debt_entries
-          where organization_id = $1
-            and status = 'open'
-            and remaining_debt > 0
-          group by customer_id
-        `,
-        [organizationId],
-      )
+      const [debts, adjustments] = await Promise.all([
+        pool.query(
+          `
+            select customer_id, sum(remaining_debt) as total_debt_amount
+            from customer_debt_entries
+            where organization_id = $1
+              and status = 'open'
+              and remaining_debt > 0
+            group by customer_id
+          `,
+          [organizationId],
+        ),
+        pool.query(
+          `
+            with latest_adjustment as (
+              select distinct on (customer_id)
+                customer_id,
+                customer_snapshot->>'code' as customer_code,
+                balance_after,
+                created_at
+              from customer_debt_adjustments
+              where organization_id = $1
+                and source_system = 'kiotviet'
+              order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
+            ),
+            invoice_after as (
+              select
+                la.customer_id,
+                sum(o.total_amount) as amount_delta,
+                max(o.created_at) as last_activity_at
+              from latest_adjustment la
+              join orders o
+                on o.organization_id = $1
+               and o.customer_id = la.customer_id
+               and o.order_type = 'invoice'
+               and o.status = 'completed'
+               and o.created_at > la.created_at
+              group by la.customer_id
+            ),
+            cashbook_after as (
+              select
+                la.customer_id,
+                sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
+                max(cbe.created_at) as last_activity_at
+              from latest_adjustment la
+              join cashbook_entries cbe
+                on cbe.organization_id = $1
+               and cbe.status = 'posted'
+               and cbe.source_type = 'kiotviet_cashbook'
+               and cbe.code ~* '^(TTHD|TT[0-9])'
+               and cbe.source->>'counterparty_code' = la.customer_code
+               and cbe.created_at > la.created_at
+              group by la.customer_id
+            )
+            select
+              la.customer_id,
+              la.balance_after + coalesce(ia.amount_delta, 0) + coalesce(ca.amount_delta, 0) as total_debt_amount,
+              greatest(
+                la.created_at,
+                coalesce(ia.last_activity_at, la.created_at),
+                coalesce(ca.last_activity_at, la.created_at)
+              ) as last_activity_at
+            from latest_adjustment la
+            left join invoice_after ia on ia.customer_id = la.customer_id
+            left join cashbook_after ca on ca.customer_id = la.customer_id
+          `,
+          [organizationId],
+        ),
+      ])
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
       for (const row of sales.rows) {
         totals.set(row.customer_id, {
@@ -3777,6 +4081,14 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       for (const row of debts.rows) {
         const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
         totals.set(row.customer_id, { ...existing, total_debt_amount: Number(row.total_debt_amount) })
+      }
+      for (const row of adjustments.rows) {
+        const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
+        totals.set(row.customer_id, {
+          ...existing,
+          total_debt_amount: Number(row.total_debt_amount),
+          last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
+        })
       }
       return totals
     },
@@ -5059,6 +5371,28 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
   `)
   await pool.query('create index if not exists customer_debt_entries_customer_idx on customer_debt_entries (organization_id, customer_id, status, created_at desc)')
   await pool.query('create index if not exists customer_debt_entries_customer_updated_idx on customer_debt_entries (organization_id, customer_id, status, updated_at desc, created_at desc)')
+  await pool.query(`
+    create table if not exists customer_debt_adjustments (
+      id text primary key default gen_random_uuid()::text,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      customer_id text not null,
+      customer_snapshot jsonb not null default '{}'::jsonb,
+      source_code text not null,
+      source_system text not null default 'kiotviet',
+      source_file text,
+      source_row integer,
+      transaction_type text not null default 'adjustment',
+      amount_delta numeric(14,2) not null,
+      paid_amount numeric(14,2) not null default 0,
+      remaining_amount numeric(14,2) not null,
+      balance_after numeric(14,2) not null default 0,
+      status text not null check (status in ('open', 'closed')),
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now(),
+      unique (organization_id, source_system, source_code)
+    )
+  `)
+  await pool.query('create index if not exists customer_debt_adjustments_customer_idx on customer_debt_adjustments (organization_id, customer_id, status, created_at desc)')
   await pool.query(`
     create table if not exists cashbook_entries (
       id text primary key default gen_random_uuid()::text,

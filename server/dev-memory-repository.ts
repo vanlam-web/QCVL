@@ -1023,7 +1023,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           if (direction && direction !== 'all' && entry.direction !== direction) return false
           if (status && status !== 'all' && entry.status !== status) return false
           if (!dateRangeMatches(entry.created_at, from, to)) return false
-          if (search && !normalize(`${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.finance_account.name} ${entry.finance_account.code}`).includes(search)) return false
+          if (search && !normalize(`${entry.code} ${entry.note} ${entry.counterparty.name} ${entry.counterparty.phone ?? ''} ${entry.source?.counterparty_code ?? ''} ${entry.finance_account.name} ${entry.finance_account.code}`).includes(search)) return false
           return true
         })
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
@@ -1489,6 +1489,7 @@ function toCustomer(
     note: row.note,
     source_creator_name: row.source_creator_name,
     last_transaction_at: row.last_transaction_at,
+    kiotviet_current_debt: row.kiotviet_current_debt,
     kiotviet_net_sales: row.kiotviet_net_sales,
     status: row.status,
   } satisfies CustomerListData

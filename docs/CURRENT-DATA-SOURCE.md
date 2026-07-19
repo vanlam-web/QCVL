@@ -6,6 +6,8 @@
 
 - Runtime source of truth: Node API + PostgreSQL on NAS.
 - Dev UI: `127.0.0.1:3202`; NAS runtime: `100.84.228.125:3200`.
+- Historical KiotViet export archive for verification: `Y:\DuLieuKV`.
+- Use `Y:\DuLieuKV` first when checking data exported from KiotViet before `12/07` or when cross-checking import source files.
 - Do not revive Supabase, RAM-only sales/finance, or demo fixture storage for runtime.
 - Do not copy `logs/dev-memory-state.json` to NAS.
 - If behavior touches money, debt, invoice lifecycle, inventory, import, permissions, or users, read the matching feature doc before editing.
@@ -53,7 +55,9 @@ Docker chi dung de chay container app va PostgreSQL tren NAS. Khong dung Docker 
 - Bao cao KiotViet `BaoCaoXuatNhapTonChiTiet_KV*.xlsx` la bang doi soat aggregate, khong tu dong ghi de ton van hanh. Parser nam o `server/modules/inventory/kiotviet-xnt-report.ts`; script doi soat nam o `scripts/compare-kiotviet-xnt.ts` va ghi ket qua moi nhat vao `logs/kiotviet-xnt-comparison-latest.json`.
 - Khi so ton QCVL voi KiotViet, dung bucket XNT (`Nhap NCC`, `Nhap kiem`, `Xuat ban`, `Xuat kiem`, `Ton cuoi ki`) de tim nguon lech. Khong doan bang UI tong hop, khong bien `Ton KV tam nhap` thanh ton that.
 - Neu Owner chot XNT lam checkpoint, dung `scripts/apply-kiotviet-xnt-checkpoint.ts` de tao phieu can bang ton tu `Ton cuoi ki`. Ma KiotViet co `{DEL}` chi duoc map vao product placeholder dung ma; neu placeholder khong ton tai thi bo qua, khong strip ve ma goc active.
-- KiotViet So Quy export (`SoQuy_KV*.xlsx`) la nguon import lich su cho finance/cashbook. File moi nhat da xem: `SoQuy_KV24062026-181948-016.xlsx`, 205 dong hop le, gom `Tien mat` va `Ngan hang`.
+- KiotViet So Quy export (`SoQuy_KV*.xlsx`) la nguon import lich su cho finance/cashbook. File archive da day len `Y:\DuLieuKV`; file moi nhat da xem: `SoQuy_KV24062026-181948-016.xlsx`, 205 dong hop le, gom `Tien mat` va `Ngan hang`.
+- KiotViet Bao cao cong no theo khach hang (`BaoCaoCongNoTheoKhachHang_KV*.xlsx`) cung nam trong `Y:\DuLieuKV` va duoc dung de doi chieu cong no lich su; vi du `CB000001` xuat hien trong file cong no nhu dong `Dieu chinh`, khong phai dong So Quy.
+- Ma `CB...` trong bao cao cong no la phieu can bang/dieu chinh cong no KiotViet. Khi dua vao QCVL, phai hien va luu nhu chung tu dieu chinh cong no ma `CB...`; khong gan nhan chung chung la `import`, khong tao hoa don `HD...`, va khong dua vao import So Quy.
 - So Quy phai di qua `finance_accounts` that: `Tien mat` map vao quy tien mat mac dinh; `Ngan hang` map bang cap `(Ten tai khoan, So tai khoan)`. Khong hard-code tai khoan trong UI JSON.
 - KiotViet So Quy export khong co cot loai doi tuong nop/nhan rieng. Export chi co `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, `So dien thoai`, `Dia chi`; QCVL phai suy luan `counterparty.type` tu ma/danh muc tin cay (`KH...` -> khach hang, `NCC...` -> nha cung cap), con khong khop thi giu `other` va giu text nguon.
 - Import So Quy KV chi duoc xoa/ghi lai cac row co `source_system = kiotviet`. Khong xoa cashbook sinh tu POS, thu no, hoac phieu thu/chi QCVL tao tay.

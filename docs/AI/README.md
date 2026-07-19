@@ -26,6 +26,7 @@ Y:\TeamAI\WORKER-NOW.md
 4. Update `WORKER-NOW.md` with your active scope before editing files.
 5. If another worker has an active file/module, avoid that area.
 6. If `WORKER-NOW.md` says a commit was pushed, pull it before editing.
+7. When you finish a task, read `Y:\TeamAI\WORKER-NOW.md` again before starting the next one.
 
 `preflight` fails outside CI if `WORKER-NOW.md` is missing or malformed.
 

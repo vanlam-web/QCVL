@@ -165,6 +165,7 @@ function PosRoute() {
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const inventoryService = useMemo(() => createBrowserInventoryService(getAccessToken), [getAccessToken])
   const orderService = useMemo(() => createBrowserOrderService(getAccessToken), [getAccessToken])
+  const salesDocumentService = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const productionQueueService = useMemo(
     () => createBrowserProductionQueueService(getAccessToken),
     [getAccessToken],
@@ -177,6 +178,7 @@ function PosRoute() {
       catalogService={catalogService}
       inventoryService={inventoryService}
       orderService={orderService}
+      salesDocumentService={salesDocumentService}
       productionQueueService={productionQueueService}
       currentUser={currentUser}
       connected={accessConnection === 'connected'}
@@ -246,6 +248,7 @@ function CustomersRoute() {
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const orderService = useMemo(() => createBrowserOrderService(getAccessToken), [getAccessToken])
   const salesDocumentService = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const financeService = useMemo(() => createBrowserFinanceService(getAccessToken), [getAccessToken])
 
   if (!initialized) return <BootstrapScreen />
   if (!currentUser) return <Navigate to={appRoutes.login} replace />
@@ -259,6 +262,7 @@ function CustomersRoute() {
         service={catalogService}
         orderService={orderService}
         salesDocumentService={salesDocumentService}
+        financeService={financeService}
       />
     </AppShell>
   )
