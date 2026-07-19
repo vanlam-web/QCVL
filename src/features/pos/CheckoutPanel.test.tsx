@@ -317,6 +317,49 @@ it('shows invoice date and time as focused text editors while keeping submit pay
   )
 })
 
+it('uses compact date and time pickers for invoice metadata', async () => {
+  const service = makeOrderService()
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={service}
+      sellerName="Văn Viết Phương Lâm"
+      orderCreatedAt="2026-07-08T07:29:00.000Z"
+    />,
+  )
+
+  const meta = screen.getByRole('group', { name: 'Thông tin hóa đơn' })
+  await userEvent.click(within(meta).getByRole('button', { name: 'Chọn ngày hóa đơn' }))
+  expect(await screen.findByRole('region', { name: 'Lịch chọn ngày hóa đơn' })).toBeInTheDocument()
+  await userEvent.click(screen.getByLabelText('Tóm tắt thanh toán'))
+  expect(screen.queryByRole('region', { name: 'Lịch chọn ngày hóa đơn' })).not.toBeInTheDocument()
+
+  await userEvent.click(within(meta).getByRole('button', { name: 'Chọn ngày hóa đơn' }))
+  const calendar = await screen.findByRole('region', { name: 'Lịch chọn ngày hóa đơn' })
+  await userEvent.click(within(calendar).getByRole('button', { name: '10' }))
+
+  await userEvent.click(within(meta).getByRole('button', { name: 'Chọn giờ hóa đơn' }))
+  expect(await screen.findByRole('region', { name: 'Chọn giờ hóa đơn' })).toBeInTheDocument()
+  await userEvent.click(screen.getByLabelText('Tóm tắt thanh toán'))
+  expect(screen.queryByRole('region', { name: 'Chọn giờ hóa đơn' })).not.toBeInTheDocument()
+
+  await userEvent.click(within(meta).getByRole('button', { name: 'Chọn giờ hóa đơn' }))
+  const timePicker = await screen.findByRole('region', { name: 'Chọn giờ hóa đơn' })
+  await userEvent.click(within(timePicker).getByRole('button', { name: '08:30' }))
+
+  expect(within(meta).getByLabelText('Ngày hóa đơn')).toHaveValue('10/07/2026')
+  expect(within(meta).getByLabelText('Thời gian hóa đơn')).toHaveValue('08:30')
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(service.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      created_at: '2026-07-10T08:30:00.000Z',
+    }),
+  )
+})
+
 it('keeps payment drawer compact without quick amount chips and with footer actions in one row', () => {
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)
 
@@ -370,6 +413,25 @@ it('selects the full money value on focus so zero replaces the current amount', 
   await userEvent.keyboard('0')
 
   expect(paymentInput).toHaveValue('0')
+})
+
+it('focuses and selects customer payment when checkout panel opens', async () => {
+  render(
+    <CheckoutPanel
+      autoFocusCustomerPayment
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={makeOrderService()}
+    />,
+  )
+
+  const paymentInput = screen.getByLabelText('Khách thanh toán') as HTMLInputElement
+
+  await waitFor(() => {
+    expect(paymentInput).toHaveFocus()
+    expect(paymentInput.selectionStart).toBe(0)
+    expect(paymentInput.selectionEnd).toBe(paymentInput.value.length)
+  })
 })
 
 it('saves the current cart as a quote and shows BG code', async () => {
@@ -618,10 +680,10 @@ it('loads and displays customer debt for selected customers', async () => {
   expect(await screen.findByText('Tổng nợ cũ')).toBeInTheDocument()
   const customerLine = screen.getByText('Cong ty ABC').closest('.checkout-customer-line')
   expect(customerLine).not.toHaveTextContent('Nợ:')
-  expect(within(customerLine as HTMLElement).getByText('Tổng nợ 150 000')).toHaveClass('checkout-customer-debt')
-  const debtList = screen.getByLabelText('Hóa đơn còn nợ')
-  expect(within(debtList).getByText('150 000')).toBeInTheDocument()
-  expect(screen.getByText('HD000099')).toBeInTheDocument()
+  expect(customerLine).not.toHaveTextContent('Tổng nợ')
+  expect(within(customerLine as HTMLElement).getByText('150 000')).toHaveClass('checkout-customer-debt')
+  expect(screen.queryByLabelText('Hóa đơn còn nợ')).not.toBeInTheDocument()
+  expect(screen.queryByText('HD000099')).not.toBeInTheDocument()
 })
 
 it('submits old debt collection separately from the current invoice payment', async () => {

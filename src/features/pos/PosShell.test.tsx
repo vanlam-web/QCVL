@@ -323,6 +323,10 @@ it('replaces the K03 product panel with the checkout drawer while payment is ope
   await openCheckoutDrawer()
 
   expect(screen.getByLabelText('Ngăn thanh toán')).toBeInTheDocument()
+  await waitFor(() => {
+    const paymentInput = screen.getByLabelText('Khách thanh toán')
+    expect(paymentInput).toHaveFocus()
+  })
   expect(screen.queryByLabelText('K03 sản phẩm')).not.toBeInTheDocument()
 })
 

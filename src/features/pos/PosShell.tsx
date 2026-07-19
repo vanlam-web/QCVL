@@ -1438,6 +1438,7 @@ export function PosShell({
         }
         checkout={
           <CheckoutPanel
+            autoFocusCustomerPayment
             cartLines={cartLines}
             selectedCustomer={selectedCustomer}
             orderService={orderService}

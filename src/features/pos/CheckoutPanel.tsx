@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Pin } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { Ref } from 'react'
+import { CalendarDays, Clock3, Pin } from 'lucide-react'
 import type { Customer } from '../catalog/types'
 import type {
   CheckoutCartLine,
@@ -24,6 +25,7 @@ export function CheckoutPanel({
   quoteBlockedReason = null,
   sellerName = '',
   orderCreatedAt,
+  autoFocusCustomerPayment = false,
   revisionSource,
   onCheckoutSuccess,
 }: {
@@ -34,6 +36,7 @@ export function CheckoutPanel({
   quoteBlockedReason?: string | null
   sellerName?: string
   orderCreatedAt?: string
+  autoFocusCustomerPayment?: boolean
   revisionSource?: { id: string; code: string }
   onCheckoutSuccess?: () => void
 }) {
@@ -58,6 +61,10 @@ export function CheckoutPanel({
   const [quoteResult, setQuoteResult] = useState<QuoteSummary | null>(null)
   const [invoiceDate, setInvoiceDate] = useState(() => checkoutDateInputValue(orderCreatedAt))
   const [invoiceTime, setInvoiceTime] = useState(() => formatCheckoutDateTime(orderCreatedAt).time)
+  const [invoiceDateTimePickerOpen, setInvoiceDateTimePickerOpen] = useState<'date' | 'time' | null>(null)
+  const [invoiceCalendarMonth, setInvoiceCalendarMonth] = useState(() => checkoutCalendarMonth(orderCreatedAt))
+  const invoiceDateTimePickerRef = useRef<HTMLDivElement | null>(null)
+  const customerPaymentInputRef = useRef<HTMLInputElement | null>(null)
 
   const {
     subtotal,
@@ -132,7 +139,48 @@ export function CheckoutPanel({
   useEffect(() => {
     setInvoiceDate(checkoutDateInputValue(orderCreatedAt))
     setInvoiceTime(formatCheckoutDateTime(orderCreatedAt).time)
+    setInvoiceCalendarMonth(checkoutCalendarMonth(orderCreatedAt))
   }, [orderCreatedAt])
+
+  useEffect(() => {
+    if (invoiceDateTimePickerOpen === null) return
+
+    function closeInvoiceDateTimePickerOnOutsidePointerDown(event: PointerEvent) {
+      const container = invoiceDateTimePickerRef.current
+      if (container === null) return
+      if (event.target instanceof Node && !container.contains(event.target)) {
+        setInvoiceDateTimePickerOpen(null)
+      }
+    }
+
+    window.addEventListener('pointerdown', closeInvoiceDateTimePickerOnOutsidePointerDown)
+    return () => {
+      window.removeEventListener('pointerdown', closeInvoiceDateTimePickerOnOutsidePointerDown)
+    }
+  }, [invoiceDateTimePickerOpen])
+
+  useEffect(() => {
+    if (!autoFocusCustomerPayment) return
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      const input = customerPaymentInputRef.current
+      input?.focus()
+      input?.select()
+    })
+    return () => window.cancelAnimationFrame(animationFrameId)
+  }, [autoFocusCustomerPayment])
+
+  const selectedInvoiceDate = parseCheckoutDisplayDate(invoiceDate)
+  const invoiceCalendarDays = checkoutCalendarDays(invoiceCalendarMonth)
+  const selectInvoiceDate = (date: Date) => {
+    setInvoiceDate(formatCheckoutDisplayDate(date))
+    setInvoiceCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1))
+    setInvoiceDateTimePickerOpen(null)
+  }
+  const selectInvoiceTime = (time: string) => {
+    setInvoiceTime(time)
+    setInvoiceDateTimePickerOpen(null)
+  }
 
   async function submitCheckout() {
     setError(null)
@@ -300,31 +348,98 @@ export function CheckoutPanel({
   return (
     <section aria-label="Thanh toán" className="checkout-panel">
       <header className="checkout-panel-header">
-        <div aria-label="Thông tin hóa đơn" className="checkout-panel-meta" role="group">
+        <div aria-label="Thông tin hóa đơn" className="checkout-panel-meta" ref={invoiceDateTimePickerRef} role="group">
           <strong aria-label="Tên hiển thị" title={displaySellerName}>{displaySellerName}</strong>
-          <input
-            aria-label="Ngày hóa đơn"
-            className="checkout-panel-date-input"
-            inputMode="numeric"
-            placeholder="dd/MM/yyyy"
-            type="text"
-            value={invoiceDate}
-            onChange={(event) => setInvoiceDate(event.target.value)}
-          />
-          <input
-            aria-label="Thời gian hóa đơn"
-            className="checkout-panel-time-input"
-            inputMode="numeric"
-            placeholder="HH:mm"
-            type="text"
-            value={invoiceTime}
-            onChange={(event) => setInvoiceTime(event.target.value)}
-          />
+          <span className="checkout-panel-date-time-shell">
+            <input
+              aria-label="Ngày hóa đơn"
+              className="checkout-panel-date-input"
+              inputMode="numeric"
+              placeholder="dd/MM/yyyy"
+              type="text"
+              value={invoiceDate}
+              onChange={(event) => {
+                setInvoiceDate(event.target.value)
+                const parsed = parseCheckoutDisplayDate(event.target.value)
+                if (parsed) setInvoiceCalendarMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+              }}
+            />
+            <button
+              aria-expanded={invoiceDateTimePickerOpen === 'date'}
+              aria-label="Chọn ngày hóa đơn"
+              className="checkout-panel-date-time-button checkout-panel-date-button"
+              type="button"
+              onClick={() => setInvoiceDateTimePickerOpen((current) => current === 'date' ? null : 'date')}
+            >
+              <CalendarDays aria-hidden="true" size={14} />
+            </button>
+            {invoiceDateTimePickerOpen === 'date' ? (
+              <section aria-label="Lịch chọn ngày hóa đơn" className="checkout-panel-date-time-picker checkout-panel-date-picker">
+                <header>
+                  <button aria-label="Tháng trước" type="button" onClick={() => setInvoiceCalendarMonth(new Date(invoiceCalendarMonth.getFullYear(), invoiceCalendarMonth.getMonth() - 1, 1))}>
+                    ‹
+                  </button>
+                  <strong>Tháng {invoiceCalendarMonth.getMonth() + 1} {invoiceCalendarMonth.getFullYear()}</strong>
+                  <button aria-label="Tháng sau" type="button" onClick={() => setInvoiceCalendarMonth(new Date(invoiceCalendarMonth.getFullYear(), invoiceCalendarMonth.getMonth() + 1, 1))}>
+                    ›
+                  </button>
+                </header>
+                <div aria-hidden="true" className="checkout-panel-date-weekdays">
+                  {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
+                </div>
+                <div className="checkout-panel-date-grid">
+                  {invoiceCalendarDays.map((date) => {
+                    const selected = selectedInvoiceDate ? date.toDateString() === selectedInvoiceDate.toDateString() : false
+                    return (
+                      <button
+                        aria-pressed={selected}
+                        className={date.getMonth() === invoiceCalendarMonth.getMonth() ? undefined : 'checkout-panel-muted-day'}
+                        key={date.toISOString()}
+                        type="button"
+                        onClick={() => selectInvoiceDate(date)}
+                      >
+                        {date.getDate()}
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            ) : null}
+          </span>
+          <span className="checkout-panel-date-time-shell checkout-panel-time-shell">
+            <input
+              aria-label="Thời gian hóa đơn"
+              className="checkout-panel-time-input"
+              inputMode="numeric"
+              placeholder="HH:mm"
+              type="text"
+              value={invoiceTime}
+              onChange={(event) => setInvoiceTime(event.target.value)}
+            />
+            <button
+              aria-expanded={invoiceDateTimePickerOpen === 'time'}
+              aria-label="Chọn giờ hóa đơn"
+              className="checkout-panel-date-time-button checkout-panel-time-button"
+              type="button"
+              onClick={() => setInvoiceDateTimePickerOpen((current) => current === 'time' ? null : 'time')}
+            >
+              <Clock3 aria-hidden="true" size={14} />
+            </button>
+            {invoiceDateTimePickerOpen === 'time' ? (
+              <section aria-label="Chọn giờ hóa đơn" className="checkout-panel-date-time-picker checkout-panel-time-picker">
+                {checkoutTimeOptions.map((time) => (
+                  <button key={time} type="button" onClick={() => selectInvoiceTime(time)}>
+                    {time}
+                  </button>
+                ))}
+              </section>
+            ) : null}
+          </span>
         </div>
         <div className="checkout-customer-line">
           <strong>{selectedCustomer?.name ?? 'Khách lẻ'}</strong>
           {selectedCustomer !== null && visibleCustomerDebt !== null && visibleCustomerDebt.total_debt > 0 ? (
-            <span className="checkout-customer-debt">Tổng nợ {formatMoney(visibleCustomerDebt.total_debt)}</span>
+            <span className="checkout-customer-debt">{formatMoney(visibleCustomerDebt.total_debt)}</span>
           ) : null}
         </div>
       </header>
@@ -393,6 +508,7 @@ export function CheckoutPanel({
             <dd>
               <MoneyInput
                 ariaLabel="Khách thanh toán"
+                inputRef={customerPaymentInputRef}
                 value={customerPaymentAmount}
                 onChange={(nextAmount) => {
                   if (paymentMode === 'bank') {
@@ -425,16 +541,6 @@ export function CheckoutPanel({
       </dl>
 
       {selectedCustomer !== null && debtLookupError ? <p role="status">{debtLookupError}</p> : null}
-      {selectedCustomer !== null && visibleCustomerDebt?.invoices.length ? (
-        <ul className="customer-debt-list" aria-label="Hóa đơn còn nợ">
-          {visibleCustomerDebt.invoices.slice(0, 3).map((invoice) => (
-            <li key={invoice.order_id}>
-              <span>{invoice.order_code}</span>
-              <span>{formatMoney(invoice.remaining_debt)}</span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
 
       <fieldset className="checkout-payment-methods">
         <legend>Phương thức thanh toán</legend>
@@ -620,11 +726,13 @@ export function CheckoutPanel({
 function MoneyInput({
   ariaLabel,
   className = 'checkout-inline-money-input',
+  inputRef,
   value,
   onChange,
 }: {
   ariaLabel: string
   className?: string
+  inputRef?: Ref<HTMLInputElement>
   value: number
   onChange: (value: number) => void
 }) {
@@ -636,6 +744,7 @@ function MoneyInput({
       aria-label={ariaLabel}
       className={className}
       inputMode="numeric"
+      ref={inputRef}
       type="text"
       value={displayValue}
       onBlur={() => setDraft(null)}
@@ -670,6 +779,11 @@ function checkoutDateInputValue(value: string | undefined) {
   return formatCheckoutDateTime(new Date().toISOString()).date
 }
 
+function checkoutCalendarMonth(value: string | undefined) {
+  const parsed = parseCheckoutDisplayDate(checkoutDateInputValue(value)) ?? new Date()
+  return new Date(parsed.getFullYear(), parsed.getMonth(), 1)
+}
+
 function checkoutCreatedAt(orderCreatedAt: string | undefined, invoiceDate: string, invoiceTime: string) {
   const source = orderCreatedAt ?? new Date().toISOString()
   const date = parseCheckoutDateInput(invoiceDate)
@@ -688,6 +802,34 @@ function parseCheckoutDateInput(value: string) {
   if (isoDate) return value
   return null
 }
+
+function parseCheckoutDisplayDate(value: string) {
+  const parsed = parseCheckoutDateInput(value)
+  if (!parsed) return null
+  const [year, month, day] = parsed.split('-').map(Number)
+  if (!year || !month || !day) return null
+  const date = new Date(year, month - 1, day)
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null
+  return date
+}
+
+function formatCheckoutDisplayDate(date: Date) {
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
+}
+
+function checkoutCalendarDays(month: Date) {
+  const firstOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)
+  const mondayOffset = (firstOfMonth.getDay() + 6) % 7
+  const firstGridDate = new Date(firstOfMonth)
+  firstGridDate.setDate(firstOfMonth.getDate() - mondayOffset)
+  return Array.from({ length: 42 }, (_, index) => new Date(firstGridDate.getFullYear(), firstGridDate.getMonth(), firstGridDate.getDate() + index))
+}
+
+const checkoutTimeOptions = Array.from({ length: 48 }, (_, index) => {
+  const hour = Math.floor(index / 2)
+  const minute = index % 2 === 0 ? '00' : '30'
+  return `${String(hour).padStart(2, '0')}:${minute}`
+})
 
 function parseCheckoutTimeInput(value: string) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : null
