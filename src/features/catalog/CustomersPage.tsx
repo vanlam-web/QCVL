@@ -1229,7 +1229,7 @@ function buildCustomerDebtLedgerRows(
       type: adjustment.transaction_type || 'Điều chỉnh',
       value_delta: adjustment.amount_delta,
       running_debt: adjustment.balance_after,
-      href: null,
+      href: customerDebtAdjustmentHref(adjustment.source_code),
     })),
     ...linkedSupplierReceipts.map((receipt) => ({
       id: `linked-supplier-receipt:${receipt.id}`,
@@ -1237,7 +1237,7 @@ function buildCustomerDebtLedgerRows(
       created_at: receipt.created_at,
       type: 'Nhập hàng',
       value_delta: -Math.abs(receipt.remaining_amount),
-      href: managementRecordOpenHref('/receipts', receipt.code),
+      href: managementRecordOpenHref('/purchase/receipts', receipt.code),
     })),
   ].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
 
@@ -1252,6 +1252,11 @@ function buildCustomerDebtLedgerRows(
   })
 
   return rowsWithRunningDebt.reverse()
+}
+
+function customerDebtAdjustmentHref(code: string) {
+  if (/^PN/i.test(code)) return managementRecordOpenHref('/purchase/receipts', code)
+  return null
 }
 
 function salesDocumentAffectsCustomerDebt(document: { status?: SalesDocumentListItem['status'] }) {
