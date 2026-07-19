@@ -619,7 +619,7 @@ export function SuppliersPage({
                   <tr>
                     <th>Mã phiếu</th>
                     <th>Thời gian</th>
-                    <th>Hóa đơn NCC</th>
+                    <th>Thời gian</th>
                     <th>Cần trả</th>
                     <th>Đã trả</th>
                     <th>Còn nợ</th>
@@ -669,7 +669,7 @@ export function SuppliersPage({
                   <tr>
                     <th>Mã phiếu</th>
                     <th>Thời gian</th>
-                    <th>Hóa đơn NCC</th>
+                    <th>Thời gian</th>
                     <th>Cần trả</th>
                     <th>Đã trả</th>
                     <th>Còn nợ</th>
