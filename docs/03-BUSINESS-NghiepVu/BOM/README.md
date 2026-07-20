@@ -76,7 +76,7 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 | SoT 3 lớp (quyết định / runtime / hướng dài) trong README này | Xong |
 | RULES / TABLES / API tách slice vs hướng dài | Xong |
 | Sales / STOCK / checklist trỏ về mục 2 | Xong |
-| PRD/plan/API vệ tinh hết chỗ khẳng định “runtime đã active” | Đang dọn (mỗi PR docs phải khớp cột này) |
+| PRD/plan/API vệ tinh hết chỗ khẳng định “runtime đã active” | Đã dọn vòng 2026-07-20; còn sót thì sửa theo quy tắc dưới |
 | Runtime slice KV (4 bước trên) | **Chưa** — chờ Owner bảo làm |
 | Hướng dài mục 3 | **Chưa** — không nhầm với slice KV |
 
