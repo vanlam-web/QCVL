@@ -22,6 +22,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { currentSystemDate } from '../../lib/system-clock'
+import { parseDateTimeValue } from '../../lib/date-format'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -1455,7 +1456,11 @@ function buildCustomerDebtSummaryRows(
   let unassignedPayment = Math.max(openDebtTotal - Math.max(currentDebt, 0), 0)
   const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
   const allocatedDebtById = new Map<string, number>()
-  const oldestRows = [...openRows].sort((left, right) => left.created_at.localeCompare(right.created_at) || left.code.localeCompare(right.code))
+  const oldestRows = [...openRows].sort((left, right) => {
+    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
+    if (timeDiff !== 0) return timeDiff
+    return left.code.localeCompare(right.code)
+  })
 
   for (const invoice of oldestRows) {
     if (unassignedPayment <= 0) break
@@ -1473,6 +1478,11 @@ function buildCustomerDebtSummaryRows(
       running_debt: Math.max(invoice.running_debt - (allocatedDebtById.get(invoice.id) ?? 0), 0),
     }))
     .filter((invoice) => invoice.remaining_debt > 0)
+    .sort((left, right) => {
+      const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
+      if (timeDiff !== 0) return timeDiff
+      return right.code.localeCompare(left.code)
+    })
 
   if (adjustedRows.length === 1) {
     return adjustedRows.map((invoice) => ({

@@ -1,4 +1,5 @@
 import { managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { parseDateTimeValue } from '../../lib/date-format'
 import type { CashbookEntry } from '../finance/types'
 import type { CustomerDebtDetail } from '../orders/order-service'
 import type { SalesDocumentListItem } from '../sales-documents/sales-document-service'
@@ -77,7 +78,7 @@ export function buildCustomerDebtLedgerRows(
       const priority = customerDebtLedgerChronologyPriority(left) - customerDebtLedgerChronologyPriority(right)
       if (priority !== 0) return priority
     }
-    const timeOrder = left.created_at.localeCompare(right.created_at)
+    const timeOrder = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
     if (timeOrder !== 0) return timeOrder
     return left.code.localeCompare(right.code)
   })

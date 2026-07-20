@@ -76,7 +76,7 @@ function readCssWithImports(path: string, seen = new Set<string>()): string {
 function SortDemo() {
   const rows = [
     { id: 'old', name: 'Beta', amount: 200, createdAt: '2026-07-07T08:00:00.000Z' },
-    { id: 'new', name: 'Alpha', amount: 500, createdAt: '2026-07-08T08:00:00.000Z' },
+    { id: 'new', name: 'Alpha', amount: 500, createdAt: '08/07/2026 08:00' },
     { id: 'mid', name: 'Gamma', amount: 100, createdAt: '2026-07-06T08:00:00.000Z' },
   ]
   const { sortedItems, sortState, requestSort } = useManagementTableSort(rows, {

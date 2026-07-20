@@ -23,6 +23,52 @@ export function displayDateKey(value: DateInput) {
   return parsed.toISOString().slice(0, 10)
 }
 
+function parseDateTimeParts(value: string) {
+  const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?/)
+  if (isoMatch) {
+    const [, year, month, day, hour = '00', minute = '00', second = '00', millis = '0'] = isoMatch
+    return Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(`${millis}`.padEnd(3, '0').slice(0, 3)),
+    )
+  }
+
+  const kvMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/)
+  if (kvMatch) {
+    const [, day, month, year, hour = '00', minute = '00', second = '00'] = kvMatch
+    return Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      0,
+    )
+  }
+
+  return null
+}
+
+export function parseDateTimeValue(value: DateInput) {
+  if (!value) return null
+  if (value instanceof Date) {
+    const time = value.getTime()
+    return Number.isNaN(time) ? null : time
+  }
+
+  const trimmed = value.trim()
+  const parsed = parseDateTimeParts(trimmed)
+  if (parsed !== null) return parsed
+  const fallback = Date.parse(trimmed)
+  return Number.isNaN(fallback) ? null : fallback
+}
+
 function dateParts(value: DateInput) {
   if (!value) return null
   if (value instanceof Date) {

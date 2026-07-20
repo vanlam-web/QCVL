@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
+import { parseDateTimeValue } from '../../lib/date-format'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
 import type { InventoryRoll, InventorySheet } from '../inventory/types'
@@ -143,7 +144,7 @@ const productCreatedDateLabels: Record<ProductCreatedDateFilter, string> = {
 
 function defaultCatalogProductOrder(products: readonly Product[]) {
   return [...products].sort((left, right) => {
-    const createdCompared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
+    const createdCompared = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
     if (Number.isFinite(createdCompared) && createdCompared !== 0) return createdCompared
     const codeCompared = left.code.localeCompare(right.code, 'vi', { numeric: true, sensitivity: 'base' })
     if (codeCompared !== 0) return codeCompared

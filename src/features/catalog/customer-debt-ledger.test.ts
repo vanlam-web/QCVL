@@ -92,4 +92,29 @@ describe('customer debt ledger', () => {
     expect(rows[0].running_debt).toBe(0)
     expect(rows[1].running_debt).toBe(100000)
   })
+
+  it('sorts ledger rows by real datetime when ISO and KV datetime strings are mixed', () => {
+    const rows = buildCustomerDebtLedgerRows(
+      [
+        {
+          id: 'order-old',
+          code: 'HD011163',
+          created_at: '14/07/2026 14:18',
+          total_amount: 209300,
+          status: 'completed',
+        },
+        {
+          id: 'order-new',
+          code: 'HD011167',
+          created_at: '2026-07-14T15:25:00.000Z',
+          total_amount: 1258530,
+          status: 'completed',
+        },
+      ],
+      [],
+      [],
+    )
+
+    expect(rows.map((row) => row.code)).toEqual(['HD011167', 'HD011163'])
+  })
 })

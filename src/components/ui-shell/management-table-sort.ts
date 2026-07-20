@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { parseDateTimeValue } from '../../lib/date-format'
 
 export type ManagementSortKind = 'text' | 'number' | 'date'
 export type ManagementSortDirection = 'asc' | 'desc'
@@ -29,8 +30,8 @@ function compareSortValue(left: string | number | null | undefined, right: strin
   if (left === null || left === undefined) return 1
   if (right === null || right === undefined) return -1
   if (kind === 'text') return String(left).localeCompare(String(right), 'vi', { numeric: true, sensitivity: 'base' })
-  const leftNumber = kind === 'date' && typeof left === 'string' ? Date.parse(left) : Number(left)
-  const rightNumber = kind === 'date' && typeof right === 'string' ? Date.parse(right) : Number(right)
+  const leftNumber = kind === 'date' && typeof left === 'string' ? parseDateTimeValue(left) ?? NaN : Number(left)
+  const rightNumber = kind === 'date' && typeof right === 'string' ? parseDateTimeValue(right) ?? NaN : Number(right)
   if (!Number.isFinite(leftNumber) && !Number.isFinite(rightNumber)) return 0
   if (!Number.isFinite(leftNumber)) return 1
   if (!Number.isFinite(rightNumber)) return -1

@@ -1161,7 +1161,7 @@ interface Timestamped {
 
 function latestTimestamp(item: Timestamped) {
   const value = item.last_activity_at ?? item.updated_at ?? item.posted_at ?? item.balanced_at ?? item.received_at ?? item.created_at
-  return typeof value === 'string' ? Date.parse(value) || 0 : 0
+  return typeof value === 'string' ? parseManagementDateTimeValue(value) ?? 0 : 0
 }
 
 function newestFirst<T>(items: readonly T[]) {
@@ -1252,7 +1252,7 @@ function filterProducts(url: URL) {
 
 function defaultProductOrder<T extends { code?: string; name?: string; created_at?: string | null }>(items: readonly T[]) {
   return [...items].sort((left, right) => {
-    const createdCompared = Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? '')
+    const createdCompared = (parseManagementDateTimeValue(right.created_at ?? '') ?? 0) - (parseManagementDateTimeValue(left.created_at ?? '') ?? 0)
     if (Number.isFinite(createdCompared) && createdCompared !== 0) return createdCompared
     const codeCompared = String(left.code ?? '').localeCompare(String(right.code ?? ''), 'vi', { numeric: true, sensitivity: 'base' })
     if (codeCompared !== 0) return codeCompared
@@ -3877,8 +3877,8 @@ function compareManagementSortValue(
   if (right === null || right === undefined) return -1
   if (kind === 'text') return String(left).localeCompare(String(right), 'vi', { numeric: true, sensitivity: 'base' })
   if (kind === 'date') {
-    const leftTime = Date.parse(String(left))
-    const rightTime = Date.parse(String(right))
+    const leftTime = parseManagementDateTimeValue(String(left)) ?? NaN
+    const rightTime = parseManagementDateTimeValue(String(right)) ?? NaN
     if (!Number.isFinite(leftTime) && !Number.isFinite(rightTime)) return 0
     if (!Number.isFinite(leftTime)) return 1
     if (!Number.isFinite(rightTime)) return -1
@@ -3890,6 +3890,32 @@ function compareManagementSortValue(
   if (!Number.isFinite(leftNumber)) return 1
   if (!Number.isFinite(rightNumber)) return -1
   return leftNumber - rightNumber
+}
+
+function parseManagementDateTimeValue(value: string) {
+  const trimmed = value.trim()
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?/)
+  if (isoMatch) {
+    const [, year, month, day, hour = '00', minute = '00', second = '00', millis = '0'] = isoMatch
+    return Date.UTC(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute),
+      Number(second),
+      Number(`${millis}`.padEnd(3, '0').slice(0, 3)),
+    )
+  }
+
+  const kvMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/)
+  if (kvMatch) {
+    const [, day, month, year, hour = '00', minute = '00', second = '00'] = kvMatch
+    return Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), Number(second), 0)
+  }
+
+  const fallback = Date.parse(trimmed)
+  return Number.isNaN(fallback) ? null : fallback
 }
 
 function sortItemsForRequest<Item extends object>(
