@@ -76,6 +76,21 @@ function rowsByInvoice(file: string) {
   return { byCode, invalidRows: mapped.invalid }
 }
 
+function firstRowsByInvoice(byCode: Map<string, KiotVietInvoiceImportRow[]>) {
+  const firstRows = new Map<string, KiotVietInvoiceImportRow>()
+  for (const [code, rows] of byCode) {
+    const first = rows[0]
+    if (first) firstRows.set(code, first)
+  }
+  return firstRows
+}
+
+function invoicePaymentStatus(totalAmount: number, paidAmount: number) {
+  if (paidAmount >= totalAmount) return 'paid'
+  if (paidAmount > 0) return 'partial'
+  return 'unpaid'
+}
+
 async function resolveOrganizationId(pool: pg.Pool) {
   const result = await pool.query('select id::text from organizations where code = $1 limit 1', [organizationCode])
   const id = result.rows[0]?.id
@@ -114,6 +129,70 @@ async function loadRepairTargets(pool: pg.Pool, organizationId: string) {
     [organizationId],
   )
   return result.rows.map((row) => ({ id: String(row.id), code: String(row.code) }))
+}
+
+async function loadDebtRepairTargets(pool: pg.Pool, organizationId: string, firstRows: Map<string, KiotVietInvoiceImportRow>) {
+  const sourceCodes = explicitCodes.size > 0 ? [...explicitCodes] : [...firstRows.keys()].map((code) => code.toUpperCase())
+  if (sourceCodes.length === 0) return []
+  const result = await pool.query(
+    `
+      select
+        o.id::text,
+        o.code,
+        o.total_amount,
+        o.paid_amount,
+        o.debt_amount,
+        o.payment_status,
+        o.status,
+        cde.remaining_debt,
+        cde.status as debt_entry_status
+      from orders o
+      left join customer_debt_entries cde
+        on cde.organization_id = o.organization_id
+       and cde.order_id = o.id
+      where o.organization_id = $1
+        and o.order_type = 'invoice'
+        and upper(o.code) = any($2::text[])
+      order by o.created_at, o.code
+    `,
+    [organizationId, sourceCodes],
+  )
+  return result.rows
+    .map((row) => {
+      const source = firstRows.get(String(row.code))
+      if (!source) return null
+      const sourceDebt = source.status === 'completed' ? Math.max(source.total_amount - source.paid_amount, 0) : 0
+      const sourceStatus = invoicePaymentStatus(source.total_amount, source.paid_amount)
+      const dbDebt = Number(row.debt_amount)
+      const entryDebt = row.remaining_debt === null || row.remaining_debt === undefined ? dbDebt : Number(row.remaining_debt)
+      const dbStatus = String(row.payment_status)
+      const orderStatus = String(row.status)
+      const entryStatus = row.debt_entry_status === null || row.debt_entry_status === undefined ? null : String(row.debt_entry_status)
+      const totalMismatch = Number(row.total_amount) !== source.total_amount || Number(row.paid_amount) !== source.paid_amount
+      const debtMismatch = dbDebt !== sourceDebt || entryDebt !== sourceDebt
+      const statusMismatch = dbStatus !== sourceStatus || orderStatus !== source.status
+      const entryMismatch = sourceDebt > 0 ? entryStatus !== 'open' : entryStatus === 'open'
+      const needsRepair = totalMismatch || debtMismatch || statusMismatch || entryMismatch
+      if (!needsRepair) return null
+      return {
+        id: String(row.id),
+        code: String(row.code),
+        db_total: Number(row.total_amount),
+        db_paid: Number(row.paid_amount),
+        db_debt: dbDebt,
+        db_entry_debt: entryDebt,
+        source_total: source.total_amount,
+        source_paid: source.paid_amount,
+        source_debt: sourceDebt,
+        source_status: source.status,
+        source_payment_status: sourceStatus,
+        total_mismatch: totalMismatch,
+        debt_mismatch: debtMismatch,
+        status_mismatch: statusMismatch,
+        entry_mismatch: entryMismatch,
+      }
+    })
+    .filter((target): target is NonNullable<typeof target> => target !== null)
 }
 
 async function productIdsByCode(pool: pg.Pool, organizationId: string, rows: KiotVietInvoiceImportRow[]) {
@@ -177,28 +256,95 @@ async function repairInvoiceItems(pool: pg.Pool, organizationId: string, orderId
   return { repaired: true, items: itemRows.length, missingProducts: [] as string[] }
 }
 
+async function repairInvoiceDebt(pool: pg.Pool, organizationId: string, orderId: string, source: KiotVietInvoiceImportRow) {
+  const sourceDebt = source.status === 'completed' ? Math.max(source.total_amount - source.paid_amount, 0) : 0
+  const paymentStatus = invoicePaymentStatus(source.total_amount, source.paid_amount)
+  await pool.query(
+    `
+      update orders
+      set status = $3,
+          total_amount = $4,
+          paid_amount = $5,
+          debt_amount = $6,
+          payment_status = $7,
+          updated_at = now()
+      where organization_id = $1
+        and id = $2
+    `,
+    [organizationId, orderId, source.status, source.total_amount, source.paid_amount, sourceDebt, paymentStatus],
+  )
+  if (sourceDebt > 0) {
+    await pool.query(
+      `
+        insert into customer_debt_entries (
+          organization_id, customer_id, order_id, original_amount, paid_amount,
+          remaining_debt, status, created_at, updated_at
+        )
+        select $1, customer_id, id, $3, 0, $3, 'open', created_at, now()
+        from orders
+        where organization_id = $1
+          and id = $2
+        on conflict (organization_id, order_id) do update set
+          customer_id = excluded.customer_id,
+          original_amount = excluded.original_amount,
+          paid_amount = excluded.paid_amount,
+          remaining_debt = excluded.remaining_debt,
+          status = excluded.status,
+          updated_at = now()
+      `,
+      [organizationId, orderId, sourceDebt],
+    )
+    return
+  }
+  await pool.query(
+    `
+      update customer_debt_entries
+      set remaining_debt = 0,
+          status = 'closed',
+          updated_at = now()
+      where organization_id = $1
+        and order_id = $2
+        and status = 'open'
+    `,
+    [organizationId, orderId],
+  )
+}
+
 async function main() {
   const url = databaseUrl()
   if (!url) throw new Error('DATABASE_URL or NAS .env database settings are required')
   const file = latestSourceFile()
   const { byCode, invalidRows } = rowsByInvoice(file)
+  const firstRows = firstRowsByInvoice(byCode)
   const pool = new Pool({ connectionString: url })
   try {
     const organizationId = await resolveOrganizationId(pool)
     const targets = (await loadRepairTargets(pool, organizationId)).filter((target) => byCode.has(target.code))
+    const debtTargets = await loadDebtRepairTargets(pool, organizationId, firstRows)
     if (!confirmRepair) {
+      const totalMismatchCount = debtTargets.filter((target) => target.total_mismatch).length
+      const debtMismatchCount = debtTargets.filter((target) => target.debt_mismatch).length
+      const statusMismatchCount = debtTargets.filter((target) => target.status_mismatch).length
+      const entryMismatchCount = debtTargets.filter((target) => target.entry_mismatch).length
       console.log(JSON.stringify({
         dry_run: true,
         file,
         invalid_rows: invalidRows.length,
-        targets: targets.length,
+        item_targets: targets.length,
+        debt_targets: debtTargets.length,
+        total_mismatch_targets: totalMismatchCount,
+        debt_mismatch_targets: debtMismatchCount,
+        status_mismatch_targets: statusMismatchCount,
+        entry_mismatch_targets: entryMismatchCount,
         sample_codes: targets.slice(0, 20).map((target) => target.code),
+        sample_debt_changes: debtTargets.slice(0, 20),
       }, null, 2))
       return
     }
 
     let repaired = 0
     let repairedItems = 0
+    let repairedDebts = 0
     const skipped: Array<{ code: string; missing_products: string[] }> = []
     await pool.query('begin')
     try {
@@ -210,6 +356,12 @@ async function main() {
         }
         repaired += 1
         repairedItems += result.items
+      }
+      for (const target of debtTargets) {
+        const source = firstRows.get(target.code)
+        if (!source) continue
+        await repairInvoiceDebt(pool, organizationId, target.id, source)
+        repairedDebts += 1
       }
       await pool.query('commit')
     } catch (error) {
@@ -224,6 +376,8 @@ async function main() {
       targets: targets.length,
       repaired,
       repaired_items: repairedItems,
+      debt_targets: debtTargets.length,
+      repaired_debts: repairedDebts,
       skipped: skipped.slice(0, 20),
     }, null, 2))
   } finally {

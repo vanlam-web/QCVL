@@ -3441,7 +3441,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async getCustomerDebt(input) {
       await ensureSalesFinanceTables(pool)
-      const [result, adjustmentResult] = await Promise.all([
+      const [result, adjustmentResult, linkedSupplierReceiptResult] = await Promise.all([
         pool.query(
           `
             select
@@ -3479,6 +3479,30 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           `,
           [input.organizationId, input.customerId],
         ),
+        pool.query(
+          `
+            select
+              pr.id::text,
+              pr.code,
+              coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at) as created_at,
+              s.id::text as supplier_id,
+              s.code as supplier_code,
+              s.data->>'name' as supplier_name,
+              coalesce(nullif(pr.data->>'payable_amount', '')::numeric, 0) as payable_amount,
+              coalesce(nullif(pr.data->>'paid_amount', '')::numeric, 0) as paid_amount,
+              coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) as remaining_amount
+            from purchase_receipt_snapshots pr
+            join supplier_snapshots s
+              on s.organization_id = pr.organization_id
+             and lower(s.code) = lower(pr.data->'supplier'->>'code')
+             and s.data->>'linked_customer_id' = $2
+            where pr.organization_id = $1
+              and pr.data->>'status' = 'posted'
+              and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
+            order by created_at desc, pr.code desc
+          `,
+          [input.organizationId, input.customerId],
+        ),
       ])
       const invoices = result.rows.map((row) => ({
         order_id: row.id,
@@ -3500,20 +3524,32 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         balance_after: Number(row.balance_after),
         source_file: row.source_file === null ? null : String(row.source_file),
       }))
+      const linkedSupplierReceipts = linkedSupplierReceiptResult.rows.map((row) => ({
+        id: String(row.id),
+        code: String(row.code),
+        created_at: row.created_at.toISOString(),
+        supplier_id: String(row.supplier_id),
+        supplier_code: String(row.supplier_code),
+        supplier_name: String(row.supplier_name),
+        payable_amount: Number(row.payable_amount),
+        paid_amount: Number(row.paid_amount),
+        remaining_amount: Number(row.remaining_amount),
+      }))
+      const linkedSupplierTotal = linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
       return {
         customer_id: input.customerId,
         total_debt: adjustments.length > 0
-          ? adjustments[0].balance_after
-          : invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0),
+          ? Math.max(adjustments[0].balance_after - linkedSupplierTotal, 0)
+          : Math.max(invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0) - linkedSupplierTotal, 0),
         invoices,
         adjustments,
-        linked_supplier_receipts: [],
+        linked_supplier_receipts: linkedSupplierReceipts,
       }
     },
 
     async listCustomerDebts(input) {
       await ensureSalesFinanceTables(pool)
-      const [invoiceResult, adjustmentResult] = await Promise.all([
+      const [invoiceResult, linkedReceiptResult, adjustmentResult] = await Promise.all([
         pool.query(
           `
             select
@@ -3536,6 +3572,29 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               and o.customer_id is not null
               and coalesce(cde.remaining_debt, o.debt_amount) > 0
             group by o.customer_id
+          `,
+          [input.organizationId],
+        ),
+        pool.query(
+          `
+            select
+              s.data->>'linked_customer_id' as customer_id,
+              cs.data->>'code' as customer_code,
+              cs.data->>'name' as customer_name,
+              sum(coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0)) as total_linked_supplier_receipts,
+              max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
+            from purchase_receipt_snapshots pr
+            join supplier_snapshots s
+              on s.organization_id = pr.organization_id
+             and lower(s.code) = lower(pr.data->'supplier'->>'code')
+            left join customer_snapshots cs
+              on cs.organization_id = pr.organization_id
+             and cs.id = s.data->>'linked_customer_id'
+            where pr.organization_id = $1
+              and pr.data->>'status' = 'posted'
+              and s.data->>'linked_customer_id' is not null
+              and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
+            group by s.data->>'linked_customer_id', cs.data->>'code', cs.data->>'name'
           `,
           [input.organizationId],
         ),
@@ -3630,6 +3689,26 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           customer_name: row.customer_name,
           total_debt: Number(row.total_debt),
           oldest_order_code: row.oldest_order_code,
+          open_invoice_count: 0,
+          invoices: [],
+        })
+      }
+      for (const row of linkedReceiptResult.rows) {
+        const customerId = String(row.customer_id)
+        const existing = byCustomer.get(customerId)
+        if (existing) {
+          byCustomer.set(customerId, {
+            ...existing,
+            total_debt: Math.max(existing.total_debt - Number(row.total_linked_supplier_receipts), 0),
+          })
+          continue
+        }
+        byCustomer.set(customerId, {
+          customer_id: customerId,
+          customer_code: String(row.customer_code ?? ''),
+          customer_name: String(row.customer_name ?? ''),
+          total_debt: Math.max(0 - Number(row.total_linked_supplier_receipts), 0),
+          oldest_order_code: '',
           open_invoice_count: 0,
           invoices: [],
         })
@@ -4078,7 +4157,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [organizationId],
       )
-      const [debts, adjustments] = await Promise.all([
+      const [debts, linkedReceiptResult, adjustments] = await Promise.all([
         pool.query(
           `
             select o.customer_id, sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount
@@ -4094,6 +4173,24 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               and o.customer_id is not null
               and coalesce(cde.remaining_debt, o.debt_amount) > 0
             group by o.customer_id
+          `,
+          [organizationId],
+        ),
+        pool.query(
+          `
+            select
+              s.data->>'linked_customer_id' as customer_id,
+              sum(coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0)) as total_linked_supplier_receipts,
+              max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
+            from purchase_receipt_snapshots pr
+            join supplier_snapshots s
+              on s.organization_id = pr.organization_id
+             and lower(s.code) = lower(pr.data->'supplier'->>'code')
+            where pr.organization_id = $1
+              and pr.data->>'status' = 'posted'
+              and s.data->>'linked_customer_id' is not null
+              and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
+            group by s.data->>'linked_customer_id'
           `,
           [organizationId],
         ),
@@ -4171,6 +4268,14 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         totals.set(row.customer_id, {
           ...existing,
           total_debt_amount: Number(row.total_debt_amount),
+          last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
+        })
+      }
+      for (const row of linkedReceiptResult.rows) {
+        const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
+        totals.set(row.customer_id, {
+          ...existing,
+          total_debt_amount: Math.max(existing.total_debt_amount - Number(row.total_linked_supplier_receipts), 0),
           last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
         })
       }
@@ -5786,7 +5891,7 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
     )
   }
 
-  if (document.order_type === 'invoice' && document.debt_amount > 0) {
+  if (document.order_type === 'invoice' && document.status !== 'cancelled' && document.debt_amount > 0) {
     await pool.query(
       `
         insert into customer_debt_entries (
@@ -5794,9 +5899,28 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
           remaining_debt, status, created_at, updated_at
         )
         values ($1, $2, $3, $4, 0, $4, 'open', $5, now())
-        on conflict (organization_id, order_id) do nothing
+        on conflict (organization_id, order_id) do update set
+          customer_id = excluded.customer_id,
+          original_amount = excluded.original_amount,
+          paid_amount = excluded.paid_amount,
+          remaining_debt = excluded.remaining_debt,
+          status = excluded.status,
+          updated_at = now()
       `,
       [organizationId, document.customer.id, orderId, document.debt_amount, document.created_at],
+    )
+  } else if (document.order_type === 'invoice') {
+    await pool.query(
+      `
+        update customer_debt_entries
+        set remaining_debt = 0,
+            status = 'closed',
+            updated_at = now()
+        where organization_id = $1
+          and order_id = $2
+          and status = 'open'
+      `,
+      [organizationId, orderId],
     )
   }
 }

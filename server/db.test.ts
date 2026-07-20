@@ -189,6 +189,79 @@ describe('createPgRepository product units', () => {
     expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('left join customer_debt_entries cde'))).toBe(true)
   })
 
+  test('subtracts linked supplier receipts from customer debt totals', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
+        return {
+          rows: [{
+            id: 'order-kv-hd010729',
+            code: 'HD010729',
+            created_at: new Date('2026-06-10T15:26:26.083Z'),
+            total_amount: '600000',
+            paid_amount: '0',
+            debt_amount: '600000',
+            remaining_debt: '600000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('linked_customer_id') && sql.includes('total_linked_supplier_receipts')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000384',
+            customer_code: 'KH000384',
+            customer_name: 'Khach test',
+            total_linked_supplier_receipts: '90000',
+            last_activity_at: new Date('2026-06-11T10:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('supplier_id') && sql.includes('remaining_amount')) {
+        return {
+          rows: [{
+            id: 'receipt-1',
+            code: 'PN000685',
+            created_at: new Date('2026-06-11T10:00:00.000Z'),
+            supplier_id: 'supplier-1',
+            supplier_code: 'NCC001',
+            supplier_name: 'NCC test',
+            payable_amount: '90000',
+            paid_amount: '0',
+            remaining_amount: '90000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from customer_debt_adjustments') && sql.includes('source_system')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select customer_id, sum(total_amount) as total_sales_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_sales_amount: '600000', last_activity_at: new Date('2026-06-10T15:26:26.083Z') }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '600000' }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-kh000384',
+    })
+    const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
+
+    expect(debt?.total_debt).toBe(510000)
+    expect(debt?.linked_supplier_receipts).toEqual([expect.objectContaining({ code: 'PN000685', remaining_amount: 90000 })])
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
+  })
+
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockResolvedValue({
@@ -819,6 +892,94 @@ describe('createPgRepository product units', () => {
       0,
       600000,
       1,
+    ])
+  })
+
+  test('updates stale customer debt entries when KiotViet invoice debt changes', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from customer_snapshots')) return { rows: [{ data: { id: 'customer-1', code: 'KH001', name: 'Khach test', phone: null } }], rowCount: 1 }
+      if (sql.includes('from products p') && sql.includes('product_unit_conversions puc')) {
+        return {
+          rows: [{
+            id: 'product-ib',
+            code: 'IB',
+            name: 'In bat',
+            status: 'active',
+            product_kind: 'service',
+            unit_name: 'm2',
+            sell_method: 'area_m2',
+            latest_purchase_cost: 0,
+            latest_purchase_cost_at: null,
+            default_sale_price: null,
+            product_group_id: null,
+            product_group: null,
+            inventory_shape: 'normal',
+            track_inventory: false,
+            unit_conversions: [],
+            kiotviet_provisional_stock: null,
+            operating_stock: null,
+            latest_kiotviet_stocktake: null,
+            draft_bom: null,
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            updated_at: new Date('2026-07-01T00:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id from orders where')) return { rows: [{ id: 'existing-order' }], rowCount: 1 }
+      if (sql.includes('insert into orders')) return { rows: [{ id: 'existing-order' }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.upsertImportedKiotVietInvoices?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      rows: [{
+        rowNumber: 646,
+        source_code: 'HD010729',
+        created_at: '2026-06-10T15:26:26.083Z',
+        updated_at: null,
+        customer_code: 'KH001',
+        customer_name: 'Khach test',
+        customer_phone: null,
+        customer_address: null,
+        price_list_name: '40',
+        source_user_name: 'Admin',
+        channel_name: null,
+        note: null,
+        subtotal_amount: 600000,
+        invoice_discount_amount: 0,
+        other_income_amount: 0,
+        total_amount: 600000,
+        paid_amount: 420604,
+        cash_amount: 0,
+        bank_amount: 420604,
+        status: 'completed',
+        product_code: 'IB',
+        product_name: 'In bat',
+        unit_name: 'm2',
+        stock_qty_per_sale_unit: null,
+        product_note: '3m x 2.5m x 2',
+        quantity: 15,
+        list_unit_price: 40000,
+        line_discount_percent: null,
+        line_discount_amount: 0,
+        unit_price: 40000,
+        line_amount: 600000,
+      }],
+    })
+
+    const debtCall = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into customer_debt_entries'))
+    const debtSql = String(debtCall?.[0])
+    expect(debtSql).toContain('on conflict (organization_id, order_id) do update set')
+    expect(debtSql).toContain('remaining_debt = excluded.remaining_debt')
+    expect(debtCall?.[1]).toEqual([
+      '11111111-1111-1111-1111-111111111111',
+      'customer-1',
+      'existing-order',
+      179396,
+      '2026-06-10T15:26:26.083Z',
     ])
   })
 

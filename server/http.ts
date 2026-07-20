@@ -2320,15 +2320,28 @@ function makeCashbookEntry(number: number): CashbookEntryData {
   }
 }
 
+type LinkedSupplierReceiptDebtData = {
+  id: string
+  code: string
+  created_at: string
+  supplier_id: string
+  supplier_code: string
+  supplier_name: string
+  payable_amount: number
+  paid_amount: number
+  remaining_amount: number
+}
+
 function makeCustomerDebtDetail(customerId: string) {
+  const linkedSupplierReceipts: LinkedSupplierReceiptDebtData[] = []
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
-  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [] }
+  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts }
   return {
     customer_id: customerId,
     total_debt: debt.total_debt,
     invoices: debt.invoices,
     adjustments: debt.adjustments ?? [],
-    linked_supplier_receipts: [],
+    linked_supplier_receipts: linkedSupplierReceipts,
   }
 }
 
