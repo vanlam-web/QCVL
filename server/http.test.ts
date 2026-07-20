@@ -4796,6 +4796,43 @@ describe('createHttpHandler', () => {
     expect(afterDefaultBody.data.items[0]).toEqual(expect.objectContaining({ code: 'khachle' }))
   })
 
+  test('persists POS-created customers so customer search can find them with zero debt', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const createResponse = await handler(
+      new Request('http://api.local/api/v1/customers', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({ name: 'Minh Võ (may)', phone: '0909123456', customer_group_id: null }),
+      }),
+    )
+    const createBody = await createResponse.json()
+
+    const searchResponse = await handler(
+      new Request('http://api.local/api/v1/customers?search=Minh%20Vo&page=1&page_size=10', { headers: { authorization } }),
+    )
+    const searchBody = await searchResponse.json()
+
+    expect(createResponse.status).toBe(201)
+    expect(createBody.data).toEqual(expect.objectContaining({
+      name: 'Minh Võ (may)',
+      total_debt_amount: 0,
+      created_by: expect.objectContaining({ id: 'user-dev-admin', name: 'Admin' }),
+    }))
+    expect(searchBody.data.items[0]).toEqual(expect.objectContaining({
+      name: 'Minh Võ (may)',
+      total_debt_amount: 0,
+    }))
+  })
+
   test('uses paged product repository for product list instead of loading the full catalog twice', async () => {
     const baseRepository = repository(await hashPassword('ChangeMe123!'))
     const listProducts = vi.fn(async () => [])

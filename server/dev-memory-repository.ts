@@ -663,6 +663,39 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     async findCustomersByCodes(input) {
       return new Set(input.codes.filter((code) => customers.has(code)))
     },
+    async createCustomer(input) {
+      const code = input.code?.trim() || nextManualCustomerCode(customers)
+      const groupId = input.customer_group_id ?? 'cg-retail'
+      const groupName = groupId ? customerGroupNamesById.get(groupId) ?? groupId : null
+      const created = hydrateCustomerLinkedSupplier(hydrateCustomerCreator({
+        id: `customer-manual-${slug(`${code}-${input.name}`)}`,
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        tax_code: null,
+        address: null,
+        customer_group_id: groupId,
+        customer_group: groupId && groupName ? { id: groupId, code: groupName, name: groupName } : null,
+        created_by: input.created_by ?? null,
+        created_at: new Date().toISOString(),
+        total_sales_amount: 0,
+        total_debt_amount: 0,
+        customer_type: null,
+        company_name: null,
+        area_name: null,
+        ward_name: null,
+        note: null,
+        source_creator_name: null,
+        last_transaction_at: null,
+        kiotviet_current_debt: null,
+        kiotviet_net_sales: null,
+        status: 'active',
+      }, users), suppliers)
+      customers.set(created.code, created)
+      syncExactCustomerSupplierLinks(customers, suppliers)
+      await persist()
+      return created
+    },
     async updateCustomer(input) {
       const entry = [...customers.entries()].find(([, customer]) => customer.id === input.id || customer.code === input.id)
       if (!entry) return null
@@ -2664,6 +2697,16 @@ function slug(value: string) {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48) || 'default'
+}
+
+function nextManualCustomerCode(customers: Map<string, CustomerListData>) {
+  let maxNumber = 0
+  for (const customer of customers.values()) {
+    const match = /^kh(\d+)$/i.exec(customer.code.trim())
+    if (!match) continue
+    maxNumber = Math.max(maxNumber, Number(match[1]))
+  }
+  return `KH${String(maxNumber + 1).padStart(6, '0')}`
 }
 
 function priceListKey(value: string) {

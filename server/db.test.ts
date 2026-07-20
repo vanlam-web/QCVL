@@ -120,6 +120,39 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('update product_unit_conversions'))).toBe(false)
   })
 
+  test('creates manual customers in customer_snapshots with zero debt', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.includes('select max(') && sql.includes('from customer_snapshots')) return { rows: [{ max_number: 21 }], rowCount: 1 }
+      if (sql.includes('from customer_snapshots') && sql.includes("data->'customer_group'") && sql.includes('limit 1')) {
+        return { rows: [{ customer_group: { id: 'cg-retail', code: 'LE', name: 'Khach le' } }], rowCount: 1 }
+      }
+      if (sql.includes('insert into customer_snapshots')) {
+        expect(values?.[2]).toBe('KH000022')
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const created = await repository.createCustomer?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      name: 'Minh Võ (may)',
+      phone: '0909123456',
+      customer_group_id: null,
+      created_by: { id: 'user-1', name: 'Admin' },
+    })
+
+    expect(created).toEqual(expect.objectContaining({
+      code: 'KH000022',
+      name: 'Minh Võ (may)',
+      total_debt_amount: 0,
+      created_by: { id: 'user-1', name: 'Admin' },
+      customer_group_id: 'cg-retail',
+    }))
+    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into customer_snapshots'))).toBe(true)
+  })
+
   test('moves same-sale cashbook timestamps when sales document time changes', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {

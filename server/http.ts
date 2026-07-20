@@ -494,6 +494,14 @@ export interface ServerRepository {
     price_list_id: string
   }>>
   listCustomers?(input: { organizationId: string; url: URL }): Promise<CustomerListData[]>
+  createCustomer?(input: {
+    organizationId: string
+    code?: string
+    name: string
+    phone?: string | null
+    customer_group_id?: string | null
+    created_by?: { id: string; name: string } | null
+  }): Promise<CustomerListData>
   updateCustomer?(input: {
     organizationId: string
     id: string
@@ -2725,8 +2733,30 @@ async function getDevApiResponse(
       },
       createCustomer: async () => {
         const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
-        const created = { ...customers[0], ...body, id: randomUUID(), code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`, customer_group_id: body.customer_group_id ?? 'cg-retail' }
-        customers.push(created)
+        const name = requiredString(body.name, 'name')
+        const createdBy = { id: currentUser.user.id, name: currentUser.user.display_name }
+        const created = repository.createCustomer
+          ? await repository.createCustomer({
+              organizationId: currentUser.organization.id,
+              code: body.code,
+              name,
+              phone: body.phone ?? null,
+              customer_group_id: body.customer_group_id ?? null,
+              created_by: createdBy,
+            })
+          : {
+              ...customers[0],
+              ...body,
+              name,
+              id: randomUUID(),
+              code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`,
+              customer_group_id: body.customer_group_id ?? 'cg-retail',
+              created_by: createdBy,
+              created_at: nowIso,
+              total_sales_amount: 0,
+              total_debt_amount: 0,
+            }
+        if (!repository.createCustomer) customers.push(created)
         return { found: true, data: created, status: 201 }
       },
       updateCustomer: async () => {

@@ -916,6 +916,46 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         .filter((customer) => customerSnapshotMatches(input.url, customer))
     },
 
+    async createCustomer(input) {
+      await ensureImportedSnapshotTables(pool)
+      const code = input.code?.trim() || await nextManualCustomerCode(pool, input.organizationId)
+      const groupId = input.customer_group_id ?? 'cg-retail'
+      const group = groupId ? await findCustomerGroupSnapshot(pool, input.organizationId, groupId) : null
+      const createdAt = new Date().toISOString()
+      const data: CustomerListData = {
+        id: randomUUID(),
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        tax_code: null,
+        address: null,
+        customer_group_id: groupId,
+        customer_group: group,
+        created_by: input.created_by ?? null,
+        created_at: createdAt,
+        total_sales_amount: 0,
+        total_debt_amount: 0,
+        customer_type: null,
+        company_name: null,
+        area_name: null,
+        ward_name: null,
+        note: null,
+        source_creator_name: null,
+        last_transaction_at: null,
+        kiotviet_current_debt: null,
+        kiotviet_net_sales: null,
+        status: 'active',
+      }
+      await pool.query(
+        `
+          insert into customer_snapshots (id, organization_id, code, data, source_type, created_at, updated_at)
+          values ($1, $2, $3, $4::jsonb, 'manual', $5::timestamptz, now())
+        `,
+        [data.id, input.organizationId, data.code, JSON.stringify(data), data.created_at],
+      )
+      return hydrateCustomerLinkedSupplier(data, [])
+    },
+
     async findCustomerByCode(input) {
       await ensureImportedSnapshotTables(pool)
       const [customerResult, supplierResult] = await Promise.all([
@@ -6496,6 +6536,24 @@ async function findCustomerGroupSnapshot(pool: pg.Pool, organizationId: string, 
 
 function hashText(value: string) {
   return createHash('sha1').update(value).digest('hex').slice(0, 10)
+}
+
+async function nextManualCustomerCode(pool: pg.Pool, organizationId: string) {
+  const result = await pool.query(
+    `
+      select max(
+        case
+          when code ~* '^kh[0-9]+$' then substring(code from '[0-9]+')::int
+          else null
+        end
+      ) as max_number
+      from customer_snapshots
+      where organization_id = $1
+    `,
+    [organizationId],
+  )
+  const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
+  return `KH${String(nextNumber).padStart(6, '0')}`
 }
 
 function customerSnapshotMatches(url: URL, customer: CustomerListData) {
