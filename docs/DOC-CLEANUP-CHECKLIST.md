@@ -25,7 +25,7 @@
 | PR | Chủ đề |
 |---|---|
 | [#4](https://github.com/vanlam-web/QCVL/pull/4) | BOM / combo KiotViet — SoT 3 lớp |
-| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Tồn QCVL / KV tạm / mốc mở + quyết định hết import |
+| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Tồn QCVL + hết import + trừ kho path + dọn BOM nháp vệ tinh + roll/sheet API stub |
 
 ---
 
