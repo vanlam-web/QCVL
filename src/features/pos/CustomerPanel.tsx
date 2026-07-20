@@ -638,6 +638,7 @@ function CustomerPosDebtPanel({
     debtLedger.cashbookHistory,
     debtLedger.debt.adjustments ?? [],
     debtLedger.debt.linked_supplier_receipts ?? [],
+    { currentTotal: debtLedger.debt.total_debt },
   )
   const visibleLedgerRows = ledgerRows.slice(0, 10)
 

@@ -1560,6 +1560,7 @@ function CustomerDebtPanel({
     debtLedger.cashbookHistory,
     debtLedger.debt.adjustments ?? [],
     debtLedger.debt.linked_supplier_receipts ?? [],
+    { currentTotal: totalDebt },
   )
   const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
@@ -1875,6 +1876,7 @@ function CustomerDebtPaymentDialog({
         debt.cashbookHistory,
         debt.debt.adjustments ?? [],
         debt.debt.linked_supplier_receipts ?? [],
+        { currentTotal: currentDebt },
       )
     : []
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)

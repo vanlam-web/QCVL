@@ -28,6 +28,7 @@ export function buildCustomerDebtLedgerRows(
   cashbookHistory: CashbookEntry[],
   adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
   linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
+  options: { currentTotal?: number } = {},
 ): CustomerDebtLedgerRow[] {
   const rows: CustomerDebtLedgerSortableRow[] = [
     ...invoiceHistory
@@ -93,7 +94,13 @@ export function buildCustomerDebtLedgerRows(
     return { ...row, running_debt: runningDebt }
   })
 
-  return rowsWithRunningDebt.reverse()
+  const newestFirst = rowsWithRunningDebt.reverse()
+  // Pin the newest row to the API canonical total so the detail "Công nợ"
+  // column never disagrees with the headline number.
+  if (options.currentTotal !== undefined && newestFirst.length > 0) {
+    newestFirst[0] = { ...newestFirst[0], running_debt: options.currentTotal }
+  }
+  return newestFirst
 }
 
 function customerDebtLedgerRelatedCode(row: CustomerDebtLedgerSortableRow) {

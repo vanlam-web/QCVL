@@ -175,7 +175,11 @@ describe('createPgRepository product units', () => {
     const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
     expect(sqlCalls.some((sql) => sql.includes('update payment_receipts') && sql.includes("code = $4 or code like $4 || '-%'"))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('update payment_receipt_methods') && sql.includes('payment_receipt_id in'))).toBe(true)
-    expect(sqlCalls.some((sql) => sql.includes('update cashbook_entries') && sql.includes("code = $3 or code like $3 || '-%'"))).toBe(true)
+    expect(sqlCalls.some((sql) => (
+      sql.includes('update cashbook_entries')
+      && sql.includes("source_type = 'payment_receipt_method'")
+      && sql.includes("code = $3 or code like $3 || '-%'")
+    ))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('alter table payment_receipts add column if not exists created_at'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('alter table payment_receipt_methods add column if not exists created_at'))).toBe(true)
     expect(sqlCalls.some((sql) => sql.includes('alter table cashbook_entries add column if not exists source'))).toBe(true)
@@ -349,6 +353,68 @@ describe('createPgRepository product units', () => {
     expect(list).toEqual([expect.objectContaining({ customer_id: 'customer-kv-kh000384', total_debt: -50000 })])
     expect(debt?.total_debt).toBe(-50000)
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(-50000)
+  })
+
+  test('upserts imported KiotViet cashbook entries into PostgreSQL with counterparty source metadata', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('select id') && sql.includes('from finance_accounts')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select id') && sql.includes('from cashbook_entries')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from customer_snapshots') && sql.includes('lower(code)')) {
+        return {
+          rows: [{
+            data: { id: 'customer-kv-kh000384', code: 'KH000384', name: 'Khach test', phone: null },
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.upsertImportedKiotVietCashbook?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      rows: [{
+        rowNumber: 2,
+        source_code: 'TT001842',
+        entry_time: '2026-07-12T03:00:00.000Z',
+        source_created_at: '2026-07-12T03:00:00.000Z',
+        source_creator_name: 'KV',
+        staff_name: null,
+        category_name: 'Thu nợ',
+        account_type: 'cash',
+        account_name: 'Tien mat',
+        account_number: null,
+        counterparty_code: 'KH000384',
+        counterparty_name: 'Khach test',
+        counterparty_phone: null,
+        counterparty_address: null,
+        transfer_content: null,
+        source_note: 'Thu no',
+        direction: 'in',
+        amount_delta: 200000,
+        book_type_name: 'Tien mat',
+        status: 'posted',
+      }],
+    })
+
+    expect(result).toEqual({
+      accounts_created: 1,
+      accounts_updated: 0,
+      entries_created: 1,
+      entries_updated: 0,
+      skipped_rows: 0,
+    })
+    const cashbookInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into cashbook_entries'))
+    expect(cashbookInsert).toBeTruthy()
+    expect(String(cashbookInsert?.[0])).toContain("'kiotviet_cashbook'")
+    const sourcePayload = JSON.parse(String(cashbookInsert?.[1]?.[9]))
+    expect(sourcePayload).toMatchObject({
+      type: 'kiotviet_cashbook',
+      counterparty_code: 'KH000384',
+      customer_id: 'customer-kv-kh000384',
+    })
+    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into finance_accounts'))).toBe(true)
   })
 
   test('collects legacy KiotViet-anchored debt when no open debt entries exist', async () => {

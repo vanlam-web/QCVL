@@ -117,4 +117,32 @@ describe('customer debt ledger', () => {
 
     expect(rows.map((row) => row.code)).toEqual(['HD011167', 'HD011163'])
   })
+
+  it('pins the newest running debt to the API canonical total when provided', () => {
+    const rows = buildCustomerDebtLedgerRows(
+      [{
+        id: 'order-1',
+        code: 'HD011150',
+        created_at: '2026-07-01T03:00:00.000Z',
+        total_amount: 100000,
+        status: 'completed',
+      }],
+      [kvCashbook('TTHD011150')],
+      [{
+        id: 'adjustment-1',
+        source_code: 'CB000001',
+        created_at: '2026-07-02T03:00:00.000Z',
+        transaction_type: 'Điều chỉnh',
+        amount_delta: 400000,
+        paid_amount: 0,
+        remaining_amount: 400000,
+        balance_after: 400000,
+        source_file: null,
+      }],
+      [],
+      { currentTotal: 350000 },
+    )
+
+    expect(rows[0].running_debt).toBe(350000)
+  })
 })
