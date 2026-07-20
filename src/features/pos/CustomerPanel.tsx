@@ -172,7 +172,6 @@ export function CustomerPanel({
 
   useEffect(() => {
     if (!detailOpen && !createOpen) return
-    if (detailOpen && selectedCustomer !== null) setDetailForm(customerDetailFormFromCustomer(selectedCustomer))
     service
       .listCustomerGroups()
       .then((response) => setCustomerGroups(response.items))
