@@ -1168,7 +1168,7 @@ describe('createHttpHandler', () => {
     )
 
     const response = await handler(
-      new Request('http://api.local/api/v1/products?status=active&page=1&page_size=5&sort=pos_usage', {
+      new Request('http://api.local/api/v1/products?status=active&page=1&page_size=5&sort=pos_usage&sort_key=created_at&sort_direction=desc', {
         headers: { authorization },
       }),
     )

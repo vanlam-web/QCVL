@@ -2678,7 +2678,10 @@ async function getDevApiResponse(
             },
           }
         }
-        const items = sortProductsForRequest(await listProductsForRequest(url, repository, currentUser.organization.id), url)
+        const productsForRequest = await listProductsForRequest(url, repository, currentUser.organization.id)
+        const items = url.searchParams.get('sort') === 'pos_usage'
+          ? productsForRequest
+          : sortProductsForRequest(productsForRequest, url)
         return {
           found: true,
           data: {

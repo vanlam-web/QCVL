@@ -25,7 +25,7 @@ describe('catalog-service', () => {
 
     expect(calls).toEqual([
       [
-        '/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&created_from=2026-07-01&created_to=2026-07-31&page=2&page_size=15&sort=pos_usage&sort_key=created_at&sort_direction=desc',
+        '/api/v1/products?search=mica&status=active&sell_method=combo&product_kind=combo&created_from=2026-07-01&created_to=2026-07-31&page=2&page_size=15&sort=pos_usage',
         undefined,
       ],
     ])
