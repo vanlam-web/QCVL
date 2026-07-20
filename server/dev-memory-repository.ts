@@ -767,6 +767,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           source_file: adjustment.source_file,
         })),
         linked_supplier_receipts: linkedSupplierReceiptOffsets(input.customerId),
+        cashbook_entries: [],
       }
     },
     async upsertImportedKiotVietCustomerDebtAdjustments(input) {
@@ -2234,7 +2235,7 @@ function recalculatePartnerDebtTotals(
   }
 }
 
-function resolveDocumentCustomer(document: SalesDocumentData, customers: Map<string, CustomerListData>) {
+function resolveDocumentCustomer(document: { customer: { id: string; code: string; name: string; phone?: string | null } }, customers: Map<string, CustomerListData>) {
   const byId = [...customers.values()].find((customer) => customer.id === document.customer.id)
   if (byId) return byId
   const code = normalize(document.customer.code ?? '')

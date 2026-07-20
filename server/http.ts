@@ -371,7 +371,14 @@ export interface CashbookListPageData {
   }
 }
 export type CustomerDebtSummaryData = CustomerDebtItem
-export type CustomerDebtDetailData = ReturnType<typeof makeCustomerDebtDetail>
+export type CustomerDebtDetailData = {
+  customer_id: string
+  total_debt: number
+  invoices: CustomerDebtItem['invoices']
+  adjustments: NonNullable<CustomerDebtItem['adjustments']>
+  linked_supplier_receipts: LinkedSupplierReceiptDebtData[]
+  cashbook_entries: CashbookEntryData[]
+}
 export interface StocktakeListData {
   id: string
   code: string
@@ -1854,7 +1861,7 @@ function manualCashbookVoucherRequestFromBody(body: Record<string, unknown>): Ma
     counterpartyName: typeof body.counterparty_name === 'string' ? body.counterparty_name.trim() : '',
     counterpartyPhone: typeof body.counterparty_phone === 'string' && body.counterparty_phone.trim() ? body.counterparty_phone.trim() : null,
     reason,
-    createdAt: body.created_at === undefined ? runtimeIso() : optionalIsoDateTime(body.created_at, 'created_at'),
+    createdAt: optionalIsoDateTime(body.created_at, 'created_at') ?? runtimeIso(),
   }
 }
 
@@ -2511,7 +2518,7 @@ type LinkedSupplierReceiptDebtData = {
   remaining_amount: number
 }
 
-function makeCustomerDebtDetail(customerId: string) {
+function makeCustomerDebtDetail(customerId: string): CustomerDebtDetailData {
   const linkedSupplierReceipts: LinkedSupplierReceiptDebtData[] = []
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
   if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts, cashbook_entries: [] }
