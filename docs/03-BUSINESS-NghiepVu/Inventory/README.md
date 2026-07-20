@@ -31,7 +31,7 @@ PRD/UX: [../../02-PRD-UX-PhongCanh/Inventory/](../../02-PRD-UX-PhongCanh/Invento
 | B | `Tồn kho` từ file Hàng hóa KV = **`Tồn KV tạm nhập`** (`inventory_provisional_balances`, `source_type = kiotviet_import`) — chỉ đối chiếu, **không** là mốc mở / tồn chính thức |
 | C | **`Tồn QCVL` mục tiêu** = tồn mở từ **mốc mở đã chọn rõ** + chứng từ tin cậy **sau mốc** (nhập / bán-POS / trả / kiểm-cân bằng / thao tác vật lý) |
 | D | Import phiếu kiểm kho KV = lịch sử/bằng chứng; **không** tự tạo `stock_movements`. Chỉ khi Owner **chọn rõ** một phiếu/ngày làm mốc mở thì dùng số đó làm tồn mở |
-| E | Tạo/lưu hóa đơn bán chính thức (và import HD đã completed tương ứng) ghi `sale_deduction` |
+| E | Tạo/lưu hóa đơn bán chính thức (và HD import đã completed tương ứng) ghi `sale_deduction`. **Chi tiết path × hành vi:** [Sales README — Trừ kho khi bán](../Sales/README.md#trừ-kho-khi-bán--trạng-thái-2026-07-20) (Postgres POS live chưa khớp combo) |
 | F | MVP: cảnh báo tồn âm, không chặn bán; máy sản xuất **không** tự trừ kho |
 | G | Mục tiêu dài: cuộn/tấm quản lý theo **object vật lý**, không chỉ tổng m² gộp |
 

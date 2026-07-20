@@ -114,19 +114,23 @@ Trong MVP, một lần thanh toán chỉ có tối đa một tài khoản ngân 
 
 ### BR-CHK-04: Trừ kho vật tư
 
-Khi đơn bán thành công, hệ thống **luôn trừ kho** theo các dòng hàng đã chốt.
+> **SoT vs runtime theo path:** [Sales README — Trừ kho khi bán](./README.md#trừ-kho-khi-bán--trạng-thái-2026-07-20). Không khẳng định mọi path đã khớp.
 
-| Loại dòng | Hành vi trừ kho |
+Khi đơn bán thành công, hệ thống **mục tiêu** trừ kho theo các dòng hàng đã chốt:
+
+| Loại dòng | Hành vi trừ kho (SoT) |
 |---|---|
 | **Loại 1 (m²)** | Trừ định mức nguyên liệu tương ứng diện tích: `Tổng m² × Định mức (m²/lần)` |
-| **Loại 2 (Cái)** | Trừ số lượng tồn kho |
-| **Loại 3 (Combo/BOM)** | Trừ từng vật tư thành phần theo BOM của dòng hàng. BOM có thể lấy từ combo có sẵn hoặc do nhân viên thêm/sửa ngay trong POS cho riêng dòng đó |
+| **Loại 2 (Cái)** | Trừ số lượng tồn kho (nếu `track_inventory`) |
+| **Loại 3 (Combo/BOM)** | Chỉ trừ vật tư thành phần theo BOM. **Không** trừ tồn theo mã combo |
 
-Nếu nhân viên chọn **Không lưu — Chỉ trừ kho**, BOM vừa nhập vẫn là định mức của dòng hàng đó để trừ kho khi chốt hóa đơn, nhưng không tạo combo/SKU mới trong danh mục. Nếu chọn **Lưu Combo mới**, hệ thống tạo một combo mới để dùng lại sau.
+**Runtime 2026-07-20:** Postgres POS live vẫn có thể trừ cả mã combo lẫn thành phần — xem bảng path ở Sales README. Import HD / dev-memory gần đúng hơn với parent combo (`track_inventory = false`).
 
-Giá bán combo độc lập với tổng giá vật tư thành phần. Tổng giá vật tư nếu có chỉ dùng để tham khảo chi phí.
+**Hướng dài:** `Không lưu — Chỉ trừ kho` / `Lưu Combo mới` trên dòng POS; deep-scan nhiều cấp.
 
-Nếu hệ thống phát hiện thiếu vật tư trên dòng hàng hoặc thành phần BOM, POS chỉ cảnh báo và có thể hiện nút `Khui vật tư` trên dòng đó. Khui là tùy chọn; không bấm khui thì báo giá vẫn lưu được và hóa đơn vẫn theo rule tồn âm/cảnh báo đã chốt.
+Giá bán combo độc lập với tổng giá vật tư thành phần.
+
+Nếu thiếu vật tư trên dòng hàng hoặc thành phần BOM, POS chỉ cảnh báo và có thể hiện nút `Khui vật tư`. Khui là tùy chọn; báo giá/hóa đơn vẫn theo rule tồn âm/cảnh báo đã chốt.
 
 ### BR-CHK-05: Lưu đơn hàng
 

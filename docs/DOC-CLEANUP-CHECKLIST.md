@@ -34,6 +34,7 @@
 - [x] **BOM/combo KV** — README 3 lớp; RULES/TABLES/API; vệ tinh Sales/K02/plan; AC slice vs hướng dài · PR #4
 - [x] **Tồn QCVL / KV tạm / mốc mở** — Inventory README 3 lớp; chốt mâu thuẫn fallback list; roll/sheet stub; API notes · PR #5
 - [x] **Owner: đã import hết** — không mở đợt import KV mới; nút import = phòng hờ · ghi trong Inventory README + PHASE + PRD · PR #5
+- [x] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory** — bảng path × SoT trên Sales README + POS-CHECKOUT · PR #5
 
 ---
 
@@ -43,11 +44,7 @@
 
 ### P1 — Lệch docs↔runtime dễ gây hiểu nhầm
 
-- [ ] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory**  
-  Điểm đã thấy: Postgres POS có thể trừ cả mã combo; path khác gần đúng hơn. SoT BOM đã chốt; cần README/Sales hoặc Inventory mục “trừ kho bán” ghi rõ từng path + runtime.  
-  Entry: `docs/03-BUSINESS-NghiepVu/Sales/` + link BOM/Inventory README  
-  Xong khi: có bảng path × hành vi × khớp SoT; vệ tinh không khẳng định “đã trừ đúng combo” cho mọi path.
-
+- [x] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory** · PR #5 (Sales README)
 - [ ] **Stub BOM API / UI “BOM nháp”** (docs mirror runtime)  
   PR #4 đã mô tả; rà lại sau khi #4 merge xem còn file vệ tinh sót trên `main`.  
   Xong khi: grep không còn “đã active / dùng ngay” như runtime đã xong (trừ SoT mục tiêu).
@@ -90,6 +87,7 @@
 |---|---|---|---|
 | 2026-07-20 | PRD tồn: fallback KV vs “không lấp QCVL” | Đã chốt đọc trong Inventory README | [x] PR #5 |
 | 2026-07-20 | Roll-sheet PRD nói “API thật” | Đổi thành stub/docs-ahead | [x] PR #5 |
+| 2026-07-20 | Postgres POS live trừ cả mã combo | Ghi bảng path trên Sales README; SoT = chỉ thành phần | [x] PR #5 |
 | | | | [ ] |
 
 ---
