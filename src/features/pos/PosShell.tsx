@@ -262,6 +262,7 @@ export function PosShell({
   )
   const selectedCustomer = activeTab.selectedCustomer
   const selectedCustomerId = selectedCustomer?.id
+  const selectedCustomerGroupId = selectedCustomer?.customer_group_id ?? ''
   const cartTotal = useMemo(
     () => cartLines.reduce((sum, line) => sum + lineTotal(line), 0),
     [cartLines],
@@ -445,18 +446,17 @@ export function PosShell({
     return () => {
       active = false
     }
-  }, [catalogService, products, resolveCartLineProduct, selectedCustomerId, updateActiveTab])
+  }, [catalogService, products, resolveCartLineProduct, selectedCustomerGroupId, selectedCustomerId, updateActiveTab])
 
   useEffect(() => {
-    const missingPriceProductIds = productSearchResults
+    const searchResultPriceProductIds = productSearchResults
       .map((product) => product.id)
-      .filter((productId) => prices[productId] === undefined)
-    if (missingPriceProductIds.length === 0) return
+    if (searchResultPriceProductIds.length === 0) return
     let active = true
 
     async function resolveSearchResultPrices() {
       try {
-        const priceResult = await catalogService.resolvePrices(missingPriceProductIds, selectedCustomerId)
+        const priceResult = await catalogService.resolvePrices(searchResultPriceProductIds, selectedCustomerId)
         if (!active) return
         setPrices((current) => ({
           ...current,
@@ -472,7 +472,7 @@ export function PosShell({
     return () => {
       active = false
     }
-  }, [catalogService, prices, productSearchResults, selectedCustomerId])
+  }, [catalogService, productSearchResults, selectedCustomerGroupId, selectedCustomerId])
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {

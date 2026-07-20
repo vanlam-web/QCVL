@@ -73,6 +73,7 @@ import {
   customerSalesDocumentStatusText as salesDocumentStatusText,
   customerVisibleSummary,
 } from './customer-presenter'
+import { CustomerCreateDialog, createCustomerFormDefaults } from './CustomerCreateDialog'
 import { CustomerImportDialog } from './CustomerImportDialog'
 
 interface CustomerState {
@@ -120,19 +121,6 @@ const defaultCustomerSortState: NonNullable<ManagementSortState<CustomerSortKey>
 const customerHistoryPageSize = 10
 const customerDebtLedgerPageSize = 10
 const customerDebtLedgerFetchPageSize = 1000
-function createCustomerFormDefaults() {
-  return {
-    code: '',
-    name: '',
-    phone: '',
-    taxCode: '',
-    address: '',
-    customerGroupId: '',
-    customerType: 'individual',
-    companyName: '',
-    note: '',
-  }
-}
 type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
 type CustomerStatusFilter = 'active' | 'inactive' | 'all'
 const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
@@ -974,135 +962,15 @@ export function CustomersPage({
       }
     >
       {createOpen ? (
-        <div className="management-modal-backdrop">
-          <section aria-label="Tạo khách hàng" aria-modal="true" className="management-modal-dialog" role="dialog">
-            <header className="management-modal-header">
-              <div>
-                <h2>Tạo khách hàng</h2>
-              </div>
-              <button className="management-icon-button" type="button" aria-label="Đóng tạo khách hàng" onClick={() => setCreateOpen(false)}>
-                ×
-              </button>
-            </header>
-
-            <form id="customer-create-form" aria-label="Tạo khách hàng" className="customer-create-form" onSubmit={createCustomer}>
-              <fieldset>
-                <legend>Thông tin chính</legend>
-                <div className="form-grid form-grid-two">
-                  <label>
-                    Tên khách hàng
-                    <input
-                      autoFocus
-                      required
-                      placeholder="Bắt buộc"
-                      value={form.name}
-                      onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Mã khách hàng
-                    <input
-                      placeholder="Bỏ trống để tự sinh"
-                      value={form.code}
-                      onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Điện thoại
-                    <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-                  </label>
-                  <label>
-                    MST
-                    <input value={form.taxCode} onChange={(event) => setForm((current) => ({ ...current, taxCode: event.target.value }))} />
-                  </label>
-                  <div aria-label="Loại khách hàng" className="customer-create-type-field" role="radiogroup">
-                    <span>Loại khách hàng</span>
-                    <label>
-                      <input
-                        checked={form.customerType === 'individual'}
-                        name="customer-type"
-                        type="radio"
-                        value="individual"
-                        onChange={() => setForm((current) => ({ ...current, customerType: 'individual' }))}
-                      />
-                      Cá nhân
-                    </label>
-                    <label>
-                      <input
-                        checked={form.customerType === 'company'}
-                        name="customer-type"
-                        type="radio"
-                        value="company"
-                        onChange={() => setForm((current) => ({ ...current, customerType: 'company' }))}
-                      />
-                      Tổ chức
-                    </label>
-                  </div>
-                  {form.customerType === 'company' ? (
-                    <label>
-                      Công ty
-                      <input
-                        placeholder="Nhập tên công ty"
-                        value={form.companyName}
-                        onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
-                      />
-                    </label>
-                  ) : null}
-                </div>
-              </fieldset>
-
-              <fieldset>
-                <legend>Địa chỉ</legend>
-                <label>
-                  Địa chỉ
-                  <input
-                    placeholder="Nhập một dòng địa chỉ"
-                    value={form.address}
-                    onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
-                  />
-                </label>
-              </fieldset>
-
-              <fieldset>
-                <legend>Nhóm khách hàng, ghi chú</legend>
-                <label>
-                  Nhóm khách hàng
-                  <select
-                    aria-label="Nhóm khách hàng"
-                    value={form.customerGroupId}
-                    onChange={(event) => setForm((current) => ({ ...current, customerGroupId: event.target.value }))}
-                  >
-                    <option value="">Chọn nhóm khách hàng</option>
-                    {visibleCustomerGroups.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Ghi chú
-                  <textarea
-                    placeholder="Nhập ghi chú"
-                    value={form.note}
-                    onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-                  />
-                </label>
-              </fieldset>
-
-              {error ? <p role="alert">{error}</p> : null}
-            </form>
-
-            <footer className="management-modal-footer">
-              <button className="button button-secondary" type="button" onClick={() => setCreateOpen(false)}>
-                Bỏ qua
-              </button>
-              <button className="button button-primary" disabled={saving} type="submit" form="customer-create-form">
-                Lưu
-              </button>
-            </footer>
-          </section>
-        </div>
+        <CustomerCreateDialog
+          error={error}
+          form={form}
+          groups={visibleCustomerGroups}
+          saving={saving}
+          onClose={() => setCreateOpen(false)}
+          onFormChange={setForm}
+          onSubmit={createCustomer}
+        />
       ) : null}
 
       <ManagementListSurface ariaLabel="Danh sách khách hàng">

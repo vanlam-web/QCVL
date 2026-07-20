@@ -485,6 +485,66 @@ it('does not reload products when customer prices refresh', async () => {
   expect(service.listProducts).toHaveBeenCalledTimes(1)
 })
 
+it('refreshes POS prices when editing the selected customer group', async () => {
+  const customerGroup40 = { id: 'group-40', code: '40', name: '40' }
+  const customerGroup35 = { id: 'group-35', code: '35', name: '35' }
+  const customer40 = {
+    id: 'customer-kp',
+    code: 'KH000027',
+    name: 'Kim Phi',
+    phone: null,
+    tax_code: null,
+    address: null,
+    customer_group_id: customerGroup40.id,
+    customer_group: customerGroup40,
+  }
+  const customer35 = {
+    ...customer40,
+    customer_group_id: customerGroup35.id,
+    customer_group: customerGroup35,
+  }
+  const service = makeCatalogService({
+    listCustomers: vi.fn(async () => ({ items: [customer40], page: 1, page_size: 20, total: 1 })),
+    listCustomerGroups: vi.fn(async () => ({
+      items: [
+        { ...customerGroup35, price_list_id: 'pl-35', is_active: true },
+        { ...customerGroup40, price_list_id: 'pl-40', is_active: true },
+      ],
+    })),
+    updateCustomer: vi.fn(async () => customer35),
+    resolvePrices: vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ product_id: 'p-1', unit_price: 40000, price_source: 'customer_group_price_list' as const, price_list_id: 'pl-40' }],
+      })
+      .mockResolvedValueOnce({
+        items: [{ product_id: 'p-1', unit_price: 40000, price_source: 'customer_group_price_list' as const, price_list_id: 'pl-40' }],
+      })
+      .mockResolvedValue({
+        items: [{ product_id: 'p-1', unit_price: 35000, price_source: 'customer_group_price_list' as const, price_list_id: 'pl-35' }],
+      }),
+  })
+
+  renderPosShell({ catalogService: service })
+
+  const grid = await screen.findByLabelText('Sản phẩm nhanh')
+  await waitFor(() => expect(within(grid).getByRole('button', { name: /Mica 3mm/ })).toHaveTextContent('40 000/m'))
+
+  await userEvent.type(screen.getByLabelText('Tìm khách'), 'kim')
+  await userEvent.keyboard('{Enter}')
+  await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000027 Kim Phi' }))
+  await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết khách Kim Phi' }))
+
+  const dialog = await screen.findByRole('dialog', { name: 'Chi tiết khách KH000027' })
+  await userEvent.click(within(dialog).getByRole('button', { name: '40' }))
+  await userEvent.click(await within(dialog).findByRole('menuitemradio', { name: '35' }))
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
+
+  await waitFor(() => expect(screen.getByLabelText('Bảng giá 35')).toHaveTextContent('35'))
+  await waitFor(() => expect(within(grid).getByRole('button', { name: /Mica 3mm/ })).toHaveTextContent('35 000/m'))
+  expect(service.updateCustomer).toHaveBeenCalledWith('customer-kp', expect.objectContaining({ customer_group_id: 'group-35' }))
+})
+
 it('uses the K01 F3 product search as an enabled product picker', async () => {
   renderPosShell()
 

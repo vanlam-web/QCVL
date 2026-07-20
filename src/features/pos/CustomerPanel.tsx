@@ -3,6 +3,7 @@ import { ChevronDown, Search, UserRound, X } from 'lucide-react'
 import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
+import { CustomerCreateDialog, createCustomerFormDefaults, type CustomerCreateForm } from '../catalog/CustomerCreateDialog'
 import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/customer-presenter'
 import {
   buildCustomerDebtLedgerRows,
@@ -64,8 +65,9 @@ export function CustomerPanel({
   const [detailHistory, setDetailHistory] = useState<CustomerHistoryState | undefined>(undefined)
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [detailSaving, setDetailSaving] = useState(false)
+  const [createSaving, setCreateSaving] = useState(false)
   const [detailDropdownOpen, setDetailDropdownOpen] = useState<CustomerDetailDropdownKey>(null)
-  const [form, setForm] = useState({ code: '', name: '', phone: '' })
+  const [form, setForm] = useState<CustomerCreateForm>(createCustomerFormDefaults)
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
   const detailRequestId = useRef(0)
@@ -169,12 +171,13 @@ export function CustomerPanel({
   }, [financeService, orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
-    if (!detailOpen || selectedCustomer === null) return
+    if (!detailOpen && !createOpen) return
+    if (detailOpen && selectedCustomer !== null) setDetailForm(customerDetailFormFromCustomer(selectedCustomer))
     service
       .listCustomerGroups()
       .then((response) => setCustomerGroups(response.items))
       .catch(() => setCustomerGroups([]))
-  }, [detailOpen, selectedCustomer, service])
+  }, [createOpen, detailOpen, selectedCustomer, service])
 
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -233,6 +236,11 @@ export function CustomerPanel({
     setDetailOpen(true)
   }
 
+  function openCreateCustomer() {
+    setForm(createCustomerFormDefaults())
+    setCreateOpen(true)
+  }
+
   async function saveCustomerDetail(event: React.FormEvent<HTMLFormElement>, detailForm: CustomerDetailForm) {
     event.preventDefault()
     if (selectedCustomer === null) return
@@ -264,21 +272,29 @@ export function CustomerPanel({
   async function createCustomer(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    setCreateSaving(true)
     try {
       const created = await service.createCustomer({
         code: form.code.trim() || undefined,
         name: form.name,
         phone: form.phone.trim() || undefined,
-        customer_group_id: null,
+        tax_code: form.taxCode.trim() || undefined,
+        address: form.address.trim() || undefined,
+        note: form.note.trim() || undefined,
+        customer_group_id: form.customerGroupId || null,
+        customer_type: form.customerType,
+        company_name: form.customerType === 'company' ? form.companyName.trim() || null : null,
       })
       onSelectCustomer(created)
       setResults([])
       setSearch(created.name)
       setSuggestionsOpen(false)
-      setForm({ code: '', name: '', phone: '' })
+      setForm(createCustomerFormDefaults())
       setCreateOpen(false)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được khách hàng.'))
+    } finally {
+      setCreateSaving(false)
     }
   }
 
@@ -354,7 +370,7 @@ export function CustomerPanel({
             placeholder="Tìm khách hàng (F4)"
             value={search}
             leadingIcon={<Search aria-hidden="true" size={16} />}
-            trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={() => setCreateOpen(true)} />}
+            trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={openCreateCustomer} />}
             onFocus={() => {
               const query = search.trim()
               setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
@@ -381,21 +397,16 @@ export function CustomerPanel({
       )}
 
       {createOpen ? (
-        <form aria-label="Tạo khách nhanh" className="customer-create-popover" onSubmit={createCustomer}>
-          <label>
-            Mã khách
-            <input value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} />
-          </label>
-          <label>
-            Tên khách
-            <input required value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-          </label>
-          <label>
-            SĐT
-            <input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} />
-          </label>
-          <button className="button button-primary" type="submit">Tạo khách</button>
-        </form>
+        <CustomerCreateDialog
+          error={error}
+          form={form}
+          formId="pos-customer-create-form"
+          groups={customerGroups.filter((group) => !isHiddenPosCustomerGroup(group))}
+          saving={createSaving}
+          onClose={() => setCreateOpen(false)}
+          onFormChange={setForm}
+          onSubmit={createCustomer}
+        />
       ) : null}
     </section>
   )

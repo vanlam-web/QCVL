@@ -370,7 +370,14 @@ describe('CustomerPanel', () => {
   })
 
   it('creates and selects a quick customer without requiring phone', async () => {
-    const created = { ...customer, id: 'customer-2', code: 'KH000002', name: 'Cong ty ABC' }
+    const created = {
+      ...customer,
+      id: 'customer-2',
+      code: 'KH000002',
+      name: 'Cong ty ABC',
+      customer_group_id: 'group-vip',
+      customer_group: { id: 'group-vip', code: 'VIP', name: 'VIP' },
+    }
     const service = serviceStub({ createCustomer: vi.fn(async () => created) })
     const onSelectCustomer = vi.fn()
 
@@ -391,14 +398,21 @@ describe('CustomerPanel', () => {
     render(<Harness />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Tạo khách nhanh' }))
-    await userEvent.type(screen.getByLabelText('Tên khách'), 'Cong ty ABC')
-    await userEvent.click(screen.getByRole('button', { name: 'Tạo khách' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Tạo khách hàng' })
+    await userEvent.type(within(dialog).getByLabelText('Tên khách hàng'), 'Cong ty ABC')
+    await userEvent.selectOptions(within(dialog).getByLabelText('Nhóm khách hàng'), 'group-vip')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
 
     expect(service.createCustomer).toHaveBeenCalledWith({
       code: undefined,
       name: 'Cong ty ABC',
       phone: undefined,
-      customer_group_id: null,
+      tax_code: undefined,
+      address: undefined,
+      note: undefined,
+      customer_group_id: 'group-vip',
+      customer_type: 'individual',
+      company_name: null,
     })
     expect(onSelectCustomer).toHaveBeenCalledWith(created)
     expect(await screen.findByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Cong ty ABC')
