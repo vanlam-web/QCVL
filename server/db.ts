@@ -2,6 +2,7 @@ import pg from 'pg'
 import { createHash, randomUUID } from 'node:crypto'
 import { displayDateRangeMatches } from './date-filter.js'
 import {
+  KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN,
   customerDebtTotalsSql,
   mapCustomerDebtTotalsRow,
   type CustomerDebtTotalsRow,
@@ -3787,6 +3788,63 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           [input.organizationId, input.customerId],
         ),
       ])
+      const totalsRow = totalsResult.rows[0]
+      const customerCode = totalsRow ? mapCustomerDebtTotalsRow(totalsRow).customer_code : ''
+      const cashbookResult = customerCode
+        ? await pool.query(
+            `
+              with kiotviet_anchor as (
+                select distinct on (customer_id)
+                  customer_id,
+                  created_at
+                from customer_debt_adjustments
+                where organization_id = $1
+                  and customer_id = $2
+                  and source_system = 'kiotviet'
+                order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
+              )
+              select
+                cbe.id,
+                cbe.code,
+                cbe.status,
+                cbe.direction,
+                cbe.amount_delta,
+                cbe.finance_account,
+                cbe.is_business_accounted,
+                cbe.source_type,
+                cbe.created_at,
+                cbe.note,
+                cbe.counterparty,
+                cbe.created_by,
+                cbe.source,
+                cbe.allocations
+              from cashbook_entries cbe
+              left join kiotviet_anchor a on true
+              left join orders o
+                on o.organization_id = cbe.organization_id
+               and o.code = cbe.source->>'order_code'
+              where cbe.organization_id = $1
+                and cbe.status = 'posted'
+                and (
+                  (
+                    cbe.source_type = 'payment_receipt_method'
+                    and (
+                      cbe.source->>'customer_id' = $2
+                      or (o.id is not null and o.customer_id = $2 and o.status <> 'cancelled')
+                    )
+                  )
+                  or (
+                    cbe.source_type = 'kiotviet_cashbook'
+                    and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+                    and cbe.source->>'counterparty_code' = $3
+                  )
+                )
+                and (a.customer_id is null or cbe.created_at > a.created_at)
+              order by cbe.created_at desc, cbe.code desc
+            `,
+            [input.organizationId, input.customerId, customerCode],
+          )
+        : { rows: [] }
       const invoices = result.rows.map((row) => ({
         order_id: row.id,
         order_code: row.code,
@@ -3818,13 +3876,19 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         paid_amount: Number(row.paid_amount),
         remaining_amount: Number(row.remaining_amount),
       }))
-      const totalsRow = totalsResult.rows[0]
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
+      const cashbookEntries = cashbookResult.rows
+        .map(mapCashbookRow)
+        .map((entry) => hydrateCashbookEntryUserSnapshot(entry, userDisplayNames))
+        .map((entry) => hydrateCashbookEntryFinanceAccount(entry, accounts))
       return {
         customer_id: input.customerId,
         total_debt: totalsRow ? mapCustomerDebtTotalsRow(totalsRow).total_debt : 0,
         invoices,
         adjustments,
         linked_supplier_receipts: linkedSupplierReceipts,
+        cashbook_entries: cashbookEntries,
       }
     },
 

@@ -9,6 +9,7 @@ import {
   buildCustomerDebtLedgerRows,
   customerDebtCounterpartyMatches,
   customerDebtCurrentAmountFromLedger,
+  mergeCustomerDebtCashbookEntries,
 } from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer, CustomerGroup } from '../catalog/types'
@@ -144,11 +145,12 @@ export function CustomerPanel({
       ])
         .then(([debt, invoiceHistory, cashbookHistory]) => {
           if (detailRequestId.current !== requestId) return
+          const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer))
           setDetailDebt(debt)
           setDetailDebtLedger({
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer)),
+            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
           })
         })
         .catch(() => {

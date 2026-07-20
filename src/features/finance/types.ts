@@ -99,6 +99,7 @@ export interface CustomerDebtDetail {
     paid_amount: number
     remaining_amount: number
   }>
+  cashbook_entries?: CashbookEntry[]
 }
 
 export interface DebtCollectionInput {

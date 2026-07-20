@@ -64,6 +64,7 @@ import {
   buildCustomerDebtLedgerRows,
   customerDebtCounterpartyMatches,
   customerDebtHasLiveLedger,
+  mergeCustomerDebtCashbookEntries,
   type CustomerDebtAdjustment,
   type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
@@ -545,13 +546,14 @@ export function CustomersPage({
       }),
     ])
       .then(([debt, invoiceHistory, cashbookHistory]) => {
+        const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, customer))
         setCustomerDebts((debts) => ({ ...debts, [customer.id]: debt }))
         setCustomerDebtLedgers((ledgers) => ({
           ...ledgers,
           [customer.id]: {
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, customer)),
+            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
           },
         }))
       })
@@ -1320,8 +1322,6 @@ function buildCustomerDebtSummaryRows(
     })
     .filter((invoice) => invoice.remaining_debt > 0)
 
-  // When live invoice remaining overstates canonical debt (payments already applied
-  // in cashbook/anchors), reduce oldest open invoices first so "Còn nợ" stays coherent.
   const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
   let alreadySettled = Math.max(openDebtTotal - currentDebt, 0)
   const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
@@ -1350,8 +1350,6 @@ function buildCustomerDebtSummaryRows(
       return right.code.localeCompare(left.code)
     })
 
-  // "Công nợ" walks backward from the headline current debt so the top row is
-  // always nợ hiện tại, and older open invoices show the balance before them.
   let runningDebt = currentDebt
   return summaryRows.map((invoice) => {
     const row = { ...invoice, running_debt: runningDebt }

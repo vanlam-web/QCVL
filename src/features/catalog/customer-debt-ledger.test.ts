@@ -118,7 +118,7 @@ describe('customer debt ledger', () => {
     expect(rows.map((row) => row.code)).toEqual(['HD011167', 'HD011163'])
   })
 
-  it('pins the newest running debt to the API canonical total when provided', () => {
+  it('adds an explicit reconciliation row instead of pinning the newest source row', () => {
     const rows = buildCustomerDebtLedgerRows(
       [{
         id: 'order-1',
@@ -143,6 +143,15 @@ describe('customer debt ledger', () => {
       { currentTotal: 350000 },
     )
 
-    expect(rows[0].running_debt).toBe(350000)
+    expect(rows[0]).toEqual(expect.objectContaining({
+      code: 'Đối soát công nợ',
+      type: 'Đối soát',
+      value_delta: -50000,
+      running_debt: 350000,
+    }))
+    expect(rows[1]).toEqual(expect.objectContaining({
+      code: 'CB000001',
+      running_debt: 400000,
+    }))
   })
 })

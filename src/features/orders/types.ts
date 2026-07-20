@@ -1,4 +1,5 @@
 import type { Product } from '../catalog/types'
+import type { CashbookEntry } from '../finance/types'
 
 export interface CheckoutCartLine {
   id: string
@@ -206,6 +207,7 @@ export interface CustomerDebtDetail {
     paid_amount: number
     remaining_amount: number
   }>
+  cashbook_entries?: CashbookEntry[]
 }
 
 export interface RecentPriceList {

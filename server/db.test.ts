@@ -316,6 +316,82 @@ describe('createPgRepository product units', () => {
     expect(canonicalSql).toContain('linked_supplier_offset')
   })
 
+  test('returns customer-debt cashbook rows with the debt detail payload', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from cashbook_entries cbe')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt001838',
+            code: 'TT001838',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '5000000',
+            finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' },
+            is_business_accounted: true,
+            source_type: 'kiotviet_cashbook',
+            created_at: new Date('2026-07-15T10:00:00.000Z'),
+            note: 'Khách trả nợ',
+            counterparty: { type: 'customer', name: 'Út Tèo', phone: null },
+            created_by: null,
+            source: { type: 'kiotviet_cashbook', counterparty_code: 'UT' },
+            allocations: [],
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-ut',
+            customer_code: 'UT',
+            customer_name: 'Út Tèo',
+            total_debt: '20714394',
+            open_invoice_count: 1,
+            oldest_order_code: 'HD011163',
+            has_kiotviet_anchor: true,
+            last_activity_at: new Date('2026-07-15T10:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
+        return {
+          rows: [{
+            id: 'order-hd011163',
+            code: 'HD011163',
+            created_at: new Date('2026-07-14T14:18:00.000Z'),
+            total_amount: '209300',
+            paid_amount: '0',
+            debt_amount: '209300',
+            remaining_debt: '209300',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id, source_code, created_at, transaction_type')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('supplier_id') && sql.includes('remaining_amount')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from users')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from finance_accounts')) return { rows: [], rowCount: 0 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-ut',
+    })
+
+    expect(debt?.cashbook_entries).toEqual([
+      expect.objectContaining({
+        id: 'cashbook-tt001838',
+        code: 'TT001838',
+        amount_delta: 5000000,
+        source_type: 'kiotviet_cashbook',
+      }),
+    ])
+  })
+
   test('keeps list, detail and customer totals on the same canonical value including negative balances', async () => {
     const { createPgRepository } = await import('./db')
     const canonicalRow = {

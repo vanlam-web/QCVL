@@ -94,13 +94,22 @@ export function buildCustomerDebtLedgerRows(
     return { ...row, running_debt: runningDebt }
   })
 
-  const newestFirst = rowsWithRunningDebt.reverse()
-  // Pin the newest row to the API canonical total so the detail "Công nợ"
-  // column never disagrees with the headline number.
-  if (options.currentTotal !== undefined && newestFirst.length > 0) {
-    newestFirst[0] = { ...newestFirst[0], running_debt: options.currentTotal }
+  if (options.currentTotal !== undefined && rowsWithRunningDebt.length > 0) {
+    const currentRunningDebt = rowsWithRunningDebt[rowsWithRunningDebt.length - 1]?.running_debt ?? 0
+    const reconciliationDelta = options.currentTotal - currentRunningDebt
+    if (Math.abs(reconciliationDelta) >= 1) {
+      rowsWithRunningDebt.push({
+        id: 'debt-reconciliation:current-total',
+        code: 'Đối soát công nợ',
+        created_at: rowsWithRunningDebt[rowsWithRunningDebt.length - 1]?.created_at ?? new Date(0).toISOString(),
+        type: 'Đối soát',
+        value_delta: reconciliationDelta,
+        running_debt: options.currentTotal,
+        href: null,
+      })
+    }
   }
-  return newestFirst
+  return rowsWithRunningDebt.reverse()
 }
 
 function customerDebtLedgerRelatedCode(row: CustomerDebtLedgerSortableRow) {
@@ -141,6 +150,21 @@ export function customerDebtCounterpartyMatches(entry: CashbookEntry, customer: 
   return (counterparty.length > 0 && customerName.length > 0 && (counterparty.includes(customerName) || customerName.includes(counterparty)))
     || (customerCode.length > 0 && counterparty.includes(customerCode))
     || (customerPhone.length > 0 && counterparty.includes(customerPhone))
+}
+
+export function mergeCustomerDebtCashbookEntries(
+  backendEntries: CashbookEntry[] | undefined,
+  fetchedEntries: CashbookEntry[],
+) {
+  const entries: CashbookEntry[] = []
+  const seen = new Set<string>()
+  for (const entry of [...(backendEntries ?? []), ...fetchedEntries]) {
+    const key = entry.id || `${entry.code}:${entry.created_at}:${entry.amount_delta}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    entries.push(entry)
+  }
+  return entries
 }
 
 function customerDebtAdjustmentHref(code: string) {

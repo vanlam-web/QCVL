@@ -5,6 +5,7 @@ import type { Customer } from '../catalog/types'
 import {
   customerDebtCounterpartyMatches,
   customerDebtCurrentAmountFromLedger,
+  mergeCustomerDebtCashbookEntries,
 } from '../catalog/customer-debt-ledger'
 import type { FinanceService } from '../finance/finance-service'
 import type { CashbookEntry } from '../finance/types'
@@ -166,11 +167,12 @@ export function CheckoutPanel({
     ])
       .then(([debt, invoiceHistory, cashbookHistory]) => {
         if (active) {
+          const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer))
           setCustomerDebt(debt)
           setCustomerDebtLedger({
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer)),
+            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
           })
           setDebtLookupError(null)
           setOldDebtPaymentAmount(0)

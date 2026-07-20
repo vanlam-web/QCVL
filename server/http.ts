@@ -2510,13 +2510,14 @@ type LinkedSupplierReceiptDebtData = {
 function makeCustomerDebtDetail(customerId: string) {
   const linkedSupplierReceipts: LinkedSupplierReceiptDebtData[] = []
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
-  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts }
+  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts, cashbook_entries: [] }
   return {
     customer_id: customerId,
     total_debt: debt.total_debt,
     invoices: debt.invoices,
     adjustments: debt.adjustments ?? [],
     linked_supplier_receipts: linkedSupplierReceipts,
+    cashbook_entries: [],
   }
 }
 
