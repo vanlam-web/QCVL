@@ -4421,6 +4421,14 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return hydrateCashbookEntryLink(pool, input.organizationId, entry)
     },
 
+    async createCashbookVoucher(input) {
+      await ensureSalesFinanceTables(pool)
+      await insertCashbookEntry(pool, input.organizationId, input.entry)
+      const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      return hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(input.entry, userDisplayNames), accounts)
+    },
+
     async getCustomerFinancialTotals(organizationId) {
       await ensureSalesFinanceTables(pool)
       const sales = await pool.query(

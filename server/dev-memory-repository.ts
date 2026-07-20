@@ -1390,6 +1390,11 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       await persist()
       return hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(nextEntry, users), financeAccounts)
     },
+    async createCashbookVoucher(input) {
+      cashbookEntries.set(input.entry.id, input.entry)
+      await persist()
+      return hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(input.entry, users), financeAccounts)
+    },
     async listStockMovements(input) {
       const productId = input.url.searchParams.get('product_id')
       return stockMovementsFromDocuments(purchaseReceipts, purchaseReceiptItems, salesDocuments, salesDocumentItems, stocktakes, stocktakeItems, products, draftBoms)

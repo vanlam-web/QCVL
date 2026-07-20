@@ -241,6 +241,7 @@ export interface CreateCashbookVoucherInput {
   voucher_direction: CashbookDirection
   voucher_type: CashbookVoucherType
   finance_account_id: string
+  created_at?: string
   amount: number
   partner_debt_mode?: PartnerDebtMode
   is_business_accounted?: boolean
@@ -248,6 +249,13 @@ export interface CreateCashbookVoucherInput {
   counterparty_name?: string
   counterparty_phone?: string
   reason: string
+}
+
+export interface CashbookVoucherCounterpartyOption {
+  id: string
+  code: string
+  name: string
+  phone: string | null
 }
 
 export interface CashbookVoucherListResponse {

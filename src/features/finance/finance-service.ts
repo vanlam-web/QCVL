@@ -8,6 +8,7 @@ import type {
   CashbookStatus,
   CashbookListResponse,
   CashbookVoucher,
+  CashbookVoucherCounterpartyOption,
   CashbookVoucherListResponse,
   CreateCashbookVoucherInput,
   CustomerDebtDetail,
@@ -115,6 +116,21 @@ export function createFinanceService(api: FinanceApiRequester) {
       })
       const result = await api.request<{ items: FinanceSalesDocumentSummary[] }>(`/api/v1/sales-documents?${params.toString()}`)
       return result.items.find((item) => item.code === code) ?? null
+    },
+    listVoucherCounterparties: async (input: { type: 'customer' | 'supplier'; search?: string }) => {
+      const params = new URLSearchParams()
+      if (input.search?.trim()) params.set('search', input.search.trim())
+      params.set('page', '1')
+      params.set('page_size', '8')
+      if (input.type === 'supplier') params.set('status', 'active')
+      const path = input.type === 'supplier' ? '/api/v1/suppliers' : '/api/v1/customers'
+      const result = await api.request<{ items: CashbookVoucherCounterpartyOption[] }>(`${path}?${params.toString()}`)
+      return result.items.map((item) => ({
+        id: item.id,
+        code: item.code,
+        name: item.name,
+        phone: item.phone ?? null,
+      }))
     },
     listCashbookVouchers: () => api.request<CashbookVoucherListResponse>('/api/v1/finance/cashbook/vouchers'),
     createCashbookVoucher: (input: CreateCashbookVoucherInput) =>

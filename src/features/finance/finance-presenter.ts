@@ -129,7 +129,7 @@ export function cashbookDetailCreatorText(entry: CashbookEntryDetail) {
 }
 
 export function cashbookDetailCategoryText(entry: CashbookEntryDetail) {
-  return entry.source.category_name ?? sourceTypeText(entry.source_type)
+  return entry.source.category_name ? voucherTypeText(entry.source.category_name, entry.direction) : sourceTypeText(entry.source_type)
 }
 
 export function cashbookDetailCounterpartyText(entry: CashbookEntryDetail) {
@@ -300,4 +300,8 @@ export function voucherTypeOptions(direction: CashbookEntry['direction']): Array
     { value: 'transfer', label: 'Chuyển/Rút' },
     { value: 'other_expense', label: 'Chi khác' },
   ]
+}
+
+export function voucherTypeText(value: string, direction: CashbookEntry['direction']) {
+  return voucherTypeOptions(direction).find((option) => option.value === value)?.label ?? value
 }

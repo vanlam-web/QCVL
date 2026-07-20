@@ -3480,6 +3480,70 @@ describe('createHttpHandler', () => {
     expect(listCashbookEntries).not.toHaveBeenCalled()
   })
 
+  test('persists manual cashbook vouchers into cashbook entries', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const createResponse = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook-vouchers', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({
+          voucher_direction: 'out',
+          voucher_type: 'staff_salary',
+          finance_account_id: 'cash-main',
+          created_at: '2026-07-12T04:12:00.000Z',
+          amount: 45000,
+          partner_debt_mode: 'no_partner_debt',
+          is_business_accounted: false,
+          counterparty_type: 'employee',
+          counterparty_name: 'Nguyen Van A',
+          reason: 'Mua van phong pham',
+        }),
+      }),
+    )
+    const createBody = await createResponse.json()
+
+    const listResponse = await handler(
+      new Request(`http://api.local/api/v1/finance/cashbook?search=${createBody.data.code}&page=1&page_size=10`, { headers: { authorization } }),
+    )
+    const listBody = await listResponse.json()
+    const vouchersResponse = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook/vouchers', { headers: { authorization } }),
+    )
+    const vouchersBody = await vouchersResponse.json()
+
+    expect(createResponse.status).toBe(201)
+    expect(createBody.data).toMatchObject({
+      code: 'PCTM000001',
+      source_type: 'manual_voucher',
+      status: 'posted',
+      amount: 45000,
+    })
+    expect(listBody.data.items[0]).toMatchObject({
+      code: 'PCTM000001',
+      source_type: 'cashbook_voucher',
+      direction: 'out',
+      amount_delta: -45000,
+      is_business_accounted: false,
+      note: 'Mua van phong pham',
+      counterparty: { type: 'employee', name: 'Nguyen Van A', phone: null },
+      finance_account: { id: 'cash-main', account_type: 'cash' },
+      created_at: '2026-07-12T04:12:00.000Z',
+      created_by: { id: 'user-dev-admin', name: 'Admin' },
+    })
+    expect(vouchersBody.data.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'PCTM000001', source_type: 'manual_voucher', amount: 45000 }),
+    ]))
+  })
+
   test('revises a completed invoice by creating .01 and cancelling the old invoice', async () => {
     const repository = await createDevMemoryRepository()
     const handler = createHttpHandler({ repository })

@@ -225,7 +225,7 @@ const voucher: CashbookVoucher = {
 
 const manualVoucher: CashbookVoucher = {
   id: 'voucher-2',
-  code: 'PC000001',
+  code: 'PCTM000001',
   source_type: 'manual_voucher',
   status: 'posted',
   amount: 45000,
@@ -265,7 +265,7 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     })),
     createCashbookVoucher: vi.fn(async () => ({
       id: 'voucher-2',
-      code: 'PC000001',
+      code: 'PCTM000001',
       source_type: 'manual_voucher' as const,
       status: 'posted' as const,
       amount: 45000,
@@ -277,12 +277,13 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     reviseCashbookVoucher: vi.fn(async () => ({
       ...manualVoucher,
       id: 'voucher-3',
-      code: 'PC000001.01',
+      code: 'PCTM000001.01',
       amount: 50000,
     })),
     listCashbookBalances: vi.fn(async () => ({ items: balances })),
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
+    listVoucherCounterparties: vi.fn(async () => [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]),
     listCashbookEntries: vi.fn(async () => ({
       summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
       items: [entry],
@@ -1000,7 +1001,7 @@ describe('FinancePage', () => {
 
   it('creates a manual cashbook expense voucher and reloads cashbook data', async () => {
     const service = makeService()
-    render(<FinancePage service={service} />)
+    render(<FinancePage service={service} currentUserName="Văn Lâm" />)
 
     await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
     await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
@@ -1010,9 +1011,9 @@ describe('FinancePage', () => {
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
     expect(within(form).getByLabelText('Mã phiếu')).toHaveAttribute('placeholder', 'Tự động')
-    expect(within(form).getByLabelText('Người chi')).toHaveValue('Cloud Admin')
+    expect(within(form).getByLabelText('Người chi')).toHaveValue('Văn Lâm')
     expect(within(form).getByLabelText('Hạch toán kết quả kinh doanh')).toBeChecked()
-    await userEvent.selectOptions(within(form).getByLabelText('Tài khoản chi'), 'cash-1')
+    expect(within(form).queryByLabelText('Tài khoản chi')).not.toBeInTheDocument()
     await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'staff_salary')
     await userEvent.type(within(form).getByLabelText('Số tiền'), '45000')
     await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nhận'), 'employee')
@@ -1027,6 +1028,7 @@ describe('FinancePage', () => {
       voucher_direction: 'out',
       voucher_type: 'staff_salary',
       finance_account_id: 'cash-1',
+      created_at: expect.any(String),
       amount: 45000,
       partner_debt_mode: 'no_partner_debt',
       is_business_accounted: false,
@@ -1035,7 +1037,29 @@ describe('FinancePage', () => {
       reason: 'Mua văn phòng phẩm',
     })
     await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledTimes(2))
-    expect(screen.getByRole('status')).toHaveTextContent('Đã tạo phiếu PC000001')
+    expect(screen.getByRole('status')).toHaveTextContent('Đã tạo phiếu PCTM000001')
+  })
+
+  it('filters voucher counterparty suggestions by selected type and only shows account picker for bank transfers', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    const form = await screen.findByRole('form', { name: 'Tạo phiếu thu' })
+
+    expect(within(form).queryByLabelText('Tài khoản nhận')).not.toBeInTheDocument()
+    expect(within(form).getByLabelText('Đối tượng nộp')).toHaveValue('other')
+    expect(within(form).queryByRole('option', { name: 'Không chọn' })).not.toBeInTheDocument()
+    await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nộp'), 'customer')
+    await userEvent.type(within(form).getByLabelText('Tên người nộp'), 'Nam')
+
+    await waitFor(() => expect(service.listVoucherCounterparties).toHaveBeenLastCalledWith({ type: 'customer', search: 'Nam' }))
+    expect(within(form).getByLabelText('Đối tượng nộp')).not.toHaveTextContent('Không chọn')
+
+    await userEvent.selectOptions(within(form).getByLabelText('Phương thức TT'), 'bank_transfer')
+    const accountSelect = await within(form).findByLabelText('Tài khoản nhận')
+    expect(accountSelect).toBeInTheDocument()
+    expect(within(accountSelect).queryByRole('option', { name: 'Tiền mặt' })).not.toBeInTheDocument()
   })
 
   it('opens cashbook entry detail with allocation rows', async () => {
@@ -1334,7 +1358,7 @@ describe('FinancePage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
 
     expect(service.cancelCashbookVoucher).toHaveBeenCalledWith('voucher-out-1')
-    expect(await screen.findByText(/Đã hủy phiếu PC000001/)).toBeInTheDocument()
+    expect(await screen.findByText(/Đã hủy phiếu PCTM000001/)).toBeInTheDocument()
   })
 
   it('does not cancel automatic cashbook entries from detail delete dialog', async () => {

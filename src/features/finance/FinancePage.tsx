@@ -30,6 +30,7 @@ import type {
   CashbookSearchScope,
   CashbookStatus,
   CashbookVoucher,
+  CashbookVoucherCounterpartyOption,
   CreateCashbookVoucherInput,
   CustomerDebtDetail,
   CustomerDebtSummary,
@@ -62,6 +63,7 @@ import {
   financeDateText as dateText,
   sourceTypeText,
   statusText,
+  voucherTypeText,
   voucherTypeOptions,
 } from './finance-presenter'
 import {
@@ -229,8 +231,9 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [voucherPaymentMethod, setVoucherPaymentMethod] = useState<CashbookEntryDetail['payment_method']>('cash')
   const [voucherPartnerDebtMode, setVoucherPartnerDebtMode] = useState<PartnerDebtMode>('no_partner_debt')
   const [voucherBusinessAccounted, setVoucherBusinessAccounted] = useState(true)
-  const [voucherCounterpartyType, setVoucherCounterpartyType] = useState<CreateCashbookVoucherInput['counterparty_type']>('none')
+  const [voucherCounterpartyType, setVoucherCounterpartyType] = useState<CreateCashbookVoucherInput['counterparty_type']>('other')
   const [voucherCounterpartyName, setVoucherCounterpartyName] = useState('')
+  const [voucherCounterpartyOptions, setVoucherCounterpartyOptions] = useState<CashbookVoucherCounterpartyOption[]>([])
   const [voucherCounterpartyPhone, setVoucherCounterpartyPhone] = useState('')
   const [voucherReason, setVoucherReason] = useState('')
   const [savingVoucher, setSavingVoucher] = useState(false)
@@ -287,7 +290,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     code: { kind: 'text', value: (entry) => entry.code },
     created_at: { kind: 'date', value: (entry) => entry.created_at },
     created_by: { kind: 'text', value: (entry) => entry.source?.source_creator_name ?? entry.created_by?.name },
-    source_type: { kind: 'text', value: (entry) => entry.source?.category_name ?? sourceTypeText(entry.source_type) },
+    source_type: { kind: 'text', value: (entry) => entry.source?.category_name ? voucherTypeText(entry.source.category_name, entry.direction) : sourceTypeText(entry.source_type) },
     counterparty: { kind: 'text', value: (entry) => entry.counterparty?.name },
     finance_account: { kind: 'text', value: (entry) => entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '' },
     amount_delta: { kind: 'number', value: (entry) => entry.amount_delta },
@@ -305,6 +308,29 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         dateRangeFromItems(cashbookEntries ?? [], (entry) => entry.created_at),
       )
 
+  useEffect(() => {
+    if (voucherMode === null || (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier')) {
+      setVoucherCounterpartyOptions([])
+      return undefined
+    }
+    let active = true
+    const search = voucherCounterpartyName.trim()
+    const timeout = window.setTimeout(() => {
+      service
+        .listVoucherCounterparties({ type: voucherCounterpartyType, search })
+        .then((items) => {
+          if (active) setVoucherCounterpartyOptions(items)
+        })
+        .catch(() => {
+          if (active) setVoucherCounterpartyOptions([])
+        })
+    }, 150)
+    return () => {
+      active = false
+      window.clearTimeout(timeout)
+    }
+  }, [service, voucherCounterpartyName, voucherCounterpartyType, voucherMode])
+
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
     const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
@@ -317,8 +343,9 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherPaymentMethod(defaultAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
     setVoucherPartnerDebtMode('no_partner_debt')
     setVoucherBusinessAccounted(direction === 'out')
-    setVoucherCounterpartyType('none')
+    setVoucherCounterpartyType('other')
     setVoucherCounterpartyName('')
+    setVoucherCounterpartyOptions([])
     setVoucherCounterpartyPhone('')
     setVoucherReason('')
     setError(null)
@@ -337,8 +364,9 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherPaymentMethod(defaultAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
     setVoucherPartnerDebtMode('no_partner_debt')
     setVoucherBusinessAccounted(true)
-    setVoucherCounterpartyType('none')
+    setVoucherCounterpartyType('other')
     setVoucherCounterpartyName('')
+    setVoucherCounterpartyOptions([])
     setVoucherCounterpartyPhone('')
     setVoucherReason('')
     setError(null)
@@ -363,6 +391,19 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       ? (pinnedBankAccount ?? sortedBankAccounts[0])
       : sortedActiveAccounts.find((account) => account.account_type === nextAccountType)
     if (nextAccount) setVoucherAccountId(nextAccount.id)
+  }
+
+  function chooseVoucherCounterpartyType(type: CreateCashbookVoucherInput['counterparty_type']) {
+    setVoucherCounterpartyType(type)
+    setVoucherCounterpartyName('')
+    setVoucherCounterpartyPhone('')
+    setVoucherCounterpartyOptions([])
+  }
+
+  function chooseVoucherCounterpartyName(name: string) {
+    setVoucherCounterpartyName(name)
+    const selected = voucherCounterpartyOptions.find((option) => option.name === name || `${option.code} - ${option.name}` === name)
+    setVoucherCounterpartyPhone(selected?.phone ?? '')
   }
 
   function changeDebtBankAmount(value: string) {
@@ -863,7 +904,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     if (column === 'created_at') return dateText(entry.created_at)
     if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? currentUserName
     if (column === 'finance_account') return financeAccountChoiceLabel(entry.finance_account)
-    if (column === 'source_type') return entry.source?.category_name ?? sourceTypeText(entry.source_type)
+    if (column === 'source_type') return entry.source?.category_name ? voucherTypeText(entry.source.category_name, entry.direction) : sourceTypeText(entry.source_type)
     if (column === 'counterparty') {
       if (!cashbookCounterpartyHasName(entry.counterparty)) return ''
       const label = cashbookCounterpartyLabel(entry)
@@ -960,6 +1001,11 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setError('Nhập lý do cho phiếu thu chi.')
       return
     }
+    const issuedAt = parseManagementDateTimeInputText(voucherIssuedAt)
+    if (issuedAt === null) {
+      setError('Thời gian phiếu không hợp lệ.')
+      return
+    }
     setSavingVoucher(true)
     setError(null)
     setMessage(null)
@@ -968,6 +1014,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         voucher_direction: voucherMode,
         voucher_type: voucherType,
         finance_account_id: voucherAccountId,
+        created_at: issuedAt.toISOString(),
         amount,
         partner_debt_mode: voucherPartnerDebtMode,
         is_business_accounted: voucherBusinessAccounted,
@@ -1113,6 +1160,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const voucherAccountLabel = voucherMode === 'in' ? 'Tài khoản nhận' : 'Tài khoản chi'
   const voucherCounterpartyTypeLabel = voucherMode === 'in' ? 'Đối tượng nộp' : 'Đối tượng nhận'
   const voucherCounterpartyNameLabel = voucherMode === 'in' ? 'Tên người nộp' : 'Tên người nhận'
+  const voucherActorName = currentUserName.trim() || 'Cloud Admin'
   const bankAccountModalTitle = editingBankAccountId === null ? 'Thêm tài khoản ngân hàng' : 'Sửa tài khoản ngân hàng'
   return (
     <ManagementPage
@@ -1439,17 +1487,16 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                 </label>
                 <label>
                   Người {voucherActorRole}
-                  <select disabled value="Cloud Admin">
-                    <option value="Cloud Admin">Cloud Admin</option>
+                  <select disabled value={voucherActorName}>
+                    <option value={voucherActorName}>{voucherActorName}</option>
                   </select>
                 </label>
                 <label>
                   {voucherCounterpartyTypeLabel}
                   <select
                     value={voucherCounterpartyType}
-                    onChange={(event) => setVoucherCounterpartyType(event.target.value as CreateCashbookVoucherInput['counterparty_type'])}
+                    onChange={(event) => chooseVoucherCounterpartyType(event.target.value as CreateCashbookVoucherInput['counterparty_type'])}
                   >
-                    <option value="none">Khác</option>
                     <option value="customer">Khách hàng</option>
                     <option value="supplier">Nhà cung cấp</option>
                     <option value="employee">Nhân viên</option>
@@ -1463,10 +1510,16 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                   </span>
                   <input
                     aria-label={voucherCounterpartyNameLabel}
+                    list="finance-voucher-counterparty-options"
                     placeholder={`Tìm người ${voucherCounterpartyRole}`}
                     value={voucherCounterpartyName}
-                    onChange={(event) => setVoucherCounterpartyName(event.target.value)}
+                    onChange={(event) => chooseVoucherCounterpartyName(event.target.value)}
                   />
+                  <datalist id="finance-voucher-counterparty-options">
+                    {voucherCounterpartyOptions.map((option) => (
+                      <option key={option.id} value={option.name}>{option.code} - {option.name}</option>
+                    ))}
+                  </datalist>
                 </label>
                 <label>
                   Phương thức TT
@@ -1478,15 +1531,17 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                     <option value="bank_transfer">Chuyển khoản</option>
                   </select>
                 </label>
-                <label>
-                  {voucherAccountLabel}
-                  <select value={voucherAccountId} onChange={(event) => chooseVoucherAccount(event.target.value)}>
-                    <option value="">Chọn tài khoản</option>
-                    {sortedActiveAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>{financeAccountChoiceLabel(account)}</option>
-                    ))}
-                  </select>
-                </label>
+                {voucherPaymentMethod === 'bank_transfer' ? (
+                  <label>
+                    {voucherAccountLabel}
+                    <select value={voucherAccountId} onChange={(event) => chooseVoucherAccount(event.target.value)}>
+                      <option value="">Chọn tài khoản</option>
+                      {activeBankAccounts.map((account) => (
+                        <option key={account.id} value={account.id}>{financeAccountChoiceLabel(account)}</option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
                 <label className="management-modal-field-wide">
                   Số tiền
                   <input

@@ -17,6 +17,7 @@ import {
   isDeletedFinanceAccount,
   paymentMethodText,
   sourceTypeText,
+  voucherTypeText,
   statusText,
 } from './finance-presenter'
 import type { CashbookEntryDetail, FinanceAccount } from './types'
@@ -85,6 +86,7 @@ describe('finance presenter', () => {
     expect(statusText('posted')).toBe('Đã ghi')
     expect(statusText('cancelled')).toBe('Đã hủy')
     expect(paymentMethodText('bank_transfer')).toBe('Ngân hàng')
+    expect(voucherTypeText('other_expense', 'out')).toBe('Chi khác')
     expect(sourceTypeText('payment_receipt_method')).toBe('Phiếu thu')
     expect(sourceTypeText('kiotviet_cashbook')).toBe('Sổ quỹ KV')
     expect(financeDateText('bad-date')).toBe('')

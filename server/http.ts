@@ -740,6 +740,10 @@ export interface ServerRepository {
     finance_account_id?: string
     note?: string | null
   }): Promise<CashbookEntryData | null>
+  createCashbookVoucher?(input: {
+    organizationId: string
+    entry: CashbookEntryData
+  }): Promise<CashbookEntryData>
   getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
     organizationId: string
@@ -1801,6 +1805,127 @@ function filterCashbookEntries(url: URL) {
   }))
 }
 
+type ManualCashbookVoucherRequest = {
+  voucherDirection: CashbookEntryData['direction']
+  voucherType: string
+  financeAccountId: string
+  amount: number
+  partnerDebtMode: string
+  isBusinessAccounted: boolean
+  counterpartyType: string
+  counterpartyName: string
+  counterpartyPhone: string | null
+  reason: string
+  createdAt: string
+}
+
+function manualCashbookVoucherRequestFromBody(body: Record<string, unknown>): ManualCashbookVoucherRequest {
+  const voucherDirection = body.voucher_direction
+  if (voucherDirection !== 'in' && voucherDirection !== 'out') {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'voucher_direction is invalid.', { voucher_direction: ['voucher_direction is invalid.'] })
+  }
+  const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id.trim() : ''
+  if (!financeAccountId) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is required.', { finance_account_id: ['finance_account_id is required.'] })
+  }
+  const amount = Math.max(Number(body.amount ?? 0), 0)
+  if (amount <= 0) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'amount must be greater than 0.', { amount: ['amount must be greater than 0.'] })
+  }
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+  if (!reason) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'reason is required.', { reason: ['reason is required.'] })
+  }
+  const counterpartyType = typeof body.counterparty_type === 'string' && body.counterparty_type.trim()
+    ? body.counterparty_type.trim()
+    : 'none'
+  return {
+    voucherDirection,
+    voucherType: typeof body.voucher_type === 'string' && body.voucher_type.trim() ? body.voucher_type.trim() : (voucherDirection === 'in' ? 'other_income' : 'other_expense'),
+    financeAccountId,
+    amount,
+    partnerDebtMode: typeof body.partner_debt_mode === 'string' && body.partner_debt_mode.trim() ? body.partner_debt_mode.trim() : 'no_partner_debt',
+    isBusinessAccounted: body.is_business_accounted === undefined ? true : body.is_business_accounted === true,
+    counterpartyType,
+    counterpartyName: typeof body.counterparty_name === 'string' ? body.counterparty_name.trim() : '',
+    counterpartyPhone: typeof body.counterparty_phone === 'string' && body.counterparty_phone.trim() ? body.counterparty_phone.trim() : null,
+    reason,
+    createdAt: body.created_at === undefined ? runtimeIso() : optionalIsoDateTime(body.created_at, 'created_at'),
+  }
+}
+
+function cashbookFinanceAccountFromFinanceAccount(account: FinanceAccountData): CashbookEntryData['finance_account'] {
+  return {
+    id: account.id,
+    code: account.account_type === 'bank' ? account.account_number ?? account.code : account.code,
+    name: account.name,
+    account_type: account.account_type,
+    account_number: account.account_number,
+    account_holder: account.account_holder,
+  }
+}
+
+function nextManualCashbookVoucherCode(entries: readonly CashbookEntryData[], direction: CashbookEntryData['direction'], accountType: FinanceAccountData['account_type']) {
+  const prefix = direction === 'in'
+    ? accountType === 'cash' ? 'PTTM' : 'PTNH'
+    : accountType === 'cash' ? 'PCTM' : 'PCNH'
+  let maxSeq = 0
+  for (const entry of entries) {
+    const match = entry.code.trim().toUpperCase().match(new RegExp(`^${prefix}(\\d{6})$`))
+    if (!match) continue
+    maxSeq = Math.max(maxSeq, Number(match[1]))
+  }
+  return `${prefix}${String(maxSeq + 1).padStart(6, '0')}`
+}
+
+function makeManualCashbookVoucherEntry(
+  request: ManualCashbookVoucherRequest,
+  account: FinanceAccountData,
+  currentUser: CurrentUserData,
+  existingEntries: readonly CashbookEntryData[],
+): CashbookEntryData {
+  const code = nextManualCashbookVoucherCode(existingEntries, request.voucherDirection, account.account_type)
+  return {
+    id: `cashbook-voucher-${randomUUID()}`,
+    code,
+    status: 'posted',
+    direction: request.voucherDirection,
+    amount_delta: request.voucherDirection === 'in' ? request.amount : -request.amount,
+    finance_account: cashbookFinanceAccountFromFinanceAccount(account),
+    is_business_accounted: request.isBusinessAccounted,
+    source_type: 'cashbook_voucher',
+    created_at: request.createdAt,
+    note: request.reason,
+    counterparty: {
+      type: request.counterpartyType,
+      name: request.counterpartyName,
+      phone: request.counterpartyPhone,
+    },
+    created_by: { id: currentUser.user.id, name: currentUser.user.display_name },
+    source: {
+      type: 'manual_voucher',
+      id: code,
+      code,
+      order_code: null,
+      category_name: request.voucherType,
+      source_note: request.reason,
+      transfer_content: request.partnerDebtMode,
+    },
+    allocations: [],
+    payment_method: account.account_type === 'bank' ? 'bank_transfer' : 'cash',
+  }
+}
+
+function cashbookVoucherListItem(entry: CashbookEntryData) {
+  return {
+    id: entry.id,
+    code: entry.code,
+    source_type: 'manual_voucher',
+    status: entry.status === 'cancelled' ? 'cancelled' : 'posted',
+    amount: Math.abs(entry.amount_delta),
+  }
+}
+
 function makeOrderFromCheckout(body: {
   customer_id?: string
   created_at?: string
@@ -2397,7 +2522,6 @@ function makeCustomerDebtDetail(customerId: string) {
 
 function cashbookPaymentMethod(entry: CashbookEntryData) {
   if (entry.payment_method === 'cash' || entry.payment_method === 'bank_transfer' || entry.payment_method === 'manual') return entry.payment_method
-  if (entry.source_type === 'cashbook_voucher') return 'manual'
   return entry.finance_account.account_type === 'bank' ? 'bank_transfer' : 'cash'
 }
 
@@ -3601,7 +3725,16 @@ async function getDevApiResponse(
         return { found: true, data: updated }
       },
       cashbookBalances: async () => ({ found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }),
-      cashbookVouchers: async () => ({ found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }),
+      cashbookVouchers: async () => {
+        const voucherEntriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
+        const entries = repository.listCashbookEntries
+          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: voucherEntriesUrl })
+          : cashbookEntries
+        const items = entries
+          .filter((entry) => entry.source_type === 'cashbook_voucher')
+          .map(cashbookVoucherListItem)
+        return { found: true, data: { items, total: items.length } }
+      },
       previewKiotVietCashbookImport: async () => {
         const body = await readJson(request)
         const mapped = mapKiotVietCashbookRows(cashbookImportRowsFromBody(body))
@@ -3764,7 +3897,27 @@ async function getDevApiResponse(
         }
         return { found: true, data: await enrichCashbookEntryDetail(cashbookEntries[index], async (code) => salesDocuments.find((document) => document.code === code) ?? null) }
       },
-      createCashbookVoucher: async () => ({ found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }),
+      createCashbookVoucher: async () => {
+        const body = await readJson(request) as Record<string, unknown>
+        const voucherRequest = manualCashbookVoucherRequestFromBody(body)
+        const accountRows = repository.listFinanceAccounts
+          ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/finance/accounts?is_active=true') })
+          : financeAccounts
+        const account = accountRows.find((item) => item.id === voucherRequest.financeAccountId)
+        if (!account) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.', { finance_account_id: ['finance_account_id is invalid.'] })
+        }
+        const entriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
+        const existingEntries = repository.listCashbookEntries
+          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
+          : cashbookEntries
+        const entry = makeManualCashbookVoucherEntry(voucherRequest, account, currentUser, existingEntries)
+        const created = repository.createCashbookVoucher
+          ? await repository.createCashbookVoucher({ organizationId: currentUser.organization.id, entry })
+          : entry
+        if (!repository.createCashbookVoucher) cashbookEntries.unshift(created)
+        return { found: true, data: cashbookVoucherListItem(created), status: 201 }
+      },
       cancelCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }),
       reviseCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }),
     },
