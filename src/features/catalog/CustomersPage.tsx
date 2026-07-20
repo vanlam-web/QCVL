@@ -64,7 +64,6 @@ import {
   buildCustomerDebtLedgerRows,
   customerDebtCounterpartyMatches,
   customerDebtHasLiveLedger,
-  customerDebtLedgerDefinesCurrentDebt,
   type CustomerDebtAdjustment,
   type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
@@ -1454,6 +1453,13 @@ function buildCustomerDebtSummaryRows(
 
   const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
   let unassignedPayment = Math.max(openDebtTotal - Math.max(currentDebt, 0), 0)
+  const latestOpenRow = [...openRows].sort((left, right) => {
+    const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
+    if (timeDiff !== 0) return timeDiff
+    return right.code.localeCompare(left.code)
+  })[0]
+  const latestOpenRunningDebt = latestOpenRow?.running_debt ?? openDebtTotal
+  const debtOffset = Math.max(currentDebt - latestOpenRunningDebt, 0)
   const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
   const allocatedDebtById = new Map<string, number>()
   const oldestRows = [...openRows].sort((left, right) => {
@@ -1475,7 +1481,7 @@ function buildCustomerDebtSummaryRows(
     .map((invoice) => ({
       ...invoice,
       remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt,
-      running_debt: Math.max(invoice.running_debt - (allocatedDebtById.get(invoice.id) ?? 0), 0),
+      running_debt: Math.max(invoice.running_debt - (allocatedDebtById.get(invoice.id) ?? 0), 0) + debtOffset,
     }))
     .filter((invoice) => invoice.remaining_debt > 0)
     .sort((left, right) => {
@@ -1487,7 +1493,7 @@ function buildCustomerDebtSummaryRows(
   if (adjustedRows.length === 1) {
     return adjustedRows.map((invoice) => ({
       ...invoice,
-      running_debt: invoice.remaining_debt,
+      running_debt: debtOffset > 0 ? invoice.running_debt : invoice.remaining_debt,
     }))
   }
 
@@ -1511,26 +1517,7 @@ function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerState | undefin
   if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
   const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
   const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
-  const invoiceRows = debtLedger.invoiceHistory.length > 0
-    ? debtLedger.invoiceHistory
-    : debtLedger.debt.invoices.map((invoice) => ({
-        id: invoice.order_id,
-        code: invoice.order_code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        paid_amount: invoice.paid_amount,
-        debt_amount: invoice.remaining_debt,
-        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-        status: 'completed' as const,
-        seller: { id: '', name: '' },
-      }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    debtLedger.cashbookHistory,
-    debtLedger.debt.adjustments ?? [],
-    debtLedger.debt.linked_supplier_receipts ?? [],
-  )
-  return customerDebtLedgerDefinesCurrentDebt(debtLedger) ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  return totalDebt
 }
 
 function CustomerDebtPanel({
@@ -1575,11 +1562,10 @@ function CustomerDebtPanel({
     debtLedger.debt.adjustments ?? [],
     debtLedger.debt.linked_supplier_receipts ?? [],
   )
-  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
   const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
-  const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  const currentDebt = totalDebt
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
   const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
   const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)

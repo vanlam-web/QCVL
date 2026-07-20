@@ -1362,6 +1362,95 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
   expect(within(receiptRow).getAllByRole('cell')[4]).toHaveTextContent('1 510 080')
 })
 
+it('shows the current imported debt balance in the customer debt summary when it is above invoice debt', async () => {
+  const salesDocumentService = makeSalesDocumentService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [
+        {
+          id: 'order-before-cb',
+          code: 'HD011163',
+          order_type: 'invoice' as const,
+          status: 'completed' as const,
+          created_at: '2026-07-14T14:18:00.000Z',
+          customer: { id: 'customer-1', code: 'KH000123', name: 'Công ty Phong Cảnh', phone: '0909000000' },
+          seller: { id: 'seller-1', name: 'Admin' },
+          subtotal_amount: 209300,
+          discount_amount: 0,
+          total_amount: 209300,
+          paid_amount: 0,
+          debt_amount: 209300,
+          payment_status: 'unpaid' as const,
+          note: null,
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+    })),
+  })
+  render(
+    <CustomersPage
+      service={makeService({
+        listCustomers: vi.fn(async () => ({
+          items: [{
+            id: 'customer-1',
+            code: 'KH000123',
+            name: 'Công ty Phong Cảnh',
+            phone: '0909000000',
+            tax_code: null,
+            address: null,
+            customer_group_id: null,
+            customer_group: null,
+            customer_type: 'company',
+            created_by: { id: 'user-admin', name: 'Admin' },
+            created_at: '2026-06-30T17:08:00Z',
+            status: 'active',
+            total_sales_amount: 209300,
+            total_debt_amount: 1510080,
+          }],
+          page: 1,
+          page_size: 15,
+          total: 1,
+        })),
+      })}
+      financeService={makeFinanceService({ listCashbookEntries: vi.fn(async () => ({
+        items: [],
+        page: 1,
+        page_size: 1000,
+        total: 0,
+        summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+      })) })}
+      orderService={makeOrderService({
+        getCustomerDebt: vi.fn(async () => ({
+          customer_id: 'customer-1',
+          total_debt: 1510080,
+          invoices: [],
+          adjustments: [{
+            id: 'customer-debt-adjustment-kv-cb000001',
+            source_code: 'CB000001',
+            created_at: '2026-07-14T15:00:00.000Z',
+            transaction_type: 'Dieu chinh',
+            amount_delta: 1510080,
+            paid_amount: 0,
+            remaining_amount: 1510080,
+            balance_after: 1510080,
+            source_file: 'BaoCaoCongNoTheoKhachHang.xlsx',
+          }],
+        })),
+      })}
+      salesDocumentService={salesDocumentService}
+    />,
+  )
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+
+  const debtSummaryTable = await within(detail).findByRole('table', { name: 'Tóm tắt công nợ' })
+  const summaryRow = within(debtSummaryTable).getByRole('row', { name: /HD011163/ })
+  expect(within(summaryRow).getAllByRole('cell')[3]).toHaveTextContent('1 510 080')
+})
+
 it('saves edits to imported customer debt adjustment slips', async () => {
   const updateCustomerDebtAdjustment = vi.fn(async () => ({
     id: 'customer-debt-adjustment-kv-cb000001',

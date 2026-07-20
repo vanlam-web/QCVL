@@ -3526,7 +3526,9 @@ async function getDevApiResponse(
       getCustomerDebt: async () => {
         const customerId = getFinanceCustomerId(path)
         if (repository.getCustomerDebt) {
-          return { found: true, data: await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId }) }
+          const detail = await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId })
+          const totalDebt = (await repository.getCustomerFinancialTotals?.(currentUser.organization.id))?.get(customerId)?.total_debt_amount
+          return { found: true, data: { ...detail, total_debt: totalDebt ?? detail.total_debt } }
         }
         return { found: true, data: makeCustomerDebtDetail(customerId) }
       },
