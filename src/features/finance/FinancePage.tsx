@@ -353,23 +353,34 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setMessage(null)
   }
 
-  function openVoucherRevision(voucher: CashbookVoucher) {
+  function openVoucherRevision(voucher: CashbookVoucher, detail?: CashbookEntryDetail) {
     const direction: CashbookDirection = voucher.code.startsWith('PT') ? 'in' : 'out'
     const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
+    const voucherDetail = detail ?? null
+    const revisionAccount = voucherDetail?.finance_account.id
+      ? sortedActiveAccounts.find((account) => account.id === voucherDetail.finance_account.id) ?? voucherDetail.finance_account
+      : defaultAccount
+    const revisionPaymentMethod = voucherDetail?.payment_method ?? (revisionAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
     setEditingVoucher(voucher)
     setVoucherMode(direction)
-    setVoucherAccountId(defaultAccount?.id ?? '')
-    setVoucherType(direction === 'in' ? 'other_income' : 'operating_expense')
+    setVoucherAccountId(revisionAccount?.id ?? '')
+    setVoucherType(voucherDetail?.source?.category_name && voucherTypeOptions(direction).some((option) => option.value === voucherDetail.source.category_name)
+      ? voucherDetail.source.category_name
+      : direction === 'in' ? 'other_income' : 'operating_expense')
     setVoucherAmount(formatVoucherAmountInput(String(voucher.amount)))
-    setVoucherIssuedAt(dateTimeInputText(currentSystemDate()))
-    setVoucherPaymentMethod(defaultAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
-    setVoucherPartnerDebtMode('no_partner_debt')
-    setVoucherBusinessAccounted(true)
-    setVoucherCounterpartyType('other')
-    setVoucherCounterpartyName('')
+    setVoucherIssuedAt(dateTimeInputText(voucherDetail ? new Date(voucherDetail.created_at) : currentSystemDate()))
+    setVoucherPaymentMethod(revisionPaymentMethod)
+    setVoucherPartnerDebtMode(voucherDetail?.source?.transfer_content === 'affects_partner_debt'
+      || voucherDetail?.source?.transfer_content === 'not_affect_partner_debt'
+      || voucherDetail?.source?.transfer_content === 'no_partner_debt'
+      ? voucherDetail.source.transfer_content
+      : 'no_partner_debt')
+    setVoucherBusinessAccounted(voucherDetail?.is_business_accounted ?? true)
+    setVoucherCounterpartyType(voucherDetail?.counterparty?.type ?? 'other')
+    setVoucherCounterpartyName(voucherDetail?.counterparty?.name ?? '')
     setVoucherCounterpartyOptions([])
-    setVoucherCounterpartyPhone('')
-    setVoucherReason('')
+    setVoucherCounterpartyPhone(voucherDetail?.counterparty?.phone ?? '')
+    setVoucherReason(voucherDetail?.note ?? voucherDetail?.source?.source_note ?? '')
     setError(null)
     setMessage(null)
   }
@@ -1108,7 +1119,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         source_type: 'manual_voucher',
         status: detail.status,
         amount: Math.abs(detail.amount_delta),
-      })
+      }, detail)
       return
     }
     setCashbookEditPreview(detail)

@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FinancePage } from './FinancePage'
+import { dateTimeInputText } from './finance-filters'
 import type { FinanceService } from './finance-service'
 import type {
   CashbookBalance,
@@ -1276,6 +1277,59 @@ describe('FinancePage', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument())
     expect(service.updateCashbookEntry).toHaveBeenCalledWith('entry-1', expect.objectContaining({ finance_account_id: 'bank-1' }))
     expect(row).toHaveTextContent('MB Bank: 0947900909')
+  })
+
+  it('prefills manual voucher edit from existing voucher content', async () => {
+    const manualVoucherEntry: CashbookEntry = {
+      ...expenseEntry,
+      id: 'manual-voucher-entry',
+      code: 'PCTM000004',
+      created_at: '2026-07-14T06:42:00Z',
+      note: 'Hoa, trái cây ông địa',
+      finance_account: { id: 'cash-1', code: 'CASH', name: 'Quỹ tiền mặt', account_type: 'cash' },
+      source_type: 'cashbook_voucher',
+      amount_delta: -110000,
+    }
+    const manualVoucherDetail: CashbookEntryDetail = {
+      ...manualVoucherEntry,
+      created_by: { id: 'user-1', name: 'Văn Lâm' },
+      counterparty: { type: 'other', name: 'Nương, 0329342440', phone: null },
+      payment_method: 'cash',
+      source: {
+        type: 'manual_voucher',
+        id: 'voucher-manual-1',
+        code: 'PCTM000004',
+        order_code: null,
+        category_name: 'other_expense',
+        source_note: 'Hoa, trái cây ông địa',
+        transfer_content: 'no_partner_debt',
+      },
+      allocations: [],
+    }
+    const service = makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 0, total_out: 110000, ending_balance: -10000 },
+        items: [manualVoucherEntry],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+      getCashbookEntry: vi.fn(async () => manualVoucherDetail),
+      reviseCashbookVoucher: vi.fn(async () => manualVoucherDetail),
+    })
+    render(<FinancePage service={service} currentUserName="Văn Lâm" />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    const row = within(table).getByRole('row', { name: /PCTM000004/ })
+    await userEvent.click(within(row).getByRole('button', { name: 'Mở chi tiết PCTM000004' }))
+    const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PCTM000004' })
+    await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PCTM000004' }))
+
+    const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PCTM000004' })
+    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(new Date(manualVoucherDetail.created_at)))
+    expect(within(editDialog).getByRole('combobox', { name: 'Phương thức TT' })).toHaveValue('cash')
+    expect(within(editDialog).getByLabelText('Ghi chú')).toHaveValue('Hoa, trái cây ông địa')
+    expect(within(editDialog).queryByRole('button', { name: 'Số tài khoản' })).not.toBeInTheDocument()
   })
 
   it('preserves historical cashbook account without resending its account id when unchanged', async () => {
