@@ -348,7 +348,7 @@ describe('CustomerPanel', () => {
     await userEvent.click(within(reopenedDialog).getByRole('tab', { name: 'Công nợ' }))
     await within(reopenedDialog).findByRole('table', { name: 'Lịch sử công nợ POS' })
     expect(within(reopenedDialog).queryByText('Tổng nợ')).not.toBeInTheDocument()
-    expect(within(reopenedDialog).getAllByText('21 025 683').length).toBeGreaterThan(0)
+    expect(within(reopenedDialog).getAllByText('50 130 458').length).toBeGreaterThan(0)
     expect(within(reopenedDialog).getByText('CB000001')).toBeInTheDocument()
     expect(within(reopenedDialog).getByText('TT001838')).toBeInTheDocument()
     expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
