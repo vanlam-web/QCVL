@@ -1,6 +1,7 @@
 # STOCK-RULES — Chính sách tồn kho và trừ kho
 
 > **Phạm vi:** Business rule cho tồn kho MVP, hàng thường, hàng cuộn, hàng tấm, tấm lỡ và thời điểm trừ kho
+> **Trạng thái docs ↔ code:** [README.md](./README.md) mục 2 (rà soát 2026-07-20). File này là SoT nghiệp vụ; không khẳng định runtime đã có mốc mở / object cuộn-tấm đầy đủ.
 
 ---
 
@@ -39,9 +40,10 @@ Lý do: KiotViet đang quản lý nhiều hàng cuộn/tấm bằng tổng số 
 Quy tắc:
 
 - Tồn import từ KiotViet phải được đánh dấu nguồn `kiotviet_import` hoặc trạng thái tương đương để biết đây là dữ liệu chuyển đổi ban đầu.
-- Với hàng `normal`, tồn tạm có thể dùng như tồn chính sau khi kiểm tra.
+- Đây là **`Tồn KV tạm nhập`** — đối chiếu, không phải mốc mở / tồn QCVL chính thức. Chi tiết trạng thái runtime: [README.md](./README.md) mục 1–2.
+- Với hàng `normal`, tồn tạm có thể dùng như số tham khảo vận hành sớm; không đồng nghĩa đã chốt công thức mốc mở.
 - Với hàng `roll` và `sheet`, tồn tạm chỉ là số tổng tham khảo để bán/đối soát ban đầu, chưa thay thế quản lý vật lý theo từng cuộn/tấm.
-- Sau này khi kiểm kho, nhập lại số cuộn/tấm thật hoặc dùng luồng khui vật tư, hệ thống sẽ chuẩn hóa dần tồn tạm thành cuộn/tấm vật lý.
+- Sau này khi kiểm kho, nhập lại số cuộn/tấm thật hoặc dùng luồng khui vật tư, hệ thống sẽ chuẩn hóa dần tồn tạm thành cuộn/tấm vật lý (**hướng dài**).
 - Không bắt buộc chuẩn hóa toàn bộ kho trong một lần trước khi dùng phần mềm.
 
 Ví dụ với hàng cuộn:

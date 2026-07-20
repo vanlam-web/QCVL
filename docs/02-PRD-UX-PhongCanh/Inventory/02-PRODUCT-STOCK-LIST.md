@@ -242,21 +242,27 @@ Thứ tự phụ thuộc để hoàn thiện tồn vận hành:
 
 ### Lộ trình tồn vận hành hiện tại 2026-07-12
 
+> **Bảng trạng thái SoT / runtime / hướng dài:** [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) (cập nhật 2026-07-20).
+
 Mục tiêu hoàn thiện `Hàng hóa` là hiển thị tồn vận hành đúng. Không lấy `Tồn kho` từ export Hàng hóa KiotViet làm mốc. Riêng phiếu kiểm kho KV ban đầu có thể được dùng làm mốc mở nếu Owner chọn rõ và xác nhận bỏ qua chứng từ trước mốc khi tính tồn hiện tại.
 
-Công thức nguồn:
+Công thức nguồn (**SoT mục tiêu**):
 
 `Tồn QCVL = tồn mở từ phiếu kiểm kho KV đã chọn + nhập hàng sau mốc - hóa đơn/POS sau mốc +/- trả hàng, kiểm kho và thao tác vật lý sau mốc`
+
+**Runtime 2026-07-20:** Postgres `operating_stock` = cộng `stock_movements` từ 0 (không có chọn mốc mở / lọc sau mốc). Chưa nghiệm thu công thức trên.
 
 Quy tắc hiển thị:
 
 - Bảng và chi tiết hàng hóa được phép hiển thị `Tồn KV tạm nhập`, nhưng phải gọi là dữ liệu đối chiếu.
-- V1 cho phép cột `Tồn QCVL` fallback hiển thị `Tồn KV tạm nhập` khi chưa có `stock_movements`, để 3200/3202 không hiện trống sau import. Đây chỉ là hiển thị tạm; logic POS/kho vẫn không được dùng số này làm tồn vận hành.
-- Khi chưa đủ movement, không đổi nhãn `Tồn KV tạm nhập` thành `Tồn kho`, `Tồn hiện tại`, hoặc tồn chính thức.
-- Nếu chưa chọn mốc mở, tồn QCVL phải thể hiện là chưa chốt thay vì lấy `Tồn KV tạm nhập` lấp vào.
-- Khi đã chọn mốc mở, chỉ chứng từ sau ngày mốc được cộng/trừ vào tồn hiện tại. Chứng từ trước mốc chỉ lưu lịch sử/đối chiếu để tránh tính hai lần.
+- V1 cho phép cột list (nhãn cột có thể là `Tồn kho`) **fallback số** từ `Tồn KV tạm nhập` khi chưa có `operating_stock`, để 3200/3202 không hiện trống sau import. Đây chỉ là hiển thị tạm; logic POS/kho không dùng số này làm tồn vận hành.
+- Khi chưa đủ movement, không đổi nhãn `Tồn KV tạm nhập` thành `Tồn kho`, `Tồn hiện tại`, hoặc tồn chính thức ở tab chi tiết.
+- Tab chi tiết: tách `Tồn QCVL` và `Tồn KV tạm nhập`. Khi chưa có `operating_stock`, nguồn QCVL hiện “Chưa chốt mốc tồn đầu kỳ” (hoặc tương đương) — **không** đồng nghĩa đã chọn mốc mở.
+- Khi đã chọn mốc mở (**chưa có runtime**), chỉ chứng từ sau ngày mốc được cộng/trừ vào tồn hiện tại. Chứng từ trước mốc chỉ lưu lịch sử/đối chiếu.
 - `Nhà cung cấp` của hàng lấy từ lịch sử phiếu nhập, không lấy từ file hàng hóa KiotViet.
 - `Dự kiến hết hàng` chỉ làm sau khi có lịch sử nhập/bán/stock movement đáng tin.
+
+> **Chốt mâu thuẫn cũ:** câu “chưa chọn mốc mở thì không lấy KV lấp vào QCVL” và “V1 fallback KV vào cột Tồn QCVL/Tồn kho” từng viết đối nhau. Đọc theo [Inventory README mục 1](../../03-BUSINESS-NghiepVu/Inventory/README.md): fallback = cột list tạm; chi tiết tách nhãn; công thức mốc mở vẫn là mục tiêu.
 
 Thứ tự làm tiếp:
 
