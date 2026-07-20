@@ -1,5 +1,6 @@
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
+import type { ManagementExportCell } from '../../components/ui-shell/management-export'
 import type {
   CashbookDirection,
   CashbookEntryDetail,
@@ -164,8 +165,8 @@ export function createFinanceService(api: FinanceApiRequester) {
 
 export type FinanceService = ReturnType<typeof createFinanceService>
 
-export function buildCashbookCsv(items: CashbookEntry[]) {
-  const exportRows = [
+export function buildCashbookCsv(items: CashbookEntry[]): ManagementExportCell[][] {
+  return [
     ['Mã phiếu', 'Thời gian', 'Người tạo', 'Loại phiếu', 'Số tài khoản', 'Người nộp/nhận', 'Giá trị', 'Ghi chú'],
     ...items.map((entry) => [
       entry.code,
@@ -178,11 +179,6 @@ export function buildCashbookCsv(items: CashbookEntry[]) {
       entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note ?? '',
     ]),
   ]
-  return `\uFEFF${exportRows.map((row) => row.map(csvCell).join(',')).join('\n')}`
-}
-
-function csvCell(value: string) {
-  return /[",\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value
 }
 
 async function fileImportPayload(file: File) {

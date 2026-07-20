@@ -283,7 +283,7 @@ describe('finance-service', () => {
     })
   })
 
-  it('builds a cashbook CSV from visible rows', () => {
+  it('builds cashbook export rows', () => {
     expect(buildCashbookCsv([
       {
         id: 'entry-1',
@@ -298,9 +298,9 @@ describe('finance-service', () => {
         note: 'Vận chuyển',
         counterparty: { type: 'supplier', name: 'Thu Nghĩa', phone: '000100' },
       },
-    ])).toBe([
-      '\uFEFFMã phiếu,Thời gian,Người tạo,Loại phiếu,Số tài khoản,Người nộp/nhận,Giá trị,Ghi chú',
-      'CTM001180,2026-07-04T07:46:00.000Z,,,,Thu Nghĩa,-30000,Vận chuyển',
-    ].join('\n'))
+    ])).toEqual([
+      ['Mã phiếu', 'Thời gian', 'Người tạo', 'Loại phiếu', 'Số tài khoản', 'Người nộp/nhận', 'Giá trị', 'Ghi chú'],
+      ['CTM001180', '2026-07-04T07:46:00.000Z', '', '', '', 'Thu Nghĩa', '-30000', 'Vận chuyển'],
+    ])
   })
 })

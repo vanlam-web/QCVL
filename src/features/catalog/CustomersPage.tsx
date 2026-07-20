@@ -51,6 +51,7 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
@@ -333,6 +334,52 @@ export function CustomersPage({
       setSelectedCustomerId(null)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được khách hàng.'))
+    }
+  }
+
+  async function exportCustomers() {
+    setError(null)
+    try {
+      const exportPageSize = Math.max(state?.total ?? 0, state?.customers.length ?? 0, 1)
+      const exportSortState = customerSortState ?? defaultCustomerSortState
+      const result = await service.listCustomers({
+        ...buildCustomerListFilters({
+          search: lastSearch,
+          status: lastStatus,
+          page: 1,
+          page_size: exportPageSize,
+          customerGroupId: lastCustomerGroupId,
+          createdFrom: lastCreatedFrom,
+          createdTo: lastCreatedTo,
+          createdBy: lastCreatedBy,
+          totalSalesMin: lastTotalSalesMin,
+          totalSalesMax: lastTotalSalesMax,
+          totalDebtMin: lastTotalDebtMin,
+          totalDebtMax: lastTotalDebtMax,
+        }),
+        sort_key: exportSortState.key,
+        sort_direction: exportSortState.direction,
+      })
+      downloadManagementCsv({
+        filename: 'khach-hang.csv',
+        rows: [
+          ['Mã KH', 'Tên khách hàng', 'Điện thoại', 'Nhóm khách', 'Loại khách', 'Trạng thái', 'Công nợ', 'Tổng bán', 'Người tạo', 'Ngày tạo'],
+          ...result.items.map((customer) => [
+            customer.code,
+            customer.name,
+            customer.phone ?? '',
+            customerGroupLabel(customer),
+            customerTypeLabel(customer),
+            customer.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động',
+            customer.total_debt_amount ?? 0,
+            customer.total_sales_amount ?? 0,
+            customerCreatorLabel(customer),
+            customer.created_at,
+          ]),
+        ],
+      })
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được file khách hàng.'))
     }
   }
 
@@ -800,7 +847,7 @@ export function CustomersPage({
             onChange={changeCustomerSearch}
           />
           <ManagementImportButton onClick={() => setCustomerImportOpen(true)}>Import</ManagementImportButton>
-          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file khách hàng" type="button">
+          <button className="button button-secondary" type="button" onClick={() => void exportCustomers()}>
             <FileDown aria-hidden="true" size={16} />
             Xuất file
           </button>

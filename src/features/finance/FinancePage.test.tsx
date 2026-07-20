@@ -783,8 +783,16 @@ describe('FinancePage', () => {
     expect(within(sidebar).queryByRole('button', { name: 'Đặt lại bộ lọc tài chính' })).not.toBeInTheDocument()
   })
 
-  it('exports visible rows without showing a cashbook column chooser', async () => {
-    const service = makeService()
+  it('exports all filtered cashbook rows without showing a cashbook column chooser', async () => {
+    const service = makeService({
+      listCashbookEntries: vi.fn(async (input = {}) => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: input.page_size === 27 ? [entry, expenseEntry] : [entry],
+        page: 1,
+        page_size: input.page_size ?? 15,
+        total: 27,
+      })),
+    })
     const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:cashbook')
     const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
@@ -797,6 +805,12 @@ describe('FinancePage', () => {
     expect(screen.queryByRole('region', { name: 'Chọn cột sổ quỹ' })).not.toBeInTheDocument()
 
     await userEvent.click(within(voucherActions).getByRole('button', { name: 'Xuất file' }))
+    expect(service.listCashbookEntries).toHaveBeenLastCalledWith(expect.objectContaining({
+      page: 1,
+      page_size: 27,
+      sort_key: 'created_at',
+      sort_direction: 'desc',
+    }))
     expect(screen.getByRole('status')).toHaveTextContent('Đã tạo file sổ quỹ')
     expect(createObjectURL).toHaveBeenCalled()
     expect(click).toHaveBeenCalled()

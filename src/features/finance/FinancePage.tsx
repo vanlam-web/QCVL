@@ -20,6 +20,7 @@ import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../co
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementDateTimeInput, parseManagementDateTimeInputText } from '../../components/ui-shell/management-date-time-input'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { formatMoney } from '../../lib/number-format'
 import type {
   CashbookBusinessAccountedFilter,
@@ -873,16 +874,37 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     event.stopPropagation()
   }
 
-  function exportCashbook() {
-    const csv = buildCashbookCsv(visibleCashbookEntries)
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = 'so-quy.csv'
-    anchor.click()
-    URL.revokeObjectURL(url)
-    setMessage('Đã tạo file sổ quỹ.')
+  async function exportCashbook() {
+    setError(null)
+    try {
+      const exportPageSize = Math.max(cashbookTotal, visibleCashbookEntries.length, 1)
+      const exportSortState = cashbookSortState ?? defaultCashbookSortState
+      const result = await service.listCashbookEntries({
+        search: lastCashbookSearch.trim() || undefined,
+        search_scope: lastCashbookSearchScope,
+        from: lastCashbookFrom.trim() || undefined,
+        to: lastCashbookTo.trim() || undefined,
+        finance_account_id: lastCashbookAccountId === 'all' || lastCashbookAccountId === '' ? undefined : lastCashbookAccountId,
+        finance_account_type: cashbookFundMode === 'bank' && lastCashbookAccountId === '' ? 'bank' : undefined,
+        direction: lastCashbookDirection,
+        status: lastCashbookStatus,
+        is_business_accounted: lastCashbookBusinessAccounted === 'all' ? undefined : lastCashbookBusinessAccounted === 'true',
+        page: 1,
+        page_size: exportPageSize,
+        sort_key: exportSortState.key,
+        sort_direction: exportSortState.direction,
+      })
+      const exportItems = showCashbookFavoritesOnly
+        ? result.items.filter((item) => cashbookFavoriteIds.includes(item.id))
+        : result.items
+      downloadManagementCsv({
+        filename: 'so-quy.csv',
+        rows: buildCashbookCsv(exportItems),
+      })
+      setMessage('Đã tạo file sổ quỹ.')
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được file sổ quỹ.'))
+    }
   }
 
   function cashbookCell(entry: CashbookEntry, column: CashbookColumnKey) {

@@ -25,6 +25,7 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
@@ -256,6 +257,71 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     } catch (cause) {
       if (stocktakeListRequestId.current !== requestId) return
       setError(formatApiError(cause, 'Không tải được phiếu kiểm kho.'))
+    }
+  }
+
+  async function exportCurrentView() {
+    setError(null)
+    try {
+      if (view === 'stocktakes') {
+        const exportPageSize = Math.max(stocktakeTotal, stocktakes.length, 1)
+        const exportSortState = stocktakeSortState ?? defaultStocktakeSortState
+        const result = await service.listStocktakes({
+          search: stocktakeLastSearch || undefined,
+          status: stocktakeStatusQuery(stocktakeStatusSelection),
+          ...(stocktakeDateFilter !== 'all' && stocktakeDateFrom ? { from: stocktakeDateFrom } : {}),
+          ...(stocktakeDateFilter !== 'all' && stocktakeDateTo ? { to: stocktakeDateTo } : {}),
+          ...(stocktakeCreatedBy !== 'all' ? { created_by: stocktakeCreatedBy } : {}),
+          page: 1,
+          page_size: exportPageSize,
+          sort_key: exportSortState.key,
+          sort_direction: exportSortState.direction,
+        })
+        downloadManagementCsv({
+          filename: 'kiem-kho.csv',
+          rows: [
+            ['Mã phiếu', 'Thời gian', 'Mã hàng', 'Tên hàng', 'Tồn hệ thống', 'Thực tế', 'Chênh lệch', 'Trạng thái', 'Người tạo', 'Ghi chú'],
+            ...result.items.map((stocktake) => [
+              stocktake.code,
+              stocktake.created_at,
+              stocktake.product_code,
+              stocktake.product_name,
+              stocktake.product_system_qty ?? '',
+              stocktake.product_actual_qty ?? '',
+              stocktake.product_difference_qty ?? '',
+              stocktakeStatusText(stocktake.status),
+              stocktake.created_by?.name ?? '',
+              stocktake.note ?? '',
+            ]),
+          ],
+        })
+        return
+      }
+      const exportPageSize = Math.max(total, products?.length ?? 0, 1)
+      const result = await service.listInventoryProducts({
+        search: lastSearch || undefined,
+        status,
+        inventory_shape: shape === 'all' ? undefined : shape,
+        page: 1,
+        page_size: exportPageSize,
+      })
+      downloadManagementCsv({
+        filename: 'hang-ton-kho.csv',
+        rows: [
+          ['Mã hàng', 'Tên hàng', 'Đơn vị', 'Kiểu tồn', 'Tồn kho', 'Tồn âm', 'Trạng thái'],
+          ...result.items.map((product) => [
+            product.code,
+            product.name,
+            product.stock_unit,
+            shapeText(product.inventory_shape),
+            product.available_qty,
+            product.is_negative ? 'Có' : 'Không',
+            product.status === 'active' ? 'Đang kinh doanh' : 'Ngừng kinh doanh',
+          ]),
+        ],
+      })
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được file tồn kho.'))
     }
   }
 
@@ -606,8 +672,8 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               <button className="button button-secondary" disabled type="button">Tồn theo cuộn/tấm</button>
               <button className="button button-secondary" disabled type="button">Khui vật tư</button>
               <ManagementImportButton onClick={() => setStocktakeImportOpen(true)}>Import</ManagementImportButton>
-              <button className="button button-secondary" type="button">Xuất file</button>
-              <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất nhiều phiếu kiểm kho" type="button">
+                <button className="button button-secondary" type="button" onClick={() => void exportCurrentView()}>Xuất file</button>
+              <button className="button button-secondary" type="button" onClick={() => void exportCurrentView()}>
                 <FileOutput aria-hidden="true" size={16} />
                 Xuất file nhiều phiếu
               </button>

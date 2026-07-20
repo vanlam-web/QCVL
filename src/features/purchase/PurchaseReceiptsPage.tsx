@@ -58,6 +58,7 @@ import {
 import { normalizeManagementSearchText, preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
@@ -589,6 +590,45 @@ export function PurchaseReceiptsPage({
       setPageSize(result.page_size)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được phiếu nhập.'))
+    }
+  }
+
+  async function exportReceipts() {
+    setError(null)
+    try {
+      const exportPageSize = Math.max(total, receipts?.length ?? 0, 1)
+      const exportSortState = receiptSortState ?? defaultPurchaseReceiptSortState
+      const result = await service.listReceipts({
+        search: search.trim() || undefined,
+        status,
+        date_from: dateFrom || undefined,
+        date_to: dateTo || undefined,
+        created_by: createdBy === 'all' ? undefined : createdBy,
+        page: 1,
+        page_size: exportPageSize,
+        sort_key: exportSortState.key,
+        sort_direction: exportSortState.direction,
+      })
+      downloadManagementCsv({
+        filename: 'nhap-hang.csv',
+        rows: [
+          ['Mã nhập hàng', 'Thời gian', 'Nhà cung cấp', 'Số lượng', 'Thành tiền', 'Cần trả', 'Đã trả', 'Còn phải trả', 'Người tạo', 'Ghi chú'],
+          ...result.items.map((receipt) => [
+            receipt.code,
+            formatKvDateTime(receipt.received_at),
+            receipt.supplier.name,
+            receiptTotalQuantity(receipt),
+            receipt.subtotal_amount,
+            receipt.payable_amount,
+            receipt.paid_amount,
+            receipt.remaining_amount,
+            receipt.created_by.name,
+            receipt.notes?.trim() ?? '',
+          ]),
+        ],
+      })
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được phiếu nhập.'))
     }
   }
 
@@ -2511,7 +2551,7 @@ function clearReceiptCreateDraft() {
             onChange={changeReceiptSearch}
           />
           <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
-          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file phiếu nhập" type="button">
+          <button className="button button-secondary" type="button" onClick={() => void exportReceipts()}>
             <FileOutput aria-hidden="true" size={16} />
             Xuất file
           </button>

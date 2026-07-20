@@ -21,6 +21,7 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
@@ -210,6 +211,54 @@ export function SalesDocumentsPage({
       if (result.items.length === 0) setSelected(null)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được chứng từ bán hàng.'))
+    }
+  }
+
+  async function exportDocuments() {
+    setError(null)
+    try {
+      const exportPageSize = Math.max(state?.total ?? 0, state?.items.length ?? 0, 1)
+      const exportSortState = documentSortState ?? defaultSalesDocumentSortState
+      const result = await service.listSalesDocuments({
+        ...buildSalesDocumentListRequest({
+          search: lastSearch,
+          type: typeFilter,
+          status: statusFilter,
+          paymentStatus: paymentStatusFilter,
+          paymentMethod: paymentMethodFilter,
+          seller: sellerFilter,
+          priceList: priceListFilter,
+          time: timeFilter,
+          from: dateFrom,
+          to: dateTo,
+          page: 1,
+          page_size: exportPageSize,
+        }),
+        sort_key: exportSortState.key,
+        sort_direction: exportSortState.direction,
+      })
+      downloadManagementCsv({
+        filename: 'hoa-don.csv',
+        rows: [
+          ['Mã hóa đơn', 'Loại', 'Thời gian', 'Khách hàng', 'Trạng thái', 'Tổng tiền hàng', 'Giảm giá', 'Tổng sau giảm', 'Khách đã trả', 'Còn nợ', 'Người bán', 'Ghi chú'],
+          ...result.items.map((document) => [
+            document.code,
+            documentTypeFilterLabel(document.order_type),
+            salesDocumentCreatedDateTimeText(document),
+            document.customer.name,
+            salesDocumentStatusLabel(document),
+            document.subtotal_amount,
+            document.discount_amount,
+            document.total_amount,
+            document.paid_amount,
+            document.debt_amount,
+            document.seller.name,
+            document.note ?? '',
+          ]),
+        ],
+      })
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được file chứng từ bán hàng.'))
     }
   }
 
@@ -745,7 +794,7 @@ export function SalesDocumentsPage({
             onChange={changeDocumentSearch}
           />
           <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
-          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file chứng từ bán hàng" type="button">
+          <button className="button button-secondary" type="button" onClick={() => void exportDocuments()}>
             <FileOutput aria-hidden="true" size={16} />
             Xuất file
           </button>

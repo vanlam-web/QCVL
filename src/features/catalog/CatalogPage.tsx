@@ -26,6 +26,7 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { appRoutes } from '../../app/routes'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
@@ -311,6 +312,48 @@ export function CatalogPage({
       setSelectedDetailTab('info')
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được hàng hóa.'))
+    }
+  }
+
+  async function exportProducts() {
+    setError(null)
+    try {
+      const exportPageSize = Math.max(state?.total ?? 0, state?.products.length ?? 0, 1)
+      const exportSortState = productSortState ?? defaultProductSortState
+      const result = await service.listProducts({
+        search: lastSearch || undefined,
+        status: lastStatus,
+        page: 1,
+        page_size: exportPageSize,
+        ...(lastProductKindFilter === 'all' ? {} : { product_kind: lastProductKindFilter }),
+        ...(lastProductGroupFilter.length > 0 ? { product_group_id: lastProductGroupFilter } : {}),
+        ...(lastInventoryShapeFilter === 'all' ? {} : { inventory_shape: lastInventoryShapeFilter }),
+        ...(lastProductCreatedDateFrom ? { created_from: lastProductCreatedDateFrom } : {}),
+        ...(lastProductCreatedDateTo ? { created_to: lastProductCreatedDateTo } : {}),
+        sort_key: exportSortState.key,
+        sort_direction: exportSortState.direction,
+      })
+      downloadManagementCsv({
+        filename: 'hang-hoa.csv',
+        rows: [
+          ['Mã hàng', 'Tên hàng', 'Đơn vị', 'Nhóm hàng', 'Loại hàng', 'Kiểu tồn kho', 'Giá vốn', 'Giá bán', 'Tồn kho', 'Trạng thái', 'Ngày tạo'],
+          ...result.items.map((product) => [
+            product.code,
+            product.name,
+            product.unit_name,
+            product.product_group?.name ?? '',
+            product.product_kind ? productKindLabels[product.product_kind] : '',
+            catalogInventoryShapeLabel(product.inventory_shape ?? 'normal'),
+            product.latest_purchase_cost ?? '',
+            product.default_sale_price ?? '',
+            product.operating_stock?.quantity ?? '',
+            product.status === 'active' ? 'Đang kinh doanh' : 'Ngừng kinh doanh',
+            product.created_at ?? '',
+          ]),
+        ],
+      })
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không xuất được file hàng hóa.'))
     }
   }
 
@@ -935,7 +978,7 @@ export function CatalogPage({
             Tạo nhóm
           </button>
           <ManagementImportButton onClick={() => setProductImportOpen(true)} />
-          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file hàng hóa" type="button">
+          <button className="button button-secondary" type="button" onClick={() => void exportProducts()}>
             <FileOutput aria-hidden="true" size={16} />
             Xuất file
           </button>

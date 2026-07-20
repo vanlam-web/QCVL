@@ -13,7 +13,7 @@ interface FinanceFiltersPanelProps {
   onSearchChange: (value: string) => void
   onCreateVoucher: () => void
   onCreateExpenseVoucher: () => void
-  onExportCashbook: () => void
+  onExportCashbook: () => void | Promise<void>
   onOpenImport: () => void
 }
 
@@ -48,7 +48,7 @@ export function FinanceFiltersPanel({
           Phiếu chi
         </button>
         <ManagementImportButton onClick={onOpenImport}>Import</ManagementImportButton>
-        <button className="button button-secondary" type="button" onClick={onExportCashbook}>
+        <button className="button button-secondary" type="button" onClick={() => void onExportCashbook()}>
           <Download aria-hidden="true" size={16} />
           Xuất file
         </button>
