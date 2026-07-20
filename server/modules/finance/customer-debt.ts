@@ -209,3 +209,124 @@ export function mapCustomerDebtTotalsRow(row: CustomerDebtTotalsRow) {
         : row.last_activity_at.toISOString(),
   }
 }
+
+export interface MemoryCustomerDebtInvoice {
+  id: string
+  code: string
+  created_at: string
+  status: string
+  order_type: string
+  total_amount: number
+  debt_amount: number
+  customer: { id: string; code: string; name: string }
+}
+
+export interface MemoryCustomerDebtAdjustment {
+  customer_id: string
+  source_code: string
+  created_at: string
+  balance_after: number
+  amount_delta: number
+  paid_amount: number
+  remaining_amount: number
+  transaction_type: string
+  source_file: string | null
+  id: string
+}
+
+export interface MemoryCustomerDebtCashbook {
+  created_at: string
+  status: string
+  source_type: string
+  direction: 'in' | 'out'
+  amount_delta: number
+  code: string
+  source?: {
+    order_code?: string | null
+    customer_id?: string | null
+    counterparty_code?: string | null
+  } | null
+}
+
+export interface MemoryLinkedSupplierReceipt {
+  remaining_amount: number
+}
+
+/** In-memory port of customerDebtTotalsSql for a single customer. */
+export function computeCustomerDebtTotal(input: {
+  customerId: string
+  customerCode: string
+  customerName: string
+  invoices: MemoryCustomerDebtInvoice[]
+  adjustments: MemoryCustomerDebtAdjustment[]
+  cashbookEntries: MemoryCustomerDebtCashbook[]
+  linkedSupplierReceipts: MemoryLinkedSupplierReceipt[]
+  resolveInvoiceCustomerId: (invoice: MemoryCustomerDebtInvoice) => string | null
+}) {
+  const customerInvoices = input.invoices.filter((invoice) => (
+    invoice.order_type === 'invoice'
+    && invoice.status !== 'cancelled'
+    && input.resolveInvoiceCustomerId(invoice) === input.customerId
+  ))
+  const openInvoices = customerInvoices
+    .filter((invoice) => invoice.debt_amount > 0)
+    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
+  const liveRemaining = openInvoices.reduce((sum, invoice) => sum + invoice.debt_amount, 0)
+  const linkedSupplierTotal = input.linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
+
+  const anchor = [...input.adjustments]
+    .filter((adjustment) => adjustment.customer_id === input.customerId)
+    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))[0]
+
+  if (!anchor) {
+    return {
+      customer_id: input.customerId,
+      customer_code: input.customerCode,
+      customer_name: input.customerName,
+      total_debt: liveRemaining - linkedSupplierTotal,
+      open_invoice_count: openInvoices.length,
+      oldest_order_code: openInvoices[0]?.code ?? '',
+      has_kiotviet_anchor: false,
+      adjustments: input.adjustments.filter((adjustment) => adjustment.customer_id === input.customerId),
+    }
+  }
+
+  const anchorTime = Date.parse(anchor.created_at)
+  const invoicesAfter = customerInvoices.filter((invoice) => Date.parse(invoice.created_at) > anchorTime)
+  const openAfter = invoicesAfter.filter((invoice) => invoice.debt_amount > 0)
+  const grossAfter = invoicesAfter.reduce((sum, invoice) => sum + invoice.total_amount, 0)
+
+  let qcvlPaid = 0
+  let kvCashbookDelta = 0
+  for (const entry of input.cashbookEntries) {
+    if (entry.status !== 'posted' || Date.parse(entry.created_at) <= anchorTime) continue
+    if (entry.source_type === 'payment_receipt_method') {
+      const matchesCustomer = entry.source?.customer_id === input.customerId
+        || (entry.source?.order_code
+          && customerInvoices.some((invoice) => invoice.code === entry.source?.order_code))
+      if (!matchesCustomer) continue
+      qcvlPaid += entry.direction === 'in' ? Math.abs(entry.amount_delta) : -Math.abs(entry.amount_delta)
+      continue
+    }
+    if (entry.source_type === 'kiotviet_cashbook') {
+      const codeOk = new RegExp(KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN, 'i').test(entry.code)
+      const counterpartyOk = (entry.source?.counterparty_code ?? '') === input.customerCode
+      if (!codeOk || !counterpartyOk) continue
+      kvCashbookDelta += entry.direction === 'in' ? -Math.abs(entry.amount_delta) : Math.abs(entry.amount_delta)
+    }
+  }
+
+  return {
+    customer_id: input.customerId,
+    customer_code: input.customerCode,
+    customer_name: input.customerName,
+    total_debt: anchor.balance_after + grossAfter - qcvlPaid + kvCashbookDelta - linkedSupplierTotal,
+    open_invoice_count: openAfter.length,
+    oldest_order_code: openAfter[0]?.code ?? anchor.source_code,
+    has_kiotviet_anchor: true,
+    adjustments: input.adjustments
+      .filter((adjustment) => adjustment.customer_id === input.customerId)
+      .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),
+  }
+}
+

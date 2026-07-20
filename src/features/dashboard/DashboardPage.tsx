@@ -72,7 +72,9 @@ export function DashboardPage({
       productRankPeriod,
       customerRankPeriod,
     }
-    setStatus('loading')
+    queueMicrotask(() => {
+      if (active) setStatus('loading')
+    })
     service.loadDashboardData(loadInput)
       .then((data) => {
         if (!active) return

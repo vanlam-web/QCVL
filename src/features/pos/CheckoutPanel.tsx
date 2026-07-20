@@ -76,12 +76,14 @@ export function CheckoutPanel({
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CheckoutResult | null>(null)
   const [quoteResult, setQuoteResult] = useState<QuoteSummary | null>(null)
-  const [invoiceDate, setInvoiceDate] = useState(() => checkoutDateInputValue(orderCreatedAt))
-  const [invoiceTime, setInvoiceTime] = useState(() => formatCheckoutDateTime(orderCreatedAt).time)
+  const [invoiceDateDraft, setInvoiceDateDraft] = useState(() => ({ source: orderCreatedAt, value: checkoutDateInputValue(orderCreatedAt) }))
+  const [invoiceTimeDraft, setInvoiceTimeDraft] = useState(() => ({ source: orderCreatedAt, value: formatCheckoutDateTime(orderCreatedAt).time }))
   const [invoiceDateTimePickerOpen, setInvoiceDateTimePickerOpen] = useState<'date' | 'time' | null>(null)
   const [invoiceCalendarMonth, setInvoiceCalendarMonth] = useState(() => checkoutCalendarMonth(orderCreatedAt))
   const invoiceDateTimePickerRef = useRef<HTMLDivElement | null>(null)
   const customerPaymentInputRef = useRef<HTMLInputElement | null>(null)
+  const selectedCustomerId = selectedCustomer?.id ?? null
+  const effectiveOldDebtPaymentAmount = selectedCustomerId === null ? 0 : oldDebtPaymentAmount
 
   const {
     subtotal,
@@ -99,9 +101,9 @@ export function CheckoutPanel({
     cashAmountOverride,
     bankAmount,
     paymentMode,
-    selectedCustomerId: selectedCustomer?.id ?? null,
+    selectedCustomerId,
     surplusMode,
-    oldDebtPaymentAmount,
+    oldDebtPaymentAmount: effectiveOldDebtPaymentAmount,
   })
   const visibleCustomerDebt =
     selectedCustomer !== null && customerDebt?.customer_id === selectedCustomer.id ? customerDebt : null
@@ -115,6 +117,8 @@ export function CheckoutPanel({
   )
   const selectedBankAccountId = bankAccountId || pinnedBankAccount?.id || ''
   const selectedBankAccount = accounts.find((account) => account.id === selectedBankAccountId) ?? null
+  const invoiceDate = invoiceDateDraft.source === orderCreatedAt ? invoiceDateDraft.value : checkoutDateInputValue(orderCreatedAt)
+  const invoiceTime = invoiceTimeDraft.source === orderCreatedAt ? invoiceTimeDraft.value : formatCheckoutDateTime(orderCreatedAt).time
 
   useEffect(() => {
     let active = true
@@ -134,14 +138,7 @@ export function CheckoutPanel({
   useEffect(() => {
     let active = true
 
-    if (selectedCustomer === null) {
-      setCustomerDebt(null)
-      setCustomerDebtLedger(null)
-      setDebtLookupError(null)
-      setOldDebtPaymentAmount(0)
-      setOldDebtExpanded(false)
-      return
-    }
+    if (selectedCustomer === null) return
 
     const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
 
@@ -192,12 +189,6 @@ export function CheckoutPanel({
   }, [financeService, orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
-    setInvoiceDate(checkoutDateInputValue(orderCreatedAt))
-    setInvoiceTime(formatCheckoutDateTime(orderCreatedAt).time)
-    setInvoiceCalendarMonth(checkoutCalendarMonth(orderCreatedAt))
-  }, [orderCreatedAt])
-
-  useEffect(() => {
     if (invoiceDateTimePickerOpen === null) return
 
     function closeInvoiceDateTimePickerOnOutsidePointerDown(event: PointerEvent) {
@@ -228,13 +219,21 @@ export function CheckoutPanel({
   const selectedInvoiceDate = parseCheckoutDisplayDate(invoiceDate)
   const invoiceCalendarDays = checkoutCalendarDays(invoiceCalendarMonth)
   const selectInvoiceDate = (date: Date) => {
-    setInvoiceDate(formatCheckoutDisplayDate(date))
+    setInvoiceDateDraft({ source: orderCreatedAt, value: formatCheckoutDisplayDate(date) })
     setInvoiceCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1))
     setInvoiceDateTimePickerOpen(null)
   }
   const selectInvoiceTime = (time: string) => {
-    setInvoiceTime(time)
+    setInvoiceTimeDraft({ source: orderCreatedAt, value: time })
     setInvoiceDateTimePickerOpen(null)
+  }
+  const toggleInvoiceDatePicker = () => {
+    const nextOpen = invoiceDateTimePickerOpen === 'date' ? null : 'date'
+    if (nextOpen === 'date') {
+      const base = parseCheckoutDisplayDate(invoiceDate) ?? currentSystemDate()
+      setInvoiceCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1))
+    }
+    setInvoiceDateTimePickerOpen(nextOpen)
   }
 
   async function submitCheckout() {
@@ -414,7 +413,7 @@ export function CheckoutPanel({
               type="text"
               value={invoiceDate}
               onChange={(event) => {
-                setInvoiceDate(event.target.value)
+                setInvoiceDateDraft({ source: orderCreatedAt, value: event.target.value })
                 const parsed = parseCheckoutDisplayDate(event.target.value)
                 if (parsed) setInvoiceCalendarMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
               }}
@@ -424,7 +423,7 @@ export function CheckoutPanel({
               aria-label="Chọn ngày hóa đơn"
               className="checkout-panel-date-time-button checkout-panel-date-button"
               type="button"
-              onClick={() => setInvoiceDateTimePickerOpen((current) => current === 'date' ? null : 'date')}
+              onClick={toggleInvoiceDatePicker}
             >
               <CalendarDays aria-hidden="true" size={14} />
             </button>
@@ -469,7 +468,7 @@ export function CheckoutPanel({
               placeholder="HH:mm"
               type="text"
               value={invoiceTime}
-              onChange={(event) => setInvoiceTime(event.target.value)}
+              onChange={(event) => setInvoiceTimeDraft({ source: orderCreatedAt, value: event.target.value })}
             />
             <button
               aria-expanded={invoiceDateTimePickerOpen === 'time'}

@@ -59,13 +59,9 @@ export function PosTopbar({
   onOpenManualMaterialOpening,
 }: PosTopbarProps) {
   const hasProductSearch = productSearch.trim().length > 0
-  const [searchResultsOpen, setSearchResultsOpen] = useState(false)
+  const [searchResultsWanted, setSearchResultsWanted] = useState(false)
+  const searchResultsOpen = hasProductSearch && searchResultsWanted
   const searchRootRef = useRef<HTMLElement | null>(null)
-
-  useEffect(() => {
-    if (hasProductSearch) return
-    setSearchResultsOpen(false)
-  }, [hasProductSearch])
 
   useEffect(() => {
     if (!searchResultsOpen) return undefined
@@ -73,7 +69,7 @@ export function PosTopbar({
     function closeOnOutsidePointer(event: PointerEvent) {
       const target = event.target
       if (target instanceof Node && searchRootRef.current?.contains(target)) return
-      setSearchResultsOpen(false)
+      setSearchResultsWanted(false)
     }
 
     window.addEventListener('pointerdown', closeOnOutsidePointer)
@@ -101,11 +97,11 @@ export function PosTopbar({
             value={productSearch}
             placeholder="Tìm hàng, combo, vật tư"
             onFocus={() => {
-              setSearchResultsOpen(true)
+              setSearchResultsWanted(true)
               onProductSearchFocus()
             }}
             onChange={(event) => {
-              setSearchResultsOpen(true)
+              setSearchResultsWanted(true)
               onProductSearchChange(event.target.value)
             }}
             onKeyDown={onProductSearchKeyDown}
@@ -118,7 +114,7 @@ export function PosTopbar({
               type="button"
               onClick={() => {
                 if (hasProductSearch) {
-                  setSearchResultsOpen(false)
+                  setSearchResultsWanted(false)
                   onProductSearchChange('')
                   return
                 }

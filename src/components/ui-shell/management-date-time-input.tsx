@@ -39,11 +39,6 @@ export function ManagementDateTimeInput({
   const calendarDays = useMemo(() => managementDateTimeCalendarDays(calendarMonth), [calendarMonth])
 
   useEffect(() => {
-    if (!selectedDateTime) return
-    setCalendarMonth(new Date(selectedDateTime.getFullYear(), selectedDateTime.getMonth(), 1))
-  }, [selectedDateTime?.getFullYear(), selectedDateTime?.getMonth()])
-
-  useEffect(() => {
     if (pickerOpen === null) return
     function closeOnOutsidePointerDown(event: PointerEvent) {
       const root = rootRef.current
@@ -56,6 +51,7 @@ export function ManagementDateTimeInput({
   function selectDate(date: Date) {
     const base = selectedDateTime ?? currentSystemDate()
     onChange(formatManagementDateTimeInputText(new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())))
+    setCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1))
     setPickerOpen(null)
   }
 
@@ -64,6 +60,15 @@ export function ManagementDateTimeInput({
     const base = selectedDateTime ?? currentSystemDate()
     onChange(formatManagementDateTimeInputText(new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)))
     setPickerOpen(null)
+  }
+
+  function toggleDatePicker() {
+    const nextOpen = pickerOpen === 'date' ? null : 'date'
+    if (nextOpen === 'date') {
+      const base = selectedDateTime ?? currentSystemDate()
+      setCalendarMonth(new Date(base.getFullYear(), base.getMonth(), 1))
+    }
+    setPickerOpen(nextOpen)
   }
 
   return (
@@ -81,7 +86,7 @@ export function ManagementDateTimeInput({
           aria-label={dateButtonLabel}
           className="management-date-time-input-button management-date-time-input-button-date"
           type="button"
-          onClick={() => setPickerOpen((current) => current === 'date' ? null : 'date')}
+          onClick={toggleDatePicker}
         >
           <CalendarDays aria-hidden="true" size={15} />
         </button>
