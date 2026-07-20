@@ -820,9 +820,10 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).getByRole('columnheader', { name: 'Công nợ' })).toBeInTheDocument()
   expect(within(detail).queryByRole('columnheader', { name: 'Tổng cộng' })).not.toBeInTheDocument()
   expect(within(detail).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
-  expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010985/ })).getByText('150 000')).toBeInTheDocument()
-  expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('100 000')).toBeInTheDocument()
-  expect(within(within(debtSummaryTable).getByRole('row', { name: /HD010986/ })).getByText('240 000')).toBeInTheDocument()
+  expect(within(debtSummaryTable).getByRole('row', { name: /HD010985/ }).querySelectorAll('td')[2]).toHaveTextContent('150 000')
+  expect(within(debtSummaryTable).getByRole('row', { name: /HD010985/ }).querySelectorAll('td')[3]).toHaveTextContent('250 000')
+  expect(within(debtSummaryTable).getByRole('row', { name: /HD010986/ }).querySelectorAll('td')[2]).toHaveTextContent('100 000')
+  expect(within(debtSummaryTable).getByRole('row', { name: /HD010986/ }).querySelectorAll('td')[3]).toHaveTextContent('100 000')
   expect(within(debtSummaryTable).queryByText('Tổng')).not.toBeInTheDocument()
   expect(within(detail).getByRole('navigation', { name: 'Phân trang tóm tắt công nợ' })).toHaveTextContent('1 - 2 trong 2 hóa đơn mở')
 
