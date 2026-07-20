@@ -28,7 +28,7 @@ export function buildCustomerDebtLedgerRows(
   cashbookHistory: CashbookEntry[],
   adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
   linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
-  options: { currentTotal?: number } = {},
+  _options: { currentTotal?: number } = {},
 ): CustomerDebtLedgerRow[] {
   const rows: CustomerDebtLedgerSortableRow[] = [
     ...invoiceHistory
@@ -94,21 +94,6 @@ export function buildCustomerDebtLedgerRows(
     return { ...row, running_debt: runningDebt }
   })
 
-  if (options.currentTotal !== undefined && rowsWithRunningDebt.length > 0) {
-    const currentRunningDebt = rowsWithRunningDebt[rowsWithRunningDebt.length - 1]?.running_debt ?? 0
-    const reconciliationDelta = options.currentTotal - currentRunningDebt
-    if (Math.abs(reconciliationDelta) >= 1) {
-      rowsWithRunningDebt.push({
-        id: 'debt-reconciliation:current-total',
-        code: 'Đối soát công nợ',
-        created_at: rowsWithRunningDebt[rowsWithRunningDebt.length - 1]?.created_at ?? new Date(0).toISOString(),
-        type: 'Đối soát',
-        value_delta: reconciliationDelta,
-        running_debt: options.currentTotal,
-        href: null,
-      })
-    }
-  }
   return rowsWithRunningDebt.reverse()
 }
 
