@@ -2770,7 +2770,7 @@ async function getDevApiResponse(
               name,
               id: randomUUID(),
               code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`,
-              customer_group_id: body.customer_group_id ?? 'cg-retail',
+              customer_group_id: body.customer_group_id ?? null,
               created_by: createdBy,
               created_at: nowIso,
               total_sales_amount: 0,

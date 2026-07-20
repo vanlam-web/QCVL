@@ -140,6 +140,20 @@ describe('CustomerPanel', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })
 
+  it('hides seed retail group label and keeps no-group customer on general price', () => {
+    const retailCustomer = {
+      ...customer,
+      customer_group_id: 'cg-retail',
+      customer_group: { id: 'cg-retail', code: 'LE', name: 'Khach le' },
+    }
+
+    render(<CustomerPanel service={serviceStub()} selectedCustomer={retailCustomer} onSelectCustomer={vi.fn()} />)
+
+    expect(screen.getByRole('group', { name: 'Khách đã chọn' })).toHaveTextContent('Khach le')
+    expect(screen.queryByLabelText('Bảng giá Khach le')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Bảng giá cg-retail')).not.toBeInTheDocument()
+  })
+
   it('shows debt badge and can clear selected customer', async () => {
     const onSelectCustomer = vi.fn()
     const debtCustomer = {

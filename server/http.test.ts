@@ -4825,11 +4825,15 @@ describe('createHttpHandler', () => {
     expect(createBody.data).toEqual(expect.objectContaining({
       name: 'Minh Võ (may)',
       total_debt_amount: 0,
+      customer_group_id: null,
+      customer_group: null,
       created_by: expect.objectContaining({ id: 'user-dev-admin', name: 'Admin' }),
     }))
     expect(searchBody.data.items[0]).toEqual(expect.objectContaining({
       name: 'Minh Võ (may)',
       total_debt_amount: 0,
+      customer_group_id: null,
+      customer_group: null,
     }))
   })
 

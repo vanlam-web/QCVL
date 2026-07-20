@@ -812,6 +812,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             where organization_id = $1
               and $3::text is not null
               and id::text = $3::text
+              and coalesce(data->>'customer_group_id', '') not in ('cg-retail', 'cg-vip')
             limit 1
           ),
           default_list as (
@@ -919,7 +920,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     async createCustomer(input) {
       await ensureImportedSnapshotTables(pool)
       const code = input.code?.trim() || await nextManualCustomerCode(pool, input.organizationId)
-      const groupId = input.customer_group_id ?? 'cg-retail'
+      const groupId = input.customer_group_id ?? null
       const group = groupId ? await findCustomerGroupSnapshot(pool, input.organizationId, groupId) : null
       const createdAt = new Date().toISOString()
       const data: CustomerListData = {

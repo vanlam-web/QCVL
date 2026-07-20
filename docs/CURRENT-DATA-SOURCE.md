@@ -7,6 +7,7 @@
 - Runtime source of truth: Node API + PostgreSQL on NAS.
 - Dev UI: `127.0.0.1:3202`; NAS runtime: `100.84.228.125:3200`.
 - Truoc khi sua bug thay tren `3202`, kiem tra process that cua `3100`/`3202` dang chay tu repo nao. Da tung gap frontend `3202` chay workspace nay nhung API `3100` chay `D:\phan mem\QCVL`; sua nham repo lam UI van loi.
+- Seed nhom `cg-retail` / `cg-vip` khong phai nhom khach that tren POS. Khach khong chon nhom phai luu `customer_group_id = null`; POS khong hien chip nhom seed va pricing dung `Gia chung`.
 - Historical KiotViet export archive for verification: `Y:\DuLieuKV`.
 - Use `Y:\DuLieuKV` first when checking data exported from KiotViet before `12/07` or when cross-checking import source files.
 - Do not revive Supabase, RAM-only sales/finance, or demo fixture storage for runtime.

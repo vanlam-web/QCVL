@@ -124,9 +124,6 @@ describe('createPgRepository product units', () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
       if (sql.includes('select max(') && sql.includes('from customer_snapshots')) return { rows: [{ max_number: 21 }], rowCount: 1 }
-      if (sql.includes('from customer_snapshots') && sql.includes("data->'customer_group'") && sql.includes('limit 1')) {
-        return { rows: [{ customer_group: { id: 'cg-retail', code: 'LE', name: 'Khach le' } }], rowCount: 1 }
-      }
       if (sql.includes('insert into customer_snapshots')) {
         expect(values?.[2]).toBe('KH000022')
         return { rows: [], rowCount: 1 }
@@ -148,8 +145,10 @@ describe('createPgRepository product units', () => {
       name: 'Minh Võ (may)',
       total_debt_amount: 0,
       created_by: { id: 'user-1', name: 'Admin' },
-      customer_group_id: 'cg-retail',
+      customer_group_id: null,
+      customer_group: null,
     }))
+    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes("data->'customer_group'"))).toBe(false)
     expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into customer_snapshots'))).toBe(true)
   })
 

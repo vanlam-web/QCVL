@@ -111,7 +111,10 @@ export function CustomerPanel({
     hasSelectedCustomerDebtLedger
       ? customerPosCurrentDebtFromLedger(detailDebtLedger, selectedCustomer?.total_debt_amount ?? 0)
       : orderService === undefined ? selectedCustomer?.total_debt_amount ?? 0 : null
-  const selectedCustomerGroupName = selectedCustomer?.customer_group?.name?.trim() ?? ''
+  const selectedCustomerGroupName =
+    selectedCustomer?.customer_group && !isHiddenPosCustomerGroup(selectedCustomer.customer_group)
+      ? selectedCustomer.customer_group.name.trim()
+      : ''
 
   useEffect(() => {
     if (!suggestionsOpen) return undefined
@@ -757,7 +760,7 @@ function mergeSelectedCustomerGroup(groups: CustomerGroup[], customer: Customer)
   ]
 }
 
-function isHiddenPosCustomerGroup(group: CustomerGroup) {
+function isHiddenPosCustomerGroup(group: Pick<CustomerGroup, 'id' | 'name'>) {
   const normalizedName = group.name
     .trim()
     .toLowerCase()

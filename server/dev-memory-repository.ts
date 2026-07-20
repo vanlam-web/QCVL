@@ -5,6 +5,7 @@ import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUse
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
 const defaultPriceList = { id: 'pl-dev-default', name: 'Bang gia le' }
+const hiddenCustomerGroupIds = new Set(['cg-retail', 'cg-vip'])
 const adminUser = {
   id: 'user-dev-admin',
   email: 'admin@qc-oms.local',
@@ -452,7 +453,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const customer = input.customerId
         ? [...customers.values()].find((item) => item.id === input.customerId) ?? null
         : null
-      const customerPriceListKey = customer?.customer_group?.name
+      const customerPriceListKey = customer?.customer_group && !hiddenCustomerGroupIds.has(customer.customer_group.id)
         ? priceListKey(customer.customer_group.name)
         : null
       const customerPriceList = customerPriceListKey ? namedSalePrices.get(customerPriceListKey) ?? null : null
@@ -665,7 +666,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async createCustomer(input) {
       const code = input.code?.trim() || nextManualCustomerCode(customers)
-      const groupId = input.customer_group_id ?? 'cg-retail'
+      const groupId = input.customer_group_id ?? null
       const groupName = groupId ? customerGroupNamesById.get(groupId) ?? groupId : null
       const created = hydrateCustomerLinkedSupplier(hydrateCustomerCreator({
         id: `customer-manual-${slug(`${code}-${input.name}`)}`,
