@@ -181,9 +181,24 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('alter table cashbook_entries add column if not exists source'))).toBe(true)
   })
 
-  test('uses order debt when imported invoice debt entry is missing', async () => {
+  test('uses the shared canonical totals query for debt detail and customer totals', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000384',
+            customer_code: 'KH000384',
+            customer_name: 'Khach test',
+            total_debt: '600000',
+            open_invoice_count: 1,
+            oldest_order_code: 'HD010729',
+            has_kiotviet_anchor: false,
+            last_activity_at: new Date('2026-06-10T15:26:26.083Z'),
+          }],
+          rowCount: 1,
+        }
+      }
       if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
         return {
           rows: [{
@@ -205,12 +220,6 @@ describe('createPgRepository product units', () => {
           rowCount: 1,
         }
       }
-      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
-        return {
-          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '600000' }],
-          rowCount: 1,
-        }
-      }
       return { rows: [], rowCount: 0 }
     })
 
@@ -224,12 +233,31 @@ describe('createPgRepository product units', () => {
     expect(debt?.total_debt).toBe(600000)
     expect(debt?.invoices).toEqual([expect.objectContaining({ order_code: 'HD010729', remaining_debt: 600000 })])
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(600000)
-    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('left join customer_debt_entries cde'))).toBe(true)
+    const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
+    expect(canonicalSql).toContain('left join customer_debt_entries cde')
+    expect(canonicalSql).toContain('kiotviet_anchor')
+    expect(canonicalSql).toContain("source_type = 'payment_receipt_method'")
+    expect(canonicalSql).toContain('CB')
   })
 
   test('subtracts linked supplier receipts from customer debt totals', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000384',
+            customer_code: 'KH000384',
+            customer_name: 'Khach test',
+            total_debt: '510000',
+            open_invoice_count: 1,
+            oldest_order_code: 'HD010729',
+            has_kiotviet_anchor: false,
+            last_activity_at: new Date('2026-06-11T10:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
       if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
         return {
           rows: [{
@@ -240,18 +268,6 @@ describe('createPgRepository product units', () => {
             paid_amount: '0',
             debt_amount: '600000',
             remaining_debt: '600000',
-          }],
-          rowCount: 1,
-        }
-      }
-      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('linked_customer_id') && sql.includes('total_linked_supplier_receipts')) {
-        return {
-          rows: [{
-            customer_id: 'customer-kv-kh000384',
-            customer_code: 'KH000384',
-            customer_name: 'Khach test',
-            total_linked_supplier_receipts: '90000',
-            last_activity_at: new Date('2026-06-11T10:00:00.000Z'),
           }],
           rowCount: 1,
         }
@@ -279,12 +295,6 @@ describe('createPgRepository product units', () => {
           rowCount: 1,
         }
       }
-      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
-        return {
-          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '600000' }],
-          rowCount: 1,
-        }
-      }
       return { rows: [], rowCount: 0 }
     })
 
@@ -298,31 +308,27 @@ describe('createPgRepository product units', () => {
     expect(debt?.total_debt).toBe(510000)
     expect(debt?.linked_supplier_receipts).toEqual([expect.objectContaining({ code: 'PN000685', remaining_amount: 90000 })])
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
+    const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
+    expect(canonicalSql).toContain('linked_supplier_offset')
   })
 
-  test('prefers live invoice debt over stale imported adjustment totals for customer lists', async () => {
+  test('keeps list, detail and customer totals on the same canonical value including negative balances', async () => {
     const { createPgRepository } = await import('./db')
+    const canonicalRow = {
+      customer_id: 'customer-kv-kh000384',
+      customer_code: 'KH000384',
+      customer_name: 'Khach test',
+      total_debt: '-50000',
+      open_invoice_count: 0,
+      oldest_order_code: 'CB000123',
+      has_kiotviet_anchor: true,
+      last_activity_at: new Date('2026-07-19T00:00:00.000Z'),
+    }
     pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) return { rows: [canonicalRow], rowCount: 1 }
       if (sql.includes('select customer_id, sum(total_amount) as total_sales_amount')) {
         return {
           rows: [{ customer_id: 'customer-kv-kh000384', total_sales_amount: '719396', last_activity_at: new Date('2026-07-20T00:00:00.000Z') }],
-          rowCount: 1,
-        }
-      }
-      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
-        return {
-          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '179396' }],
-          rowCount: 1,
-        }
-      }
-      if (sql.includes('total_linked_supplier_receipts')) return { rows: [], rowCount: 0 }
-      if (sql.includes('with latest_adjustment')) {
-        return {
-          rows: [{
-            customer_id: 'customer-kv-kh000384',
-            total_debt_amount: '3029396',
-            last_activity_at: new Date('2026-07-19T00:00:00.000Z'),
-          }],
           rowCount: 1,
         }
       }
@@ -330,11 +336,71 @@ describe('createPgRepository product units', () => {
     })
 
     const repository = createPgRepository('postgres://unit-test')
+    const list = await repository.listCustomerDebts?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/finance/customer-debts'),
+    })
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-kh000384',
+    })
     const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
 
-    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(179396)
-    const adjustmentSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with latest_adjustment'))?.[0])
-    expect(adjustmentSql).toContain('CB')
+    expect(list).toEqual([expect.objectContaining({ customer_id: 'customer-kv-kh000384', total_debt: -50000 })])
+    expect(debt?.total_debt).toBe(-50000)
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(-50000)
+  })
+
+  test('collects legacy KiotViet-anchored debt when no open debt entries exist', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000384',
+            customer_code: 'KH000384',
+            customer_name: 'Khach test',
+            total_debt: '500000',
+            open_invoice_count: 0,
+            oldest_order_code: 'CB000123',
+            has_kiotviet_anchor: true,
+            last_activity_at: new Date('2026-07-01T00:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('limit 1') && sql.includes('balance_after') && sql.includes('for update')) {
+        return {
+          rows: [{
+            id: 'adjustment-anchor-1',
+            source_code: 'CB000123',
+            paid_amount: '0',
+            balance_after: '500000',
+            customer_snapshot: { name: 'Khach test', phone: null },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('regexp_match')) return { rows: [{ max_seq: 41 }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.collectCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-kh000384',
+      amount: 200000,
+      cashAmount: 200000,
+      bankAmount: 0,
+    })
+
+    expect(result).toEqual({ payment_receipt_id: 'TT000042', allocated_amount: 200000 })
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('update customer_debt_adjustments') && sql.includes('paid_amount = paid_amount + $1'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('insert into payment_receipts'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('insert into cashbook_entries'))).toBe(true)
+    const receiptInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into payment_receipts'))
+    expect(receiptInsert?.[1]?.[4]).toBeNull()
   })
 
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {

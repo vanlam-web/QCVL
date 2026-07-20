@@ -1516,9 +1516,7 @@ function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], pay
 
 function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerState | undefined, fallbackDebt: number) {
   if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
-  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
-  return totalDebt
+  return customerDebtHasLiveLedger(debtLedger.debt) ? debtLedger.debt.total_debt : fallbackDebt
 }
 
 function CustomerDebtPanel({
