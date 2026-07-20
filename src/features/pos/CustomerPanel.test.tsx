@@ -215,6 +215,29 @@ describe('CustomerPanel', () => {
             source_file: 'BaoCaoCongNoTheoKhachHang_KV.xlsx',
           },
         ],
+        cashbook_entries: [
+          {
+            id: 'cashbook-1',
+            code: 'TT001838',
+            status: 'posted' as const,
+            direction: 'in' as const,
+            amount_delta: 29104775,
+            finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+            is_business_accounted: true,
+            source_type: 'kiotviet_cashbook' as const,
+            created_at: '2026-07-15T10:00:00.000Z',
+            note: null,
+            counterparty: { type: 'customer' as const, name: detailedCustomer.name, phone: detailedCustomer.phone },
+            created_by: null,
+            source: {
+              type: 'payment_receipt',
+              id: 'payment-1',
+              code: 'TT001838',
+              order_code: null,
+              counterparty_code: detailedCustomer.code,
+            },
+          },
+        ],
       })),
     })
     const salesDocumentService = salesDocumentServiceStub({
@@ -242,37 +265,7 @@ describe('CustomerPanel', () => {
         total: 1,
       })),
     })
-    const financeService = financeServiceStub({
-      listCashbookEntries: vi.fn(async () => ({
-        items: [
-          {
-            id: 'cashbook-1',
-            code: 'TT001838',
-            status: 'posted' as const,
-            direction: 'in' as const,
-            amount_delta: 29104775,
-            finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
-            is_business_accounted: true,
-            source_type: 'kiotviet_cashbook' as const,
-            created_at: '2026-07-15T10:00:00.000Z',
-            note: null,
-            counterparty: { type: 'customer' as const, name: detailedCustomer.name, phone: detailedCustomer.phone },
-            created_by: null,
-            source: {
-              type: 'payment_receipt',
-              id: 'payment-1',
-              code: 'TT001838',
-              order_code: null,
-              counterparty_code: detailedCustomer.code,
-            },
-          },
-        ],
-        page: 1,
-        page_size: 1000,
-        total: 1,
-        summary: { opening_balance: 0, total_in: 29104775, total_out: 0, ending_balance: 29104775 },
-      })),
-    })
+    const financeService = financeServiceStub()
     const updatedCustomer = {
       ...detailedCustomer,
       name: 'Út Tèo mới',
@@ -351,13 +344,7 @@ describe('CustomerPanel', () => {
     expect(within(reopenedDialog).getAllByText('50 130 458').length).toBeGreaterThan(0)
     expect(within(reopenedDialog).getByText('CB000001')).toBeInTheDocument()
     expect(within(reopenedDialog).getByText('TT001838')).toBeInTheDocument()
-    expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
-      search: detailedCustomer.name,
-      search_scope: 'counterparty',
-      status: 'posted',
-      page: 1,
-      page_size: 1000,
-    })
+    expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
 
     await userEvent.click(within(reopenedDialog).getByRole('tab', { name: 'Lịch sử' }))
     expect(await within(reopenedDialog).findByRole('table', { name: 'Lịch sử hóa đơn POS' })).toBeInTheDocument()

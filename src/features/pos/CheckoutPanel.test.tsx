@@ -737,6 +737,29 @@ it('shows the backend canonical debt total for the checkout debt badge', async (
           source_file: 'BaoCaoCongNoTheoKhachHang_KV.xlsx',
         },
       ],
+      cashbook_entries: [
+        {
+          id: 'cashbook-1',
+          code: 'TT001838',
+          status: 'posted' as const,
+          direction: 'in' as const,
+          amount_delta: 351991,
+          finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+          is_business_accounted: true,
+          source_type: 'kiotviet_cashbook' as const,
+          created_at: '2026-07-12T03:00:00Z',
+          note: null,
+          counterparty: { type: 'customer' as const, name: customer.name, phone: customer.phone },
+          created_by: null,
+          source: {
+            type: 'payment_receipt',
+            id: 'payment-1',
+            code: 'TT001838',
+            order_code: null,
+            counterparty_code: customer.code,
+          },
+        },
+      ],
     })),
   })
   const salesDocumentService = makeSalesDocumentService({
@@ -764,37 +787,7 @@ it('shows the backend canonical debt total for the checkout debt badge', async (
       total: 1,
     })),
   })
-  const financeService = makeFinanceService({
-    listCashbookEntries: vi.fn(async () => ({
-      items: [
-        {
-          id: 'cashbook-1',
-          code: 'TT001838',
-          status: 'posted' as const,
-          direction: 'in' as const,
-          amount_delta: 351991,
-          finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
-          is_business_accounted: true,
-          source_type: 'kiotviet_cashbook' as const,
-          created_at: '2026-07-12T03:00:00Z',
-          note: null,
-          counterparty: { type: 'customer' as const, name: customer.name, phone: customer.phone },
-          created_by: null,
-          source: {
-            type: 'payment_receipt',
-            id: 'payment-1',
-            code: 'TT001838',
-            order_code: null,
-            counterparty_code: customer.code,
-          },
-        },
-      ],
-      page: 1,
-      page_size: 1000,
-      total: 1,
-      summary: { opening_balance: 0, total_in: 351991, total_out: 0, ending_balance: 351991 },
-    })),
-  })
+  const financeService = makeFinanceService()
 
   render(
     <CheckoutPanel
@@ -815,13 +808,7 @@ it('shows the backend canonical debt total for the checkout debt badge', async (
     page: 1,
     page_size: 1000,
   })
-  expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
-    search: 'Cong ty ABC',
-    search_scope: 'counterparty',
-    status: 'posted',
-    page: 1,
-    page_size: 1000,
-  })
+  expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
 })
 
 it('submits old debt collection separately from the current invoice payment', async () => {

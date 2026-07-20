@@ -7,9 +7,7 @@ import { CustomerCreateDialog, createCustomerFormDefaults, type CustomerCreateFo
 import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/customer-presenter'
 import {
   buildCustomerDebtLedgerRows,
-  customerDebtCounterpartyMatches,
   customerDebtCurrentAmountFromLedger,
-  mergeCustomerDebtCashbookEntries,
 } from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer, CustomerGroup } from '../catalog/types'
@@ -44,14 +42,13 @@ const hiddenPosCustomerGroupNames = new Set(['khach le', 'khach si'])
 export function CustomerPanel({
   service,
   orderService,
-  financeService,
   salesDocumentService,
   selectedCustomer,
   onSelectCustomer,
 }: {
   service: CatalogService
   orderService?: Pick<OrderService, 'getCustomerDebt'>
-  financeService?: Pick<FinanceService, 'listCashbookEntries'>
+  financeService?: Pick<FinanceService, never>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer | null) => void
@@ -120,7 +117,6 @@ export function CustomerPanel({
     })
 
     if (orderService) {
-      const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
       Promise.all([
         orderService.getCustomerDebt(selectedCustomer.id),
         salesDocumentService?.listSalesDocuments({
@@ -129,28 +125,14 @@ export function CustomerPanel({
           page: 1,
           page_size: customerDebtLedgerFetchPageSize,
         }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
-        financeService?.listCashbookEntries({
-          search: counterpartySearch || undefined,
-          search_scope: 'counterparty',
-          status: 'posted',
-          page: 1,
-          page_size: customerDebtLedgerFetchPageSize,
-        }) ?? Promise.resolve({
-          items: [],
-          page: 1,
-          page_size: customerDebtLedgerFetchPageSize,
-          total: 0,
-          summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
-        }),
       ])
-        .then(([debt, invoiceHistory, cashbookHistory]) => {
+        .then(([debt, invoiceHistory]) => {
           if (detailRequestId.current !== requestId) return
-          const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer))
           setDetailDebt(debt)
           setDetailDebtLedger({
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
+            cashbookHistory: debt.cashbook_entries ?? [],
           })
         })
         .catch(() => {
@@ -170,7 +152,7 @@ export function CustomerPanel({
           if (detailRequestId.current === requestId) setDetailHistory('error')
         })
     }
-  }, [financeService, orderService, salesDocumentService, selectedCustomer])
+  }, [orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
     if (!detailOpen && !createOpen) return

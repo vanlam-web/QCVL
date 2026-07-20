@@ -103,6 +103,23 @@ function makeOrderService(overrides: Partial<Pick<OrderService, 'getCustomerDebt
           remaining_debt: 50000,
         },
       ],
+      cashbook_entries: [
+        {
+          id: 'cashbook-1',
+          code: 'TT000001',
+          status: 'posted' as const,
+          direction: 'in' as const,
+          amount_delta: 190000,
+          finance_account: { id: 'cash-main', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+          is_business_accounted: true,
+          source_type: 'payment_receipt_method' as const,
+          created_at: '2026-06-29T18:00:00Z',
+          note: null,
+          counterparty: { type: 'customer' as const, name: 'Công ty Phong Cảnh', phone: '0909000000' },
+          created_by: { id: 'user-admin', name: 'Admin' },
+          source: { type: 'payment_receipt', id: 'TT000001', code: 'TT000001', order_code: 'HD010986' },
+        },
+      ],
     })),
     ...overrides,
   } satisfies Pick<OrderService, 'getCustomerDebt'>
@@ -800,13 +817,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).queryByText('Lịch sử công nợ')).not.toBeInTheDocument()
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 })
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 1000 })
-  expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
-    search: 'Công ty Phong Cảnh',
-    search_scope: 'counterparty',
-    status: 'posted',
-    page: 1,
-    page_size: 1000,
-  })
+  expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
   expect(within(detail).getByRole('button', { name: 'Tóm tắt' })).toHaveAttribute('aria-pressed', 'true')
   expect(within(detail).getByRole('button', { name: 'Chi tiết' })).toHaveAttribute('aria-pressed', 'false')
   const debtSummaryTable = within(detail).getByRole('table', { name: 'Tóm tắt công nợ' })

@@ -3,7 +3,6 @@ import { parseDateTimeValue } from '../../lib/date-format'
 import type { CashbookEntry } from '../finance/types'
 import type { CustomerDebtDetail } from '../orders/order-service'
 import type { SalesDocumentListItem } from '../sales-documents/sales-document-service'
-import type { Customer } from './types'
 
 export type CustomerDebtAdjustment = NonNullable<CustomerDebtDetail['adjustments']>[number]
 
@@ -118,31 +117,6 @@ export function customerDebtHasLiveLedger(debt: CustomerDebtDetail) {
     || (debt.cashbook_entries?.length ?? 0) > 0
 }
 
-export function customerDebtCounterpartyMatches(entry: CashbookEntry, customer: Customer) {
-  const counterparty = normalizeCustomerDebtText(`${entry.counterparty?.name ?? ''} ${entry.counterparty?.phone ?? ''} ${entry.source?.counterparty_code ?? ''}`)
-  const customerName = normalizeCustomerDebtText(customer.name)
-  const customerCode = normalizeCustomerDebtText(customer.code)
-  const customerPhone = normalizeCustomerDebtText(customer.phone ?? '')
-  return (counterparty.length > 0 && customerName.length > 0 && (counterparty.includes(customerName) || customerName.includes(counterparty)))
-    || (customerCode.length > 0 && counterparty.includes(customerCode))
-    || (customerPhone.length > 0 && counterparty.includes(customerPhone))
-}
-
-export function mergeCustomerDebtCashbookEntries(
-  backendEntries: CashbookEntry[] | undefined,
-  fetchedEntries: CashbookEntry[],
-) {
-  const entries: CashbookEntry[] = []
-  const seen = new Set<string>()
-  for (const entry of [...(backendEntries ?? []), ...fetchedEntries]) {
-    const key = entry.id || `${entry.code}:${entry.created_at}:${entry.amount_delta}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    entries.push(entry)
-  }
-  return entries
-}
-
 function customerDebtAdjustmentHref(code: string) {
   if (/^PN/i.test(code)) return managementRecordOpenHref('/purchase/receipts', code)
   return null
@@ -178,12 +152,3 @@ function kiotVietCashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
     || /^TNHHD\d/i.test(entry.code)
 }
 
-function normalizeCustomerDebtText(value: string) {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/đ/g, 'd')
-    .replace(/\s+/g, ' ')
-    .trim()
-}

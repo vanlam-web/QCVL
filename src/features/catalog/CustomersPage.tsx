@@ -62,9 +62,7 @@ import type { SalesDocumentListItem, SalesDocumentService } from '../sales-docum
 import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType } from './customer-filters'
 import {
   buildCustomerDebtLedgerRows,
-  customerDebtCounterpartyMatches,
   customerDebtHasLiveLedger,
-  mergeCustomerDebtCashbookEntries,
   type CustomerDebtAdjustment,
   type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
@@ -210,7 +208,7 @@ export function CustomersPage({
   service: CatalogService
   orderService: Pick<OrderService, 'getCustomerDebt'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
-  financeService?: Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt' | 'updateCustomerDebtAdjustment'>
+  financeService?: Pick<FinanceService, 'listAccounts' | 'collectCustomerDebt' | 'updateCustomerDebtAdjustment'>
 }) {
   const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
   const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
@@ -521,8 +519,6 @@ export function CustomersPage({
     customerDebtLedgerRequestsRef.current.add(customer.id)
     setCustomerDebts((debts) => ({ ...debts, [customer.id]: 'loading' }))
     setCustomerDebtLedgers((ledgers) => ({ ...ledgers, [customer.id]: 'loading' }))
-    const counterpartySearch = customer.name.trim() || customer.code
-
     Promise.all([
       orderService.getCustomerDebt(customer.id),
       salesDocumentService?.listSalesDocuments({
@@ -531,29 +527,15 @@ export function CustomersPage({
         page: 1,
         page_size: customerDebtLedgerFetchPageSize,
       }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
-      financeService?.listCashbookEntries({
-        search: counterpartySearch || undefined,
-        search_scope: 'counterparty',
-        status: 'posted',
-        page: 1,
-        page_size: customerDebtLedgerFetchPageSize,
-      }) ?? Promise.resolve({
-        items: [],
-        page: 1,
-        page_size: customerDebtLedgerFetchPageSize,
-        total: 0,
-        summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
-      }),
     ])
-      .then(([debt, invoiceHistory, cashbookHistory]) => {
-        const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, customer))
+      .then(([debt, invoiceHistory]) => {
         setCustomerDebts((debts) => ({ ...debts, [customer.id]: debt }))
         setCustomerDebtLedgers((ledgers) => ({
           ...ledgers,
           [customer.id]: {
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
+            cashbookHistory: debt.cashbook_entries ?? [],
           },
         }))
       })

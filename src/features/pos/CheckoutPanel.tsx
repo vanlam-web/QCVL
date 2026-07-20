@@ -2,11 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { CalendarDays, Clock3, Pin } from 'lucide-react'
 import type { Customer } from '../catalog/types'
-import {
-  customerDebtCounterpartyMatches,
-  customerDebtCurrentAmountFromLedger,
-  mergeCustomerDebtCashbookEntries,
-} from '../catalog/customer-debt-ledger'
+import { customerDebtCurrentAmountFromLedger } from '../catalog/customer-debt-ledger'
 import type { FinanceService } from '../finance/finance-service'
 import type { CashbookEntry } from '../finance/types'
 import type {
@@ -30,7 +26,6 @@ export function CheckoutPanel({
   cartLines,
   selectedCustomer,
   orderService,
-  financeService,
   salesDocumentService,
   orderNote = '',
   quoteBlockedReason = null,
@@ -43,7 +38,7 @@ export function CheckoutPanel({
   cartLines: CheckoutCartLine[]
   selectedCustomer: Customer | null
   orderService: OrderService
-  financeService?: Pick<FinanceService, 'listCashbookEntries'>
+  financeService?: Pick<FinanceService, never>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
   orderNote?: string
   quoteBlockedReason?: string | null
@@ -141,8 +136,6 @@ export function CheckoutPanel({
 
     if (selectedCustomer === null) return
 
-    const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
-
     Promise.all([
       orderService.getCustomerDebt(selectedCustomer.id),
       salesDocumentService?.listSalesDocuments({
@@ -151,28 +144,14 @@ export function CheckoutPanel({
         page: 1,
         page_size: 1000,
       }) ?? Promise.resolve({ items: [], page: 1, page_size: 1000, total: 0 }),
-      financeService?.listCashbookEntries({
-        search: counterpartySearch || undefined,
-        search_scope: 'counterparty',
-        status: 'posted',
-        page: 1,
-        page_size: 1000,
-      }) ?? Promise.resolve({
-        items: [],
-        page: 1,
-        page_size: 1000,
-        total: 0,
-        summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
-      }),
     ])
-      .then(([debt, invoiceHistory, cashbookHistory]) => {
+      .then(([debt, invoiceHistory]) => {
         if (active) {
-          const fetchedCashbookEntries = cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer))
           setCustomerDebt(debt)
           setCustomerDebtLedger({
             debt,
             invoiceHistory: invoiceHistory.items,
-            cashbookHistory: mergeCustomerDebtCashbookEntries(debt.cashbook_entries, fetchedCashbookEntries),
+            cashbookHistory: debt.cashbook_entries ?? [],
           })
           setDebtLookupError(null)
           setOldDebtPaymentAmount(0)
@@ -188,7 +167,7 @@ export function CheckoutPanel({
     return () => {
       active = false
     }
-  }, [financeService, orderService, salesDocumentService, selectedCustomer])
+  }, [orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
     if (invoiceDateTimePickerOpen === null) return
