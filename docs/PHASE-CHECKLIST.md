@@ -138,6 +138,7 @@ Chá»‰ má»Ÿ khi Owner chá»n vÃ  Spec xÃ¡c nháº­n Source of Trut
 | Viá»‡c | Má»©c sáºµn sÃ ng | Ghi chÃº |
 |---|---|---|
 | Purchase P4 â€” nháº­p cuá»™n/táº¥m váº­t lÃ½ | Trung bÃ¬nh | Cáº§n khá»›p vá»›i model kho cuá»™n/táº¥m hiá»‡n táº¡i trÆ°á»›c khi implement |
+| BOM KV runtime alignment (Owner 2026-07-20) | Chờ Owner bảo làm | SoT xong 3 lớp ở `docs/03-BUSINESS-NghiepVu/BOM/README.md`. Code: import `active`, Postgres POS không trừ mã combo, migrate draft, UI bỏ nháp, nối/ẩn stub `/bom` |
 | Product/Inventory/POS completion | Đang mở | V1 đang chạy được với dữ liệu import + fallback tồn KV tạm; chi tiet hang/dong hang va So quy detail da on tren `3202`; `/pos/cart/validate` da implement; phan con lai la detail cac module chua ra, POS roll/sheet object-level deduction, va doi chieu KV/QCVL theo bo loc |
 | V1 functional gaps | Đang mở | Làm trên local `3202` trước, xong từng bước mới đẩy `3200`: 1) tiep tuc ra soat UI detail con lai khi cham module; 2) cac nut them/sua/xoa con thieu; 3) filter con thieu hoac chua dung shared controls; 4) bao cao doi chieu du lieu theo tung module truoc khi coi V1 on dinh |
 | PriceBook product groups/filter | Trung bÃ¬nh | Cáº§n schema/UI filter nhÃ³m hÃ ng náº¿u Owner cáº§n |

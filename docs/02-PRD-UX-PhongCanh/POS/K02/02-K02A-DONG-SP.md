@@ -45,7 +45,7 @@
 - Combo Cấp 2: Hiển thị phẳng, **khoá tuyệt đối** — chỉ sửa SL.
 - Cơ chế lưu: `(•) Không lưu — Chỉ trừ kho` | `( ) Lưu Combo mới`
 
-> Ranh giới hiện tại (Owner 2026-07-20): BOM KV active dùng ngay; bán combo trừ thành phần, không trừ mã combo. BOM thêm/sửa trong POS vẫn là định mức dòng (`Không lưu — Chỉ trừ kho` / `Lưu Combo mới`). Deep-scan combo lồng nhau để sau khi DB/API nhiều cấp đủ.
+> Ranh giới: **SoT Owner 2026-07-20** — BOM KV `active` dùng ngay; bán combo trừ thành phần, không trừ mã combo. POS chỉnh BOM dòng (`Không lưu` / `Lưu Combo mới`) và deep-scan nhiều cấp = **hướng dài / chưa runtime đầy đủ**. **Runtime chưa khớp SoT** — [BOM README mục 2](../../../03-BUSINESS-NghiepVu/BOM/README.md).
 
 → [Chi tiết](./02a-K02A-SP-THUONG.md#trường-hợp-3-hàng-combo-/-định-mức-vật-tư-bom)
 

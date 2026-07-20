@@ -310,7 +310,7 @@ Sản phẩm ngưng bán:
 - Bán thiếu tồn hiển thị cảnh báo nhưng vẫn cho tiếp tục.
 - Tạo/lưu đơn bán chính thức có dòng cần trừ kho tạo stock movement.
 - Dữ liệu máy sản xuất không tự tạo stock movement trong MVP.
-- Combo có BOM: bán chỉ trừ thành phần; không trừ tồn mã combo; không sản xuất sẵn (Owner 2026-07-20).
+- Combo có BOM: **SoT** bán chỉ trừ thành phần; không trừ mã combo; không sản xuất sẵn (Owner 2026-07-20). **Runtime chưa khớp đủ** — [BOM README mục 2](../BOM/README.md).
 - Import tồn KiotViet ban đầu được phép là tồn tạm, nhưng hàng cuộn/tấm phải có trạng thái/chỉ dấu chưa chuẩn hóa vật lý.
 - Hàng `normal` cho sửa tổng tồn.
 - Hàng `roll` không cho sửa tổng tồn, phải sửa theo từng cuộn.

@@ -69,6 +69,19 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 3. Đổi nghĩa `draft_bom` + bỏ copy “nháp / cần rà soát”.
 4. Nối thật `GET|POST .../bom` (hoặc tạm ẩn sửa BOM nếu chưa sẵn sàng).
 
+### Tiến trình tài liệu / code (cập nhật khi làm)
+
+| Việc | Trạng thái |
+|---|---|
+| SoT 3 lớp (quyết định / runtime / hướng dài) trong README này | Xong |
+| RULES / TABLES / API tách slice vs hướng dài | Xong |
+| Sales / STOCK / checklist trỏ về mục 2 | Xong |
+| PRD/plan/API vệ tinh hết chỗ khẳng định “runtime đã active” | Đang dọn (mỗi PR docs phải khớp cột này) |
+| Runtime slice KV (4 bước trên) | **Chưa** — chờ Owner bảo làm |
+| Hướng dài mục 3 | **Chưa** — không nhầm với slice KV |
+
+**Quy tắc:** Doc vệ tinh chỉ được viết “import `active` / dùng ngay” như **SoT mục tiêu**. Nếu nói về hành vi đang chạy phải ghi **Runtime chưa khớp** hoặc link mục 2. Không viết “đã ghi active” khi code còn `draft`.
+
 ---
 
 ## 3. Hướng dài / chưa làm (đã chốt hướng, chưa slice)

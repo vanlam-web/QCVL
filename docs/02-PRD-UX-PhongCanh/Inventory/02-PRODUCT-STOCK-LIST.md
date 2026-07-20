@@ -48,7 +48,7 @@ Export KiotViet file thật `DanhSachSanPham_KV09072026-215404-812.xlsx` đượ
 - Không đưa barcode/QR scan, tự động gợi ý thông tin hàng hóa, thuộc tính retail hoặc bảo hành/bảo trì vào MVP.
 - Nhà cung cấp chỉ đưa vào sau khi Purchase/phiếu nhập có dữ liệu thật. Quan hệ đúng là nhiều-nhiều giữa hàng hóa và nhà cung cấp, không dùng một `primary_supplier_id` duy nhất làm nguồn sự thật. Không làm vị trí kho trong scope hiện tại.
 - Tồn âm là dữ liệu thực tế nên danh sách/báo cáo cần hiển thị rõ để xử lý, không ẩn.
-- Cột `Vật tư cấu thành` xác nhận BOM/định mức là nghiệp vụ thật. QC-OMS hỗ trợ nhập/sửa BOM cấp 1 khi tạo combo và trong chi tiết hàng hóa. Import KiotViet đã ghi BOM từ `Hàng thành phần` vào `product_boms`/`product_bom_items` ở trạng thái dùng ngay (`active`, Owner 2026-07-20). Field API `draft_bom` giữ tên cũ nhưng nội dung là BOM đang dùng.
+- Cột `Vật tư cấu thành` xác nhận BOM/định mức là nghiệp vụ thật. QC-OMS hỗ trợ nhập/sửa BOM cấp 1 khi tạo combo và trong chi tiết hàng hóa. **SoT Owner 2026-07-20:** import KV → BOM `active` dùng ngay; field `draft_bom` giữ tên cũ, nghĩa = BOM đang dùng. **Runtime chưa khớp** — xem [BOM README mục 2](../../03-BUSINESS-NghiepVu/BOM/README.md).
 
 ---
 
@@ -221,11 +221,11 @@ Nếu dòng thiếu `ĐVT`, import không chặn dòng đó. Hệ thống gán t
 
 Phase hiện tại chưa ghi: `Dự kiến hết hàng`. Phần này phải làm bằng luồng riêng có truy vết: dự báo theo lịch sử dùng hàng.
 
-`Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức` được parse thành BOM trong `product_boms`/`product_bom_items`. **Owner 2026-07-20:** BOM import từ KiotViet lưu `status = active` và dùng ngay khi bán combo trừ thành phần; không còn bắt buộc duyệt/kích hoạt lại.
+`Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức` được parse thành BOM trong `product_boms`/`product_bom_items`. **SoT Owner 2026-07-20:** lưu `status = active`, dùng ngay khi bán combo trừ thành phần; không duyệt/kích hoạt lại. **Runtime 2026-07-20 còn ghi `draft`** — [BOM README mục 2](../../03-BUSINESS-NghiepVu/BOM/README.md).
 
 `Tồn kho` từ file KiotViet được lưu vào `inventory_provisional_balances` với `source_type = kiotviet_import`. UI gọi rõ là `Tồn KV tạm nhập`. Đây là dữ liệu đối chiếu, không phải mốc khởi tạo tồn, không tự dựng cuộn/tấm vật lý và không thay thế `stock_movements`. Import lại cùng mã cập nhật số đối chiếu của mã đó theo file mới nhất.
 
-Danh sách hàng hóa phải trả kèm metadata import. Bảng chính dùng cột `Tồn QCVL`: nếu `operating_stock` có dữ liệu thì hiển thị tồn vận hành QCVL; nếu chưa có `operating_stock` nhưng có `kiotviet_provisional_stock` thì fallback hiển thị số tồn KV tạm nhập để nhân viên thấy dữ liệu đã import. Tab `Tồn kho` vẫn phải tách nhãn rõ `Tồn QCVL` và `Tồn KV tạm nhập`, số lượng và đơn vị từ `inventory_provisional_balances`, kèm trạng thái `Dữ liệu đối chiếu`. Tab `BOM/Vật tư cấu thành` hiển thị `Hàng thành phần KiotViet` và số vật tư đang dùng. Tồn KV tạm nhập vẫn chỉ để đối chiếu; BOM từ KV thì dùng ngay khi bán combo trừ thành phần (Owner 2026-07-20).
+Danh sách hàng hóa phải trả kèm metadata import. Bảng chính dùng cột `Tồn QCVL`: nếu `operating_stock` có dữ liệu thì hiển thị tồn vận hành QCVL; nếu chưa có `operating_stock` nhưng có `kiotviet_provisional_stock` thì fallback hiển thị số tồn KV tạm nhập để nhân viên thấy dữ liệu đã import. Tab `Tồn kho` vẫn phải tách nhãn rõ `Tồn QCVL` và `Tồn KV tạm nhập`, số lượng và đơn vị từ `inventory_provisional_balances`, kèm trạng thái `Dữ liệu đối chiếu`. Tab `BOM/Vật tư cấu thành` hiển thị BOM KV và số vật tư. Tồn KV tạm nhập chỉ để đối chiếu. **SoT:** BOM KV dùng ngay khi bán trừ thành phần; **UI runtime còn copy nháp** — [BOM README mục 2](../../03-BUSINESS-NghiepVu/BOM/README.md).
 
 Tồn vận hành đúng phải tính từ một mốc mở đã xác nhận cộng/trừ lịch sử sau mốc. Mốc mở có thể là một phiếu kiểm kho ban đầu từ KiotViet nếu Owner chọn rõ mã phiếu/ngày chốt. Sau mốc đó, phiếu nhập làm tăng tồn, hóa đơn bán làm giảm tồn, trả hàng đảo chiều tồn, kiểm kho/cân bằng kho điều chỉnh chênh lệch, và thao tác cuộn/tấm/object ghi movement riêng. Cân bằng kho thuộc màn `Phiếu kiểm kho`, không nằm trong danh sách Hàng hóa. Khi chưa đủ mốc mở và luồng chứng từ sau mốc, `/products` không được gọi `inventory_provisional_balances` là tồn kho chính thức hoặc mốc ban đầu.
 
@@ -283,7 +283,7 @@ Các cột đã thống nhất bỏ qua: `Thương hiệu`, `Vị trí`, `Tồn 
 
 ## Ghi chú triển khai 2026-07-10
 
-- Import KiotViet không chỉ hiển thị quy đổi ở UI. Backend phải ghi đơn vị tồn chính vào `inventory_units`, cấu hình tồn vào `product_inventory_settings`, đơn vị phụ vào `product_unit_conversions`, tồn tạm vào `inventory_provisional_balances`, và BOM từ `Hàng thành phần` vào `product_boms`/`product_bom_items` ở trạng thái dùng ngay (`active`).
+- Import KiotViet không chỉ hiển thị quy đổi ở UI. Backend phải ghi đơn vị tồn chính vào `inventory_units`, cấu hình tồn vào `product_inventory_settings`, đơn vị phụ vào `product_unit_conversions`, tồn tạm vào `inventory_provisional_balances`, và BOM từ `Hàng thành phần` vào `product_boms`/`product_bom_items` ở trạng thái **SoT `active`** (runtime 2026-07-20 vẫn `draft` — [BOM README mục 2](../../03-BUSINESS-NghiepVu/BOM/README.md)).
 - `GET /api/v1/products` phải đọc `unit_conversions` từ `product_unit_conversions`; không được trả `[]` giả khi DB đã có dữ liệu.
 - `GET /api/v1/products` phải trả `kiotviet_provisional_stock`, `latest_kiotviet_stocktake` và `draft_bom` nếu có. **SoT:** `draft_bom` = BOM đang dùng; UI không “nháp chờ duyệt”. **Runtime 2026-07-20:** field/UI vẫn theo draft — xem [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md) mục 2.
 - Bộ lọc `Thời gian tạo` của Hàng hóa đã làm thật trên dev ngày `2026-07-10`: vỏ dùng class chung `management-filter-time-options`, `management-filter-quick-time-menu`, `management-filter-date-range`; ruột đi qua `CatalogPage.load` -> `catalog-service.ts` -> API `GET /products?created_from=&created_to=` -> repository lọc `products.created_at`.
