@@ -143,6 +143,52 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('alter table cashbook_entries add column if not exists source'))).toBe(true)
   })
 
+  test('uses order debt when imported invoice debt entry is missing', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
+        return {
+          rows: [{
+            id: 'order-kv-hd010729',
+            code: 'HD010729',
+            created_at: new Date('2026-06-10T15:26:26.083Z'),
+            total_amount: '600000',
+            paid_amount: '0',
+            debt_amount: '600000',
+            remaining_debt: '600000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from customer_debt_adjustments') && sql.includes('source_system')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select customer_id, sum(total_amount) as total_sales_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_sales_amount: '600000', last_activity_at: new Date('2026-06-10T15:26:26.083Z') }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '600000' }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-kh000384',
+    })
+    const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
+
+    expect(debt?.total_debt).toBe(600000)
+    expect(debt?.invoices).toEqual([expect.objectContaining({ order_code: 'HD010729', remaining_debt: 600000 })])
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(600000)
+    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('left join customer_debt_entries cde'))).toBe(true)
+  })
+
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockResolvedValue({

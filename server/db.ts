@@ -3444,14 +3444,27 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const [result, adjustmentResult] = await Promise.all([
         pool.query(
           `
-            select o.id, o.code, o.created_at, o.total_amount, o.paid_amount, o.debt_amount, cde.remaining_debt
-            from customer_debt_entries cde
-            join orders o on o.id = cde.order_id
-            where cde.organization_id = $1
-              and cde.customer_id = $2
-              and cde.status = 'open'
-              and cde.remaining_debt > 0
-            order by cde.updated_at desc, cde.created_at desc
+            select
+              o.id,
+              o.code,
+              o.created_at,
+              o.total_amount,
+              o.paid_amount,
+              o.debt_amount,
+              coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt,
+              coalesce(cde.updated_at, o.updated_at) as debt_updated_at
+            from orders o
+            left join customer_debt_entries cde
+              on cde.organization_id = o.organization_id
+             and cde.order_id = o.id
+             and cde.status = 'open'
+             and cde.remaining_debt > 0
+            where o.organization_id = $1
+              and o.customer_id = $2
+              and o.order_type = 'invoice'
+              and o.status <> 'cancelled'
+              and coalesce(cde.remaining_debt, o.debt_amount) > 0
+            order by debt_updated_at desc, o.created_at desc
           `,
           [input.organizationId, input.customerId],
         ),
@@ -3504,19 +3517,25 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         pool.query(
           `
             select
-              cde.customer_id,
+              o.customer_id,
               min(o.customer_snapshot->>'code') as customer_code,
               min(o.customer_snapshot->>'name') as customer_name,
-              sum(cde.remaining_debt) as total_debt,
+              sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt,
               count(*)::int as open_invoice_count,
-              (array_agg(o.code order by cde.created_at asc))[1] as oldest_order_code,
-              max(cde.created_at) as latest_created_at
-            from customer_debt_entries cde
-            join orders o on o.id = cde.order_id
-            where cde.organization_id = $1
-              and cde.status = 'open'
-              and cde.remaining_debt > 0
-            group by cde.customer_id
+              (array_agg(o.code order by coalesce(cde.created_at, o.created_at) asc))[1] as oldest_order_code,
+              max(coalesce(cde.created_at, o.created_at)) as latest_created_at
+            from orders o
+            left join customer_debt_entries cde
+              on cde.organization_id = o.organization_id
+             and cde.order_id = o.id
+             and cde.status = 'open'
+             and cde.remaining_debt > 0
+            where o.organization_id = $1
+              and o.order_type = 'invoice'
+              and o.status <> 'cancelled'
+              and o.customer_id is not null
+              and coalesce(cde.remaining_debt, o.debt_amount) > 0
+            group by o.customer_id
           `,
           [input.organizationId],
         ),
@@ -4062,12 +4081,19 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const [debts, adjustments] = await Promise.all([
         pool.query(
           `
-            select customer_id, sum(remaining_debt) as total_debt_amount
-            from customer_debt_entries
-            where organization_id = $1
-              and status = 'open'
-              and remaining_debt > 0
-            group by customer_id
+            select o.customer_id, sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount
+            from orders o
+            left join customer_debt_entries cde
+              on cde.organization_id = o.organization_id
+             and cde.order_id = o.id
+             and cde.status = 'open'
+             and cde.remaining_debt > 0
+            where o.organization_id = $1
+              and o.order_type = 'invoice'
+              and o.status <> 'cancelled'
+              and o.customer_id is not null
+              and coalesce(cde.remaining_debt, o.debt_amount) > 0
+            group by o.customer_id
           `,
           [organizationId],
         ),
