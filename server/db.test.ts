@@ -244,7 +244,7 @@ describe('createPgRepository product units', () => {
     expect(canonicalSql).toContain('CB')
   })
 
-  test('subtracts linked supplier receipts from customer debt totals', async () => {
+  test('keeps linked supplier receipts out of customer debt totals', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('with live_invoice_debt')) {
@@ -253,7 +253,7 @@ describe('createPgRepository product units', () => {
             customer_id: 'customer-kv-kh000384',
             customer_code: 'KH000384',
             customer_name: 'Khach test',
-            total_debt: '510000',
+            total_debt: '600000',
             open_invoice_count: 1,
             oldest_order_code: 'HD010729',
             has_kiotviet_anchor: false,
@@ -309,11 +309,36 @@ describe('createPgRepository product units', () => {
     })
     const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
 
-    expect(debt?.total_debt).toBe(510000)
+    expect(debt?.total_debt).toBe(600000)
     expect(debt?.linked_supplier_receipts).toEqual([expect.objectContaining({ code: 'PN000685', remaining_amount: 90000 })])
-    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(600000)
     const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
-    expect(canonicalSql).toContain('linked_supplier_offset')
+    expect(canonicalSql).not.toContain('linked_supplier_offset')
+  })
+
+  test('does not net linked supplier payable in the in-memory customer debt formula', async () => {
+    const { computeCustomerDebtTotal } = await import('./modules/finance/customer-debt')
+    const debt = computeCustomerDebtTotal({
+      customerId: 'customer-kv-ut',
+      customerCode: 'UT',
+      customerName: 'Ut Teo',
+      invoices: [{
+        id: 'order-hd011163',
+        code: 'HD011163',
+        created_at: '2026-07-14T14:18:00.000Z',
+        status: 'completed',
+        order_type: 'invoice',
+        total_amount: 1000000,
+        debt_amount: 1000000,
+        customer: { id: 'customer-kv-ut', code: 'UT', name: 'Ut Teo' },
+      }],
+      adjustments: [],
+      cashbookEntries: [],
+      linkedSupplierReceipts: [{ remaining_amount: 400000 }],
+      resolveInvoiceCustomerId: (invoice) => invoice.customer.id,
+    })
+
+    expect(debt.total_debt).toBe(1000000)
   })
 
   test('returns customer-debt cashbook rows with the debt detail payload', async () => {

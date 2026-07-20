@@ -4,7 +4,7 @@
 // Semantics per customer:
 //
 // - Without a KiotViet anchor (no imported `customer_debt_adjustments` row):
-//     total_debt = sum(live invoice remaining debt) - sum(linked supplier receipts remaining)
+//     total_debt = sum(live invoice remaining debt)
 //   Live remaining debt is `customer_debt_entries.remaining_debt` when an open
 //   entry exists, otherwise `orders.debt_amount`.
 //
@@ -17,7 +17,10 @@
 //                      customer id stamped in entry source)
 //                + sum(KiotViet cashbook debt flows after the anchor: in = pay down,
 //                      out = add debt; matched by the KV debt voucher code pattern)
-//                - sum(linked supplier receipts remaining)
+//
+// Customer receivable and supplier payable stay in separate ledgers. A linked
+// supplier receipt must not reduce customer debt unless a real customer debt
+// adjustment/collection document exists.
 //
 // Totals are NOT clamped to zero: a negative total means the customer has
 // credit (paid more than owed) and must stay visible for reconciliation.
@@ -127,44 +130,22 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
        and cbe.created_at > a.created_at
       group by a.customer_id
     ),
-    linked_supplier_offset as (
-      select
-        s.data->>'linked_customer_id' as customer_id,
-        min(cs.data->>'code') as customer_code,
-        min(cs.data->>'name') as customer_name,
-        sum(coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0)) as remaining_amount,
-        max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
-      from purchase_receipt_snapshots pr
-      join supplier_snapshots s
-        on s.organization_id = pr.organization_id
-       and lower(s.code) = lower(pr.data->'supplier'->>'code')
-      left join customer_snapshots cs
-        on cs.organization_id = pr.organization_id
-       and cs.id = s.data->>'linked_customer_id'
-      where pr.organization_id = $1
-        and pr.data->>'status' = 'posted'
-        and s.data->>'linked_customer_id' is not null
-        and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
-      group by s.data->>'linked_customer_id'
-    ),
     debt_customers as (
       select customer_id from live_invoice_debt
       union
       select customer_id from kiotviet_anchor
-      union
-      select customer_id from linked_supplier_offset
     )
     select
       dc.customer_id,
-      coalesce(a.customer_code, lid.customer_code, lso.customer_code, '') as customer_code,
-      coalesce(a.customer_name, lid.customer_name, lso.customer_name, '') as customer_name,
+      coalesce(a.customer_code, lid.customer_code, '') as customer_code,
+      coalesce(a.customer_name, lid.customer_name, '') as customer_name,
       case when a.customer_id is not null
         then a.balance_after
            + coalesce(iaa.gross_total, 0)
            - coalesce(qpa.paid_total, 0)
            + coalesce(kca.amount_delta, 0)
         else coalesce(lid.remaining_debt, 0)
-      end - coalesce(lso.remaining_amount, 0) as total_debt,
+      end as total_debt,
       case when a.customer_id is not null
         then coalesce(iaa.open_invoice_count, 0)
         else coalesce(lid.open_invoice_count, 0)
@@ -179,8 +160,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         coalesce(lid.last_activity_at, timestamptz 'epoch'),
         coalesce(iaa.last_activity_at, timestamptz 'epoch'),
         coalesce(qpa.last_activity_at, timestamptz 'epoch'),
-        coalesce(kca.last_activity_at, timestamptz 'epoch'),
-        coalesce(lso.last_activity_at, timestamptz 'epoch')
+        coalesce(kca.last_activity_at, timestamptz 'epoch')
       ) as last_activity_at
     from debt_customers dc
     left join kiotviet_anchor a on a.customer_id = dc.customer_id
@@ -188,7 +168,6 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
     left join invoices_after_anchor iaa on iaa.customer_id = dc.customer_id
     left join qcvl_payments_after_anchor qpa on qpa.customer_id = dc.customer_id
     left join kiotviet_cashbook_after_anchor kca on kca.customer_id = dc.customer_id
-    left join linked_supplier_offset lso on lso.customer_id = dc.customer_id
     ${customerFilter}
   `
 }
@@ -272,8 +251,6 @@ export function computeCustomerDebtTotal(input: {
     .filter((invoice) => invoice.debt_amount > 0)
     .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
   const liveRemaining = openInvoices.reduce((sum, invoice) => sum + invoice.debt_amount, 0)
-  const linkedSupplierTotal = input.linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
-
   const anchor = [...input.adjustments]
     .filter((adjustment) => adjustment.customer_id === input.customerId)
     .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))[0]
@@ -283,7 +260,7 @@ export function computeCustomerDebtTotal(input: {
       customer_id: input.customerId,
       customer_code: input.customerCode,
       customer_name: input.customerName,
-      total_debt: liveRemaining - linkedSupplierTotal,
+      total_debt: liveRemaining,
       open_invoice_count: openInvoices.length,
       oldest_order_code: openInvoices[0]?.code ?? '',
       has_kiotviet_anchor: false,
@@ -320,7 +297,7 @@ export function computeCustomerDebtTotal(input: {
     customer_id: input.customerId,
     customer_code: input.customerCode,
     customer_name: input.customerName,
-    total_debt: anchor.balance_after + grossAfter - qcvlPaid + kvCashbookDelta - linkedSupplierTotal,
+    total_debt: anchor.balance_after + grossAfter - qcvlPaid + kvCashbookDelta,
     open_invoice_count: openAfter.length,
     oldest_order_code: openAfter[0]?.code ?? anchor.source_code,
     has_kiotviet_anchor: true,

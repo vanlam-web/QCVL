@@ -8,7 +8,7 @@ Make customer debt explainable from one visible ledger source. Customer list, cu
 
 ## Root Issue
 
-The backend canonical total mixes invoice debt, KiotViet anchor balances, QCVL payments, KiotViet cashbook rows, and linked supplier offsets. The UI ledger does not always include all those contributors, then pins the newest visible row to the backend total. This can make debt appear to decrease without a visible transaction.
+The backend canonical total mixed invoice debt, KiotViet anchor balances, QCVL payments, KiotViet cashbook rows, and linked supplier offsets. The UI ledger did not always include all contributors, then pinned the newest visible row to the backend total. This could make debt appear to decrease without a real customer payment/adjustment.
 
 ## Scope
 
@@ -25,8 +25,8 @@ The backend canonical total mixes invoice debt, KiotViet anchor balances, QCVL p
 2. Expose every contributor used by that formula as a visible ledger row.
 3. Treat KiotViet anchor as the opening ledger row only.
 4. Treat KiotViet cashbook debt rows as visible payment/adjustment ledger rows.
-5. Treat linked supplier receipts as visible offset rows.
-6. Prevent double counting where the latest anchor source is also counted as linked supplier offset.
+5. Do not net linked supplier receipts against customer receivable. Customer debt and supplier payable are separate ledgers unless a real customer debt adjustment/collection document exists.
+6. Prevent hidden deltas from cashbook rows that do not reliably match the customer.
 7. Remove frontend pinning of newest running balance to backend total.
 8. If backend total and visible ledger running balance diverge, tests must fail.
 

@@ -27,7 +27,7 @@ export function buildCustomerDebtLedgerRows(
   invoiceHistory: Array<{ id: string; code: string; created_at: string; total_amount: number; status?: SalesDocumentListItem['status'] }>,
   cashbookHistory: CashbookEntry[],
   adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
-  linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
+  _linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
   _options: { currentTotal?: number } = {},
 ): CustomerDebtLedgerRow[] {
   const rows: CustomerDebtLedgerSortableRow[] = [
@@ -62,15 +62,6 @@ export function buildCustomerDebtLedgerRows(
       href: customerDebtAdjustmentHref(adjustment.source_code),
       adjustment,
       related_code: adjustment.source_code,
-    })),
-    ...linkedSupplierReceipts.map((receipt) => ({
-      id: `linked-supplier-receipt:${receipt.id}`,
-      code: receipt.code,
-      created_at: receipt.created_at,
-      type: 'Nhập hàng',
-      value_delta: -Math.abs(receipt.remaining_amount),
-      href: managementRecordOpenHref('/purchase/receipts', receipt.code),
-      related_code: receipt.code,
     })),
   ].sort((left, right) => {
     const leftRelated = customerDebtLedgerRelatedCode(left)
@@ -124,7 +115,7 @@ export function customerDebtHasLiveLedger(debt: CustomerDebtDetail) {
   return debt.total_debt !== 0
     || debt.invoices.length > 0
     || (debt.adjustments?.length ?? 0) > 0
-    || (debt.linked_supplier_receipts?.length ?? 0) > 0
+    || (debt.cashbook_entries?.length ?? 0) > 0
 }
 
 export function customerDebtCounterpartyMatches(entry: CashbookEntry, customer: Customer) {

@@ -149,4 +149,32 @@ describe('customer debt ledger', () => {
       running_debt: 400000,
     }))
   })
+
+  it('does not show linked supplier receipts as customer debt payments', () => {
+    const rows = buildCustomerDebtLedgerRows(
+      [{
+        id: 'order-1',
+        code: 'HD011163',
+        created_at: '2026-07-14T14:18:00.000Z',
+        total_amount: 1000000,
+        status: 'completed',
+      }],
+      [],
+      [],
+      [{
+        id: 'receipt-1',
+        code: 'PN000566',
+        created_at: '2026-07-15T09:14:00.000Z',
+        supplier_id: 'supplier-ut',
+        supplier_code: 'NCC000035',
+        supplier_name: 'Ut Teo',
+        payable_amount: 400000,
+        paid_amount: 0,
+        remaining_amount: 400000,
+      }],
+    )
+
+    expect(rows.map((row) => row.code)).toEqual(['HD011163'])
+    expect(rows[0].running_debt).toBe(1000000)
+  })
 })
