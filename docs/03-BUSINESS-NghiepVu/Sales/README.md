@@ -20,18 +20,13 @@
 
 ## Ghi chú BOM/Combo
 
-> SoT đầy đủ: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md). **Owner 2026-07-20** đã chốt lại hướng KiotViet.
+> SoT + **hiện trạng code**: [../BOM/README.md](../BOM/README.md). Rules: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md).
 
-Đã chốt cho vận hành hiện tại:
+**Nghiệp vụ đã chốt (Owner 2026-07-20):** import KV → BOM dùng ngay; bán combo chỉ trừ thành phần; không trừ mã combo; không sản xuất sẵn.
 
-- BOM import từ cột `Hàng thành phần` KiotViet dùng ngay (`active`); không nháp/duyệt lại.
-- Khi bán combo: trừ **thành phần** theo BOM; **không** trừ tồn theo mã combo; không sản xuất sẵn.
-- Combo là dòng bán hàng có snapshot BOM.
-- Nhân viên có thể thêm/sửa BOM ngay trong POS (`Không lưu — Chỉ trừ kho` / `Lưu Combo mới`).
+**Runtime (2026-07-20):** chưa khớp đủ — import vẫn `draft`, UI còn “BOM nháp”, Postgres POS còn có thể trừ cả mã combo. Chi tiết bảng lệch ở BOM README mục 2.
 
-Vẫn để phase sâu hơn (không chặn bán combo phẳng cấp 1):
-
-- Combo lồng nhiều cấp / deep-scan phức tạp khi DB/API BOM nhiều cấp chưa đủ.
+**Hướng dài (chưa làm):** deep-scan nhiều cấp; POS `Không lưu` / `Lưu Combo mới` đầy đủ; snapshot BOM trên chứng từ.
 
 ---
 

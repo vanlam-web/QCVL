@@ -1,75 +1,82 @@
-# BOM API — Backend contract mức khung
+# BOM API — Backend contract
 
-> **Vai trò:** Draft kỹ thuật từ Source of Truth nghiệp vụ.
+> **Vai trò:** Contract mục tiêu + ghi rõ hiện trạng stub.
 > **Business:** [BOM-RULES.md](../../03-BUSINESS-NghiepVu/BOM/BOM-RULES.md)
+> **Hiện trạng tổng:** [BOM README mục 2](../../03-BUSINESS-NghiepVu/BOM/README.md)
 
 ---
 
-## 1. Endpoints tối thiểu
+## 0. Hiện trạng runtime (2026-07-20)
 
-| Method | Path | Mục đích |
-|---|---|---|
-| `GET` | `/v1/products/{product_id}/bom` | Lấy BOM active của sản phẩm |
-| `POST` | `/v1/products/{product_id}/bom` | Tạo BOM/version mới |
-| `PUT` | `/v1/products/{product_id}/bom` | Lưu/thay thế BOM hiện hành, alias của `POST` trong MVP |
-| `GET` | `/v1/boms/{bom_id}` | Chi tiết BOM/version |
-| `POST` | `/v1/boms/{bom_id}/activate` | Đặt version làm active |
-| `POST` | `/v1/boms/preview` | Deep-scan BOM để xem vật tư lá/chi phí tham khảo |
-| `POST` | `/v1/boms/validate` | Kiểm tra vòng lặp, thiếu cấu hình, độ sâu |
-
-Trong QC-OMS hiện tại, modal `+ Tạo hàng hóa` tạo combo theo 2 bước: `POST /products` để tạo sản phẩm `sell_method = combo`, sau đó `POST /products/{product_id}/bom` để lưu vật tư cấu thành cho combo vừa tạo. `PUT /products/{product_id}/bom` cũng được hỗ trợ như alias lưu/thay thế BOM hiện hành. Sau khi tạo, người dùng mở chi tiết hàng hóa để sửa BOM/version hiện hành. Khi bán combo, hệ thống trừ tồn vào vật tư cấu thành theo BOM active, không trừ tồn theo chính mã combo.
-
-**Owner 2026-07-20:** BOM import từ KiotViet được đặt `active` và dùng ngay khi bán. Endpoint `POST /v1/boms/{bom_id}/activate` vẫn có thể giữ cho BOM tạo/sửa tay trong app, nhưng **không** còn là bước bắt buộc sau import KiotViet.
-
-**Tên field API `draft_bom`:** Product list/detail có thể vẫn trả `draft_bom` vì tương thích client cũ. Nghĩa nghiệp vụ hiện hành = metadata BOM đang dùng từ KV (thường `status = active`), **không** còn nghĩa “nháp chờ kích hoạt”. Client/UI không được hiện copy kiểu “BOM nháp / cần rà soát trước khi dùng”. Khi có migration breaking riêng mới đổi tên field.
-
-**Migration runtime:** DB còn BOM KV `draft` từ trước 2026-07-20 phải được promote/`active` (hoặc archive + import lại) trước khi coi code đã khớp SoT.
-
-BOM không lưu `component_type`/`component_role` trên từng dòng và API từ chối các flag chính/phụ thủ công. `Vật tư phụ` là loại hàng/metadata của chính vật tư (`product_kind = auxiliary_material`); mọi vật tư còn lại được xem là vật tư chính. API lưu dòng BOM chỉ cần `component_product_id`, `quantity` và `notes`. API đọc BOM trả thêm metadata component gồm `product_kind` và `latest_purchase_cost` để UI hiển thị trạng thái dòng và giá vốn tạm. Logic tự hiệu chỉnh định mức từ kiểm kho, sửa tồn, khui vật tư và lịch sử sản xuất là phase sau.
-
----
-
-## 2. Checkout contract
-
-Checkout/POS cần gửi hoặc tham chiếu BOM theo 2 cách:
-
-| Trường hợp | Contract |
+| Hạng mục | Hiện trạng |
 |---|---|
-| Dùng BOM chuẩn | Gửi `bom_id`/`version` hoặc backend resolve active BOM tại thời điểm checkout |
-| BOM phát sinh trên dòng | Gửi `line_bom_snapshot` trong order item payload |
+| Import KV → BOM | Có parse/ghi DB; **sai status** (`draft` thay vì `active`) |
+| Product list field `draft_bom` | Có; chỉ join BOM `draft`; UI copy “nháp / rà soát” — **sai SoT** |
+| `GET /api/v1/products/{id}/bom` | **Stub** (`data: null`) trong `server/http.ts` |
+| `POST` / `PUT` `/api/v1/products/{id}/bom` | Frontend gọi `POST`; handler **stub** trả BOM rỗng fake `active` |
+| `POST /v1/boms/{id}/activate` | **Không có** |
+| `preview` / `validate` | **Không có** |
+| Trừ kho khi bán (Postgres POS) | Trừ parent + component — **sai SoT** (xem README) |
 
-Backend phải lưu snapshot BOM đã dùng vào chứng từ trước khi tạo stock movement.
-
----
-
-## 3. Deep-scan
-
-Backend deep-scan BOM:
-
-1. bắt đầu từ BOM của dòng bán
-2. nhân định mức theo số lượng dòng
-3. nếu component có BOM con, tiếp tục mở rộng
-4. dừng ở vật tư lá cuối cùng
-5. gom các vật tư cùng sản phẩm/đơn vị nếu hợp lệ
-6. trả về danh sách tiêu hao để checkout tạo stock movement
-
-Combo con dùng BOM chuẩn đang active tại thời điểm chốt đơn, trừ khi chứng từ đang xem lại đã có BOM version/snapshot cũ. Khi lưu chứng từ, backend phải lưu đủ tham chiếu/snapshot để chứng từ cũ không đổi nếu BOM của combo con bị sửa sau này.
-
-Khi `Lưu Combo mới`, combo mới giữ combo con là component tham chiếu. API không tự flatten combo con thành toàn bộ vật tư lá trong BOM chuẩn mới.
-
-Combo không trừ tồn kho theo chính mã combo. Tồn kho được tính theo vật tư lá sau deep-scan. Nếu combo con thiếu vật tư, response cảnh báo phải trả theo vật tư thành phần để POS có thể hiện cảnh báo và nút `Khui vật tư` khi được hỗ trợ.
-
-Validation:
-
-- chặn vòng lặp
-- tối đa 5 cấp mặc định
-- thiếu BOM con thì trả warning/flag; không chặn checkout trong MVP nếu nghiệp vụ cho phép bán tiếp
-- vòng lặp hoặc vượt quá 5 cấp thì trả lỗi cấu hình; không tự bỏ qua nhánh lỗi
+Không mô tả stub như đã hoàn thành. Khi nối thật API, cập nhật mục này cùng PR.
 
 ---
 
-## 4. Inventory integration
+## 1. Endpoints mục tiêu
 
-BOM API chỉ tính vật tư cần trừ. Việc chọn cuộn/tấm nào và ghi stock movement vẫn theo Inventory service/rules.
+| Method | Path | Mục đích | Ưu tiên |
+|---|---|---|---|
+| `GET` | `/v1/products/{product_id}/bom` | Lấy BOM **active** (đang dùng) | Slice khi bỏ stub |
+| `POST` | `/v1/products/{product_id}/bom` | Tạo/lưu version BOM | Slice khi bỏ stub |
+| `PUT` | `/v1/products/{product_id}/bom` | Alias lưu/thay thế (nếu giữ) | Tùy; frontend hiện dùng `POST` |
+| `GET` | `/v1/boms/{bom_id}` | Chi tiết version | Hướng dài |
+| `POST` | `/v1/boms/{bom_id}/activate` | Đặt version `active` (BOM **tay**, không dùng sau import KV) | Hướng dài / tùy chọn |
+| `POST` | `/v1/boms/preview` | Deep-scan / chi phí tham khảo | Hướng dài |
+| `POST` | `/v1/boms/validate` | Vòng lặp, độ sâu | Hướng dài |
 
-Không được trừ tổng `m2` trực tiếp cho hàng `roll` hoặc `sheet`.
+### Tạo combo tay (mục tiêu)
+
+1. `POST /products` với `sell_method = combo`, `track_inventory = false`.
+2. `POST /products/{id}/bom` lưu thành phần → BOM `active`.
+3. Bán: trừ thành phần, không trừ mã combo.
+
+### Owner 2026-07-20
+
+- Import KV đặt `active` ngay; **không** bắt `activate` sau import.
+- `draft_bom` trên list/detail: tên cũ; nghĩa = BOM đang dùng; **không** UI “nháp chờ duyệt”.
+- Migrate draft KV cũ khi triển khai.
+
+### Metadata dòng BOM
+
+Không lưu `component_type` / role chính-phụ trên dòng. `product_kind = auxiliary_material` là loại hàng của vật tư. Payload dòng: `component_product_id`, `quantity`, `notes` (+ metadata đọc: `product_kind`, `latest_purchase_cost` nếu có).
+
+Tự hiệu chỉnh định mức từ kiểm kho/khui: **phase sau**.
+
+---
+
+## 2. Checkout / trừ kho *(SoT)*
+
+| Trường hợp | Contract mục tiêu |
+|---|---|
+| Dùng BOM chuẩn | Backend resolve BOM `active` (hoặc client gửi `bom_id`/version) |
+| BOM phát sinh trên dòng | `line_bom_snapshot` — **hướng dài** |
+
+Khi chốt hóa đơn combo:
+
+1. Không `sale_deduction` trên mã combo nếu `track_inventory = false` / `product_kind = combo`.
+2. Tạo `sale_deduction` cho từng thành phần theo định mức × SL bán.
+3. Snapshot đầy đủ: hướng dài.
+
+---
+
+## 3. Deep-scan *(hướng dài)*
+
+Giữ hướng: bung BOM con → vật tư lá; chống vòng lặp; max 5 cấp; thiếu BOM con → warning, không chặn checkout MVP nếu rule cho phép.
+
+**Slice hiện tại:** trừ phẳng `product_bom_items` cấp 1.
+
+---
+
+## 4. Inventory
+
+BOM API (khi có) chỉ tính vật tư cần trừ. Chọn cuộn/tấm và ghi movement theo Inventory rules. Không trừ tổng `m2` trực tiếp cho `roll`/`sheet` khi đã quản lý vật lý.

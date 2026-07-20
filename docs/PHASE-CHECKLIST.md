@@ -99,7 +99,7 @@ Current status 2026-07-17:
 
 Current status 2026-07-20:
 
-- Owner chốt lại BOM/KiotViet: import `Hàng thành phần` xong dùng ngay (`active`); không nháp/duyệt lại; không sản xuất sẵn; bán combo chỉ trừ thành phần, không trừ mã combo. SoT: `docs/03-BUSINESS-NghiepVu/BOM/`. Docs sync trên branch `cursor/bom-kv-active-decision-0482`. Runtime code (import status, POS trừ kho, migrate draft cũ, UI copy) chưa làm cho đến khi Owner bảo triển khai.
+- BOM/KiotViet: SoT đã chốt và tách rõ 3 lớp trong `docs/03-BUSINESS-NghiepVu/BOM/README.md` — (1) quyết định Owner, (2) hiện trạng code chưa khớp, (3) hướng dài chưa làm. Runtime chưa triển khai cho đến khi Owner bảo làm. Khi làm: import `active`, sửa Postgres POS không trừ mã combo, migrate draft KV, bỏ UI “BOM nháp”, nối hoặc ẩn stub `/products/{id}/bom`.
 
 ---
 
