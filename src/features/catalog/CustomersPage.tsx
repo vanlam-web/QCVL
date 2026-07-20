@@ -119,6 +119,19 @@ type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount'
 const customerHistoryPageSize = 10
 const customerDebtLedgerPageSize = 10
 const customerDebtLedgerFetchPageSize = 1000
+function createCustomerFormDefaults() {
+  return {
+    code: '',
+    name: '',
+    phone: '',
+    taxCode: '',
+    address: '',
+    customerGroupId: '',
+    customerType: 'individual',
+    companyName: '',
+    note: '',
+  }
+}
 type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
 type CustomerStatusFilter = 'active' | 'inactive' | 'all'
 const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
@@ -250,13 +263,7 @@ export function CustomersPage({
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [form, setForm] = useState({
-    code: '',
-    name: '',
-    phone: '',
-    taxCode: '',
-    address: '',
-  })
+  const [form, setForm] = useState(createCustomerFormDefaults)
 
   async function load(filters: CustomerListFilters & {
     customerGroupIdValue?: string
@@ -667,11 +674,15 @@ export function CustomersPage({
         phone: form.phone.trim() || undefined,
         tax_code: form.taxCode.trim() || undefined,
         address: form.address.trim() || undefined,
-        customer_group_id: null,
+        note: form.note.trim() || undefined,
+        customer_group_id: form.customerGroupId || null,
+        customer_type: form.customerType,
+        company_name: form.customerType === 'company' ? form.companyName.trim() || null : null,
       })
-      setForm({ code: '', name: '', phone: '', taxCode: '', address: '' })
+      setForm(createCustomerFormDefaults())
       setCreateOpen(false)
-      await load({ page })
+      setPage(1)
+      await load({ page: 1, page_size: pageSize })
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được khách hàng.'))
     } finally {
@@ -680,7 +691,7 @@ export function CustomersPage({
   }
 
   function openCreateCustomer() {
-    setForm({ code: '', name: '', phone: '', taxCode: '', address: '' })
+    setForm(createCustomerFormDefaults())
     setCreateOpen(true)
   }
 
@@ -910,7 +921,6 @@ export function CustomersPage({
             <header className="management-modal-header">
               <div>
                 <h2>Tạo khách hàng</h2>
-                <p>Mã khách hàng sẽ tự sinh nếu để trống.</p>
               </div>
               <button className="management-icon-button" type="button" aria-label="Đóng tạo khách hàng" onClick={() => setCreateOpen(false)}>
                 ×
@@ -947,6 +957,39 @@ export function CustomersPage({
                     MST
                     <input value={form.taxCode} onChange={(event) => setForm((current) => ({ ...current, taxCode: event.target.value }))} />
                   </label>
+                  <div aria-label="Loại khách hàng" className="customer-create-type-field" role="radiogroup">
+                    <span>Loại khách hàng</span>
+                    <label>
+                      <input
+                        checked={form.customerType === 'individual'}
+                        name="customer-type"
+                        type="radio"
+                        value="individual"
+                        onChange={() => setForm((current) => ({ ...current, customerType: 'individual' }))}
+                      />
+                      Cá nhân
+                    </label>
+                    <label>
+                      <input
+                        checked={form.customerType === 'company'}
+                        name="customer-type"
+                        type="radio"
+                        value="company"
+                        onChange={() => setForm((current) => ({ ...current, customerType: 'company' }))}
+                      />
+                      Tổ chức
+                    </label>
+                  </div>
+                  {form.customerType === 'company' ? (
+                    <label>
+                      Công ty
+                      <input
+                        placeholder="Nhập tên công ty"
+                        value={form.companyName}
+                        onChange={(event) => setForm((current) => ({ ...current, companyName: event.target.value }))}
+                      />
+                    </label>
+                  ) : null}
                 </div>
               </fieldset>
 
@@ -958,6 +1001,33 @@ export function CustomersPage({
                     placeholder="Nhập một dòng địa chỉ"
                     value={form.address}
                     onChange={(event) => setForm((current) => ({ ...current, address: event.target.value }))}
+                  />
+                </label>
+              </fieldset>
+
+              <fieldset>
+                <legend>Nhóm khách hàng, ghi chú</legend>
+                <label>
+                  Nhóm khách hàng
+                  <select
+                    aria-label="Nhóm khách hàng"
+                    value={form.customerGroupId}
+                    onChange={(event) => setForm((current) => ({ ...current, customerGroupId: event.target.value }))}
+                  >
+                    <option value="">Chọn nhóm khách hàng</option>
+                    {customerGroups.map((group) => (
+                      <option key={group.id} value={group.id}>
+                        {group.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Ghi chú
+                  <textarea
+                    placeholder="Nhập ghi chú"
+                    value={form.note}
+                    onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
                   />
                 </label>
               </fieldset>

@@ -1543,6 +1543,8 @@ export function PosShell({
             cartLines={cartLines}
             selectedCustomer={selectedCustomer}
             orderService={orderService}
+            financeService={financeService}
+            salesDocumentService={customerSalesDocumentService}
             orderNote={activeTab.orderNote}
             sellerName={currentUser.user.display_name}
             orderCreatedAt={activeTab.createdAt}

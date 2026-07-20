@@ -422,6 +422,10 @@ it('searches and creates a customer from the search action', async () => {
   await userEvent.type(within(createForm).getByLabelText('Tên khách hàng'), 'Nguyễn Văn A')
   await userEvent.type(within(createForm).getByLabelText('Điện thoại'), '0911000000')
   await userEvent.type(within(createForm).getByLabelText('MST'), '0311111111')
+  await userEvent.click(within(createForm).getByRole('radio', { name: 'Tổ chức' }))
+  await userEvent.type(within(createForm).getByLabelText('Công ty'), 'Công ty ABC')
+  await userEvent.selectOptions(within(createForm).getByLabelText('Nhóm khách hàng'), 'cg-1')
+  await userEvent.type(within(createForm).getByLabelText('Ghi chú'), 'Khách mới')
   await userEvent.type(within(createForm).getByLabelText('Địa chỉ'), '99 Lê Lợi')
   await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
 
@@ -431,7 +435,16 @@ it('searches and creates a customer from the search action', async () => {
     phone: '0911000000',
     tax_code: '0311111111',
     address: '99 Lê Lợi',
-    customer_group_id: null,
+    note: 'Khách mới',
+    customer_group_id: 'cg-1',
+    customer_type: 'company',
+    company_name: 'Công ty ABC',
+  })
+  expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    status: 'active',
   })
 })
 

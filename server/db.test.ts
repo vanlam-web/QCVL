@@ -136,13 +136,19 @@ describe('createPgRepository product units', () => {
       organizationId: '11111111-1111-1111-1111-111111111111',
       name: 'Minh Võ (may)',
       phone: '0909123456',
+      tax_code: '0311111111',
+      address: '99 Lê Lợi',
+      note: 'Khách tạo tay',
       customer_group_id: null,
+      customer_type: 'company',
+      company_name: 'Minh Võ Co',
       created_by: { id: 'user-1', name: 'Admin' },
     })
 
     expect(created).toEqual(expect.objectContaining({
       code: 'KH000022',
       name: 'Minh Võ (may)',
+      company_name: 'Minh Võ Co',
       total_debt_amount: 0,
       created_by: { id: 'user-1', name: 'Admin' },
       customer_group_id: null,

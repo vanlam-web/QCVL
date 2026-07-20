@@ -83,6 +83,30 @@
   font-weight: 800;
 }
 
+.customer-create-type-field {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.customer-create-type-field > span {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.customer-create-type-field label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.customer-create-form textarea {
+  min-height: 4rem;
+  padding-block: var(--space-2);
+  resize: vertical;
+}
+
 .form-grid {
   display: grid;
   gap: var(--space-2);

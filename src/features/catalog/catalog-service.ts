@@ -218,7 +218,10 @@ export function createCatalogService(api: CatalogApiRequester) {
       phone?: string
       tax_code?: string
       address?: string
+      note?: string
       customer_group_id?: string | null
+      customer_type?: string | null
+      company_name?: string | null
     }) =>
       api.request<Customer>('/api/v1/customers', {
         method: 'POST',

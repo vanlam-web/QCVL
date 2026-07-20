@@ -4811,7 +4811,16 @@ describe('createHttpHandler', () => {
       new Request('http://api.local/api/v1/customers', {
         method: 'POST',
         headers: { authorization },
-        body: JSON.stringify({ name: 'Minh Võ (may)', phone: '0909123456', customer_group_id: null }),
+        body: JSON.stringify({
+          name: 'Minh Võ (may)',
+          phone: '0909123456',
+          tax_code: '0311111111',
+          address: '99 Lê Lợi',
+          note: 'Khách tạo tay',
+          customer_group_id: null,
+          customer_type: 'company',
+          company_name: 'Minh Võ Co',
+        }),
       }),
     )
     const createBody = await createResponse.json()
@@ -4824,6 +4833,11 @@ describe('createHttpHandler', () => {
     expect(createResponse.status).toBe(201)
     expect(createBody.data).toEqual(expect.objectContaining({
       name: 'Minh Võ (may)',
+      tax_code: '0311111111',
+      address: '99 Lê Lợi',
+      note: 'Khách tạo tay',
+      customer_type: 'company',
+      company_name: 'Minh Võ Co',
       total_debt_amount: 0,
       customer_group_id: null,
       customer_group: null,
@@ -4831,6 +4845,7 @@ describe('createHttpHandler', () => {
     }))
     expect(searchBody.data.items[0]).toEqual(expect.objectContaining({
       name: 'Minh Võ (may)',
+      company_name: 'Minh Võ Co',
       total_debt_amount: 0,
       customer_group_id: null,
       customer_group: null,

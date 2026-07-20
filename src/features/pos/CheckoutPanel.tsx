@@ -2,6 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Ref } from 'react'
 import { CalendarDays, Clock3, Pin } from 'lucide-react'
 import type { Customer } from '../catalog/types'
+import {
+  customerDebtCounterpartyMatches,
+  customerDebtCurrentAmountFromLedger,
+} from '../catalog/customer-debt-ledger'
+import type { FinanceService } from '../finance/finance-service'
+import type { CashbookEntry } from '../finance/types'
 import type {
   CheckoutCartLine,
   CheckoutResult,
@@ -10,6 +16,7 @@ import type {
   OrderService,
   QuoteSummary,
 } from '../orders/order-service'
+import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
 import { currentSystemDate, currentSystemISOString } from '../../lib/system-clock'
@@ -22,6 +29,8 @@ export function CheckoutPanel({
   cartLines,
   selectedCustomer,
   orderService,
+  financeService,
+  salesDocumentService,
   orderNote = '',
   quoteBlockedReason = null,
   sellerName = '',
@@ -33,6 +42,8 @@ export function CheckoutPanel({
   cartLines: CheckoutCartLine[]
   selectedCustomer: Customer | null
   orderService: OrderService
+  financeService?: Pick<FinanceService, 'listCashbookEntries'>
+  salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
   orderNote?: string
   quoteBlockedReason?: string | null
   sellerName?: string
@@ -55,6 +66,11 @@ export function CheckoutPanel({
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
   const [pinnedBankAccountIds, setPinnedBankAccountIds] = useState<string[]>(() => readPinnedBankAccountIds())
   const [customerDebt, setCustomerDebt] = useState<CustomerDebtDetail | null>(null)
+  const [customerDebtLedger, setCustomerDebtLedger] = useState<{
+    debt: CustomerDebtDetail
+    invoiceHistory: SalesDocumentListItem[]
+    cashbookHistory: CashbookEntry[]
+  } | null>(null)
   const [debtLookupError, setDebtLookupError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -89,6 +105,10 @@ export function CheckoutPanel({
   })
   const visibleCustomerDebt =
     selectedCustomer !== null && customerDebt?.customer_id === selectedCustomer.id ? customerDebt : null
+  const visibleCustomerDebtAmount =
+    selectedCustomer !== null && customerDebtLedger?.debt.customer_id === selectedCustomer.id
+      ? customerDebtCurrentAmountFromLedger(customerDebtLedger, selectedCustomer.total_debt_amount ?? 0)
+      : visibleCustomerDebt?.total_debt ?? 0
   const pinnedBankAccount = useMemo(
     () => accounts.find((account) => pinnedBankAccountIds.includes(account.id)) ?? null,
     [accounts, pinnedBankAccountIds],
@@ -114,13 +134,47 @@ export function CheckoutPanel({
   useEffect(() => {
     let active = true
 
-    if (selectedCustomer === null) return
+    if (selectedCustomer === null) {
+      setCustomerDebt(null)
+      setCustomerDebtLedger(null)
+      setDebtLookupError(null)
+      setOldDebtPaymentAmount(0)
+      setOldDebtExpanded(false)
+      return
+    }
 
-    orderService
-      .getCustomerDebt(selectedCustomer.id)
-      .then((response) => {
+    const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
+
+    Promise.all([
+      orderService.getCustomerDebt(selectedCustomer.id),
+      salesDocumentService?.listSalesDocuments({
+        customer_id: selectedCustomer.id,
+        type: 'invoice',
+        page: 1,
+        page_size: 1000,
+      }) ?? Promise.resolve({ items: [], page: 1, page_size: 1000, total: 0 }),
+      financeService?.listCashbookEntries({
+        search: counterpartySearch || undefined,
+        search_scope: 'counterparty',
+        status: 'posted',
+        page: 1,
+        page_size: 1000,
+      }) ?? Promise.resolve({
+        items: [],
+        page: 1,
+        page_size: 1000,
+        total: 0,
+        summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+      }),
+    ])
+      .then(([debt, invoiceHistory, cashbookHistory]) => {
         if (active) {
-          setCustomerDebt(response)
+          setCustomerDebt(debt)
+          setCustomerDebtLedger({
+            debt,
+            invoiceHistory: invoiceHistory.items,
+            cashbookHistory: cashbookHistory.items.filter((entry) => customerDebtCounterpartyMatches(entry, selectedCustomer)),
+          })
           setDebtLookupError(null)
           setOldDebtPaymentAmount(0)
           setOldDebtExpanded(false)
@@ -135,7 +189,7 @@ export function CheckoutPanel({
     return () => {
       active = false
     }
-  }, [orderService, selectedCustomer])
+  }, [financeService, orderService, salesDocumentService, selectedCustomer])
 
   useEffect(() => {
     setInvoiceDate(checkoutDateInputValue(orderCreatedAt))
@@ -439,8 +493,8 @@ export function CheckoutPanel({
         </div>
         <div className="checkout-customer-line">
           <strong>{selectedCustomer?.name ?? 'Khách lẻ'}</strong>
-          {selectedCustomer !== null && visibleCustomerDebt !== null && visibleCustomerDebt.total_debt > 0 ? (
-            <span className="checkout-customer-debt">{formatMoney(visibleCustomerDebt.total_debt)}</span>
+          {selectedCustomer !== null && visibleCustomerDebtAmount > 0 ? (
+            <span className="checkout-customer-debt">{formatMoney(visibleCustomerDebtAmount)}</span>
           ) : null}
         </div>
       </header>
@@ -523,7 +577,7 @@ export function CheckoutPanel({
             </dd>
           </div>
         )}
-        {selectedCustomer !== null && visibleCustomerDebt !== null && visibleCustomerDebt.total_debt > 0 ? (
+        {selectedCustomer !== null && visibleCustomerDebtAmount > 0 ? (
           <div className="checkout-old-debt-summary">
             <dt>Tổng nợ cũ</dt>
             <dd />

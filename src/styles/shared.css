@@ -2837,6 +2837,8 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 .management-create-form input,
 .management-create-form select,
 .customer-create-form input,
+.customer-create-form select,
+.customer-create-form textarea,
 .customer-create-popover input,
 .pos-product-create-popover input,
 .pos-product-create-popover select,

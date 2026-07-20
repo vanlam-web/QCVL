@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event'
 import { CheckoutPanel } from './CheckoutPanel'
 import type { CheckoutCartLine, OrderService } from '../orders/order-service'
 import type { Customer } from '../catalog/types'
+import type { FinanceService } from '../finance/finance-service'
+import type { SalesDocumentService } from '../sales-documents/sales-document-service'
 
 const customer: Customer = {
   id: 'customer-1',
@@ -86,6 +88,26 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
     })),
     ...overrides,
   }
+}
+
+function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries'>> = {}) {
+  return {
+    listCashbookEntries: vi.fn(async () => ({
+      items: [],
+      page: 1,
+      page_size: 1000,
+      total: 0,
+      summary: { opening_balance: 0, total_in: 0, total_out: 0, ending_balance: 0 },
+    })),
+    ...overrides,
+  } satisfies Pick<FinanceService, 'listCashbookEntries'>
+}
+
+function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 'listSalesDocuments'>> = {}) {
+  return {
+    listSalesDocuments: vi.fn(async () => ({ items: [], page: 1, page_size: 1000, total: 0 })),
+    ...overrides,
+  } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
 }
 
 it('shows only QCVL cash bank transfer and mixed payment choices', async () => {
@@ -684,6 +706,122 @@ it('loads and displays customer debt for selected customers', async () => {
   expect(within(customerLine as HTMLElement).getByText('150 000')).toHaveClass('checkout-customer-debt')
   expect(screen.queryByLabelText('Hóa đơn còn nợ')).not.toBeInTheDocument()
   expect(screen.queryByText('HD000099')).not.toBeInTheDocument()
+})
+
+it('uses live customer debt ledger for checkout debt badge when history exists', async () => {
+  const orderService = makeOrderService({
+    getCustomerDebt: vi.fn(async () => ({
+      customer_id: 'customer-1',
+      total_debt: 1115740,
+      invoices: [
+        {
+          order_id: 'order-old-1',
+          order_code: 'HD000099',
+          created_at: '2026-06-30T03:00:00Z',
+          total_amount: 1115740,
+          paid_amount: 0,
+          debt_amount: 1115740,
+          remaining_debt: 1115740,
+        },
+      ],
+      adjustments: [
+        {
+          id: 'adjustment-1',
+          source_code: 'CB000001',
+          created_at: '2026-07-10T03:00:00Z',
+          transaction_type: 'Điều chỉnh',
+          amount_delta: 4000000,
+          paid_amount: 0,
+          remaining_amount: 4000000,
+          balance_after: 4000000,
+          source_file: 'BaoCaoCongNoTheoKhachHang_KV.xlsx',
+        },
+      ],
+    })),
+  })
+  const salesDocumentService = makeSalesDocumentService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [
+        {
+          id: 'order-live-1',
+          code: 'HD000100',
+          order_type: 'invoice' as const,
+          status: 'completed' as const,
+          created_at: '2026-07-11T03:00:00Z',
+          customer: { id: customer.id, code: customer.code, name: customer.name, phone: customer.phone },
+          seller: { id: 'seller-1', name: 'Văn Lâm' },
+          subtotal_amount: 1000000,
+          discount_amount: 0,
+          total_amount: 1000000,
+          paid_amount: 0,
+          debt_amount: 1000000,
+          payment_status: 'unpaid' as const,
+          note: null,
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+    })),
+  })
+  const financeService = makeFinanceService({
+    listCashbookEntries: vi.fn(async () => ({
+      items: [
+        {
+          id: 'cashbook-1',
+          code: 'TT001838',
+          status: 'posted' as const,
+          direction: 'in' as const,
+          amount_delta: 351991,
+          finance_account: { id: 'cash', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const },
+          is_business_accounted: true,
+          source_type: 'kiotviet_cashbook' as const,
+          created_at: '2026-07-12T03:00:00Z',
+          note: null,
+          counterparty: { type: 'customer' as const, name: customer.name, phone: customer.phone },
+          created_by: null,
+          source: {
+            type: 'payment_receipt',
+            id: 'payment-1',
+            code: 'TT001838',
+            order_code: null,
+            counterparty_code: customer.code,
+          },
+        },
+      ],
+      page: 1,
+      page_size: 1000,
+      total: 1,
+      summary: { opening_balance: 0, total_in: 351991, total_out: 0, ending_balance: 351991 },
+    })),
+  })
+
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={orderService}
+      financeService={financeService}
+      salesDocumentService={salesDocumentService}
+    />,
+  )
+
+  expect(await screen.findByText('4 648 009')).toBeInTheDocument()
+  expect(screen.queryByText('1 115 740')).not.toBeInTheDocument()
+  expect(orderService.getCustomerDebt).toHaveBeenCalledWith('customer-1')
+  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({
+    customer_id: 'customer-1',
+    type: 'invoice',
+    page: 1,
+    page_size: 1000,
+  })
+  expect(financeService.listCashbookEntries).toHaveBeenCalledWith({
+    search: 'Cong ty ABC',
+    search_scope: 'counterparty',
+    status: 'posted',
+    page: 1,
+    page_size: 1000,
+  })
 })
 
 it('submits old debt collection separately from the current invoice payment', async () => {

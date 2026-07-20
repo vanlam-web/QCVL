@@ -7,8 +7,7 @@ import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/cu
 import {
   buildCustomerDebtLedgerRows,
   customerDebtCounterpartyMatches,
-  customerDebtHasLiveLedger,
-  customerDebtLedgerDefinesCurrentDebt,
+  customerDebtCurrentAmountFromLedger,
 } from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer, CustomerGroup } from '../catalog/types'
@@ -39,28 +38,6 @@ type CustomerDetailForm = {
 type CustomerDetailDropdownKey = 'group' | 'type' | null
 const customerDebtLedgerFetchPageSize = 1000
 const hiddenPosCustomerGroupNames = new Set(['khach le', 'khach si'])
-
-function customerPosCurrentDebtFromLedger(debtLedger: Exclude<CustomerPosDebtLedgerState, 'loading' | 'error'>, fallbackDebt: number) {
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
-  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
-  const invoiceRows = debtLedger.invoiceHistory.length > 0
-    ? debtLedger.invoiceHistory
-    : debtLedger.debt.invoices.map((invoice) => ({
-        id: invoice.order_id,
-        code: invoice.order_code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-      }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    debtLedger.cashbookHistory,
-    debtLedger.debt.adjustments ?? [],
-    debtLedger.debt.linked_supplier_receipts ?? [],
-  )
-  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
-  return ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
-}
 
 export function CustomerPanel({
   service,
@@ -109,7 +86,7 @@ export function CustomerPanel({
     && detailDebtLedger !== 'error'
   const selectedCustomerDebt =
     hasSelectedCustomerDebtLedger
-      ? customerPosCurrentDebtFromLedger(detailDebtLedger, selectedCustomer?.total_debt_amount ?? 0)
+      ? customerDebtCurrentAmountFromLedger(detailDebtLedger, selectedCustomer?.total_debt_amount ?? 0)
       : orderService === undefined ? selectedCustomer?.total_debt_amount ?? 0 : null
   const selectedCustomerGroupName =
     selectedCustomer?.customer_group && !isHiddenPosCustomerGroup(selectedCustomer.customer_group)
