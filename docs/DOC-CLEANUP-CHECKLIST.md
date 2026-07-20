@@ -96,8 +96,9 @@
 
 | Module | Bảng trạng thái 3 lớp |
 |---|---|
-| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) *(trên PR #4)* |
+| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) *(3 lớp đầy đủ trên PR #4)* |
 | Inventory / tồn | [03-BUSINESS-NghiepVu/Inventory/README.md](./03-BUSINESS-NghiepVu/Inventory/README.md) |
+| Sales / trừ kho bán | [03-BUSINESS-NghiepVu/Sales/README.md](./03-BUSINESS-NghiepVu/Sales/README.md) |
 | Queue sản phẩm | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |
 | Document rules | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 
