@@ -11,6 +11,7 @@ Quy trÃ¬nh phá»‘i há»£p:
 - [WORKFLOW-AUTO-SPEC-IMPLEMENT.md](./WORKFLOW-AUTO-SPEC-IMPLEMENT.md)
 - [PROJECT-COORDINATION.md](./PROJECT-COORDINATION.md)
 - [REVIEW-ISSUES.md](./REVIEW-ISSUES.md)
+- [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) — checklist chỉnh lý docs tạm (2026-07-20)
 
 ---
 
@@ -101,6 +102,7 @@ Current status 2026-07-20 (Inventory stock docs):
 
 - SoT tồn kho tách 3 lớp trong `docs/03-BUSINESS-NghiepVu/Inventory/README.md`: (1) quyết định Owner / công thức mốc mở, (2) runtime Postgres cộng movement từ 0 + fallback KV list, chưa chọn mốc mở, roll/sheet stub, (3) hướng dài object/cuộn-tấm. Chỉ chỉnh docs; chưa làm runtime mốc mở.
 - Owner 2026-07-20: **đã import hết dữ liệu KiotViet cần dùng** — không mở thêm đợt import file KV. Việc tiếp theo = vận hành/đối soát trên dữ liệu đã có (mốc mở nếu chọn, tồn QCVL, POS). Nút import chỉ còn công cụ kỹ thuật phòng hờ.
+- Tiến độ chỉnh lý docs (BOM/Inventory/tiếp theo): [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md).
 
 
 ---

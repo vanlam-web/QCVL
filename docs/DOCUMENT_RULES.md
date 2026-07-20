@@ -29,6 +29,8 @@ Every living doc should start with:
 
 Keep long timelines out of first-read docs. If history matters, summarize the latest fact and link to the original evidence.
 
+During the 2026-07 docs cleanup wave, track open cleanup items in [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) (temporary). Prefer module README “3 lớp” over repeating status in many satellite files.
+
 ## Editing Rule
 
 Before changing docs:
