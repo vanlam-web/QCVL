@@ -341,6 +341,7 @@ export interface CashbookEntryData {
     id: string
     code: string
     order_code: string | null
+    customer_id?: string | null
     category_name?: string | null
     source_creator_name?: string | null
     source_created_at?: string | null
@@ -2160,7 +2161,7 @@ async function collectCustomerDebt(request: Request) {
     note: entryNote,
     counterparty: { type: 'customer', name: customerName, phone: customerPhone },
     payment_method: bankAmount > 0 && cashAmount <= 0 ? 'bank_transfer' : cashAmount > 0 && bankAmount <= 0 ? 'cash' : 'manual',
-    source: { type: 'payment_receipt', id: receiptCode, code: receiptCode, order_code: allocations[0]?.order_code ?? null },
+    source: { type: 'payment_receipt', id: receiptCode, code: receiptCode, order_code: allocations[0]?.order_code ?? null, customer_id: customerId },
     allocations,
   }
   const entries: typeof cashbookEntries = []

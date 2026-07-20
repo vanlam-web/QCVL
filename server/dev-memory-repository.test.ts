@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import { createDevMemoryRepository } from './dev-memory-repository'
-import type { ServerRepository } from './http'
+import type { SalesDocumentData, ServerRepository } from './http'
 
 type DevMemoryRepository = Awaited<ReturnType<typeof createDevMemoryRepository>>
 type DevMemoryRepositoryWithHelpers = DevMemoryRepository & {
@@ -3384,5 +3384,93 @@ describe('createDevMemoryRepository persistence', () => {
     })
 
     expect(receipts?.map((receipt) => receipt.code)).toEqual(['PN000502'])
+  })
+
+  test('serves canonical customer debt list/detail and collects debt against real invoices', async () => {
+    const repository = await createDevMemoryRepository()
+
+    function invoiceDocument(id: string, code: string, createdAt: string, amount: number): SalesDocumentData {
+      return {
+        id,
+        code,
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: createdAt,
+        customer: { id: 'customer-debt-test', code: 'KHDEBT', name: 'Khach cong no', phone: null },
+        seller: { id: 'user-dev-admin', name: 'Admin' },
+        subtotal_amount: amount,
+        discount_amount: 0,
+        total_amount: amount,
+        paid_amount: 0,
+        debt_amount: amount,
+        payment_status: 'unpaid',
+        note: null,
+        items: [],
+      }
+    }
+    await repository.createCustomer?.({
+      organizationId: 'org-dev-memory',
+      code: 'KHDEBT',
+      name: 'Khach cong no',
+    })
+    const customer = await repository.findCustomerByCode?.({ organizationId: 'org-dev-memory', code: 'KHDEBT' })
+    const customerId = customer?.id ?? 'customer-debt-test'
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: { ...invoiceDocument('order-debt-old', 'HD020001', '2026-07-10T08:00:00.000Z', 100000), customer: { id: customerId, code: 'KHDEBT', name: 'Khach cong no', phone: null } },
+      cashbookEntries: [],
+    })
+    await repository.saveSalesDocument?.({
+      organizationId: 'org-dev-memory',
+      document: { ...invoiceDocument('order-debt-new', 'HD020002', '2026-07-12T08:00:00.000Z', 200000), customer: { id: customerId, code: 'KHDEBT', name: 'Khach cong no', phone: null } },
+      cashbookEntries: [],
+    })
+
+    const listBefore = await repository.listCustomerDebts?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/finance/customer-debts'),
+    })
+    expect(listBefore?.find((debt) => debt.customer_id === customerId)).toMatchObject({
+      total_debt: 300000,
+      open_invoice_count: 2,
+      oldest_order_code: 'HD020001',
+    })
+
+    const collected = await repository.collectCustomerDebt?.({
+      organizationId: 'org-dev-memory',
+      customerId,
+      amount: 150000,
+      cashAmount: 150000,
+      bankAmount: 0,
+    })
+    expect(collected).toMatchObject({ allocated_amount: 150000 })
+    expect(collected?.payment_receipt_id).toMatch(/^TT\d{6}$/)
+
+    const debt = await repository.getCustomerDebt?.({ organizationId: 'org-dev-memory', customerId })
+    expect(debt?.total_debt).toBe(150000)
+    expect(debt?.invoices).toEqual([
+      expect.objectContaining({ order_code: 'HD020002', remaining_debt: 150000 }),
+    ])
+
+    const totals = await repository.getCustomerFinancialTotals?.('org-dev-memory')
+    expect(totals?.get(customerId)?.total_debt_amount).toBe(150000)
+
+    const documents = await repository.listSalesDocuments?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/sales-documents?page=1&page_size=100&status=all'),
+    })
+    expect(documents?.find((document) => document.code === 'HD020001')).toMatchObject({ paid_amount: 100000, debt_amount: 0, payment_status: 'paid' })
+    expect(documents?.find((document) => document.code === 'HD020002')).toMatchObject({ paid_amount: 50000, debt_amount: 150000, payment_status: 'partial' })
+
+    const cashbook = await repository.listCashbookEntries?.({
+      organizationId: 'org-dev-memory',
+      url: new URL('http://api.local/api/v1/finance/cashbook?page=1&page_size=100&status=posted'),
+    })
+    const receiptEntry = cashbook?.find((entry) => entry.code === collected?.payment_receipt_id)
+    expect(receiptEntry).toMatchObject({ direction: 'in', amount_delta: 150000, source_type: 'payment_receipt_method' })
+    expect(receiptEntry?.allocations?.map((allocation) => [allocation.order_code, allocation.allocated_amount])).toEqual([
+      ['HD020001', 100000],
+      ['HD020002', 50000],
+    ])
   })
 })

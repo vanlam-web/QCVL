@@ -295,7 +295,7 @@ describe('CustomerPanel', () => {
       />,
     )
 
-    await waitFor(() => expect(screen.getByText('Còn nợ:', { exact: false })).toHaveTextContent('21 025 683'))
+    await waitFor(() => expect(screen.getByText('Còn nợ:', { exact: false })).toHaveTextContent('50 130 458'))
 
     await userEvent.click(screen.getByRole('button', { name: 'Mở chi tiết khách Khach le' }))
 

@@ -1,6 +1,11 @@
 import pg from 'pg'
 import { createHash, randomUUID } from 'node:crypto'
 import { displayDateRangeMatches } from './date-filter.js'
+import {
+  customerDebtTotalsSql,
+  mapCustomerDebtTotalsRow,
+  type CustomerDebtTotalsRow,
+} from './modules/finance/customer-debt.js'
 import type {
   AuthUserRow,
   CashbookEntryData,
@@ -3482,7 +3487,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async getCustomerDebt(input) {
       await ensureSalesFinanceTables(pool)
-      const [result, adjustmentResult, linkedSupplierReceiptResult] = await Promise.all([
+      const [totalsResult, result, adjustmentResult, linkedSupplierReceiptResult] = await Promise.all([
+        pool.query<CustomerDebtTotalsRow>(
+          customerDebtTotalsSql({ singleCustomer: true }),
+          [input.organizationId, input.customerId],
+        ),
         pool.query(
           `
             select
@@ -3576,12 +3585,10 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         paid_amount: Number(row.paid_amount),
         remaining_amount: Number(row.remaining_amount),
       }))
-      const linkedSupplierTotal = linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
+      const totalsRow = totalsResult.rows[0]
       return {
         customer_id: input.customerId,
-        total_debt: adjustments.length > 0
-          ? Math.max(adjustments[0].balance_after - linkedSupplierTotal, 0)
-          : Math.max(invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0) - linkedSupplierTotal, 0),
+        total_debt: totalsRow ? mapCustomerDebtTotalsRow(totalsRow).total_debt : 0,
         invoices,
         adjustments,
         linked_supplier_receipts: linkedSupplierReceipts,
@@ -3590,171 +3597,22 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async listCustomerDebts(input) {
       await ensureSalesFinanceTables(pool)
-      const [invoiceResult, linkedReceiptResult, adjustmentResult] = await Promise.all([
-        pool.query(
-          `
-            select
-              o.customer_id,
-              min(o.customer_snapshot->>'code') as customer_code,
-              min(o.customer_snapshot->>'name') as customer_name,
-              sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt,
-              count(*)::int as open_invoice_count,
-              (array_agg(o.code order by coalesce(cde.created_at, o.created_at) asc))[1] as oldest_order_code,
-              max(coalesce(cde.created_at, o.created_at)) as latest_created_at
-            from orders o
-            left join customer_debt_entries cde
-              on cde.organization_id = o.organization_id
-             and cde.order_id = o.id
-             and cde.status = 'open'
-             and cde.remaining_debt > 0
-            where o.organization_id = $1
-              and o.order_type = 'invoice'
-              and o.status <> 'cancelled'
-              and o.customer_id is not null
-              and coalesce(cde.remaining_debt, o.debt_amount) > 0
-            group by o.customer_id
-          `,
-          [input.organizationId],
-        ),
-        pool.query(
-          `
-            select
-              s.data->>'linked_customer_id' as customer_id,
-              cs.data->>'code' as customer_code,
-              cs.data->>'name' as customer_name,
-              sum(coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0)) as total_linked_supplier_receipts,
-              max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
-            from purchase_receipt_snapshots pr
-            join supplier_snapshots s
-              on s.organization_id = pr.organization_id
-             and lower(s.code) = lower(pr.data->'supplier'->>'code')
-            left join customer_snapshots cs
-              on cs.organization_id = pr.organization_id
-             and cs.id = s.data->>'linked_customer_id'
-            where pr.organization_id = $1
-              and pr.data->>'status' = 'posted'
-              and s.data->>'linked_customer_id' is not null
-              and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
-            group by s.data->>'linked_customer_id', cs.data->>'code', cs.data->>'name'
-          `,
-          [input.organizationId],
-        ),
-        pool.query(
-          `
-            with latest_adjustment as (
-              select distinct on (customer_id)
-                customer_id,
-                customer_snapshot->>'code' as customer_code,
-                customer_snapshot->>'name' as customer_name,
-                balance_after,
-                source_code,
-                created_at
-              from customer_debt_adjustments
-              where organization_id = $1
-                and source_system = 'kiotviet'
-              order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
-            ),
-            invoice_after as (
-              select
-                la.customer_id,
-                sum(o.total_amount) as amount_delta,
-                max(o.created_at) as latest_created_at
-              from latest_adjustment la
-              join orders o
-                on o.organization_id = $1
-               and o.customer_id = la.customer_id
-               and o.order_type = 'invoice'
-               and o.status = 'completed'
-               and o.created_at > la.created_at
-              group by la.customer_id
-            ),
-            cashbook_after as (
-              select
-                la.customer_id,
-                sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
-                max(cbe.created_at) as latest_created_at
-              from latest_adjustment la
-              join cashbook_entries cbe
-                on cbe.organization_id = $1
-               and cbe.status = 'posted'
-               and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(CB|TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
-               and cbe.source->>'counterparty_code' = la.customer_code
-               and cbe.created_at > la.created_at
-              group by la.customer_id
-            )
-            select
-              la.customer_id,
-              la.customer_code,
-              la.customer_name,
-              la.balance_after + coalesce(ia.amount_delta, 0) + coalesce(ca.amount_delta, 0) as total_debt,
-              la.source_code as oldest_order_code,
-              greatest(
-                la.created_at,
-                coalesce(ia.latest_created_at, la.created_at),
-                coalesce(ca.latest_created_at, la.created_at)
-              ) as latest_created_at
-            from latest_adjustment la
-            left join invoice_after ia on ia.customer_id = la.customer_id
-            left join cashbook_after ca on ca.customer_id = la.customer_id
-          `,
-          [input.organizationId],
-        ),
-      ])
-      const byCustomer = new Map<string, CustomerDebtSummaryData>()
-      for (const row of invoiceResult.rows) {
-        byCustomer.set(String(row.customer_id), {
-          customer_id: row.customer_id,
-          customer_code: row.customer_code,
-          customer_name: row.customer_name,
-          total_debt: Number(row.total_debt),
-          oldest_order_code: row.oldest_order_code,
-          open_invoice_count: Number(row.open_invoice_count),
-          invoices: [],
+      const result = await pool.query<CustomerDebtTotalsRow>(customerDebtTotalsSql(), [input.organizationId])
+      const debts = result.rows
+        .map((row) => {
+          const mapped = mapCustomerDebtTotalsRow(row)
+          return {
+            customer_id: mapped.customer_id,
+            customer_code: mapped.customer_code,
+            customer_name: mapped.customer_name,
+            total_debt: mapped.total_debt,
+            oldest_order_code: mapped.oldest_order_code,
+            open_invoice_count: mapped.open_invoice_count,
+            invoices: [],
+          } satisfies CustomerDebtSummaryData
         })
-      }
-      for (const row of adjustmentResult.rows) {
-        const customerId = String(row.customer_id)
-        const existing = byCustomer.get(customerId)
-        if (existing) {
-          byCustomer.set(customerId, {
-            ...existing,
-            total_debt: Number(row.total_debt),
-            oldest_order_code: row.oldest_order_code,
-          })
-          continue
-        }
-        byCustomer.set(customerId, {
-          customer_id: row.customer_id,
-          customer_code: row.customer_code,
-          customer_name: row.customer_name,
-          total_debt: Number(row.total_debt),
-          oldest_order_code: row.oldest_order_code,
-          open_invoice_count: 0,
-          invoices: [],
-        })
-      }
-      for (const row of linkedReceiptResult.rows) {
-        const customerId = String(row.customer_id)
-        const existing = byCustomer.get(customerId)
-        if (existing) {
-          byCustomer.set(customerId, {
-            ...existing,
-            total_debt: Math.max(existing.total_debt - Number(row.total_linked_supplier_receipts), 0),
-          })
-          continue
-        }
-        byCustomer.set(customerId, {
-          customer_id: customerId,
-          customer_code: String(row.customer_code ?? ''),
-          customer_name: String(row.customer_name ?? ''),
-          total_debt: Math.max(0 - Number(row.total_linked_supplier_receipts), 0),
-          oldest_order_code: '',
-          open_invoice_count: 0,
-          invoices: [],
-        })
-      }
-      return [...byCustomer.values()].filter((debt) => customerDebtMatches(input.url, debt))
+        .filter((debt) => debt.total_debt !== 0)
+      return debts.filter((debt) => customerDebtMatches(input.url, debt))
     },
 
     async collectCustomerDebt(input) {
@@ -3765,7 +3623,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
       await pool.query('begin')
       try {
-        const [debtRows, adjustmentRows] = await Promise.all([
+        const [debtRows, adjustmentRows, anchorRows, totalsBefore] = await Promise.all([
           pool.query(
             `
               select
@@ -3806,6 +3664,23 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               order by created_at asc
               for update
             `,
+            [input.organizationId, input.customerId],
+          ),
+          pool.query(
+            `
+              select id, source_code, paid_amount, balance_after, customer_snapshot
+              from customer_debt_adjustments
+              where organization_id = $1
+                and customer_id = $2
+                and source_system = 'kiotviet'
+              order by created_at desc, source_row desc nulls last, updated_at desc
+              limit 1
+              for update
+            `,
+            [input.organizationId, input.customerId],
+          ),
+          pool.query<CustomerDebtTotalsRow>(
+            customerDebtTotalsSql({ singleCustomer: true }),
             [input.organizationId, input.customerId],
           ),
         ])
@@ -3899,6 +3774,37 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           remainingPayment -= allocated
         }
 
+        // Legacy KiotViet debt (anchored in `balance_after`) has no open debt entry
+        // rows to allocate against. Recording the payment receipt is what reduces the
+        // canonical total, so allocate the leftover against the anchor for audit.
+        const anchorRow = anchorRows.rows[0]
+        const canonicalDebtBefore = totalsBefore.rows[0] ? mapCustomerDebtTotalsRow(totalsBefore.rows[0]).total_debt : 0
+        if (remainingPayment > 0 && anchorRow) {
+          const allocatedSoFar = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
+          const legacyRemaining = Math.max(canonicalDebtBefore - allocatedSoFar, 0)
+          const allocated = Math.min(remainingPayment, legacyRemaining)
+          if (allocated > 0) {
+            await pool.query(
+              `
+                update customer_debt_adjustments
+                set paid_amount = paid_amount + $1,
+                    updated_at = now()
+                where id = $2
+              `,
+              [allocated, anchorRow.id],
+            )
+            allocations.push({
+              order_id: String(anchorRow.id),
+              order_code: String(anchorRow.source_code),
+              order_total_amount: Number(anchorRow.balance_after),
+              collected_before: Number(anchorRow.paid_amount),
+              allocated_amount: allocated,
+              remaining_after: legacyRemaining - allocated,
+            })
+            remainingPayment -= allocated
+          }
+        }
+
         const allocatedAmount = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
         if (allocatedAmount <= 0) {
           await pool.query('commit')
@@ -3976,7 +3882,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             created_at: new Date().toISOString(),
             note: method.method === 'bank_transfer' && input.bankTransactionRef ? `${note} (${input.bankTransactionRef})` : note,
             counterparty: { type: 'customer', name: firstCustomer.name, phone: firstCustomer.phone },
-            source: { type: 'payment_receipt', id: receiptId, code: receiptCode, order_code: receiptOrderCode },
+            source: { type: 'payment_receipt', id: receiptId, code: receiptCode, order_code: receiptOrderCode, customer_id: input.customerId },
             allocations,
           } as CashbookEntryData)
         }
@@ -4296,102 +4202,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [organizationId],
       )
-      const [debts, linkedReceiptResult, adjustments] = await Promise.all([
-        pool.query(
-          `
-            select o.customer_id, sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount
-            from orders o
-            left join customer_debt_entries cde
-              on cde.organization_id = o.organization_id
-             and cde.order_id = o.id
-             and cde.status = 'open'
-             and cde.remaining_debt > 0
-            where o.organization_id = $1
-              and o.order_type = 'invoice'
-              and o.status <> 'cancelled'
-              and o.customer_id is not null
-              and coalesce(cde.remaining_debt, o.debt_amount) > 0
-            group by o.customer_id
-          `,
-          [organizationId],
-        ),
-        pool.query(
-          `
-            select
-              s.data->>'linked_customer_id' as customer_id,
-              sum(coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0)) as total_linked_supplier_receipts,
-              max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
-            from purchase_receipt_snapshots pr
-            join supplier_snapshots s
-              on s.organization_id = pr.organization_id
-             and lower(s.code) = lower(pr.data->'supplier'->>'code')
-            where pr.organization_id = $1
-              and pr.data->>'status' = 'posted'
-              and s.data->>'linked_customer_id' is not null
-              and coalesce(nullif(pr.data->>'remaining_amount', '')::numeric, 0) > 0
-            group by s.data->>'linked_customer_id'
-          `,
-          [organizationId],
-        ),
-        pool.query(
-          `
-            with latest_adjustment as (
-              select distinct on (customer_id)
-                customer_id,
-                customer_snapshot->>'code' as customer_code,
-                balance_after,
-                created_at
-              from customer_debt_adjustments
-              where organization_id = $1
-                and source_system = 'kiotviet'
-              order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
-            ),
-            invoice_after as (
-              select
-                la.customer_id,
-                sum(o.total_amount) as amount_delta,
-                max(o.created_at) as last_activity_at
-              from latest_adjustment la
-              join orders o
-                on o.organization_id = $1
-               and o.customer_id = la.customer_id
-               and o.order_type = 'invoice'
-               and o.status = 'completed'
-               and o.created_at > la.created_at
-              group by la.customer_id
-            ),
-            cashbook_after as (
-              select
-                la.customer_id,
-                sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
-                max(cbe.created_at) as last_activity_at
-              from latest_adjustment la
-              join cashbook_entries cbe
-                on cbe.organization_id = $1
-               and cbe.status = 'posted'
-               and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(CB|TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
-               and cbe.source->>'counterparty_code' = la.customer_code
-               and cbe.created_at > la.created_at
-              group by la.customer_id
-            )
-            select
-              la.customer_id,
-              la.balance_after + coalesce(ia.amount_delta, 0) + coalesce(ca.amount_delta, 0) as total_debt_amount,
-              greatest(
-                la.created_at,
-                coalesce(ia.last_activity_at, la.created_at),
-                coalesce(ca.last_activity_at, la.created_at)
-              ) as last_activity_at
-            from latest_adjustment la
-            left join invoice_after ia on ia.customer_id = la.customer_id
-            left join cashbook_after ca on ca.customer_id = la.customer_id
-          `,
-          [organizationId],
-        ),
-      ])
+      const debts = await pool.query<CustomerDebtTotalsRow>(customerDebtTotalsSql(), [organizationId])
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
-      const liveDebtCustomerIds = new Set<string>()
       for (const row of sales.rows) {
         totals.set(row.customer_id, {
           total_sales_amount: Number(row.total_sales_amount),
@@ -4400,25 +4212,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         })
       }
       for (const row of debts.rows) {
-        liveDebtCustomerIds.add(String(row.customer_id))
-        const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
-        totals.set(row.customer_id, { ...existing, total_debt_amount: Number(row.total_debt_amount) })
-      }
-      for (const row of adjustments.rows) {
-        const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
-        const hasLiveDebt = liveDebtCustomerIds.has(String(row.customer_id))
-        totals.set(row.customer_id, {
+        const mapped = mapCustomerDebtTotalsRow(row)
+        const existing = totals.get(mapped.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
+        totals.set(mapped.customer_id, {
           ...existing,
-          total_debt_amount: hasLiveDebt ? existing.total_debt_amount : Number(row.total_debt_amount),
-          last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
-        })
-      }
-      for (const row of linkedReceiptResult.rows) {
-        const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
-        totals.set(row.customer_id, {
-          ...existing,
-          total_debt_amount: Math.max(existing.total_debt_amount - Number(row.total_linked_supplier_receipts), 0),
-          last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
+          total_debt_amount: mapped.total_debt,
+          last_activity_at: mapped.last_activity_at ?? existing.last_activity_at,
         })
       }
       return totals

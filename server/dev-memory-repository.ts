@@ -141,6 +141,49 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
 
   if (syncExactCustomerSupplierLinks(customers, suppliers) > 0) await persist()
 
+  function openCustomerInvoices(customerId: string) {
+    return [...salesDocuments.values()].filter((document) => (
+      document.order_type === 'invoice'
+      && document.status !== 'cancelled'
+      && document.debt_amount > 0
+      && resolveDocumentCustomer(document, customers)?.id === customerId
+    ))
+  }
+
+  function linkedSupplierReceiptOffsets(customerId: string) {
+    const supplier = [...suppliers.values()].find((item) => item.linked_customer_id === customerId)
+    if (!supplier) return []
+    return [...purchaseReceipts.values()]
+      .filter((receipt) => (
+        receipt.status === 'posted'
+        && receipt.remaining_amount > 0
+        && (receipt.supplier.id === supplier.id || normalize(receipt.supplier.code) === normalize(supplier.code))
+      ))
+      .sort((left, right) => Date.parse(right.received_at) - Date.parse(left.received_at))
+      .map((receipt) => ({
+        id: receipt.id,
+        code: receipt.code,
+        created_at: receipt.received_at,
+        supplier_id: supplier.id,
+        supplier_code: supplier.code,
+        supplier_name: supplier.name,
+        payable_amount: receipt.payable_amount,
+        paid_amount: receipt.paid_amount,
+        remaining_amount: receipt.remaining_amount,
+      }))
+  }
+
+  function linkedSupplierReceiptOffsetTotals() {
+    const totals = new Map<string, number>()
+    for (const supplier of suppliers.values()) {
+      if (!supplier.linked_customer_id) continue
+      const offset = linkedSupplierReceiptOffsets(supplier.linked_customer_id)
+        .reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
+      if (offset > 0) totals.set(supplier.linked_customer_id, offset)
+    }
+    return totals
+  }
+
   function activeAdminAuthUser() {
     return [...authUsers.values()].find((candidate) => candidate.id === adminAuthUser.id) ?? adminAuthUser
   }
@@ -653,7 +696,198 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
             : existing.last_activity_at,
         })
       }
+      for (const [customerId, offset] of linkedSupplierReceiptOffsetTotals()) {
+        const existing = totals.get(customerId)
+        if (!existing) continue
+        totals.set(customerId, {
+          ...existing,
+          total_debt_amount: existing.total_debt_amount - offset,
+        })
+      }
       return totals
+    },
+    async listCustomerDebts(input) {
+      const search = normalize(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
+      const offsets = linkedSupplierReceiptOffsetTotals()
+      const byCustomer = new Map<string, {
+        customer_id: string
+        customer_code: string
+        customer_name: string
+        total_debt: number
+        oldest_order_code: string
+        open_invoice_count: number
+        invoices: never[]
+      }>()
+      for (const document of [...salesDocuments.values()].sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))) {
+        if (document.order_type !== 'invoice' || document.status === 'cancelled' || document.debt_amount <= 0) continue
+        const customer = resolveDocumentCustomer(document, customers)
+        if (!customer) continue
+        const existing = byCustomer.get(customer.id)
+        if (existing) {
+          existing.total_debt += document.debt_amount
+          existing.open_invoice_count += 1
+          continue
+        }
+        byCustomer.set(customer.id, {
+          customer_id: customer.id,
+          customer_code: customer.code,
+          customer_name: customer.name,
+          total_debt: document.debt_amount,
+          oldest_order_code: document.code,
+          open_invoice_count: 1,
+          invoices: [],
+        })
+      }
+      for (const [customerId, offset] of offsets) {
+        const existing = byCustomer.get(customerId)
+        if (existing) {
+          existing.total_debt -= offset
+          continue
+        }
+        const customer = [...customers.values()].find((item) => item.id === customerId)
+        if (!customer) continue
+        byCustomer.set(customerId, {
+          customer_id: customer.id,
+          customer_code: customer.code,
+          customer_name: customer.name,
+          total_debt: -offset,
+          oldest_order_code: '',
+          open_invoice_count: 0,
+          invoices: [],
+        })
+      }
+      return [...byCustomer.values()]
+        .filter((debt) => debt.total_debt !== 0)
+        .filter((debt) => {
+          if (!search) return true
+          return normalize(`${debt.customer_code} ${debt.customer_name} ${debt.oldest_order_code}`).includes(search)
+        })
+        .sort((left, right) => right.total_debt - left.total_debt)
+    },
+    async getCustomerDebt(input) {
+      const invoices = openCustomerInvoices(input.customerId)
+        .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+        .map((document) => ({
+          order_id: document.id,
+          order_code: document.code,
+          created_at: document.created_at,
+          total_amount: document.total_amount,
+          paid_amount: document.paid_amount,
+          debt_amount: document.debt_amount,
+          remaining_debt: document.debt_amount,
+        }))
+      const linkedSupplierReceipts = linkedSupplierReceiptOffsets(input.customerId)
+      const linkedSupplierTotal = linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
+      return {
+        customer_id: input.customerId,
+        total_debt: invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0) - linkedSupplierTotal,
+        invoices,
+        adjustments: [],
+        linked_supplier_receipts: linkedSupplierReceipts,
+      }
+    },
+    async collectCustomerDebt(input) {
+      if (input.amount <= 0 || input.cashAmount + input.bankAmount !== input.amount) {
+        return { payment_receipt_id: '', allocated_amount: 0 }
+      }
+      const openInvoices = openCustomerInvoices(input.customerId)
+        .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
+      const requestedAllocations = (input.allocations ?? [])
+        .map((allocation) => ({
+          order_id: allocation.order_id,
+          order_code: allocation.order_code,
+          allocated_amount: Math.max(Number(allocation.allocated_amount), 0),
+        }))
+        .filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+      const allocationTargets = requestedAllocations.length > 0
+        ? requestedAllocations
+            .map((allocation) => ({
+              allocation,
+              document: openInvoices.find((document) => document.id === allocation.order_id || document.code === allocation.order_code),
+            }))
+            .filter((item): item is { allocation: typeof requestedAllocations[number]; document: SalesDocumentData } => Boolean(item.document))
+        : openInvoices.map((document) => ({ allocation: null, document }))
+
+      let remainingPayment = input.amount
+      const allocations: NonNullable<CashbookEntryData['allocations']> = []
+      for (const { allocation, document } of allocationTargets) {
+        if (remainingPayment <= 0) break
+        const allocated = Math.min(document.debt_amount, remainingPayment, allocation?.allocated_amount ?? remainingPayment)
+        if (allocated <= 0) continue
+        const collectedBefore = document.paid_amount
+        document.paid_amount += allocated
+        document.debt_amount = Math.max(document.debt_amount - allocated, 0)
+        document.payment_status = invoicePaymentStatus(document.paid_amount, document.debt_amount)
+        allocations.push({
+          order_id: document.id,
+          order_code: document.code,
+          order_total_amount: document.total_amount,
+          collected_before: collectedBefore,
+          allocated_amount: allocated,
+          remaining_after: document.debt_amount,
+        })
+        remainingPayment -= allocated
+      }
+
+      const allocatedAmount = sumAllocations(allocations)
+      if (allocatedAmount <= 0) return { payment_receipt_id: '', allocated_amount: 0 }
+
+      const customer = [...customers.values()].find((item) => item.id === input.customerId) ?? null
+      const receiptCode = nextPaymentReceiptCode(cashbookEntries)
+      const createdAt = new Date().toISOString()
+      const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
+      const note = input.note?.trim() ? `${input.note.trim()} - ${allocationCodes}` : `Thu no ${allocationCodes}`
+      const baseEntry = {
+        status: 'posted',
+        direction: 'in' as const,
+        is_business_accounted: true,
+        source_type: 'payment_receipt_method',
+        created_by: null,
+        created_at: createdAt,
+        note,
+        counterparty: { type: 'customer', name: customer?.name ?? 'Khach hang', phone: customer?.phone ?? null },
+        source: {
+          type: 'payment_receipt',
+          id: receiptCode,
+          code: receiptCode,
+          order_code: allocations[0]?.order_code ?? null,
+          customer_id: input.customerId,
+        },
+        allocations,
+      }
+      const accountList = [...financeAccounts.values()]
+      const cashAccount = accountList.find((account) => account.account_type === 'cash' && account.is_default_cash)
+        ?? accountList.find((account) => account.account_type === 'cash')
+        ?? accountList[0]
+      const bankAccount = accountList.find((account) => account.id === input.bankAccountId)
+        ?? accountList.find((account) => account.account_type === 'bank')
+        ?? accountList[0]
+      const entries: CashbookEntryData[] = []
+      if (input.cashAmount > 0) {
+        entries.push({
+          ...baseEntry,
+          id: `cashbook-debt-${slug(`${receiptCode}-tm-${createdAt}`)}`,
+          code: entries.length === 0 ? receiptCode : `${receiptCode}-TM`,
+          amount_delta: input.cashAmount,
+          finance_account: cashbookFinanceAccountSnapshot(cashAccount),
+          payment_method: 'cash',
+        } as CashbookEntryData)
+      }
+      if (input.bankAmount > 0) {
+        entries.push({
+          ...baseEntry,
+          id: `cashbook-debt-${slug(`${receiptCode}-nh-${createdAt}`)}`,
+          code: entries.length === 0 ? receiptCode : `${receiptCode}-NH`,
+          amount_delta: input.bankAmount,
+          finance_account: cashbookFinanceAccountSnapshot(bankAccount),
+          payment_method: 'bank_transfer',
+          note: input.bankTransactionRef ? `${note} (${input.bankTransactionRef})` : note,
+        } as CashbookEntryData)
+      }
+      for (const entry of entries) cashbookEntries.set(entry.id, entry)
+      recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
     },
     async findCustomerByCode(input) {
       const customer = customers.get(input.code)
@@ -2225,6 +2459,16 @@ function invoicePaymentStatus(paidAmount: number, debtAmount: number) {
 
 function sumAllocations(allocations: NonNullable<CashbookEntryData['allocations']>) {
   return allocations.reduce((total, allocation) => total + allocation.allocated_amount, 0)
+}
+
+function nextPaymentReceiptCode(cashbookEntries: Map<string, CashbookEntryData>) {
+  let maxSeq = 0
+  for (const entry of cashbookEntries.values()) {
+    const match = entry.code.trim().toUpperCase().match(/^TT(\d{6})$/)
+    if (!match) continue
+    maxSeq = Math.max(maxSeq, Number(match[1]))
+  }
+  return `TT${String(maxSeq + 1).padStart(6, '0')}`
 }
 
 function financeAccountFromCashbookRow(

@@ -708,7 +708,7 @@ it('loads and displays customer debt for selected customers', async () => {
   expect(screen.queryByText('HD000099')).not.toBeInTheDocument()
 })
 
-it('uses live customer debt ledger for checkout debt badge when history exists', async () => {
+it('shows the backend canonical debt total for the checkout debt badge', async () => {
   const orderService = makeOrderService({
     getCustomerDebt: vi.fn(async () => ({
       customer_id: 'customer-1',
@@ -806,8 +806,8 @@ it('uses live customer debt ledger for checkout debt badge when history exists',
     />,
   )
 
-  expect(await screen.findByText('4 648 009')).toBeInTheDocument()
-  expect(screen.queryByText('1 115 740')).not.toBeInTheDocument()
+  expect(await screen.findByText('1 115 740')).toBeInTheDocument()
+  expect(screen.queryByText('4 648 009')).not.toBeInTheDocument()
   expect(orderService.getCustomerDebt).toHaveBeenCalledWith('customer-1')
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({
     customer_id: 'customer-1',

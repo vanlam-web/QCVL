@@ -119,15 +119,6 @@ function customerDebtCashbookRelatedCode(entry: CashbookEntry) {
   return entry.code
 }
 
-export function customerDebtLedgerDefinesCurrentDebt(input: {
-  cashbookHistory: CashbookEntry[]
-  debt: CustomerDebtDetail
-}) {
-  return input.cashbookHistory.length > 0
-    || (input.debt.adjustments?.length ?? 0) > 0
-    || (input.debt.linked_supplier_receipts?.length ?? 0) > 0
-}
-
 export function customerDebtHasLiveLedger(debt: CustomerDebtDetail) {
   return debt.total_debt !== 0
     || debt.invoices.length > 0
@@ -150,33 +141,15 @@ function customerDebtAdjustmentHref(code: string) {
   return null
 }
 
+// The backend total (`debt.total_debt`) is the single source of truth for the
+// current debt amount. The ledger rows built above are for display only and
+// must not redefine the headline number.
 export function customerDebtCurrentAmountFromLedger(input: {
   debt: CustomerDebtDetail
   invoiceHistory: Array<{ id: string; code: string; created_at: string; total_amount: number; status?: SalesDocumentListItem['status'] }>
   cashbookHistory: CashbookEntry[]
 }, fallbackDebt: number) {
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(input.debt)
-  const totalDebt = hasLiveDebtLedger ? input.debt.total_debt : fallbackDebt
-  const invoiceRows = input.invoiceHistory.length > 0
-    ? input.invoiceHistory
-    : input.debt.invoices.map((invoice) => ({
-        id: invoice.order_id,
-        code: invoice.order_code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-      }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    input.cashbookHistory,
-    input.debt.adjustments ?? [],
-    input.debt.linked_supplier_receipts ?? [],
-  )
-  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt({
-    cashbookHistory: input.cashbookHistory,
-    debt: input.debt,
-  })
-  return ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  return customerDebtHasLiveLedger(input.debt) ? input.debt.total_debt : fallbackDebt
 }
 
 function salesDocumentAffectsCustomerDebt(document: { status?: SalesDocumentListItem['status'] }) {

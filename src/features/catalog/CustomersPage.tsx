@@ -64,7 +64,6 @@ import {
   buildCustomerDebtLedgerRows,
   customerDebtCounterpartyMatches,
   customerDebtHasLiveLedger,
-  customerDebtLedgerDefinesCurrentDebt,
   type CustomerDebtAdjustment,
   type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
@@ -1509,28 +1508,7 @@ function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], pay
 
 function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerState | undefined, fallbackDebt: number) {
   if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
-  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
-  const invoiceRows = debtLedger.invoiceHistory.length > 0
-    ? debtLedger.invoiceHistory
-    : debtLedger.debt.invoices.map((invoice) => ({
-        id: invoice.order_id,
-        code: invoice.order_code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        paid_amount: invoice.paid_amount,
-        debt_amount: invoice.remaining_debt,
-        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-        status: 'completed' as const,
-        seller: { id: '', name: '' },
-      }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    debtLedger.cashbookHistory,
-    debtLedger.debt.adjustments ?? [],
-    debtLedger.debt.linked_supplier_receipts ?? [],
-  )
-  return customerDebtLedgerDefinesCurrentDebt(debtLedger) ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  return customerDebtHasLiveLedger(debtLedger.debt) ? debtLedger.debt.total_debt : fallbackDebt
 }
 
 function CustomerDebtPanel({
@@ -1575,11 +1553,10 @@ function CustomerDebtPanel({
     debtLedger.debt.adjustments ?? [],
     debtLedger.debt.linked_supplier_receipts ?? [],
   )
-  const ledgerDefinesCurrentDebt = customerDebtLedgerDefinesCurrentDebt(debtLedger)
   const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
-  const currentDebt = ledgerDefinesCurrentDebt ? ledgerRows[0]?.running_debt ?? totalDebt : totalDebt
+  const currentDebt = totalDebt
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
   const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
   const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)
