@@ -49,7 +49,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
@@ -220,7 +220,7 @@ export function CustomersPage({
   service: CatalogService
   orderService: Pick<OrderService, 'getCustomerDebt'>
   salesDocumentService?: Pick<SalesDocumentService, 'listSalesDocuments'>
-  financeService?: Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt'>
+  financeService?: Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt' | 'updateCustomerDebtAdjustment'>
 }) {
   const [routeSearch] = useState(() => (new URLSearchParams(window.location.search).get('search') ?? '').trim())
   const [routeOpen] = useState(() => (new URLSearchParams(window.location.search).get('open') ?? '').trim())
@@ -240,7 +240,9 @@ export function CustomersPage({
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [analysisCustomer, setAnalysisCustomer] = useState<Customer | null>(null)
   const [debtAdjustmentCustomer, setDebtAdjustmentCustomer] = useState<Customer | null>(null)
-  const [debtAdjustmentForm, setDebtAdjustmentForm] = useState({ adjustedAt: '', amount: '', note: '' })
+  const [debtAdjustmentForm, setDebtAdjustmentForm] = useState<CustomerDebtAdjustmentForm>({ adjustmentId: '', adjustedAt: '', adjustedAtIso: null, amount: '', note: '' })
+  const [savingDebtAdjustment, setSavingDebtAdjustment] = useState(false)
+  const [debtAdjustmentError, setDebtAdjustmentError] = useState<string | null>(null)
   const [debtPaymentCustomer, setDebtPaymentCustomer] = useState<Customer | null>(null)
   const [debtPaymentForm, setDebtPaymentForm] = useState<CustomerDebtPaymentForm>(() => ({
     paidAt: formatCustomerDebtAdjustmentDateTime(currentSystemDate()),
@@ -280,6 +282,7 @@ export function CustomersPage({
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
+  const [customerSortState, setCustomerSortState] = useState<ManagementSortState<CustomerSortKey>>(null)
   const [form, setForm] = useState(createCustomerFormDefaults)
 
   async function load(filters: CustomerListFilters & {
@@ -292,6 +295,7 @@ export function CustomersPage({
     totalSalesMaxValue?: string
     totalDebtMinValue?: string
     totalDebtMaxValue?: string
+    sortStateValue?: ManagementSortState<CustomerSortKey>
   } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextCustomerGroupId = filters.customerGroupIdValue ?? lastCustomerGroupId
@@ -303,24 +307,28 @@ export function CustomersPage({
     const nextTotalSalesMax = filters.totalSalesMaxValue ?? lastTotalSalesMax
     const nextTotalDebtMin = filters.totalDebtMinValue ?? lastTotalDebtMin
     const nextTotalDebtMax = filters.totalDebtMaxValue ?? lastTotalDebtMax
+    const nextSortState = filters.sortStateValue === undefined ? customerSortState : filters.sortStateValue
     const nextPage = filters.page ?? page
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
     try {
-      const result = await service.listCustomers(buildCustomerListFilters({
-        search: nextSearch,
-        status: nextStatus,
-        page: nextPage,
-        page_size: nextPageSize,
-        customerGroupId: nextCustomerGroupId,
-        createdFrom: nextCreatedFrom,
-        createdTo: nextCreatedTo,
-        createdBy: nextCreatedBy,
-        totalSalesMin: nextTotalSalesMin,
-        totalSalesMax: nextTotalSalesMax,
-        totalDebtMin: nextTotalDebtMin,
-        totalDebtMax: nextTotalDebtMax,
-      }))
+      const result = await service.listCustomers({
+        ...buildCustomerListFilters({
+          search: nextSearch,
+          status: nextStatus,
+          page: nextPage,
+          page_size: nextPageSize,
+          customerGroupId: nextCustomerGroupId,
+          createdFrom: nextCreatedFrom,
+          createdTo: nextCreatedTo,
+          createdBy: nextCreatedBy,
+          totalSalesMin: nextTotalSalesMin,
+          totalSalesMax: nextTotalSalesMax,
+          totalDebtMin: nextTotalDebtMin,
+          totalDebtMax: nextTotalDebtMax,
+        }),
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+      })
       setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       setLastSearch(nextSearch)
       setLastCustomerGroupId(nextCustomerGroupId)
@@ -497,6 +505,14 @@ export function CustomersPage({
     await load({ page: nextPage })
   }
 
+  async function requestCustomerSort(key: CustomerSortKey) {
+    const kind = key === 'total_debt_amount' || key === 'total_sales_amount' ? 'number' : 'text'
+    const nextSortState = nextManagementSortState(customerSortState, key, kind)
+    setCustomerSortState(nextSortState)
+    setPage(1)
+    await load({ page: 1, sortStateValue: nextSortState })
+  }
+
   function toggleCustomerDetail(customer: Customer) {
     setSelectedCustomerId((current) => {
       const next = current === customer.id ? null : customer.id
@@ -669,6 +685,39 @@ export function CustomersPage({
     }
   }
 
+  async function saveCustomerDebtAdjustment(customer: Customer, form: CustomerDebtAdjustmentForm) {
+    if (!financeService?.updateCustomerDebtAdjustment) return
+    const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
+    if (!form.adjustmentId || selectedAdjustmentDateTime === null) {
+      setDebtAdjustmentError('Thời gian điều chỉnh không hợp lệ.')
+      return
+    }
+    const amount = parseMoneyInput(form.amount)
+    if (amount <= 0) {
+      setDebtAdjustmentError('Giá trị nợ điều chỉnh phải lớn hơn 0.')
+      return
+    }
+    setSavingDebtAdjustment(true)
+    setDebtAdjustmentError(null)
+    try {
+      const formattedIso = form.adjustedAtIso && form.adjustedAt === dateTime(form.adjustedAtIso)
+        ? form.adjustedAtIso
+        : selectedAdjustmentDateTime.toISOString()
+      await financeService.updateCustomerDebtAdjustment(form.adjustmentId, {
+        adjusted_at: formattedIso,
+        amount_delta: amount,
+        note: form.note.trim() || null,
+      })
+      setDebtAdjustmentCustomer(null)
+      loadCustomerDebtLedger(customer, { force: true })
+      void load({ page })
+    } catch (cause) {
+      setDebtAdjustmentError(formatApiError(cause, 'Không lưu được phiếu điều chỉnh.'))
+    } finally {
+      setSavingDebtAdjustment(false)
+    }
+  }
+
   function selectCustomerHistoryType(customerId: string, historyType: CustomerHistoryType) {
     setCustomerHistoryType(historyType)
     loadCustomerHistory(customerId, historyType, { page: customerHistoryPages[customerHistoryKey(customerId, historyType)] ?? 1 })
@@ -748,18 +797,7 @@ export function CustomersPage({
         { from: createdFrom, to: createdTo },
         dateRangeFromItems(state?.customers ?? [], (customer) => customer.created_at),
       )
-  const {
-    sortedItems: sortedCustomers,
-    sortState: customerSortState,
-    requestSort: requestCustomerSort,
-  } = useManagementTableSort<Customer, CustomerSortKey>(state?.customers ?? [], {
-    code: { kind: 'text', value: (customer) => customer.code },
-    name: { kind: 'text', value: (customer) => customer.name },
-    phone: { kind: 'text', value: (customer) => customer.phone },
-    group: { kind: 'text', value: (customer) => customerGroupLabel(customer) },
-    total_debt_amount: { kind: 'number', value: (customer) => customer.total_debt_amount },
-    total_sales_amount: { kind: 'number', value: (customer) => customer.total_sales_amount },
-  })
+  const sortedCustomers = state?.customers ?? []
   const customerKpis = (
     <MetricGrid ariaLabel="Tổng quan khách hàng">
       <MetricCard hint="Theo bộ lọc hiện tại" label="Công nợ" tone={visibleDebtTotal > 0 ? 'warning' : 'neutral'} value={<MoneyText value={visibleDebtTotal} />} />
@@ -769,7 +807,8 @@ export function CustomersPage({
 
   function openDebtAdjustmentDialog(customer: Customer, form?: CustomerDebtAdjustmentForm) {
     setDebtAdjustmentCustomer(customer)
-    setDebtAdjustmentForm(form ?? { adjustedAt: '', amount: '', note: '' })
+    setDebtAdjustmentError(null)
+    setDebtAdjustmentForm(form ?? { adjustmentId: '', adjustedAt: '', adjustedAtIso: null, amount: '', note: '' })
   }
 
   return (
@@ -1228,7 +1267,9 @@ export function CustomersPage({
                             ledgerPage={debtLedgerPage}
                             ledgerPageSize={customerDebtLedgerPageSize}
                             onOpenAdjustment={(adjustment) => openDebtAdjustmentDialog(customer, {
+                              adjustmentId: adjustment.id,
                               adjustedAt: dateTime(adjustment.created_at),
+                              adjustedAtIso: adjustment.created_at,
                               amount: formatMoney(adjustment.amount_delta),
                               note: adjustment.source_file ?? adjustment.transaction_type ?? '',
                             })}
@@ -1344,6 +1385,10 @@ export function CustomersPage({
           currentDebt={debtAdjustmentCustomer.total_debt_amount ?? 0}
           onChange={setDebtAdjustmentForm}
           onClose={() => setDebtAdjustmentCustomer(null)}
+          saving={savingDebtAdjustment}
+          error={debtAdjustmentError}
+          canSave={Boolean(financeService?.updateCustomerDebtAdjustment)}
+          onSubmit={(form) => void saveCustomerDebtAdjustment(debtAdjustmentCustomer, form)}
         />
       ) : null}
       {debtPaymentCustomer ? (
@@ -1727,7 +1772,9 @@ function CustomerHistoryPanel({
 }
 
 type CustomerDebtAdjustmentForm = {
+  adjustmentId: string
   adjustedAt: string
+  adjustedAtIso: string | null
   amount: string
   note: string
 }
@@ -2051,12 +2098,20 @@ function CustomerDebtAdjustmentDialog({
   form,
   onChange,
   onClose,
+  saving,
+  error,
+  canSave,
+  onSubmit,
 }: {
   customer: Customer
   currentDebt: number
   form: CustomerDebtAdjustmentForm
   onChange: (form: CustomerDebtAdjustmentForm) => void
   onClose: () => void
+  saving: boolean
+  error: string | null
+  canSave: boolean
+  onSubmit: (form: CustomerDebtAdjustmentForm) => void
 }) {
   const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
   const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
@@ -2065,20 +2120,21 @@ function CustomerDebtAdjustmentDialog({
     return new Date(now.getFullYear(), now.getMonth(), 1)
   })
   const calendarDays = customerDebtAdjustmentCalendarDays(calendarMonth)
+  const canSubmit = canSave && !saving && form.adjustmentId.trim() !== '' && selectedAdjustmentDateTime !== null && parseMoneyInput(form.amount) > 0
   const updateField = (field: keyof CustomerDebtAdjustmentForm, value: string) => {
     onChange({ ...form, [field]: value })
   }
   const selectAdjustmentDate = (date: Date) => {
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
-    updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: next.toISOString() })
     setPickerOpen(null)
   }
   const selectAdjustmentTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number)
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
-    updateField('adjustedAt', formatCustomerDebtAdjustmentDateTime(next))
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: next.toISOString() })
     setPickerOpen(null)
   }
 
@@ -2099,8 +2155,12 @@ function CustomerDebtAdjustmentDialog({
         <form
           aria-label="Điều chỉnh công nợ"
           className="management-modal-form customer-debt-adjustment-form"
-          onSubmit={(event) => event.preventDefault()}
+          onSubmit={(event) => {
+            event.preventDefault()
+            if (canSubmit) onSubmit(form)
+          }}
         >
+          {error ? <p role="alert" className="form-error">{error}</p> : null}
           <div className="customer-debt-adjustment-row">
             <span>Nợ cần thu hiện tại</span>
             <strong>{formatMoney(currentDebt)}</strong>
@@ -2189,8 +2249,8 @@ function CustomerDebtAdjustmentDialog({
             <button className="button button-secondary" type="button" onClick={onClose}>
               Bỏ qua
             </button>
-            <button className="button button-primary" disabled title="Chưa nối lưu phiếu điều chỉnh" type="submit">
-              Cập nhật
+            <button className="button button-primary" disabled={!canSubmit} type="submit">
+              {saving ? 'Đang lưu...' : 'Cập nhật'}
             </button>
           </footer>
         </form>

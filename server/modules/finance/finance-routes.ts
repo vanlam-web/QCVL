@@ -15,6 +15,7 @@ export interface FinanceRouteHandlers {
   listCustomerDebts(): RouteResult
   getCustomerDebt(): RouteResult
   collectCustomerDebt(): RouteResult
+  updateCustomerDebtAdjustment(): RouteResult
   cashbookBalances(): RouteResult
   cashbookVouchers(): RouteResult
   previewKiotVietCashbookImport(): RouteResult
@@ -41,6 +42,7 @@ export function handleFinanceRoute(context: FinanceRouteContext, handlers: Finan
   if (method === 'GET' && pathname === '/api/v1/finance/customer-debts') return handlers.listCustomerDebts()
   if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(pathname)) return handlers.getCustomerDebt()
   if (method === 'POST' && pathname === '/api/v1/finance/debt-collections') return handlers.collectCustomerDebt()
+  if (method === 'PATCH' && /^\/api\/v1\/finance\/customer-debt-adjustments\/[^/]+$/.test(pathname)) return handlers.updateCustomerDebtAdjustment()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook/balances') return handlers.cashbookBalances()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook/vouchers') return handlers.cashbookVouchers()
   if (method === 'POST' && pathname === '/api/v1/finance/cashbook/import/kiotviet/preview') return handlers.previewKiotVietCashbookImport()

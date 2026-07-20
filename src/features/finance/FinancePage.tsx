@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState, type FormEvent, type MouseEvent } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
@@ -242,6 +242,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [collecting, setCollecting] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const cashbookSortInitialRender = useRef(true)
   const activeAccounts = accounts.filter((account) => account.is_active)
   const sortedActiveAccounts = [...activeAccounts].sort(cashFirstAccountSort)
   const defaultCashAccountId = sortedActiveAccounts.find((account) => account.account_type === 'cash' && account.is_default_cash)?.id
@@ -461,6 +462,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     business_accounted_filter?: CashbookBusinessAccountedFilter
     page?: number
     page_size?: number
+    sortStateValue?: typeof cashbookSortState
   } = {}) {
     const nextSearch = input.search ?? lastCashbookSearch
     const nextSearchScope = input.search_scope ?? lastCashbookSearchScope
@@ -470,6 +472,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     const nextDirection = input.direction ?? lastCashbookDirection
     const nextStatus = input.status ?? lastCashbookStatus
     const nextBusinessAccounted = input.business_accounted_filter ?? lastCashbookBusinessAccounted
+    const nextSortState = input.sortStateValue ?? cashbookSortState
     const nextPage = input.page ?? cashbookPage
     const nextPageSize = input.page_size ?? cashbookPageSize
     setError(null)
@@ -486,6 +489,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         is_business_accounted: nextBusinessAccounted === 'all' ? undefined : nextBusinessAccounted === 'true',
         page: nextPage,
         page_size: nextPageSize,
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setCashbookEntries(result.items)
       void hydrateCashbookCounterparties(result.items)
@@ -505,6 +509,15 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setError(formatApiError(cause, 'Không tải được sổ quỹ.'))
     }
   }
+
+  useEffect(() => {
+    if (cashbookSortInitialRender.current) {
+      cashbookSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void loadCashbook({ page: 1, sortStateValue: cashbookSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cashbookSortState?.key, cashbookSortState?.direction])
 
   async function applyCashbookQuickTimeFilter(preset: Exclude<CashbookTimeFilter, 'custom'>) {
     const range = cashbookQuickTimeRange(preset)

@@ -118,6 +118,14 @@ export interface DebtCollectionInput {
   note?: string
 }
 
+export type CustomerDebtAdjustment = NonNullable<CustomerDebtDetail['adjustments']>[number]
+
+export interface UpdateCustomerDebtAdjustmentInput {
+  adjusted_at: string
+  amount_delta: number
+  note?: string | null
+}
+
 export interface DebtCollectionResult {
   payment_receipt_id: string
   allocated_amount: number

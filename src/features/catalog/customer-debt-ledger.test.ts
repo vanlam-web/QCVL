@@ -51,6 +51,30 @@ describe('customer debt ledger', () => {
     expect(rows.map((row) => row.code)).not.toContain('TNH000009')
   })
 
+  it('includes KiotViet CB adjustment slips in customer debt history', () => {
+    const rows = buildCustomerDebtLedgerRows(
+      [{
+        id: 'order-1',
+        code: 'HD007698.01',
+        created_at: '2025-12-04T03:00:00.000Z',
+        total_amount: 500000,
+        status: 'completed',
+      }],
+      [
+        {
+          ...kvCashbook('CB000033'),
+          direction: 'out',
+          amount_delta: 250000,
+          note: 'Dieu chinh cong no',
+        },
+      ],
+      [],
+    )
+
+    expect(rows.map((row) => row.code)).toContain('CB000033')
+    expect(rows.find((row) => row.code === 'CB000033')?.type).toBe('Điều chỉnh')
+  })
+
   it('shows same-invoice payments above the debt invoice row', () => {
     const rows = buildCustomerDebtLedgerRows(
       [{

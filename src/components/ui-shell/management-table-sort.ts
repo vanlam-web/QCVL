@@ -13,6 +13,17 @@ export function firstManagementSortDirection(kind: ManagementSortKind): Manageme
   return kind === 'text' ? 'asc' : 'desc'
 }
 
+export function nextManagementSortState<Key extends string>(
+  current: ManagementSortState<Key>,
+  key: Key,
+  kind: ManagementSortKind,
+): ManagementSortState<Key> {
+  const firstDirection = firstManagementSortDirection(kind)
+  if (current === null || current.key !== key) return { key, direction: firstDirection }
+  if (current.direction === firstDirection) return { key, direction: firstDirection === 'asc' ? 'desc' : 'asc' }
+  return null
+}
+
 function compareSortValue(left: string | number | null | undefined, right: string | number | null | undefined, kind: ManagementSortKind) {
   if (left === right) return 0
   if (left === null || left === undefined) return 1
@@ -45,12 +56,7 @@ export function useManagementTableSort<Item, Key extends string>(
   }, [columns, items, sortState])
 
   function requestSort(key: Key) {
-    const firstDirection = firstManagementSortDirection(columns[key].kind)
-    setSortState((current) => {
-      if (current === null || current.key !== key) return { key, direction: firstDirection }
-      if (current.direction === firstDirection) return { key, direction: firstDirection === 'asc' ? 'desc' : 'asc' }
-      return null
-    })
+    setSortState((current) => nextManagementSortState(current, key, columns[key].kind))
   }
 
   return { sortedItems, sortState, requestSort }

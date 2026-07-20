@@ -237,6 +237,17 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     listCustomerDebts: vi.fn(async () => ({ items: [debt], page: 1, page_size: 15, total: 1 })),
     getCustomerDebt: vi.fn(async () => debtDetail),
     collectCustomerDebt: vi.fn(async () => ({ payment_receipt_id: 'receipt-1', allocated_amount: 500000 })),
+    updateCustomerDebtAdjustment: vi.fn(async (adjustmentId, input) => ({
+      id: adjustmentId,
+      source_code: 'CB000001',
+      created_at: input.adjusted_at ?? '2023-07-12T16:27:00.000Z',
+      transaction_type: 'Dieu chinh',
+      amount_delta: input.amount_delta ?? 0,
+      paid_amount: 0,
+      remaining_amount: input.amount_delta ?? 0,
+      balance_after: 0,
+      source_file: input.note ?? null,
+    })),
     createFinanceAccount: vi.fn(async (input) => ({ ...input, id: 'created-bank-account' })),
     updateFinanceAccount: vi.fn(async (accountId, input) => ({ ...accounts.find((account) => account.id === accountId) ?? accounts[1], ...input, id: accountId })),
     updateCashbookEntry: vi.fn(async (entryId, input) => ({

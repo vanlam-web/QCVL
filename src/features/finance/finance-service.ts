@@ -20,6 +20,8 @@ import type {
   FinanceSalesDocumentSummary,
   KiotVietCashbookDeleteResult,
   KiotVietCashbookImportPreview,
+  CustomerDebtAdjustment,
+  UpdateCustomerDebtAdjustmentInput,
   UpdateCashbookEntryInput,
 } from './types'
 
@@ -60,6 +62,11 @@ export function createFinanceService(api: FinanceApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    updateCustomerDebtAdjustment: (adjustmentId: string, input: UpdateCustomerDebtAdjustmentInput) =>
+      api.request<CustomerDebtAdjustment>(`/api/v1/finance/customer-debt-adjustments/${encodeURIComponent(adjustmentId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     listCashbookBalances: () => api.request<CashbookBalanceListResponse>('/api/v1/finance/cashbook/balances'),
     listCashbookEntries: (input: {
       search?: string
@@ -73,6 +80,8 @@ export function createFinanceService(api: FinanceApiRequester) {
       to?: string
       page?: number
       page_size?: number
+      sort_key?: 'code' | 'created_at' | 'created_by' | 'source_type' | 'counterparty' | 'finance_account' | 'amount_delta' | 'status' | 'note' | 'is_business_accounted'
+      sort_direction?: 'asc' | 'desc'
     } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
@@ -86,6 +95,8 @@ export function createFinanceService(api: FinanceApiRequester) {
       if (input.to) params.set('to', input.to)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.sort_key) params.set('sort_key', input.sort_key)
+      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
       const query = params.toString()
       return api.request<CashbookListResponse>(`/api/v1/finance/cashbook${query ? `?${query}` : ''}`)
     },

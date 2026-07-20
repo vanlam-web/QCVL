@@ -60,7 +60,7 @@ export function createInventoryService(api: InventoryApiRequester) {
       const query = params.toString()
       return api.request<StockMovementListResponse>(`/api/v1/inventory/stock-movements${query ? `?${query}` : ''}`)
     },
-    listStocktakes: (input: { search?: string; status?: Stocktake['status'] | string; from?: string; to?: string; created_by?: string; page?: number; page_size?: number } = {}) => {
+    listStocktakes: (input: { search?: string; status?: Stocktake['status'] | string; from?: string; to?: string; created_by?: string; page?: number; page_size?: number; sort_key?: 'code' | 'created_at' | 'product_code' | 'product_name' | 'product_system_qty' | 'product_actual_qty' | 'product_difference_qty' | 'status'; sort_direction?: 'asc' | 'desc' } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
       if (input.status) params.set('status', input.status)
@@ -69,6 +69,8 @@ export function createInventoryService(api: InventoryApiRequester) {
       if (input.created_by) params.set('created_by', input.created_by)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.sort_key) params.set('sort_key', input.sort_key)
+      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
       const query = params.toString()
       return api.request<StocktakeListResponse>(`/api/v1/inventory/stocktakes${query ? `?${query}` : ''}`)
     },

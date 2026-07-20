@@ -2976,6 +2976,64 @@ describe('createHttpHandler', () => {
     })
   })
 
+  test('sorts the full filtered customer list before pagination', async () => {
+    const base = repository(await hashPassword('ChangeMe123!'))
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        async listCustomers() {
+          return [
+            {
+              id: 'customer-low-debt',
+              code: 'KH-LOW',
+              name: 'Khach no thap',
+              phone: null,
+              tax_code: null,
+              address: null,
+              customer_group_id: null,
+              customer_group: null,
+              created_by: null,
+              created_at: '2026-07-02T00:00:00.000Z',
+              total_sales_amount: 500000,
+              total_debt_amount: 10000,
+              status: 'active',
+            },
+            {
+              id: 'customer-high-debt',
+              code: 'KH-HIGH',
+              name: 'Khach no cao',
+              phone: null,
+              tax_code: null,
+              address: null,
+              customer_group_id: null,
+              customer_group: null,
+              created_by: null,
+              created_at: '2026-07-01T00:00:00.000Z',
+              total_sales_amount: 100000,
+              total_debt_amount: 900000,
+              status: 'active',
+            },
+          ]
+        },
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(new Request('http://api.local/api/v1/customers?sort_key=total_debt_amount&sort_direction=desc&page=1&page_size=1', { headers: { authorization } }))
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items).toEqual([expect.objectContaining({ code: 'KH-HIGH', total_debt_amount: 900000 })])
+    expect(body.data.total).toBe(2)
+  })
+
   test('searches demo management lists by the fields advertised in each search box', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
@@ -4753,6 +4811,62 @@ describe('createHttpHandler', () => {
     expect(cashbookBody.data.items[0].finance_account).toEqual(expect.objectContaining({
       id: 'bank-main',
       account_type: 'bank',
+    }))
+  })
+
+  test('updates imported customer debt adjustment slips through the finance route', async () => {
+    const passwordHash = await hashPassword('ChangeMe123!')
+    const updateCustomerDebtAdjustment = vi.fn(async () => ({
+      id: 'customer-debt-adjustment-kv-cb000033',
+      source_code: 'CB000033',
+      created_at: '2023-07-24T11:18:00.000Z',
+      transaction_type: 'Điều chỉnh',
+      amount_delta: 14766370,
+      paid_amount: 0,
+      remaining_amount: 14766370,
+      balance_after: 15648370,
+      source_file: 'Nguồn mới',
+    }))
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(passwordHash),
+        updateCustomerDebtAdjustment,
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/finance/customer-debt-adjustments/customer-debt-adjustment-kv-cb000033', {
+        method: 'PATCH',
+        headers: { authorization },
+        body: JSON.stringify({
+          adjusted_at: '2023-07-24T11:18:00.000Z',
+          amount_delta: 14766370,
+          note: 'Nguồn mới',
+        }),
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(updateCustomerDebtAdjustment).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      adjustmentId: 'customer-debt-adjustment-kv-cb000033',
+      adjustedAt: '2023-07-24T11:18:00.000Z',
+      amountDelta: 14766370,
+      note: 'Nguồn mới',
+    })
+    expect(body.data).toEqual(expect.objectContaining({
+      source_code: 'CB000033',
+      amount_delta: 14766370,
+      source_file: 'Nguồn mới',
     }))
   })
 

@@ -23,7 +23,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { appRoutes } from '../../app/routes'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
@@ -257,6 +257,7 @@ export function CatalogPage({
     latestPurchaseCost: '0',
     productGroupId: '',
   })
+  const productSortInitialRender = useRef(true)
   async function load(filters: {
     search?: string
     status?: ProductStatusFilter
@@ -267,6 +268,7 @@ export function CatalogPage({
     created_to?: string
     page?: number
     page_size?: number
+    sortStateValue?: ManagementSortState<ProductSortKey>
   } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextStatus = filters.status ?? lastStatus
@@ -275,6 +277,7 @@ export function CatalogPage({
     const nextInventoryShape = filters.inventory_shape ?? lastInventoryShapeFilter
     const nextCreatedFrom = filters.created_from ?? lastProductCreatedDateFrom
     const nextCreatedTo = filters.created_to ?? lastProductCreatedDateTo
+    const nextSortState = filters.sortStateValue ?? productSortState
     const nextPage = filters.page ?? page
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
@@ -289,6 +292,7 @@ export function CatalogPage({
         ...(nextInventoryShape === 'all' ? {} : { inventory_shape: nextInventoryShape }),
         ...(nextCreatedFrom ? { created_from: nextCreatedFrom } : {}),
         ...(nextCreatedTo ? { created_to: nextCreatedTo } : {}),
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total, totalAll: result.total_all })
       setLastSearch(nextSearch)
@@ -794,6 +798,14 @@ export function CatalogPage({
     unit_name: { kind: 'text', value: (product) => product.unit_name },
     out_of_stock: { kind: 'text', value: () => null },
   })
+  useEffect(() => {
+    if (productSortInitialRender.current) {
+      productSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void load({ page: 1, sortStateValue: productSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productSortState?.key, productSortState?.direction])
   const productVisibleDateRange = productCreatedDateFilter === 'custom'
     ? { from: productCreatedDateFrom, to: productCreatedDateTo }
     : displayDateRangeForData(

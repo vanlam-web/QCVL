@@ -24,7 +24,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
@@ -142,6 +142,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [adjusting, setAdjusting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const stocktakeListRequestId = useRef(0)
+  const stocktakeSortInitialRender = useRef(true)
 
   const fallbackProductSummary = inventoryListSummary(products)
   const negativeCount = productSummary?.negative_count ?? fallbackProductSummary.negativeCount
@@ -163,6 +164,14 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     product_difference_qty: { kind: 'number', value: (stocktake) => stocktake.product_difference_qty },
     status: { kind: 'text', value: (stocktake) => stocktakeStatusText(stocktake.status) },
   })
+  useEffect(() => {
+    if (stocktakeSortInitialRender.current) {
+      stocktakeSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void loadStocktakeList({ page: 1, sortStateValue: stocktakeSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stocktakeSortState?.key, stocktakeSortState?.direction])
   const stocktakeVisibleDateRange = stocktakeDateFilter === 'custom'
     ? { from: stocktakeDateFrom, to: stocktakeDateTo }
     : displayDateRangeForData(
@@ -211,6 +220,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     createdBy?: string
     page?: number
     page_size?: number
+    sortStateValue?: ManagementSortState<StocktakeSortKey>
   } = {}) {
     const nextSearch = input.search ?? stocktakeLastSearch
     const nextStatusSelection = input.statusSelection ?? stocktakeStatusSelection
@@ -218,6 +228,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     const nextFrom = input.from ?? stocktakeDateFrom
     const nextTo = input.to ?? stocktakeDateTo
     const nextCreatedBy = input.createdBy ?? stocktakeCreatedBy
+    const nextSortState = input.sortStateValue ?? stocktakeSortState
     const nextPage = input.page ?? stocktakePage
     const nextPageSize = input.page_size ?? stocktakePageSize
     const requestId = stocktakeListRequestId.current + 1
@@ -232,6 +243,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
         ...(nextCreatedBy !== 'all' ? { created_by: nextCreatedBy } : {}),
         page: nextPage,
         page_size: nextPageSize,
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       if (stocktakeListRequestId.current !== requestId) return
       setStocktakes(result.items)

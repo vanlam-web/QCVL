@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Network, Pencil, Save, Search, StickyNote, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
@@ -31,7 +31,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import { supplierNumberFilterValue } from './supplier-filters'
@@ -145,6 +145,7 @@ export function SuppliersPage({
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [paymentFinanceAccountId, setPaymentFinanceAccountId] = useState('')
   const [paymentNote, setPaymentNote] = useState('')
+  const supplierSortInitialRender = useRef(true)
   const bankAccounts = financeAccounts.filter((account) => account.is_active && account.account_type === 'bank')
   const fallbackSupplierSummary = supplierListSummary(suppliers)
   const payableTotal = summary?.current_payable_amount ?? fallbackSupplierSummary.payableTotal
@@ -170,6 +171,7 @@ export function SuppliersPage({
       totalPurchaseMaxValue?: string
       currentPayableMinValue?: string
       currentPayableMaxValue?: string
+      sortStateValue?: ManagementSortState<SupplierSortKey>
     } = {
       search: lastSearch,
       status: lastStatus,
@@ -187,6 +189,7 @@ export function SuppliersPage({
     const nextTotalPurchaseMax = input.totalPurchaseMaxValue ?? lastTotalPurchaseMax
     const nextCurrentPayableMin = input.currentPayableMinValue ?? lastCurrentPayableMin
     const nextCurrentPayableMax = input.currentPayableMaxValue ?? lastCurrentPayableMax
+    const nextSortState = input.sortStateValue ?? supplierSortState
     const nextPage = input.page ?? page
     const nextPageSize = input.page_size ?? pageSize
     setError(null)
@@ -204,6 +207,7 @@ export function SuppliersPage({
         ...(totalPurchaseMaxFilter === undefined ? {} : { total_purchase_max: totalPurchaseMaxFilter }),
         ...(currentPayableMinFilter === undefined ? {} : { current_payable_min: currentPayableMinFilter }),
         ...(currentPayableMaxFilter === undefined ? {} : { current_payable_max: currentPayableMaxFilter }),
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setSuppliers(result.items)
       setTotal(result.total)
@@ -220,6 +224,15 @@ export function SuppliersPage({
       setError(formatApiError(cause, 'Không tải được nhà cung cấp.'))
     }
   }
+
+  useEffect(() => {
+    if (supplierSortInitialRender.current) {
+      supplierSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void loadSuppliers({ page: 1, sortStateValue: supplierSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supplierSortState?.key, supplierSortState?.direction])
 
   useEffect(() => {
     let active = true

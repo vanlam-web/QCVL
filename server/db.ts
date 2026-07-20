@@ -3678,7 +3678,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 on cbe.organization_id = $1
                and cbe.status = 'posted'
                and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
+               and cbe.code ~* '^(CB|TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
                and cbe.source->>'counterparty_code' = la.customer_code
                and cbe.created_at > la.created_at
               group by la.customer_id
@@ -3987,6 +3987,61 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
         await pool.query('commit')
         return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async updateCustomerDebtAdjustment(input) {
+      await ensureSalesFinanceTables(pool)
+      await pool.query('begin')
+      try {
+        const result = await pool.query(
+          `
+            update customer_debt_adjustments
+            set
+              created_at = coalesce($3::timestamptz, created_at),
+              amount_delta = coalesce($4::numeric, amount_delta),
+              remaining_amount = greatest(coalesce($4::numeric, amount_delta) - paid_amount, 0),
+              source_file = case when $5::boolean then $6::text else source_file end,
+              updated_at = now()
+            where organization_id = $1
+              and id = $2
+            returning
+              id,
+              source_code,
+              created_at,
+              transaction_type,
+              amount_delta,
+              paid_amount,
+              remaining_amount,
+              balance_after,
+              source_file
+          `,
+          [
+            input.organizationId,
+            input.adjustmentId,
+            input.adjustedAt ?? null,
+            input.amountDelta ?? null,
+            input.note !== undefined,
+            input.note ?? null,
+          ],
+        )
+        await pool.query('commit')
+        const row = result.rows[0]
+        if (!row) return null
+        return {
+          id: String(row.id),
+          source_code: String(row.source_code),
+          created_at: row.created_at.toISOString(),
+          transaction_type: String(row.transaction_type),
+          amount_delta: Number(row.amount_delta),
+          paid_amount: Number(row.paid_amount),
+          remaining_amount: Number(row.remaining_amount),
+          balance_after: Number(row.balance_after),
+          source_file: row.source_file === null ? null : String(row.source_file),
+        }
       } catch (error) {
         await pool.query('rollback')
         throw error
@@ -4315,7 +4370,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 on cbe.organization_id = $1
                and cbe.status = 'posted'
                and cbe.source_type = 'kiotviet_cashbook'
-               and cbe.code ~* '^(TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
+               and cbe.code ~* '^(CB|TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
                and cbe.source->>'counterparty_code' = la.customer_code
                and cbe.created_at > la.created_at
               group by la.customer_id
@@ -4336,6 +4391,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         ),
       ])
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
+      const liveDebtCustomerIds = new Set<string>()
       for (const row of sales.rows) {
         totals.set(row.customer_id, {
           total_sales_amount: Number(row.total_sales_amount),
@@ -4344,14 +4400,16 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         })
       }
       for (const row of debts.rows) {
+        liveDebtCustomerIds.add(String(row.customer_id))
         const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
         totals.set(row.customer_id, { ...existing, total_debt_amount: Number(row.total_debt_amount) })
       }
       for (const row of adjustments.rows) {
         const existing = totals.get(row.customer_id) ?? { total_sales_amount: 0, total_debt_amount: 0 }
+        const hasLiveDebt = liveDebtCustomerIds.has(String(row.customer_id))
         totals.set(row.customer_id, {
           ...existing,
-          total_debt_amount: Number(row.total_debt_amount),
+          total_debt_amount: hasLiveDebt ? existing.total_debt_amount : Number(row.total_debt_amount),
           last_activity_at: row.last_activity_at?.toISOString() ?? existing.last_activity_at,
         })
       }

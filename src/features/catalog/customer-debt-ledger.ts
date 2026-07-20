@@ -191,6 +191,7 @@ function cashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
 function kiotVietCashbookEntryAffectsCustomerDebt(entry: CashbookEntry) {
   if (entry.source_type !== 'kiotviet_cashbook') return false
   return /^TTHD/i.test(entry.code)
+    || /^CB/i.test(entry.code)
     || /^TT\d/i.test(entry.code)
     || /^TTM(?:HD)?\d/i.test(entry.code)
     || /^TNHHD\d/i.test(entry.code)

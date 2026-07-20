@@ -722,6 +722,13 @@ export interface ServerRepository {
     bankTransactionRef?: string
     note?: string
   }): Promise<{ payment_receipt_id: string; allocated_amount: number }>
+  updateCustomerDebtAdjustment?(input: {
+    organizationId: string
+    adjustmentId: string
+    adjustedAt?: string
+    amountDelta?: number
+    note?: string | null
+  }): Promise<CustomerDebtDetailData['adjustments'] extends Array<infer T> ? T | null : null>
   listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
   listCashbookEntriesPage?(input: { organizationId: string; url: URL }): Promise<CashbookListPageData>
   getCashbookEntry?(input: { organizationId: string; id: string }): Promise<CashbookEntryData | null>
@@ -2182,6 +2189,28 @@ async function collectCustomerDebt(request: Request) {
   return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
 }
 
+async function updateCustomerDebtAdjustmentInMemory(request: Request, adjustmentId: string) {
+  const body = await readJson(request) as {
+    adjusted_at?: string
+    amount_delta?: number
+    note?: string | null
+  }
+  for (const debt of customerDebtItems) {
+    const adjustment = (debt.adjustments ?? []).find((item) => item.id === adjustmentId)
+    if (!adjustment) continue
+    if (typeof body.adjusted_at === 'string' && body.adjusted_at.trim()) adjustment.created_at = body.adjusted_at
+    if (typeof body.amount_delta === 'number' && Number.isFinite(body.amount_delta)) {
+      const nextAmount = Math.max(body.amount_delta, 0)
+      const paidAmount = Math.max(adjustment.paid_amount, 0)
+      adjustment.amount_delta = nextAmount
+      adjustment.remaining_amount = Math.max(nextAmount - paidAmount, 0)
+    }
+    if (body.note !== undefined) adjustment.source_file = body.note === null ? null : String(body.note)
+    return adjustment
+  }
+  return null
+}
+
 async function salesDocumentProductCatalog(
   repository: ServerRepository,
   organizationId: string,
@@ -2635,7 +2664,7 @@ async function getDevApiResponse(
         return { found: true, data: renamed }
       },
       listProducts: async () => {
-        if (repository.listProductsPage && url.searchParams.get('sort') !== 'pos_usage') {
+        if (repository.listProductsPage && url.searchParams.get('sort') !== 'pos_usage' && !url.searchParams.get('sort_key')) {
           const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, url })
           return {
             found: true,
@@ -2648,7 +2677,7 @@ async function getDevApiResponse(
             },
           }
         }
-        const items = await listProductsForRequest(url, repository, currentUser.organization.id)
+        const items = sortProductsForRequest(await listProductsForRequest(url, repository, currentUser.organization.id), url)
         return {
           found: true,
           data: {
@@ -2733,7 +2762,7 @@ async function getDevApiResponse(
             last_activity_at: lastActivityAt,
           }
         })
-        const sortedCustomers = newestFirst(hydrateLinkedSuppliers(filteredCustomers, repositorySuppliers ?? suppliers))
+        const sortedCustomers = sortCustomersForRequest(hydrateLinkedSuppliers(filteredCustomers, repositorySuppliers ?? suppliers), url)
         return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
       },
       createCustomer: async () => {
@@ -2924,7 +2953,7 @@ async function getDevApiResponse(
         return { found: true, data: paged(newestFirst(items), page, pageSize) }
       },
       stocktakes: async () => {
-        if (repository.listStocktakesPage) {
+        if (repository.listStocktakesPage && !url.searchParams.get('sort_key')) {
           const result = await repository.listStocktakesPage({ organizationId: currentUser.organization.id, url })
           return {
             found: true,
@@ -2937,8 +2966,11 @@ async function getDevApiResponse(
             },
           }
         }
-        const items = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
-          ?? [makeStocktake(currentUser.user)]
+        const items = sortStocktakesForRequest(
+          await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
+            ?? [makeStocktake(currentUser.user)],
+          url,
+        )
         const creatorUrl = new URL(url)
         creatorUrl.searchParams.delete('created_by')
         const creatorItems = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url: creatorUrl })
@@ -3061,7 +3093,7 @@ async function getDevApiResponse(
           organizationId: currentUser.organization.id,
           url,
         })
-        const items = repositorySuppliers ?? filterSuppliers(url)
+        const items = sortSuppliersForRequest(repositorySuppliers ?? filterSuppliers(url), url)
         return { found: true, data: { ...paged(items, page, pageSize), summary: supplierListSummary(items) } }
       },
       previewKiotVietSupplierImport: async () => {
@@ -3184,7 +3216,7 @@ async function getDevApiResponse(
           organizationId: currentUser.organization.id,
           url,
         })
-        const items = repositoryReceipts ?? filterPurchaseReceipts(url)
+        const items = sortPurchaseReceiptsForRequest(repositoryReceipts ?? filterPurchaseReceipts(url), url)
         return { found: true, data: { ...paged(items, page, pageSize), summary: purchaseReceiptListSummary(items) } }
       },
       previewKiotVietPurchaseReceiptImport: async () => {
@@ -3337,7 +3369,7 @@ async function getDevApiResponse(
       listSalesDocuments: async () => {
         const page = Number(url.searchParams.get('page') ?? '1')
         const pageSize = Number(url.searchParams.get('page_size') ?? '20')
-        if (repository.listSalesDocumentsPage) {
+        if (repository.listSalesDocumentsPage && !url.searchParams.get('sort_key')) {
           const result = await repository.listSalesDocumentsPage({ organizationId: currentUser.organization.id, url })
           return {
             found: true,
@@ -3351,10 +3383,10 @@ async function getDevApiResponse(
           }
         }
         if (repository.listSalesDocuments) {
-          const items = await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url })
+          const items = sortSalesDocumentsForRequest(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), url)
           return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
         }
-        const items = filterSalesDocuments(url)
+        const items = sortSalesDocumentsForRequest(filterSalesDocuments(url), url)
         return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
       },
       getSalesDocument: async () => {
@@ -3540,6 +3572,28 @@ async function getDevApiResponse(
         }
         return { found: true, data: await collectCustomerDebt(request), status: 201 }
       },
+      updateCustomerDebtAdjustment: async () => {
+        const adjustmentId = getIdFromPath(path) ?? ''
+        if (repository.updateCustomerDebtAdjustment) {
+          const body = await readJson(request) as {
+            adjusted_at?: string
+            amount_delta?: number
+            note?: string | null
+          }
+          const updated = await repository.updateCustomerDebtAdjustment({
+            organizationId: currentUser.organization.id,
+            adjustmentId,
+            adjustedAt: typeof body.adjusted_at === 'string' ? body.adjusted_at : undefined,
+            amountDelta: typeof body.amount_delta === 'number' ? body.amount_delta : undefined,
+            note: body.note,
+          })
+          if (updated === null) return { found: true, data: { message: 'Customer debt adjustment not found' }, status: 404 }
+          return { found: true, data: updated }
+        }
+        const updated = await updateCustomerDebtAdjustmentInMemory(request, adjustmentId)
+        if (updated === null) return { found: true, data: { message: 'Customer debt adjustment not found' }, status: 404 }
+        return { found: true, data: updated }
+      },
       cashbookBalances: async () => ({ found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }),
       cashbookVouchers: async () => ({ found: true, data: { items: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').map((entry) => ({ id: entry.id, code: entry.code, source_type: 'manual_voucher', status: 'posted', amount: Math.abs(entry.amount_delta) })), total: cashbookEntries.filter((entry) => entry.source_type === 'cashbook_voucher').length } }),
       previewKiotVietCashbookImport: async () => {
@@ -3604,7 +3658,7 @@ async function getDevApiResponse(
       },
       listCashbook: async () => {
         const entriesUrl = cashbookEntriesUrl(url)
-        if (repository.listCashbookEntriesPage) {
+        if (repository.listCashbookEntriesPage && !url.searchParams.get('sort_key')) {
           const pageData = await repository.listCashbookEntriesPage({ organizationId: currentUser.organization.id, url: entriesUrl })
           return {
             found: true,
@@ -3614,13 +3668,14 @@ async function getDevApiResponse(
         const entries = repository.listCashbookEntries
           ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
           : filterCashbookEntries(entriesUrl)
+        const sortedEntries = sortCashbookEntriesForRequest(entries, url)
         const summarySourceUrl = cashbookSummarySourceUrl(url)
         const summarySourceEntries = summarySourceUrl
           ? repository.listCashbookEntries
             ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: summarySourceUrl })
             : filterCashbookEntries(summarySourceUrl)
           : entries
-        return { found: true, data: { ...paged(entries, page, pageSize), summary: cashbookListSummary(entries, { from: url.searchParams.get('from'), sourceEntries: summarySourceEntries }) } }
+        return { found: true, data: { ...paged(sortedEntries, page, pageSize), summary: cashbookListSummary(entries, { from: url.searchParams.get('from'), sourceEntries: summarySourceEntries }) } }
       },
       getCashbookEntry: async () => {
         const id = getIdFromPath(path) ?? ''
@@ -3807,6 +3862,140 @@ function customerListSummary(items: readonly CustomerListData[]) {
     total_debt_amount: items.reduce((sum, item) => sum + item.total_debt_amount, 0),
     total_sales_amount: items.reduce((sum, item) => sum + item.total_sales_amount, 0),
   }
+}
+
+type ManagementSortDirection = 'asc' | 'desc'
+type ManagementSortKind = 'text' | 'number' | 'date'
+
+function compareManagementSortValue(
+  left: string | number | null | undefined,
+  right: string | number | null | undefined,
+  kind: ManagementSortKind,
+) {
+  if (left === right) return 0
+  if (left === null || left === undefined) return 1
+  if (right === null || right === undefined) return -1
+  if (kind === 'text') return String(left).localeCompare(String(right), 'vi', { numeric: true, sensitivity: 'base' })
+  if (kind === 'date') {
+    const leftTime = Date.parse(String(left))
+    const rightTime = Date.parse(String(right))
+    if (!Number.isFinite(leftTime) && !Number.isFinite(rightTime)) return 0
+    if (!Number.isFinite(leftTime)) return 1
+    if (!Number.isFinite(rightTime)) return -1
+    return leftTime - rightTime
+  }
+  const leftNumber = Number(left)
+  const rightNumber = Number(right)
+  if (!Number.isFinite(leftNumber) && !Number.isFinite(rightNumber)) return 0
+  if (!Number.isFinite(leftNumber)) return 1
+  if (!Number.isFinite(rightNumber)) return -1
+  return leftNumber - rightNumber
+}
+
+function sortItemsForRequest<Item extends object>(
+  items: readonly Item[],
+  url: URL,
+  columns: Record<string, { kind: ManagementSortKind; value: (item: Item) => string | number | null | undefined }>,
+  fallbackSort?: (items: readonly Item[]) => Item[],
+) {
+  const sortKey = url.searchParams.get('sort_key')
+  const column = sortKey ? columns[sortKey] : undefined
+  if (!column) return fallbackSort ? fallbackSort(items) : [...items]
+  const sortDirection: ManagementSortDirection = url.searchParams.get('sort_direction') === 'asc' ? 'asc' : 'desc'
+  return [...items]
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const compared = compareManagementSortValue(column.value(left.item), column.value(right.item), column.kind)
+      const directed = sortDirection === 'asc' ? compared : -compared
+      return directed === 0 ? left.index - right.index : directed
+    })
+    .map(({ item }) => item)
+}
+
+function sortCustomersForRequest(customers: readonly CustomerListData[], url: URL) {
+  return sortItemsForRequest(customers, url, {
+    code: { kind: 'text', value: (customer) => customer.code },
+    name: { kind: 'text', value: (customer) => customer.name },
+    phone: { kind: 'text', value: (customer) => customer.phone },
+    group: { kind: 'text', value: (customer) => customer.customer_group?.name },
+    total_debt_amount: { kind: 'number', value: (customer) => customer.total_debt_amount },
+    total_sales_amount: { kind: 'number', value: (customer) => customer.total_sales_amount },
+  }, newestFirst)
+}
+
+function sortProductsForRequest(productsToSort: readonly ProductListData[], url: URL) {
+  return sortItemsForRequest(productsToSort, url, {
+    code: { kind: 'text', value: (product) => product.code },
+    name: { kind: 'text', value: (product) => product.name },
+    latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost },
+    default_sale_price: { kind: 'number', value: (product) => product.default_sale_price },
+    operating_stock: { kind: 'number', value: (product) => product.operating_stock?.quantity },
+    unit_name: { kind: 'text', value: (product) => product.unit_name },
+    sell_method: { kind: 'text', value: (product) => product.sell_method },
+    out_of_stock: { kind: 'text', value: () => null },
+  })
+}
+
+function sortSuppliersForRequest(suppliersToSort: readonly SupplierListData[], url: URL) {
+  return sortItemsForRequest(suppliersToSort, url, {
+    code: { kind: 'text', value: (supplier) => supplier.code },
+    name: { kind: 'text', value: (supplier) => supplier.name },
+    phone: { kind: 'text', value: (supplier) => supplier.phone },
+    current_payable_amount: { kind: 'number', value: (supplier) => supplier.current_payable_amount },
+    total_purchase_amount: { kind: 'number', value: (supplier) => supplier.total_purchase_amount },
+    status: { kind: 'text', value: (supplier) => supplier.status },
+  })
+}
+
+function sortPurchaseReceiptsForRequest(receiptsToSort: readonly PurchaseReceiptData[], url: URL) {
+  return sortItemsForRequest(receiptsToSort, url, {
+    code: { kind: 'text', value: (receipt) => receipt.code },
+    supplier_name: { kind: 'text', value: (receipt) => receipt.supplier.name },
+    total_quantity: { kind: 'number', value: (receipt) => receipt.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) },
+    subtotal_amount: { kind: 'number', value: (receipt) => receipt.subtotal_amount },
+    payable_amount: { kind: 'number', value: (receipt) => receipt.payable_amount },
+    paid_amount: { kind: 'number', value: (receipt) => receipt.paid_amount },
+  })
+}
+
+function sortSalesDocumentsForRequest(documentsToSort: readonly SalesDocumentData[], url: URL) {
+  return sortItemsForRequest(documentsToSort, url, {
+    code: { kind: 'text', value: (document) => document.code },
+    created_at: { kind: 'date', value: (document) => document.created_at },
+    customer_name: { kind: 'text', value: (document) => document.customer.name },
+    subtotal_amount: { kind: 'number', value: (document) => document.subtotal_amount },
+    discount_amount: { kind: 'number', value: (document) => document.discount_amount },
+    total_amount: { kind: 'number', value: (document) => document.total_amount },
+    paid_amount: { kind: 'number', value: (document) => document.paid_amount },
+  })
+}
+
+function sortStocktakesForRequest(stocktakesToSort: readonly StocktakeListData[], url: URL) {
+  return sortItemsForRequest(stocktakesToSort, url, {
+    code: { kind: 'text', value: (stocktake) => stocktake.code },
+    created_at: { kind: 'date', value: (stocktake) => stocktake.created_at },
+    product_code: { kind: 'text', value: (stocktake) => stocktake.product_code },
+    product_name: { kind: 'text', value: (stocktake) => stocktake.product_name },
+    product_system_qty: { kind: 'number', value: (stocktake) => stocktake.product_system_qty },
+    product_actual_qty: { kind: 'number', value: (stocktake) => stocktake.product_actual_qty },
+    product_difference_qty: { kind: 'number', value: (stocktake) => stocktake.product_difference_qty },
+    status: { kind: 'text', value: (stocktake) => stocktake.status },
+  })
+}
+
+function sortCashbookEntriesForRequest(entriesToSort: readonly CashbookEntryData[], url: URL) {
+  return sortItemsForRequest(entriesToSort, url, {
+    code: { kind: 'text', value: (entry) => entry.code },
+    created_at: { kind: 'date', value: (entry) => entry.created_at },
+    created_by: { kind: 'text', value: (entry) => entry.source?.source_creator_name ?? entry.created_by?.name },
+    source_type: { kind: 'text', value: (entry) => entry.source?.category_name ?? entry.source_type },
+    counterparty: { kind: 'text', value: (entry) => entry.counterparty?.name },
+    finance_account: { kind: 'text', value: (entry) => entry.finance_account.account_type === 'bank' ? entry.finance_account.code : '' },
+    amount_delta: { kind: 'number', value: (entry) => entry.amount_delta },
+    status: { kind: 'text', value: (entry) => entry.status },
+    note: { kind: 'text', value: (entry) => entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note },
+    is_business_accounted: { kind: 'text', value: (entry) => (entry.is_business_accounted ? 'Có' : 'Không') },
+  })
 }
 
 function customerDisplayTotals(

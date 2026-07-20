@@ -51,12 +51,14 @@ describe('catalog-service', () => {
       total_debt_max: 300000,
       page: 2,
       page_size: 15,
+      sort_key: 'total_debt_amount',
+      sort_direction: 'desc',
     })
     await service.listCustomerGroups()
 
     expect(calls).toEqual([
       [
-        '/api/v1/customers?search=phong&customer_group_id=cg-1&created_from=2026-07-01&created_to=2026-07-06&created_by=user-admin&total_sales_min=500000&total_sales_max=900000&total_debt_min=100000&total_debt_max=300000&page=2&page_size=15',
+        '/api/v1/customers?search=phong&customer_group_id=cg-1&created_from=2026-07-01&created_to=2026-07-06&created_by=user-admin&total_sales_min=500000&total_sales_max=900000&total_debt_min=100000&total_debt_max=300000&page=2&page_size=15&sort_key=total_debt_amount&sort_direction=desc',
         undefined,
       ],
       ['/api/v1/customer-groups', undefined],

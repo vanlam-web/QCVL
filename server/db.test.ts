@@ -300,6 +300,43 @@ describe('createPgRepository product units', () => {
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
   })
 
+  test('prefers live invoice debt over stale imported adjustment totals for customer lists', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('select customer_id, sum(total_amount) as total_sales_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_sales_amount: '719396', last_activity_at: new Date('2026-07-20T00:00:00.000Z') }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('sum(coalesce(cde.remaining_debt, o.debt_amount)) as total_debt_amount')) {
+        return {
+          rows: [{ customer_id: 'customer-kv-kh000384', total_debt_amount: '179396' }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('total_linked_supplier_receipts')) return { rows: [], rowCount: 0 }
+      if (sql.includes('with latest_adjustment')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000384',
+            total_debt_amount: '3029396',
+            last_activity_at: new Date('2026-07-19T00:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
+
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(179396)
+    const adjustmentSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with latest_adjustment'))?.[0])
+    expect(adjustmentSql).toContain('CB')
+  })
+
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockResolvedValue({

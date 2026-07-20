@@ -1,4 +1,4 @@
-import { useEffect, useState, type MouseEvent } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
@@ -20,7 +20,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
@@ -157,6 +157,7 @@ export function SalesDocumentsPage({
   const [importOpen, setImportOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [canceling, setCanceling] = useState(false)
+  const documentsSortInitialRender = useRef(true)
   async function loadDocuments(input: {
     search?: string
     type?: SalesDocumentTypeFilter[]
@@ -170,6 +171,7 @@ export function SalesDocumentsPage({
     to?: string
     page?: number
     page_size?: number
+    sortStateValue?: ManagementSortState<SalesDocumentSortKey>
   } = {}) {
     const nextSearch = input.search ?? lastSearch
     const nextType = input.type ?? typeFilter
@@ -181,11 +183,13 @@ export function SalesDocumentsPage({
     const nextTime = input.time ?? timeFilter
     const nextFrom = input.from ?? dateFrom
     const nextTo = input.to ?? dateTo
+    const nextSortState = input.sortStateValue ?? documentSortState
     const nextPage = input.page ?? state?.page ?? 1
     const nextPageSize = input.page_size ?? state?.pageSize ?? defaultPageSize
     setError(null)
     try {
-      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
+      const result = await service.listSalesDocuments({
+        ...buildSalesDocumentListRequest({
         search: nextSearch,
         type: nextType,
         status: nextStatus,
@@ -198,7 +202,9 @@ export function SalesDocumentsPage({
         to: nextTo,
         page: nextPage,
         page_size: nextPageSize,
-      }))
+      }),
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+      })
       setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       if (result.items.length === 0) setSelected(null)
     } catch (cause) {
@@ -617,6 +623,14 @@ export function SalesDocumentsPage({
     total_amount: { kind: 'number', value: (document) => document.total_amount },
     paid_amount: { kind: 'number', value: (document) => document.paid_amount },
   })
+  useEffect(() => {
+    if (documentsSortInitialRender.current) {
+      documentsSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void loadDocuments({ page: 1, sortStateValue: documentSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [documentSortState?.key, documentSortState?.direction])
   const total = state?.total ?? 0
   const page = state?.page ?? 1
   const pageSize = state?.pageSize ?? defaultPageSize

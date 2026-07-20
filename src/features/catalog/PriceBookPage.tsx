@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
@@ -20,10 +20,10 @@ import {
 import { ManagementChipPicker } from '../../components/ui-shell/ManagementChipPicker'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { useChipSelection } from '../../components/ui-shell/use-chip-selection'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
-import type { CatalogService } from './catalog-service'
+import type { CatalogService, ProductListSortKey } from './catalog-service'
 import { ProductImportDialog } from './ProductImportDialog'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
 import type {
@@ -56,6 +56,7 @@ const sellMethodLabels: Record<SellMethod, string> = {
 }
 
 type AdjustmentMode = 'none' | 'amount' | 'percent'
+const emptyPriceLists: PriceList[] = []
 
 function defaultPriceBookProductOrder(products: readonly Product[]) {
   return [...products].sort((left, right) => {
@@ -63,6 +64,10 @@ function defaultPriceBookProductOrder(products: readonly Product[]) {
     if (codeCompared !== 0) return codeCompared
     return left.name.localeCompare(right.name, 'vi', { numeric: true, sensitivity: 'base' })
   })
+}
+
+function isPriceBookServerSortKey(key: string): key is ProductListSortKey {
+  return key === 'code' || key === 'name' || key === 'latest_purchase_cost' || key === 'sell_method'
 }
 
 export function PriceBookPage({
@@ -88,6 +93,7 @@ export function PriceBookPage({
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
+  const priceBookSortInitialRender = useRef(true)
   const [formulaForm, setFormulaForm] = useState({
     name: '',
     codeContains: '',
@@ -103,10 +109,11 @@ export function PriceBookPage({
     tierAmount: '',
     adjustments: {} as Record<string, { mode: AdjustmentMode; value: string }>,
   })
-  async function load(filters: { search?: string; status?: ProductStatusFilter; product_group_id?: string[]; page?: number; page_size?: number } = {}) {
+  async function load(filters: { search?: string; status?: ProductStatusFilter; product_group_id?: string[]; page?: number; page_size?: number; sortStateValue?: ManagementSortState<string> } = {}) {
     const nextSearch = filters.search ?? lastSearch
     const nextStatus = filters.status ?? lastStatus
     const nextProductGroup = filters.product_group_id ?? lastProductGroup
+    const nextSortState = filters.sortStateValue ?? priceBookSortState
     const nextPage = filters.page ?? page
     const nextPageSize = filters.page_size ?? pageSize
     setError(null)
@@ -117,6 +124,7 @@ export function PriceBookPage({
         ...(nextProductGroup.length > 0 ? { product_group_id: nextProductGroup } : {}),
         search: nextSearch || undefined,
         status: nextStatus,
+        ...(nextSortState !== null && isPriceBookServerSortKey(nextSortState.key) ? { sort_key: nextSortState.key, sort_direction: nextSortState.direction } : {}),
       })
       setState((current) => ({
         products: result.items,
@@ -349,14 +357,15 @@ export function PriceBookPage({
     .map((groupId) => state?.productGroups.find((group) => group.id === groupId)?.name)
     .filter((name): name is string => Boolean(name))
   const activeFilterSummary = selectedProductGroupNames.length > 0 ? `${statusSummary} - ${selectedProductGroupNames.join(', ')}` : statusSummary
-  const priceListOptions = useMemo(() => (state?.priceLists ?? []).map((priceList) => ({
+  const availablePriceLists = state?.priceLists ?? emptyPriceLists
+  const priceListOptions = useMemo(() => availablePriceLists.map((priceList) => ({
     id: priceList.id,
     label: displayPriceListName(priceList),
-  })), [state?.priceLists])
+  })), [availablePriceLists])
   const defaultPriceListIds = useMemo(() => {
-    const defaultIds = (state?.priceLists ?? []).filter((priceList) => priceList.is_default).map((priceList) => priceList.id)
-    return defaultIds.length > 0 ? defaultIds : (state?.priceLists[0]?.id ? [state.priceLists[0].id] : [])
-  }, [state?.priceLists])
+    const defaultIds = availablePriceLists.filter((priceList) => priceList.is_default).map((priceList) => priceList.id)
+    return defaultIds.length > 0 ? defaultIds : (availablePriceLists[0]?.id ? [availablePriceLists[0].id] : [])
+  }, [availablePriceLists])
   const {
     selectedOptions: selectedPriceListOptions,
     unselectedOptions: unselectedPriceListOptions,
@@ -367,12 +376,12 @@ export function PriceBookPage({
     initialSelectedIds: defaultPriceListIds,
   })
   const selectedPriceLists = useMemo(() => {
-    const priceListById = new Map((state?.priceLists ?? []).map((priceList) => [priceList.id, priceList]))
+    const priceListById = new Map(availablePriceLists.map((priceList) => [priceList.id, priceList]))
     return selectedPriceListOptions.flatMap((option) => {
       const priceList = priceListById.get(option.id)
       return priceList ? [priceList] : []
     })
-  }, [selectedPriceListOptions, state?.priceLists])
+  }, [availablePriceLists, selectedPriceListOptions])
   const {
     sortedItems: sortedPriceBookProducts,
     sortState: priceBookSortState,
@@ -387,6 +396,15 @@ export function PriceBookPage({
     }, {}),
     sell_method: { kind: 'text', value: (product) => sellMethodLabels[product.sell_method] },
   })
+  useEffect(() => {
+    if (priceBookSortInitialRender.current) {
+      priceBookSortInitialRender.current = false
+      return
+    }
+    if (priceBookSortState !== null && !isPriceBookServerSortKey(priceBookSortState.key)) return
+    queueMicrotask(() => void load({ page: 1, sortStateValue: priceBookSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [priceBookSortState?.key, priceBookSortState?.direction])
 
   return (
     <ManagementPage

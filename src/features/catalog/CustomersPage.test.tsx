@@ -216,7 +216,7 @@ function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 
   } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
 }
 
-function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries' | 'collectCustomerDebt' | 'listAccounts'>> = {}) {
+function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashbookEntries' | 'collectCustomerDebt' | 'listAccounts' | 'updateCustomerDebtAdjustment'>> = {}) {
   return {
     listAccounts: vi.fn(async () => ({ items: [] })),
     listCashbookEntries: vi.fn(async () => ({
@@ -243,8 +243,19 @@ function makeFinanceService(overrides: Partial<Pick<FinanceService, 'listCashboo
       summary: { opening_balance: 0, total_in: 190000, total_out: 0, ending_balance: 190000 },
     })),
     collectCustomerDebt: vi.fn(async () => ({ payment_receipt_id: 'TT000001', allocated_amount: 250000 })),
+    updateCustomerDebtAdjustment: vi.fn(async () => ({
+      id: 'customer-debt-adjustment-kv-cb000001',
+      source_code: 'CB000001',
+      created_at: '2023-07-12T16:27:00.000Z',
+      transaction_type: 'Dieu chinh',
+      amount_delta: 2000000,
+      paid_amount: 0,
+      remaining_amount: 2000000,
+      balance_after: 1000000,
+      source_file: 'Ghi chú mới',
+    })),
     ...overrides,
-  } satisfies Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt'>
+  } satisfies Pick<FinanceService, 'listAccounts' | 'listCashbookEntries' | 'collectCustomerDebt' | 'updateCustomerDebtAdjustment'>
 }
 
 it('lists customers in the shared management layout', async () => {
@@ -430,6 +441,59 @@ it('uses the shared pagination footer to move between customer pages', async () 
   expect(footer).toContainElement(screen.getByText('16 - 30 trong 45 khách hàng'))
   expect(within(footer).getByRole('textbox', { name: 'Trang hiện tại' })).toHaveValue('2')
   expect(service.listCustomers).toHaveBeenLastCalledWith({ page: 2, page_size: 15, search: undefined, status: 'active' })
+})
+
+it('requests customer sorting from the API so sorting applies before pagination', async () => {
+  const highDebtCustomer = {
+    id: 'customer-high-debt',
+    code: 'KH-HIGH',
+    name: 'Khách nợ cao',
+    phone: null,
+    tax_code: null,
+    address: null,
+    customer_group_id: null,
+    customer_group: null,
+    created_by: { id: 'user-admin', name: 'Admin' },
+    created_at: '2026-07-01T00:00:00Z',
+    total_sales_amount: 1000000,
+    total_debt_amount: 900000,
+  }
+  const lowDebtCustomer = {
+    id: 'customer-low-debt',
+    code: 'KH-LOW',
+    name: 'Khách nợ thấp',
+    phone: null,
+    tax_code: null,
+    address: null,
+    customer_group_id: null,
+    customer_group: null,
+    created_by: { id: 'user-admin', name: 'Admin' },
+    created_at: '2026-07-02T00:00:00Z',
+    total_sales_amount: 2000000,
+    total_debt_amount: 10000,
+  }
+  const service = makeService({
+    listCustomers: vi.fn(async (input = {}) => ({
+      items: input.sort_key === 'total_debt_amount' ? [highDebtCustomer] : [lowDebtCustomer],
+      page: 1,
+      page_size: input.page_size ?? 15,
+      total: 2,
+    })),
+  })
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  await screen.findByText('KH-LOW')
+  await userEvent.click(within(screen.getByRole('columnheader', { name: 'Công nợ' })).getByRole('button', { name: 'Công nợ' }))
+
+  await waitFor(() => expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    status: 'active',
+    sort_key: 'total_debt_amount',
+    sort_direction: 'desc',
+  }))
+  expect(await screen.findByText('KH-HIGH')).toBeInTheDocument()
 })
 
 it('uses the shared management filter hide and show controls', async () => {
@@ -1296,6 +1360,68 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
   expect(within(receiptRow).getByRole('link', { name: 'PN000449' })).toHaveAttribute('href', '/purchase/receipts?open=PN000449')
   expect(within(receiptRow).getAllByRole('cell')[3]).toHaveTextContent('-280 320')
   expect(within(receiptRow).getAllByRole('cell')[4]).toHaveTextContent('1 510 080')
+})
+
+it('saves edits to imported customer debt adjustment slips', async () => {
+  const updateCustomerDebtAdjustment = vi.fn(async () => ({
+    id: 'customer-debt-adjustment-kv-cb000001',
+    source_code: 'CB000001',
+    created_at: '2023-07-12T16:27:00.000Z',
+    transaction_type: 'Dieu chinh',
+    amount_delta: 2000000,
+    paid_amount: 0,
+    remaining_amount: 2000000,
+    balance_after: 1000000,
+    source_file: 'Ghi chú mới',
+  }))
+  render(
+    <CustomersPage
+      service={makeService()}
+      financeService={makeFinanceService({ updateCustomerDebtAdjustment })}
+      orderService={makeOrderService({
+        getCustomerDebt: vi.fn(async () => ({
+          customer_id: 'customer-1',
+          total_debt: 1000000,
+          invoices: [],
+          adjustments: [
+            {
+              id: 'customer-debt-adjustment-kv-cb000001',
+              source_code: 'CB000001',
+              created_at: '2023-07-12T16:27:00.000Z',
+              transaction_type: 'Dieu chinh',
+              amount_delta: 1000000,
+              paid_amount: 0,
+              remaining_amount: 1000000,
+              balance_after: 1000000,
+              source_file: 'Nguồn cũ',
+            },
+          ],
+        })),
+      })}
+      salesDocumentService={makeSalesDocumentService({ listSalesDocuments: vi.fn(async () => ({ items: [], page: 1, page_size: 1000, total: 0 })) })}
+    />,
+  )
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: /KH000123/ })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+  await userEvent.click(within(detail).getByRole('button', { name: 'Chi tiết' }))
+  const debtHistoryTable = await within(detail).findByRole('table', { name: 'Lịch sử công nợ' })
+  await userEvent.click(within(within(debtHistoryTable).getByRole('row', { name: /CB000001/ })).getByRole('button', { name: 'CB000001' }))
+
+  const adjustmentDialog = screen.getByRole('dialog', { name: 'Điều chỉnh công nợ KH000123' })
+  await userEvent.clear(within(adjustmentDialog).getByLabelText('Giá trị nợ điều chỉnh'))
+  await userEvent.type(within(adjustmentDialog).getByLabelText('Giá trị nợ điều chỉnh'), '2 000 000')
+  await userEvent.clear(within(adjustmentDialog).getByLabelText('Mô tả'))
+  await userEvent.type(within(adjustmentDialog).getByLabelText('Mô tả'), 'Ghi chú mới')
+  await userEvent.click(within(adjustmentDialog).getByRole('button', { name: 'Cập nhật' }))
+
+  expect(updateCustomerDebtAdjustment).toHaveBeenCalledWith('customer-debt-adjustment-kv-cb000001', {
+    adjusted_at: '2023-07-12T16:27:00.000Z',
+    amount_delta: 2000000,
+    note: 'Ghi chú mới',
+  })
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Điều chỉnh công nợ KH000123' })).not.toBeInTheDocument())
 })
 
 it('opens customer detail when legacy cloud data has no created timestamp', async () => {

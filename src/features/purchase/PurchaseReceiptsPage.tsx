@@ -57,7 +57,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { normalizeManagementSearchText, preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
@@ -401,6 +401,7 @@ export function PurchaseReceiptsPage({
   const receiptProductSearchToolbarRef = useRef<HTMLDivElement | null>(null)
   const receiptCreateDraftRestoredRef = useRef(false)
   const skipReceiptCreateDraftPersistRef = useRef(false)
+  const receiptSortInitialRender = useRef(true)
   const totals = useMemo(() => {
     return purchaseReceiptTotals(form)
   }, [form])
@@ -560,7 +561,8 @@ export function PurchaseReceiptsPage({
       date_to?: string
       created_by?: string
       page?: number
-      page_size?: number
+    page_size?: number
+      sortStateValue?: ManagementSortState<PurchaseReceiptSortKey>
     } = {
       search: search.trim() || undefined,
       status,
@@ -573,12 +575,14 @@ export function PurchaseReceiptsPage({
   ) {
     const nextPage = input.page ?? page
     const nextPageSize = input.page_size ?? pageSize
+    const nextSortState = input.sortStateValue ?? receiptSortState
     setError(null)
     try {
       const result = await service.listReceipts({
         ...input,
         page: nextPage,
         page_size: nextPageSize,
+        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setReceipts(result.items)
       setTotal(result.total)
@@ -589,6 +593,15 @@ export function PurchaseReceiptsPage({
       setError(formatApiError(cause, 'Không tải được phiếu nhập.'))
     }
   }
+
+  useEffect(() => {
+    if (receiptSortInitialRender.current) {
+      receiptSortInitialRender.current = false
+      return
+    }
+    queueMicrotask(() => void loadReceipts({ page: 1, sortStateValue: receiptSortState }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [receiptSortState?.key, receiptSortState?.direction])
 
   useEffect(() => {
     let active = true
