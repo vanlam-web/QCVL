@@ -1,6 +1,12 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
+import { computeCustomerDebtTotal } from './modules/finance/customer-debt.js'
+import {
+  rebuildKiotVietCashbookAllocations,
+  type AllocatableInvoice,
+  type AllocatablePurchaseReceipt,
+} from './modules/finance/kiotviet-cashbook-allocation.js'
 import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
@@ -32,6 +38,18 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const salesDocuments = new Map<string, SalesDocumentData>()
   const salesDocumentItems = new Map<string, Map<number, Parameters<NonNullable<ServerRepository['upsertImportedKiotVietInvoices']>>[0]['rows'][number]>>()
   const cashbookEntries = new Map<string, CashbookEntryData>()
+  const customerDebtAdjustments = new Map<string, {
+    id: string
+    customer_id: string
+    source_code: string
+    created_at: string
+    transaction_type: string
+    amount_delta: number
+    paid_amount: number
+    remaining_amount: number
+    balance_after: number
+    source_file: string | null
+  }>()
   const financeAccounts = new Map<string, FinanceAccountData>([
     ['cash-main', { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash', is_default_cash: true, is_active: true, opening_balance: 0, note: null, notify_on_transaction: false }],
     ['bank-main', { id: 'bank-main', code: 'VCB', name: 'Vietcombank', account_type: 'bank', is_default_cash: false, is_active: true, account_number: '0000000000', account_holder: 'VAN LAM', opening_balance: 0, note: null, notify_on_transaction: true }],
@@ -173,15 +191,25 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       }))
   }
 
-  function linkedSupplierReceiptOffsetTotals() {
-    const totals = new Map<string, number>()
-    for (const supplier of suppliers.values()) {
-      if (!supplier.linked_customer_id) continue
-      const offset = linkedSupplierReceiptOffsets(supplier.linked_customer_id)
-        .reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
-      if (offset > 0) totals.set(supplier.linked_customer_id, offset)
-    }
-    return totals
+  function computeDebtForCustomer(customer: Pick<CustomerListData, 'id' | 'code' | 'name'>) {
+    return computeCustomerDebtTotal({
+      customerId: customer.id,
+      customerCode: customer.code,
+      customerName: customer.name,
+      invoices: [...salesDocuments.values()],
+      adjustments: [...customerDebtAdjustments.values()],
+      cashbookEntries: [...cashbookEntries.values()].map((entry) => ({
+        created_at: entry.created_at,
+        status: entry.status,
+        source_type: entry.source_type,
+        direction: entry.direction,
+        amount_delta: entry.amount_delta,
+        code: entry.code,
+        source: entry.source ?? null,
+      })),
+      linkedSupplierReceipts: linkedSupplierReceiptOffsets(customer.id),
+      resolveInvoiceCustomerId: (invoice) => resolveDocumentCustomer(invoice, customers)?.id ?? null,
+    })
   }
 
   function activeAdminAuthUser() {
@@ -667,96 +695,37 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     async getCustomerFinancialTotals() {
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
       for (const customer of customers.values()) {
+        const debt = computeDebtForCustomer(customer)
+        const salesAmount = [...salesDocuments.values()]
+          .filter((document) => (
+            document.order_type === 'invoice'
+            && document.status !== 'cancelled'
+            && resolveDocumentCustomer(document, customers)?.id === customer.id
+          ))
+          .reduce((sum, document) => sum + document.total_amount, 0)
         totals.set(customer.id, {
-          total_sales_amount: 0,
-          total_debt_amount: customer.total_debt_amount ?? 0,
+          total_sales_amount: salesAmount,
+          total_debt_amount: debt.total_debt,
           last_activity_at: customer.last_transaction_at ?? customer.created_at,
-        })
-      }
-      const customersWithLiveInvoices = new Set<string>()
-      for (const document of salesDocuments.values()) {
-        if (document.order_type !== 'invoice' || document.status === 'cancelled') continue
-        const customer = resolveDocumentCustomer(document, customers)
-        if (!customer) continue
-        const firstLiveInvoice = !customersWithLiveInvoices.has(customer.id)
-        customersWithLiveInvoices.add(customer.id)
-        const current = totals.get(customer.id) ?? {
-          total_sales_amount: 0,
-          total_debt_amount: 0,
-          last_activity_at: customer.last_transaction_at ?? customer.created_at,
-        }
-        const existing = firstLiveInvoice
-          ? { ...current, total_sales_amount: 0, total_debt_amount: 0 }
-          : current
-        totals.set(customer.id, {
-          total_sales_amount: existing.total_sales_amount + document.total_amount,
-          total_debt_amount: existing.total_debt_amount + Math.max(document.debt_amount, 0),
-          last_activity_at: !existing.last_activity_at || Date.parse(document.created_at) > Date.parse(existing.last_activity_at)
-            ? document.created_at
-            : existing.last_activity_at,
-        })
-      }
-      for (const [customerId, offset] of linkedSupplierReceiptOffsetTotals()) {
-        const existing = totals.get(customerId)
-        if (!existing) continue
-        totals.set(customerId, {
-          ...existing,
-          total_debt_amount: existing.total_debt_amount - offset,
         })
       }
       return totals
     },
     async listCustomerDebts(input) {
       const search = normalize(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
-      const offsets = linkedSupplierReceiptOffsetTotals()
-      const byCustomer = new Map<string, {
-        customer_id: string
-        customer_code: string
-        customer_name: string
-        total_debt: number
-        oldest_order_code: string
-        open_invoice_count: number
-        invoices: never[]
-      }>()
-      for (const document of [...salesDocuments.values()].sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))) {
-        if (document.order_type !== 'invoice' || document.status === 'cancelled' || document.debt_amount <= 0) continue
-        const customer = resolveDocumentCustomer(document, customers)
-        if (!customer) continue
-        const existing = byCustomer.get(customer.id)
-        if (existing) {
-          existing.total_debt += document.debt_amount
-          existing.open_invoice_count += 1
-          continue
-        }
-        byCustomer.set(customer.id, {
-          customer_id: customer.id,
-          customer_code: customer.code,
-          customer_name: customer.name,
-          total_debt: document.debt_amount,
-          oldest_order_code: document.code,
-          open_invoice_count: 1,
-          invoices: [],
+      return [...customers.values()]
+        .map((customer) => {
+          const debt = computeDebtForCustomer(customer)
+          return {
+            customer_id: customer.id,
+            customer_code: customer.code,
+            customer_name: customer.name,
+            total_debt: debt.total_debt,
+            oldest_order_code: debt.oldest_order_code,
+            open_invoice_count: debt.open_invoice_count,
+            invoices: [],
+          }
         })
-      }
-      for (const [customerId, offset] of offsets) {
-        const existing = byCustomer.get(customerId)
-        if (existing) {
-          existing.total_debt -= offset
-          continue
-        }
-        const customer = [...customers.values()].find((item) => item.id === customerId)
-        if (!customer) continue
-        byCustomer.set(customerId, {
-          customer_id: customer.id,
-          customer_code: customer.code,
-          customer_name: customer.name,
-          total_debt: -offset,
-          oldest_order_code: '',
-          open_invoice_count: 0,
-          invoices: [],
-        })
-      }
-      return [...byCustomer.values()]
         .filter((debt) => debt.total_debt !== 0)
         .filter((debt) => {
           if (!search) return true
@@ -765,6 +734,12 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         .sort((left, right) => right.total_debt - left.total_debt)
     },
     async getCustomerDebt(input) {
+      const customer = [...customers.values()].find((item) => item.id === input.customerId) ?? null
+      const debt = computeDebtForCustomer(customer ?? {
+        id: input.customerId,
+        code: '',
+        name: '',
+      } as CustomerListData)
       const invoices = openCustomerInvoices(input.customerId)
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
         .map((document) => ({
@@ -776,15 +751,52 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           debt_amount: document.debt_amount,
           remaining_debt: document.debt_amount,
         }))
-      const linkedSupplierReceipts = linkedSupplierReceiptOffsets(input.customerId)
-      const linkedSupplierTotal = linkedSupplierReceipts.reduce((sum, receipt) => sum + receipt.remaining_amount, 0)
       return {
         customer_id: input.customerId,
-        total_debt: invoices.reduce((sum, invoice) => sum + invoice.remaining_debt, 0) - linkedSupplierTotal,
+        total_debt: debt.total_debt,
         invoices,
-        adjustments: [],
-        linked_supplier_receipts: linkedSupplierReceipts,
+        adjustments: debt.adjustments.map((adjustment) => ({
+          id: adjustment.id,
+          source_code: adjustment.source_code,
+          created_at: adjustment.created_at,
+          transaction_type: adjustment.transaction_type,
+          amount_delta: adjustment.amount_delta,
+          paid_amount: adjustment.paid_amount,
+          remaining_amount: adjustment.remaining_amount,
+          balance_after: adjustment.balance_after,
+          source_file: adjustment.source_file,
+        })),
+        linked_supplier_receipts: linkedSupplierReceiptOffsets(input.customerId),
       }
+    },
+    async upsertImportedKiotVietCustomerDebtAdjustments(input) {
+      let created = 0
+      let updated = 0
+      let skipped = 0
+      for (const row of input.rows) {
+        const customer = resolveCustomerByImportCode(customers, row.customer_code)
+        if (!customer) {
+          skipped += 1
+          continue
+        }
+        const id = `customer-debt-adjustment-kv-${slug(row.source_code)}`
+        if (customerDebtAdjustments.has(id)) updated += 1
+        else created += 1
+        customerDebtAdjustments.set(id, {
+          id,
+          customer_id: customer.id,
+          source_code: row.source_code,
+          created_at: row.transaction_time ?? new Date().toISOString(),
+          transaction_type: row.transaction_type,
+          amount_delta: row.amount_delta,
+          paid_amount: 0,
+          remaining_amount: row.amount_delta,
+          balance_after: row.balance_after,
+          source_file: row.source_file ?? null,
+        })
+      }
+      await persist()
+      return { created, updated, skipped }
     },
     async collectCustomerDebt(input) {
       if (input.amount <= 0 || input.cashAmount + input.bankAmount !== input.amount) {
@@ -1289,6 +1301,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       salesDocuments.set(code, updated)
       if (input.created_at !== undefined) {
         for (const [entryId, cashbookEntry] of cashbookEntries.entries()) {
+          if (cashbookEntry.source?.type === 'kiotviet_cashbook' || cashbookEntry.source_type === 'kiotviet_cashbook') continue
           if (!cashbookEntryMatchesSalesDocument(cashbookEntry, updated)) continue
           cashbookEntries.set(entryId, { ...cashbookEntry, created_at: input.created_at })
         }
@@ -2116,247 +2129,73 @@ function rebuildKiotVietCashbookLedger(
   customers: Map<string, CustomerListData>,
   suppliers: Map<string, SupplierListData>,
 ) {
-  resetImportedKiotVietDocumentPayments(salesDocuments, purchaseReceipts)
+  const invoices: AllocatableInvoice[] = [...salesDocuments.values()]
+    .filter((document) => document.order_type === 'invoice')
+    .map((document) => ({
+      id: document.id,
+      code: document.code,
+      created_at: document.created_at,
+      status: document.status,
+      order_type: document.order_type,
+      total_amount: document.total_amount,
+      paid_amount: document.paid_amount,
+      debt_amount: document.debt_amount,
+      customer: document.customer,
+    }))
+  const receipts: AllocatablePurchaseReceipt[] = [...purchaseReceipts.values()]
+    .map((receipt) => ({
+      id: receipt.id,
+      code: receipt.code,
+      received_at: receipt.received_at,
+      status: receipt.status,
+      payable_amount: receipt.payable_amount,
+      paid_amount: receipt.paid_amount,
+      remaining_amount: receipt.remaining_amount,
+      supplier: receipt.supplier,
+      supplier_id: receipt.supplier_id,
+    }))
+  const cashbookRows = [...cashbookEntries.values()]
+    .filter((entry) => entry.source?.type === 'kiotviet_cashbook' || entry.source_type === 'kiotviet_cashbook')
+    .map((entry) => ({
+      id: entry.id,
+      source_code: entry.code,
+      entry_time: entry.created_at,
+      direction: entry.direction,
+      amount_delta: entry.amount_delta,
+      status: entry.status,
+      counterparty_code: entry.source?.counterparty_code ?? null,
+      counterparty_name: entry.counterparty?.name ?? null,
+      category_name: entry.source?.category_name ?? null,
+    }))
 
-  const rows = [...cashbookEntries.values()]
-    .filter((entry) => entry.source?.type === 'kiotviet_cashbook')
-    .map((entry) => {
-      const source = entry.source ?? { type: 'kiotviet_cashbook', id: entry.code, code: entry.code, order_code: null }
-      entry.allocations = []
-      entry.source = { ...source, order_code: null }
-      return { entry, row: cashbookRowFromEntry(entry) }
-    })
-    .filter(({ row }) => row.status === 'posted')
-    .sort((left, right) => Date.parse(left.row.entry_time ?? '') - Date.parse(right.row.entry_time ?? '') || left.row.source_code.localeCompare(right.row.source_code))
-
-  for (const { entry, row } of rows) {
-    const allocations = allocateImportedCashbookRow(row, salesDocuments, purchaseReceipts, customers, suppliers)
-    if (allocations.length === 0) continue
-    entry.allocations = allocations
+  const rebuilt = rebuildKiotVietCashbookAllocations({
+    invoices,
+    receipts,
+    cashbookRows,
+    shouldResetInvoice: (invoice) => invoice.id.startsWith('order-kv-') || invoice.id.startsWith('sales-document-kv-'),
+    shouldResetReceipt: (receipt) => receipt.id.startsWith('purchase-receipt-kv-'),
+  })
+  for (const invoice of rebuilt.invoices) {
+    const document = salesDocuments.get(invoice.code)
+    if (!document) continue
+    document.paid_amount = invoice.paid_amount
+    document.debt_amount = invoice.debt_amount
+    document.payment_status = invoicePaymentStatus(invoice.paid_amount, invoice.debt_amount)
+  }
+  for (const receipt of rebuilt.receipts) {
+    const current = purchaseReceipts.get(receipt.code)
+    if (!current) continue
+    current.paid_amount = receipt.paid_amount
+    current.remaining_amount = receipt.remaining_amount
+  }
+  for (const allocation of rebuilt.cashbookAllocations) {
+    const entry = cashbookEntries.get(allocation.id) ?? [...cashbookEntries.values()].find((item) => item.id === allocation.id)
+    if (!entry) continue
+    entry.allocations = allocation.allocations
     const source = entry.source ?? { type: 'kiotviet_cashbook', id: entry.code, code: entry.code, order_code: null }
-    entry.source = { ...source, order_code: allocations[0]?.order_code ?? null }
+    entry.source = { ...source, order_code: allocation.order_code }
   }
-
   recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
-}
-
-function resetImportedKiotVietDocumentPayments(
-  salesDocuments: Map<string, SalesDocumentData>,
-  purchaseReceipts: Map<string, PurchaseReceiptData>,
-) {
-  for (const document of salesDocuments.values()) {
-    if (!document.id.startsWith('order-kv-')) continue
-    const debt = document.status === 'completed' && document.order_type === 'invoice' ? document.total_amount : 0
-    document.paid_amount = 0
-    document.debt_amount = debt
-    document.payment_status = invoicePaymentStatus(0, debt)
-  }
-
-  for (const receipt of purchaseReceipts.values()) {
-    if (!receipt.id.startsWith('purchase-receipt-kv-')) continue
-    receipt.paid_amount = 0
-    receipt.remaining_amount = receipt.status === 'posted' ? receipt.payable_amount : 0
-  }
-}
-
-function cashbookRowFromEntry(entry: CashbookEntryData): KiotVietCashbookRepositoryRow {
-  const source = entry.source as CashbookEntryData['source'] & {
-    category_name?: string | null
-    source_created_at?: string | null
-    transfer_content?: string | null
-    source_note?: string | null
-    counterparty_code?: string | null
-    counterparty_address?: string | null
-  }
-
-  return {
-    rowNumber: 0,
-    source_code: entry.code,
-    entry_time: entry.created_at,
-    source_created_at: source?.source_created_at ?? null,
-    source_creator_name: source?.source_creator_name ?? null,
-    staff_name: null,
-    category_name: source?.category_name ?? null,
-    account_type: entry.finance_account.account_type,
-    account_name: entry.finance_account.name,
-    account_number: entry.finance_account.account_type === 'bank' ? entry.finance_account.code : null,
-    counterparty_code: source?.counterparty_code ?? null,
-    counterparty_name: entry.counterparty.name ?? null,
-    counterparty_phone: entry.counterparty.phone ?? null,
-    counterparty_address: source?.counterparty_address ?? null,
-    transfer_content: source?.transfer_content ?? null,
-    source_note: source?.source_note ?? null,
-    direction: entry.direction as KiotVietCashbookRepositoryRow['direction'],
-    amount_delta: entry.amount_delta,
-    book_type_name: entry.finance_account.account_type === 'bank' ? 'Ngan hang' : 'Tien mat',
-    status: entry.status as KiotVietCashbookRepositoryRow['status'],
-  }
-}
-
-function allocateImportedCashbookRow(
-  row: KiotVietCashbookRepositoryRow,
-  salesDocuments: Map<string, SalesDocumentData>,
-  purchaseReceipts: Map<string, PurchaseReceiptData>,
-  customers: Map<string, CustomerListData>,
-  suppliers: Map<string, SupplierListData>,
-): NonNullable<CashbookEntryData['allocations']> {
-  const directInvoiceCode = linkedInvoiceCodeFromCashbookCode(row.source_code)
-  if (directInvoiceCode !== null && row.direction === 'in') {
-    return allocateDirectCustomerCashbookPayment(row, salesDocuments.get(directInvoiceCode) ?? null)
-  }
-
-  const directReceiptCode = linkedPurchaseReceiptCodeFromCashbookCode(row.source_code)
-  if (directReceiptCode !== null && row.direction === 'out') {
-    return allocateDirectSupplierCashbookPayment(row, purchaseReceipts.get(directReceiptCode) ?? null)
-  }
-
-  if (isKiotVietDelayedCustomerPayment(row)) {
-    return allocateCustomerCashbookPayment(row, salesDocuments, customers)
-  }
-  if (isKiotVietDelayedSupplierPayment(row)) {
-    return allocateSupplierCashbookPayment(row, purchaseReceipts, suppliers)
-  }
-  return []
-}
-
-function allocateCustomerCashbookPayment(
-  row: KiotVietCashbookRepositoryRow,
-  salesDocuments: Map<string, SalesDocumentData>,
-  customers: Map<string, CustomerListData>,
-): NonNullable<CashbookEntryData['allocations']> {
-  const customer = resolveCashbookCustomer(row, customers)
-  if (!customer) return []
-  let remaining = Math.max(row.amount_delta, 0)
-  const entryTime = Date.parse(row.entry_time ?? '')
-  const allocations: NonNullable<CashbookEntryData['allocations']> = []
-  const invoices = [...salesDocuments.values()]
-    .filter((document) => (
-      document.order_type === 'invoice'
-      && document.status !== 'cancelled'
-      && document.debt_amount > 0
-      && (!Number.isFinite(entryTime) || Date.parse(document.created_at) <= entryTime)
-      && (document.customer.id === customer.id || normalize(document.customer.code ?? '') === normalize(customer.code))
-    ))
-    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
-
-  for (const invoice of invoices) {
-    if (remaining <= 0) break
-    const allocated = Math.min(invoice.debt_amount, remaining)
-    const collectedBefore = invoice.paid_amount
-    invoice.paid_amount += allocated
-    invoice.debt_amount = Math.max(invoice.debt_amount - allocated, 0)
-    invoice.payment_status = invoicePaymentStatus(invoice.paid_amount, invoice.debt_amount)
-    allocations.push({
-      order_id: invoice.id,
-      order_code: invoice.code,
-      order_total_amount: invoice.total_amount,
-      collected_before: collectedBefore,
-      allocated_amount: allocated,
-      remaining_after: invoice.debt_amount,
-    })
-    remaining -= allocated
-  }
-
-  if (allocations.length > 0) {
-    customer.total_debt_amount = Math.max(customer.total_debt_amount - sumAllocations(allocations), 0)
-    customer.last_transaction_at = row.entry_time ?? customer.last_transaction_at
-  }
-
-  return allocations
-}
-
-function allocateSupplierCashbookPayment(
-  row: KiotVietCashbookRepositoryRow,
-  purchaseReceipts: Map<string, PurchaseReceiptData>,
-  suppliers: Map<string, SupplierListData>,
-): NonNullable<CashbookEntryData['allocations']> {
-  const supplier = resolveCashbookSupplier(row, suppliers)
-  if (!supplier) return []
-  let remaining = Math.abs(row.amount_delta)
-  const entryTime = Date.parse(row.entry_time ?? '')
-  const allocations: NonNullable<CashbookEntryData['allocations']> = []
-  const receipts = [...purchaseReceipts.values()]
-    .filter((receipt) => (
-      receipt.status === 'posted'
-      && receipt.remaining_amount > 0
-      && (!Number.isFinite(entryTime) || Date.parse(receipt.received_at) <= entryTime)
-      && (receipt.supplier.id === supplier.id || normalize(receipt.supplier.code) === normalize(supplier.code))
-    ))
-    .sort((left, right) => Date.parse(left.received_at) - Date.parse(right.received_at))
-
-  for (const receipt of receipts) {
-    if (remaining <= 0) break
-    const allocated = Math.min(receipt.remaining_amount, remaining)
-    const paidBefore = receipt.paid_amount
-    receipt.paid_amount += allocated
-    receipt.remaining_amount = Math.max(receipt.remaining_amount - allocated, 0)
-    allocations.push({
-      order_id: receipt.id,
-      order_code: receipt.code,
-      order_total_amount: receipt.payable_amount,
-      collected_before: paidBefore,
-      allocated_amount: allocated,
-      remaining_after: receipt.remaining_amount,
-    })
-    remaining -= allocated
-  }
-
-  if (allocations.length > 0) {
-    supplier.current_payable_amount = Math.max(supplier.current_payable_amount - sumAllocations(allocations), 0)
-  }
-
-  return allocations
-}
-
-function allocateDirectCustomerCashbookPayment(
-  row: KiotVietCashbookRepositoryRow,
-  invoice: SalesDocumentData | null,
-): NonNullable<CashbookEntryData['allocations']> {
-  if (!invoice || invoice.order_type !== 'invoice' || invoice.status === 'cancelled' || invoice.debt_amount <= 0) return []
-  const allocated = Math.min(invoice.debt_amount, Math.max(row.amount_delta, 0))
-  if (allocated <= 0) return []
-  const collectedBefore = invoice.paid_amount
-  invoice.paid_amount += allocated
-  invoice.debt_amount = Math.max(invoice.debt_amount - allocated, 0)
-  invoice.payment_status = invoicePaymentStatus(invoice.paid_amount, invoice.debt_amount)
-  return [{
-    order_id: invoice.id,
-    order_code: invoice.code,
-    order_total_amount: invoice.total_amount,
-    collected_before: collectedBefore,
-    allocated_amount: allocated,
-    remaining_after: invoice.debt_amount,
-  }]
-}
-
-function allocateDirectSupplierCashbookPayment(
-  row: KiotVietCashbookRepositoryRow,
-  receipt: PurchaseReceiptData | null,
-): NonNullable<CashbookEntryData['allocations']> {
-  if (!receipt || receipt.status !== 'posted' || receipt.remaining_amount <= 0) return []
-  const allocated = Math.min(receipt.remaining_amount, Math.abs(row.amount_delta))
-  if (allocated <= 0) return []
-  const paidBefore = receipt.paid_amount
-  receipt.paid_amount += allocated
-  receipt.remaining_amount = Math.max(receipt.remaining_amount - allocated, 0)
-  return [{
-    order_id: receipt.id,
-    order_code: receipt.code,
-    order_total_amount: receipt.payable_amount,
-    collected_before: paidBefore,
-    allocated_amount: allocated,
-    remaining_after: receipt.remaining_amount,
-  }]
-}
-
-function linkedInvoiceCodeFromCashbookCode(code: string) {
-  const match = code.trim().toUpperCase().match(/^TTHDO?(\d+(?:\.\d+)?)$/)
-  return match ? `HD${match[1]}` : null
-}
-
-function linkedPurchaseReceiptCodeFromCashbookCode(code: string) {
-  const match = code.trim().toUpperCase().match(/^PCPN(\d+(?:\.\d+)?)$/)
-  return match ? `PN${match[1]}` : null
 }
 
 function recalculatePartnerDebtTotals(
@@ -2402,53 +2241,6 @@ function resolveReceiptSupplier(receipt: PurchaseReceiptData, suppliers: Map<str
   if (byId) return byId
   const code = normalize(receipt.supplier.code)
   return [...suppliers.values()].find((supplier) => normalize(supplier.code) === code) ?? null
-}
-
-function resolveCashbookCustomer(
-  row: KiotVietCashbookRepositoryRow,
-  customers: Map<string, CustomerListData>,
-) {
-  const code = row.counterparty_code?.trim()
-  if (code && customers.has(code)) return customers.get(code)
-  const normalizedCode = normalize(code ?? '')
-  const normalizedName = normalize(row.counterparty_name ?? '')
-  return [...customers.values()].find((customer) => (
-    (normalizedCode && normalize(customer.code) === normalizedCode)
-    || (normalizedName && normalize(customer.name) === normalizedName)
-  )) ?? null
-}
-
-function resolveCashbookSupplier(
-  row: KiotVietCashbookRepositoryRow,
-  suppliers: Map<string, SupplierListData>,
-) {
-  const code = row.counterparty_code?.trim()
-  if (code && suppliers.has(code)) return suppliers.get(code)
-  const normalizedCode = normalize(code ?? '')
-  const normalizedName = normalize(row.counterparty_name ?? '')
-  return [...suppliers.values()].find((supplier) => (
-    (normalizedCode && normalize(supplier.code) === normalizedCode)
-    || (normalizedName && normalize(supplier.name) === normalizedName)
-  )) ?? null
-}
-
-function isKiotVietDelayedCustomerPayment(
-  row: KiotVietCashbookRepositoryRow,
-) {
-  const code = normalize(row.source_code)
-  if (code.startsWith('tthd') || code.startsWith('pcpn')) return false
-  if (row.direction !== 'in') return false
-  const category = normalize(row.category_name ?? '')
-  return category.includes('khach tra no') || category.includes('tien khach tra')
-}
-
-function isKiotVietDelayedSupplierPayment(
-  row: KiotVietCashbookRepositoryRow,
-) {
-  const code = normalize(row.source_code)
-  if (!code.startsWith('pc') || code.startsWith('pcpn')) return false
-  if (row.direction !== 'out') return false
-  return normalize(row.category_name ?? '').includes('tien tra ncc')
 }
 
 function invoicePaymentStatus(paidAmount: number, debtAmount: number) {

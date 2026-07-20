@@ -6,6 +6,12 @@ import {
   mapCustomerDebtTotalsRow,
   type CustomerDebtTotalsRow,
 } from './modules/finance/customer-debt.js'
+import {
+  invoicePaymentStatus,
+  rebuildKiotVietCashbookAllocations,
+  type AllocatableInvoice,
+  type AllocatablePurchaseReceipt,
+} from './modules/finance/kiotviet-cashbook-allocation.js'
 import type {
   AuthUserRow,
   CashbookEntryData,
@@ -756,8 +762,29 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         ending_qty: row.ending_qty === null ? null : Number(row.ending_qty),
         partner_name: row.partner_name === null ? null : String(row.partner_name),
       }))
-      if (movements.length > 0 || !productId) return movements
-      return derivedPurchaseStockMovementsFromSnapshots(pool, input.organizationId, productId)
+      if (!productId) return movements
+      const derived = await derivedPurchaseStockMovementsFromSnapshots(pool, input.organizationId, productId)
+      if (movements.length === 0) return derived
+      const existingPurchaseCodes = new Set(
+        movements
+          .filter((movement) => movement.document_type === 'purchase_receipt' && movement.document_code)
+          .map((movement) => movement.document_code as string),
+      )
+      const missingDerived = derived.filter((movement) => (
+        movement.document_code !== null && !existingPurchaseCodes.has(movement.document_code)
+      ))
+      if (missingDerived.length === 0) return movements
+      const merged = [...movements, ...missingDerived].sort((left, right) => {
+        const timeDiff = Date.parse(String(left.created_at)) - Date.parse(String(right.created_at))
+        if (timeDiff !== 0) return timeDiff
+        return String(left.id).localeCompare(String(right.id))
+      })
+      let endingQty = 0
+      for (const movement of merged) {
+        endingQty += Number(movement.quantity_delta)
+        movement.ending_qty = endingQty
+      }
+      return merged.reverse()
     },
 
     async findDefaultPriceList(input) {
@@ -2846,6 +2873,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     async upsertImportedKiotVietCashbook(input) {
       await ensureFinanceAccountsTable(pool)
       await ensureSalesFinanceTables(pool)
+      await ensureImportedSnapshotTables(pool)
       let accountsCreated = 0
       let accountsUpdated = 0
       let entriesCreated = 0
@@ -2942,6 +2970,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 note = excluded.note,
                 source_type = 'kiotviet_cashbook',
                 source = excluded.source,
+                allocations = '[]'::jsonb,
                 created_at = excluded.created_at
             `,
             [
@@ -2983,6 +3012,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             ],
           )
         }
+        await rebuildImportedKiotVietCashbookAllocations(pool, input.organizationId)
         invalidateOrgCache(financeAccountsListCache, pool, input.organizationId)
         await pool.query('commit')
         return {
@@ -3000,15 +3030,24 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async deleteImportedKiotVietCashbook(input) {
       await ensureSalesFinanceTables(pool)
-      const result = await pool.query(
-        `
-          delete from cashbook_entries
-          where organization_id = $1
-            and source_type = 'kiotviet_cashbook'
-        `,
-        [input.organizationId],
-      )
-      return { deleted: result.rowCount ?? 0, blocked: 0 }
+      await ensureImportedSnapshotTables(pool)
+      await pool.query('begin')
+      try {
+        const result = await pool.query(
+          `
+            delete from cashbook_entries
+            where organization_id = $1
+              and source_type = 'kiotviet_cashbook'
+          `,
+          [input.organizationId],
+        )
+        await rebuildImportedKiotVietCashbookAllocations(pool, input.organizationId)
+        await pool.query('commit')
+        return { deleted: result.rowCount ?? 0, blocked: 0 }
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
     },
 
     async findSalesDocumentsByCodes(input) {
@@ -3054,7 +3093,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       await ensureImportedSnapshotTables(pool)
       await ensureSalesFinanceTables(pool)
       await ensureStockMovementsTable(pool)
+      await ensureProductBomTables(pool)
       const products = await stockProductsByImportCode(pool, input.organizationId)
+      const bomComponentsByProductId = await draftBomComponentsByProductId(pool, input.organizationId)
       let invoicesCreated = 0
       let invoicesUpdated = 0
       let itemsCreated = 0
@@ -3096,25 +3137,48 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           let runningEndingQty = 0
           for (const row of [...rows].sort((left, right) => left.rowNumber - right.rowNumber)) {
             const product = resolveStockProduct(products, row.product_code)
-            if (!product?.track_inventory) continue
+            if (!product) continue
             const saleUnitFactor = row.stock_qty_per_sale_unit && row.stock_qty_per_sale_unit > 0 ? row.stock_qty_per_sale_unit : product.factor
-            const quantityDelta = -(row.quantity * saleUnitFactor)
-            if (quantityDelta === 0) continue
-            runningEndingQty += quantityDelta
-            affectedProducts.add(product.id)
-            await insertStockMovement(pool, input.organizationId, {
-              id: stableUuidFromText(`stock-movement-kv-sale-${sourceCode}-${row.rowNumber}`),
-              productId: product.id,
-              movementType: 'sale_deduction',
-              quantityDelta,
-              endingQty: runningEndingQty,
-              documentType: 'sale_invoice',
-              documentCode: sourceCode,
-              transactionPrice: row.unit_price,
-              costPrice: product.latest_purchase_cost,
-              partnerName: customer?.name ?? row.customer_name,
-              createdAt: first.created_at ?? first.updated_at ?? new Date().toISOString(),
-            })
+            const soldQuantity = row.quantity * saleUnitFactor
+            if (product.track_inventory) {
+              const quantityDelta = -soldQuantity
+              if (quantityDelta !== 0) {
+                runningEndingQty += quantityDelta
+                affectedProducts.add(product.id)
+                await insertStockMovement(pool, input.organizationId, {
+                  id: stableUuidFromText(`stock-movement-kv-sale-${sourceCode}-${row.rowNumber}`),
+                  productId: product.id,
+                  movementType: 'sale_deduction',
+                  quantityDelta,
+                  endingQty: runningEndingQty,
+                  documentType: 'sale_invoice',
+                  documentCode: sourceCode,
+                  transactionPrice: row.unit_price,
+                  costPrice: product.latest_purchase_cost,
+                  partnerName: customer?.name ?? row.customer_name,
+                  createdAt: first.created_at ?? first.updated_at ?? new Date().toISOString(),
+                })
+              }
+            }
+            for (const component of bomComponentsByProductId.get(product.id) ?? []) {
+              if (!component.trackInventory) continue
+              const quantityDelta = -soldQuantity * component.quantity * component.factor
+              if (quantityDelta === 0) continue
+              affectedProducts.add(component.productId)
+              await insertStockMovement(pool, input.organizationId, {
+                id: stableUuidFromText(`stock-movement-kv-sale-bom-${sourceCode}-${row.rowNumber}-${component.productId}`),
+                productId: component.productId,
+                movementType: 'sale_deduction',
+                quantityDelta,
+                endingQty: null,
+                documentType: 'sale_invoice',
+                documentCode: sourceCode,
+                transactionPrice: null,
+                costPrice: component.latestPurchaseCost,
+                partnerName: customer?.name ?? row.customer_name,
+                createdAt: first.created_at ?? first.updated_at ?? new Date().toISOString(),
+              })
+            }
           }
         }
         await recomputeStockMovementBalances(pool, input.organizationId, affectedProducts)
@@ -4958,6 +5022,53 @@ function resolveStockProduct(products: Map<string, StockImportProduct>, productC
   return products.get(baseKiotVietImportCode(productCode)) ?? null
 }
 
+type DraftBomComponent = {
+  productId: string
+  quantity: number
+  factor: number
+  trackInventory: boolean
+  latestPurchaseCost: number | null
+}
+
+async function draftBomComponentsByProductId(pool: pg.Pool, organizationId: string) {
+  await ensureProductBomTables(pool)
+  const result = await pool.query(
+    `
+      select
+        pb.product_id::text as parent_product_id,
+        p.id::text as component_product_id,
+        pbi.quantity,
+        p.track_inventory,
+        p.latest_purchase_cost
+      from product_boms pb
+      join product_bom_items pbi
+        on pbi.organization_id = pb.organization_id
+       and pbi.bom_id = pb.id
+      join products p
+        on p.organization_id = pbi.organization_id
+       and p.id = pbi.component_product_id
+      where pb.organization_id = $1
+        and pb.status in ('draft', 'active')
+      order by pb.product_id, pbi.sort_order, pbi.id
+    `,
+    [organizationId],
+  )
+  const byProductId = new Map<string, DraftBomComponent[]>()
+  for (const row of result.rows) {
+    const parentId = String(row.parent_product_id)
+    const components = byProductId.get(parentId) ?? []
+    components.push({
+      productId: String(row.component_product_id),
+      quantity: Number(row.quantity ?? 0),
+      factor: 1,
+      trackInventory: Boolean(row.track_inventory),
+      latestPurchaseCost: row.latest_purchase_cost === null ? null : Number(row.latest_purchase_cost),
+    })
+    byProductId.set(parentId, components)
+  }
+  return byProductId
+}
+
 async function snapshotByCode<T>(pool: pg.Pool, tableName: 'customer_snapshots' | 'supplier_snapshots', organizationId: string, code: string) {
   const result = await pool.query(
     `
@@ -5064,7 +5175,7 @@ async function insertStockMovement(
     productId: string
     movementType: string
     quantityDelta: number
-    endingQty: number
+    endingQty: number | null
     documentType: string
     documentCode: string
     transactionPrice: number | null
@@ -5108,6 +5219,8 @@ async function insertStockMovement(
 async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: string, document: SalesDocumentData) {
   const affectedProducts = await deleteStockMovementsForDocument(pool, organizationId, 'sale_invoice', document.code)
   if (document.order_type === 'invoice' && document.status === 'completed') {
+    await ensureProductBomTables(pool)
+    const bomComponentsByProductId = await draftBomComponentsByProductId(pool, organizationId)
     let runningEndingQty = 0
     for (const [index, rawItem] of document.items.entries()) {
       const item = rawItem as {
@@ -5119,23 +5232,44 @@ async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: st
       const quantity = Number(item.quantity ?? 0)
       const stockQtyPerSaleUnit = Number(item.stock_qty_per_sale_unit ?? 1)
       const factor = Number.isFinite(stockQtyPerSaleUnit) && stockQtyPerSaleUnit > 0 ? stockQtyPerSaleUnit : 1
-      const quantityDelta = -(quantity * factor)
-      if (quantityDelta === 0) continue
-      runningEndingQty += quantityDelta
-      affectedProducts.add(item.product_id)
-      await insertStockMovement(pool, organizationId, {
-        id: stableUuidFromText(`stock-movement-pos-sale-${document.code}-${index + 1}`),
-        productId: item.product_id,
-        movementType: 'sale_deduction',
-        quantityDelta,
-        endingQty: runningEndingQty,
-        documentType: 'sale_invoice',
-        documentCode: document.code,
-        transactionPrice: Number(item.unit_price ?? 0),
-        costPrice: null,
-        partnerName: document.customer.name,
-        createdAt: document.created_at,
-      })
+      const soldQuantity = quantity * factor
+      const quantityDelta = -soldQuantity
+      if (quantityDelta !== 0) {
+        runningEndingQty += quantityDelta
+        affectedProducts.add(item.product_id)
+        await insertStockMovement(pool, organizationId, {
+          id: stableUuidFromText(`stock-movement-pos-sale-${document.code}-${index + 1}`),
+          productId: item.product_id,
+          movementType: 'sale_deduction',
+          quantityDelta,
+          endingQty: runningEndingQty,
+          documentType: 'sale_invoice',
+          documentCode: document.code,
+          transactionPrice: Number(item.unit_price ?? 0),
+          costPrice: null,
+          partnerName: document.customer.name,
+          createdAt: document.created_at,
+        })
+      }
+      for (const component of bomComponentsByProductId.get(item.product_id) ?? []) {
+        if (!component.trackInventory) continue
+        const componentDelta = -soldQuantity * component.quantity * component.factor
+        if (componentDelta === 0) continue
+        affectedProducts.add(component.productId)
+        await insertStockMovement(pool, organizationId, {
+          id: stableUuidFromText(`stock-movement-pos-sale-bom-${document.code}-${index + 1}-${component.productId}`),
+          productId: component.productId,
+          movementType: 'sale_deduction',
+          quantityDelta: componentDelta,
+          endingQty: null,
+          documentType: 'sale_invoice',
+          documentCode: document.code,
+          transactionPrice: null,
+          costPrice: component.latestPurchaseCost,
+          partnerName: document.customer.name,
+          createdAt: document.created_at,
+        })
+      }
     }
   }
   await recomputeStockMovementBalances(pool, organizationId, affectedProducts)
@@ -6550,6 +6684,197 @@ function financeAccountFromKiotVietCashbookRow(row: KiotVietCashbookImportRow): 
 function linkedInvoiceCodeFromKiotVietCashbookCode(code: string) {
   const match = code.trim().toUpperCase().match(/^TTHDO?(\d+(?:\.\d+)?)$/)
   return match ? `HD${match[1]}` : null
+}
+
+async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organizationId: string) {
+  const [invoiceResult, receiptResult, cashbookResult] = await Promise.all([
+    pool.query<{
+      id: string
+      code: string
+      created_at: Date
+      status: string
+      order_type: string
+      total_amount: string | number
+      paid_amount: string | number
+      debt_amount: string | number
+      customer_id: string | null
+      customer_snapshot: { id?: string; code?: string; name?: string } | null
+    }>(
+      `
+        select id, code, created_at, status, order_type, total_amount, paid_amount, debt_amount,
+               customer_id, customer_snapshot
+        from orders
+        where organization_id = $1
+          and id like 'sales-document-kv-%'
+          and order_type = 'invoice'
+      `,
+      [organizationId],
+    ),
+    pool.query<{
+      id: string
+      code: string
+      data: {
+        status?: string
+        received_at?: string
+        payable_amount?: number
+        paid_amount?: number
+        remaining_amount?: number
+        supplier?: { id?: string; code?: string; name?: string }
+        supplier_id?: string
+      }
+    }>(
+      `
+        select id, code, data
+        from purchase_receipt_snapshots
+        where organization_id = $1
+          and id like 'purchase-receipt-kv-%'
+      `,
+      [organizationId],
+    ),
+    pool.query<{
+      id: string
+      code: string
+      created_at: Date
+      direction: 'in' | 'out'
+      amount_delta: string | number
+      status: string
+      source: Record<string, unknown> | null
+      counterparty: { name?: string; phone?: string | null } | null
+    }>(
+      `
+        select id, code, created_at, direction, amount_delta, status, source, counterparty
+        from cashbook_entries
+        where organization_id = $1
+          and source_type = 'kiotviet_cashbook'
+      `,
+      [organizationId],
+    ),
+  ])
+
+  const invoices: AllocatableInvoice[] = invoiceResult.rows.map((row) => ({
+    id: String(row.id),
+    code: String(row.code),
+    created_at: row.created_at.toISOString(),
+    status: String(row.status),
+    order_type: String(row.order_type),
+    total_amount: Number(row.total_amount),
+    paid_amount: Number(row.paid_amount),
+    debt_amount: Number(row.debt_amount),
+    customer: {
+      id: String(row.customer_id ?? row.customer_snapshot?.id ?? ''),
+      code: String(row.customer_snapshot?.code ?? ''),
+      name: row.customer_snapshot?.name,
+    },
+  }))
+
+  const receipts: AllocatablePurchaseReceipt[] = receiptResult.rows.map((row) => ({
+    id: String(row.id),
+    code: String(row.code),
+    received_at: String(row.data?.received_at ?? new Date().toISOString()),
+    status: String(row.data?.status ?? 'posted'),
+    payable_amount: Number(row.data?.payable_amount ?? 0),
+    paid_amount: Number(row.data?.paid_amount ?? 0),
+    remaining_amount: Number(row.data?.remaining_amount ?? 0),
+    supplier: {
+      id: String(row.data?.supplier?.id ?? row.data?.supplier_id ?? ''),
+      code: String(row.data?.supplier?.code ?? ''),
+      name: row.data?.supplier?.name,
+    },
+    supplier_id: row.data?.supplier_id,
+  }))
+
+  const rebuilt = rebuildKiotVietCashbookAllocations({
+    invoices,
+    receipts,
+    cashbookRows: cashbookResult.rows.map((row) => ({
+      id: String(row.id),
+      source_code: String(row.code),
+      entry_time: row.created_at.toISOString(),
+      direction: row.direction,
+      amount_delta: Number(row.amount_delta),
+      status: String(row.status),
+      counterparty_code: typeof row.source?.counterparty_code === 'string' ? row.source.counterparty_code : null,
+      counterparty_name: row.counterparty?.name ?? null,
+      category_name: typeof row.source?.category_name === 'string' ? row.source.category_name : null,
+    })),
+  })
+
+  for (const invoice of rebuilt.invoices) {
+    const paymentStatus = invoicePaymentStatus(invoice.paid_amount, invoice.debt_amount)
+    await pool.query(
+      `
+        update orders
+        set paid_amount = $3,
+            debt_amount = $4,
+            payment_status = $5,
+            updated_at = now()
+        where organization_id = $1
+          and id = $2
+      `,
+      [organizationId, invoice.id, invoice.paid_amount, invoice.debt_amount, paymentStatus],
+    )
+    if (invoice.debt_amount > 0) {
+      await pool.query(
+        `
+          insert into customer_debt_entries (
+            organization_id, customer_id, order_id, original_amount, paid_amount,
+            remaining_debt, status, created_at, updated_at
+          )
+          values ($1, $2, $3, $4, $5, $6, 'open', now(), now())
+          on conflict (organization_id, order_id) do update set
+            customer_id = excluded.customer_id,
+            original_amount = excluded.original_amount,
+            paid_amount = excluded.paid_amount,
+            remaining_debt = excluded.remaining_debt,
+            status = 'open',
+            updated_at = now()
+        `,
+        [organizationId, invoice.customer.id, invoice.id, invoice.total_amount, invoice.paid_amount, invoice.debt_amount],
+      )
+    } else {
+      await pool.query(
+        `
+          update customer_debt_entries
+          set paid_amount = $3,
+              remaining_debt = 0,
+              status = 'closed',
+              updated_at = now()
+          where organization_id = $1
+            and order_id = $2
+        `,
+        [organizationId, invoice.id, invoice.paid_amount],
+      )
+    }
+  }
+
+  for (const receipt of rebuilt.receipts) {
+    await pool.query(
+      `
+        update purchase_receipt_snapshots
+        set data = jsonb_set(
+              jsonb_set(data, '{paid_amount}', to_jsonb($3::numeric), true),
+              '{remaining_amount}', to_jsonb($4::numeric), true
+            ),
+            updated_at = now()
+        where organization_id = $1
+          and id = $2
+      `,
+      [organizationId, receipt.id, receipt.paid_amount, receipt.remaining_amount],
+    )
+  }
+
+  for (const entry of rebuilt.cashbookAllocations) {
+    await pool.query(
+      `
+        update cashbook_entries
+        set allocations = $3::jsonb,
+            source = jsonb_set(coalesce(source, '{}'::jsonb), '{order_code}', to_jsonb($4::text), true)
+        where organization_id = $1
+          and id = $2
+      `,
+      [organizationId, entry.id, JSON.stringify(entry.allocations), entry.order_code],
+    )
+  }
 }
 
 async function ensureImportedSnapshotTables(pool: pg.Pool) {

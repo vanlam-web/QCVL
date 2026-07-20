@@ -2918,7 +2918,7 @@ describe('createHttpHandler', () => {
 
     expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['KH-ACTIVE'])
     expect(body.data.summary).toMatchObject({
-      total_debt_amount: 100000,
+      total_debt_amount: 0,
       total_sales_amount: 450000,
     })
   })

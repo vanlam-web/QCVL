@@ -7,7 +7,6 @@ import {
   mapKiotVietInvoiceRows,
   parseKiotVietInvoiceWorkbookBuffer,
   previewKiotVietInvoiceImport,
-  type KiotVietInvoiceImportRow,
 } from '../server/modules/sales/kiotviet-invoice-import.js'
 
 const { Pool } = pg

@@ -664,12 +664,12 @@ export function CustomersPage({
       })
       setState((current) => {
         if (!current) return current
-        const nextDebt = Math.max((current.summary?.total_debt_amount ?? 0) - result.allocated_amount, 0)
+        const nextDebt = (current.summary?.total_debt_amount ?? 0) - result.allocated_amount
         return {
           ...current,
           customers: current.customers.map((item) => (
             item.id === customer.id
-              ? { ...item, total_debt_amount: Math.max((item.total_debt_amount ?? 0) - result.allocated_amount, 0) }
+              ? { ...item, total_debt_amount: (item.total_debt_amount ?? 0) - result.allocated_amount }
               : item
           )),
           summary: current.summary
@@ -1433,72 +1433,33 @@ function buildCustomerDebtSummaryRows(
     status?: SalesDocumentListItem['status']
   }>,
   ledgerRows: CustomerDebtLedgerRow[],
-  currentDebt: number,
 ): CustomerDebtSummaryRow[] {
   const runningDebtByInvoiceCode = new Map<string, number>()
   for (const row of ledgerRows) {
     if (row.type === 'Bán hàng') runningDebtByInvoiceCode.set(row.code, row.running_debt)
   }
 
-  const openRows = invoices
+  return invoices
     .filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
-    .map((invoice) => ({
-      id: invoice.id,
-      code: invoice.code,
-      created_at: invoice.created_at,
-      total_amount: invoice.total_amount,
-      remaining_debt: Math.max(typeof invoice.debt_amount === 'number' ? invoice.debt_amount : invoice.total_amount - (invoice.paid_amount ?? 0), 0),
-      running_debt: runningDebtByInvoiceCode.get(invoice.code) ?? 0,
-    }))
-    .filter((invoice) => invoice.remaining_debt > 0)
-
-  const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
-  let unassignedPayment = Math.max(openDebtTotal - Math.max(currentDebt, 0), 0)
-  const latestOpenRow = [...openRows].sort((left, right) => {
-    const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
-    if (timeDiff !== 0) return timeDiff
-    return right.code.localeCompare(left.code)
-  })[0]
-  const latestOpenRunningDebt = latestOpenRow?.running_debt ?? openDebtTotal
-  const debtOffset = Math.max(currentDebt - latestOpenRunningDebt, 0)
-  const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
-  const allocatedDebtById = new Map<string, number>()
-  const oldestRows = [...openRows].sort((left, right) => {
-    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
-    if (timeDiff !== 0) return timeDiff
-    return left.code.localeCompare(right.code)
-  })
-
-  for (const invoice of oldestRows) {
-    if (unassignedPayment <= 0) break
-    const remainingDebt = remainingDebtById.get(invoice.id) ?? 0
-    const allocated = Math.min(remainingDebt, unassignedPayment)
-    remainingDebtById.set(invoice.id, remainingDebt - allocated)
-    unassignedPayment -= allocated
-    allocatedDebtById.set(invoice.id, allocated)
-  }
-
-  const adjustedRows = openRows
-    .map((invoice) => ({
-      ...invoice,
-      remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt,
-      running_debt: Math.max(invoice.running_debt - (allocatedDebtById.get(invoice.id) ?? 0), 0) + debtOffset,
-    }))
+    .map((invoice) => {
+      const remainingDebt = typeof invoice.debt_amount === 'number'
+        ? invoice.debt_amount
+        : invoice.total_amount - (invoice.paid_amount ?? 0)
+      return {
+        id: invoice.id,
+        code: invoice.code,
+        created_at: invoice.created_at,
+        total_amount: invoice.total_amount,
+        remaining_debt: remainingDebt,
+        running_debt: runningDebtByInvoiceCode.get(invoice.code) ?? remainingDebt,
+      }
+    })
     .filter((invoice) => invoice.remaining_debt > 0)
     .sort((left, right) => {
       const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
       if (timeDiff !== 0) return timeDiff
       return right.code.localeCompare(left.code)
     })
-
-  if (adjustedRows.length === 1) {
-    return adjustedRows.map((invoice) => ({
-      ...invoice,
-      running_debt: debtOffset > 0 ? invoice.running_debt : invoice.remaining_debt,
-    }))
-  }
-
-  return adjustedRows
 }
 
 function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {
@@ -1565,8 +1526,7 @@ function CustomerDebtPanel({
   const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
-  const currentDebt = totalDebt
-  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
+  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows)
   const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
   const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)
   const visibleSummaryRows = summaryRows.slice((safeSummaryPage - 1) * ledgerPageSize, safeSummaryPage * ledgerPageSize)
@@ -1879,7 +1839,7 @@ function CustomerDebtPaymentDialog({
         { currentTotal: currentDebt },
       )
     : []
-  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
+  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows)
   const hasManualInvoicePayments = Object.values(form.invoicePayments).some((value) => parseMoneyInput(value) > 0)
   const manualPaymentAmount = summaryRows.reduce((sum, row) => sum + Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt), 0)
   const paymentAmount = hasManualInvoicePayments ? manualPaymentAmount : parseMoneyInput(form.amount)
@@ -2017,7 +1977,7 @@ function CustomerDebtPaymentDialog({
               value={form.amount}
               onChange={(event) => updateAmount(event.target.value)}
             />
-            <small>Nợ còn: {formatMoney(Math.max(currentDebt - Math.min(paymentAmount, currentDebt), 0))}</small>
+            <small>Nợ còn: {formatMoney(currentDebt - paymentAmount)}</small>
           </label>
           <label className="customer-debt-payment-full">
             <span>Ghi chú</span>
