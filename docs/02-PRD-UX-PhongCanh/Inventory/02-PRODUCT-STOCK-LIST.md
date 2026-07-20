@@ -266,14 +266,12 @@ Quy tắc hiển thị:
 
 Thứ tự làm tiếp:
 
-1. Rà `Khách hàng` đủ dùng cho hóa đơn/POS và `Khách lẻ`: mã khách, tên, SĐT, loại khách, người tạo, import/cleanup và chọn khách. Không làm sâu `Lịch sử bán/trả hàng` hoặc `Nợ cần thu` ở bước này.
-2. Rà `Nhà cung cấp` đủ dùng cho phiếu nhập và công nợ NCC.
-3. Chọn/ghi nhận phiếu kiểm kho KV ban đầu làm mốc mở khi bắt đầu xây công thức tồn.
-4. Phiếu nhập posted sau mốc ghi `stock_movements` tăng tồn. Dev-memory import KiotViet posted đã đọc được movement tăng tồn; cần nối tiếp DB thật khi làm migration/persistence.
-5. Cho hóa đơn/POS posted sau mốc ghi `stock_movements` giảm tồn. Đây là bước tiếp theo để tồn không chỉ có chiều cộng.
-6. Cho trả hàng sau mốc ghi movement đảo chiều.
-7. Cho kiểm kho/cân bằng kho sau mốc ghi adjustment rõ ràng.
-8. Quay lại `/products` để hiển thị tồn QCVL tính được và cột so sánh KV.
+**Owner 2026-07-20:** không import thêm file KiotViet. Các bước dưới đây là vận hành/đối soát trên dữ liệu đã nạp.
+
+1. Rà `Khách hàng` / `Nhà cung cấp` đủ dùng trên dữ liệu đã import (không mở đợt import mới).
+2. Chọn/ghi nhận phiếu kiểm kho KV **đã có** làm mốc mở khi Owner muốn chốt công thức tồn (chưa có runtime chọn mốc).
+3. Đảm bảo phiếu nhập / hóa đơn / POS đã có ghi `stock_movements` đúng trên dữ liệu hiện có; bổ sung trả hàng / kiểm-cân bằng sau mốc khi làm.
+4. Quay lại `/products` để hiển thị tồn QCVL theo công thức đã chốt và cột so sánh KV tạm (đối chiếu).
 
 Tab `Tồn kho` cũng hiển thị `Kiểm kho KiotViet gần nhất` nếu đã import file kiểm kho. Trường API là `latest_kiotviet_stocktake`, hydrate từ `stocktakes`/`stocktake_items` có `source_type = kiotviet_import` và `source_system = kiotviet`. Phần này chỉ là bằng chứng đối soát: hiển thị mã phiếu, ngày, số lượng thực tế, số lệch. Tuyệt đối không lấy `actual_qty` của phiếu kiểm kho để ghi đè `inventory_provisional_balances` hoặc tồn vận hành.
 
