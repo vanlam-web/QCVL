@@ -476,10 +476,6 @@ export function PurchaseReceiptsPage({
   }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
   const receiptWorkspaceLookupLoading = isCreatingReceipt && (!suppliersLoaded || !productsLoaded)
 
-  useEffect(() => {
-    setReceiptReceivedAtText(formatReceiptDateTimeInput(form.received_at))
-  }, [form.received_at])
-
   function updateReceiptReceivedAtText(value: string) {
     setReceiptReceivedAtText(value)
     const normalized = parseReceiptDateTimeInput(value)
@@ -652,6 +648,7 @@ export function PurchaseReceiptsPage({
                 physical_payload: item.physical_payload,
               })),
             })
+            setReceiptReceivedAtText(formatReceiptDateTimeInput(detail.received_at.slice(0, 16)))
           } catch (cause) {
             if (active) setError(formatApiError(cause, 'Không tải được chi tiết phiếu nhập.'))
           } finally {
@@ -907,6 +904,7 @@ function clearReceiptCreateDraft() {
           physical_payload: item.physical_payload,
         })),
       })
+      setReceiptReceivedAtText(formatReceiptDateTimeInput(detail.received_at.slice(0, 16)))
       setPaymentMethod('cash')
       setFinanceAccountId('')
       setSupplierPaymentOpen(false)
@@ -960,7 +958,9 @@ function clearReceiptCreateDraft() {
       setSelectedReceipt(null)
       setReceiptDetailTab('info')
       setDetailOpen(false)
-      setForm(blankForm())
+      const nextBlankForm = blankForm()
+      setForm(nextBlankForm)
+      setReceiptReceivedAtText(formatReceiptDateTimeInput(nextBlankForm.received_at))
       await loadReceipts()
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được phiếu nhập.'))
@@ -990,7 +990,9 @@ function clearReceiptCreateDraft() {
       setSelectedReceipt(null)
       setReceiptDetailTab('info')
       setDetailOpen(false)
-      setForm(blankForm())
+      const nextBlankForm = blankForm()
+      setForm(nextBlankForm)
+      setReceiptReceivedAtText(formatReceiptDateTimeInput(nextBlankForm.received_at))
       clearReceiptCreateDraft()
       if (createMode && onCloseCreateReceipt) {
         onCloseCreateReceipt()
@@ -1185,7 +1187,9 @@ function clearReceiptCreateDraft() {
     setSelectedReceipt(null)
     setReceiptDetailTab('info')
     setDetailOpen(false)
-    setForm(blankForm())
+    const nextBlankForm = blankForm()
+    setForm(nextBlankForm)
+    setReceiptReceivedAtText(formatReceiptDateTimeInput(nextBlankForm.received_at))
     setPaymentMethod('cash')
     setFinanceAccountId('')
     setSupplierPaymentOpen(false)

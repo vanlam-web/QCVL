@@ -1037,12 +1037,6 @@ function SalesDocumentDetailView({
   const hasPaymentHistory = Array.isArray(document?.payment_receipts) && document.payment_receipts.length > 0
   const selectedTab = hasPaymentHistory ? activeTab : 'info'
 
-  useEffect(() => {
-    setNote(document?.note ?? '')
-    setCreatedAtInput(salesDocumentDateTimeInputText(document?.created_at))
-    setEditingCreatedAt(false)
-  }, [document?.id, document?.note, document?.created_at])
-
   async function saveNote() {
     if (!document || !onSaveNote) return
     setSavingNote(true)

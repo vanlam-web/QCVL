@@ -524,7 +524,11 @@ function dashboardActivities(now: Date, documents: SalesDocumentListItem[], purc
     })),
   ]
     .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
-    .map(({ at: _at, ...activity }) => activity)
+    .map((item) => {
+      const { at, ...activity } = item
+      void at
+      return activity
+    })
 }
 
 function counterpartyLabel(document: SalesDocumentListItem) {
@@ -658,7 +662,11 @@ function systemActivityItems(now: Date, documents: SalesDocumentDetail[]) {
     .filter((activity) => activity.action !== '')
     .sort((left, right) => new Date(right.at).getTime() - new Date(left.at).getTime())
     .slice(0, 8)
-    .map(({ at: _at, ...activity }) => activity)
+    .map((item) => {
+      const { at, ...activity } = item
+      void at
+      return activity
+    })
 }
 
 function systemActionText(action: string) {

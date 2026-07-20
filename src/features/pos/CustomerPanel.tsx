@@ -62,7 +62,6 @@ export function CustomerPanel({
   const [detailDebt, setDetailDebt] = useState<CustomerDebtState | undefined>(undefined)
   const [detailDebtLedger, setDetailDebtLedger] = useState<CustomerPosDebtLedgerState | undefined>(undefined)
   const [detailHistory, setDetailHistory] = useState<CustomerHistoryState | undefined>(undefined)
-  const [detailForm, setDetailForm] = useState<CustomerDetailForm>(() => customerDetailFormFromCustomer(selectedCustomer))
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([])
   const [detailSaving, setDetailSaving] = useState(false)
   const [detailDropdownOpen, setDetailDropdownOpen] = useState<CustomerDetailDropdownKey>(null)
@@ -110,9 +109,12 @@ export function CustomerPanel({
     if (selectedCustomer === null) return
     const requestId = detailRequestId.current + 1
     detailRequestId.current = requestId
-    setDetailDebt(orderService ? 'loading' : undefined)
-    setDetailDebtLedger(orderService ? 'loading' : undefined)
-    setDetailHistory(salesDocumentService ? 'loading' : undefined)
+    queueMicrotask(() => {
+      if (detailRequestId.current !== requestId) return
+      setDetailDebt(orderService ? 'loading' : undefined)
+      setDetailDebtLedger(orderService ? 'loading' : undefined)
+      setDetailHistory(salesDocumentService ? 'loading' : undefined)
+    })
 
     if (orderService) {
       const counterpartySearch = selectedCustomer.name.trim() || selectedCustomer.code
@@ -168,7 +170,6 @@ export function CustomerPanel({
 
   useEffect(() => {
     if (!detailOpen || selectedCustomer === null) return
-    setDetailForm(customerDetailFormFromCustomer(selectedCustomer))
     service
       .listCustomerGroups()
       .then((response) => setCustomerGroups(response.items))
@@ -232,7 +233,7 @@ export function CustomerPanel({
     setDetailOpen(true)
   }
 
-  async function saveCustomerDetail(event: React.FormEvent<HTMLFormElement>) {
+  async function saveCustomerDetail(event: React.FormEvent<HTMLFormElement>, detailForm: CustomerDetailForm) {
     event.preventDefault()
     if (selectedCustomer === null) return
     setError(null)
@@ -251,7 +252,6 @@ export function CustomerPanel({
       })
       onSelectCustomer(updated)
       setSearch(updated.name)
-      setDetailForm(customerDetailFormFromCustomer(updated))
       setDetailDropdownOpen(null)
       setDetailOpen(false)
     } catch (cause) {
@@ -315,17 +315,20 @@ export function CustomerPanel({
               </span>
             ) : null}
           </span>
-          {selectedCustomerDebt !== null && selectedCustomerDebt > 0 ? (
-          <span className="customer-selected-debt">Còn nợ: <strong>{formatMoney(selectedCustomerDebt)}</strong></span>
+          {selectedCustomerDebt !== null && selectedCustomerDebt !== 0 ? (
+          <span className="customer-selected-debt">
+            {selectedCustomerDebt > 0 ? 'Còn nợ' : 'Dư có'}:{' '}
+            <strong>{formatMoney(Math.abs(selectedCustomerDebt))}</strong>
+          </span>
           ) : null}
           {detailOpen ? (
             <SelectedCustomerDetailDialog
+              key={selectedCustomer.id}
               activeTab={detailTab}
               customer={selectedCustomer}
               customerGroups={mergeSelectedCustomerGroup(customerGroups, selectedCustomer)}
               debt={detailDebt}
               debtLedger={detailDebtLedger}
-              form={detailForm}
               history={detailHistory}
               saving={detailSaving}
               summaryDebt={selectedCustomerDebt}
@@ -335,7 +338,6 @@ export function CustomerPanel({
                 setDetailOpen(false)
               }}
               onCloseDropdown={() => setDetailDropdownOpen(null)}
-              onFormChange={setDetailForm}
               onSaveInfo={saveCustomerDetail}
               onSelectTab={(tab) => {
                 setDetailDropdownOpen(null)
@@ -405,12 +407,10 @@ function SelectedCustomerDetailDialog({
   customerGroups,
   debt,
   debtLedger,
-  form,
   history,
   saving,
   summaryDebt,
   onClose,
-  onFormChange,
   onSaveInfo,
   onSelectTab,
   detailDropdownOpen,
@@ -422,18 +422,17 @@ function SelectedCustomerDetailDialog({
   customerGroups: CustomerGroup[]
   debt: CustomerDebtState | undefined
   debtLedger: CustomerPosDebtLedgerState | undefined
-  form: CustomerDetailForm
   history: CustomerHistoryState | undefined
   saving: boolean
   summaryDebt: number | null
   onClose: () => void
-  onFormChange: (form: CustomerDetailForm) => void
-  onSaveInfo: (event: React.FormEvent<HTMLFormElement>) => void
+  onSaveInfo: (event: React.FormEvent<HTMLFormElement>, form: CustomerDetailForm) => void
   onSelectTab: (tab: CustomerDetailTab) => void
   detailDropdownOpen: CustomerDetailDropdownKey
   onToggleDropdown: (key: Exclude<CustomerDetailDropdownKey, null>) => void
   onCloseDropdown: () => void
 }) {
+  const [form, setForm] = useState<CustomerDetailForm>(() => customerDetailFormFromCustomer(customer))
   const totalSales = customer.total_sales_amount ?? 0
   return (
     <div className="management-modal-backdrop customer-pos-detail-backdrop" onMouseDown={onClose}>
@@ -486,22 +485,22 @@ function SelectedCustomerDetailDialog({
         </div>
 
         {activeTab === 'info' ? (
-          <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" id="customer-pos-detail-form" onSubmit={onSaveInfo}>
+          <form aria-label="Sửa thông tin khách hàng" className="customer-pos-detail-section customer-pos-detail-form" id="customer-pos-detail-form" onSubmit={(event) => onSaveInfo(event, form)}>
             <label>
               <span>Mã KH</span>
-              <input required value={form.code} onChange={(event) => onFormChange({ ...form, code: event.target.value })} />
+              <input required value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value })} />
             </label>
             <label>
               <span>Tên KH</span>
-              <input required value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} />
+              <input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
             </label>
             <label>
               <span>SĐT</span>
-              <input value={form.phone} onChange={(event) => onFormChange({ ...form, phone: event.target.value })} />
+              <input value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
             </label>
             <label>
               <span>MST</span>
-              <input value={form.tax_code} onChange={(event) => onFormChange({ ...form, tax_code: event.target.value })} />
+              <input value={form.tax_code} onChange={(event) => setForm({ ...form, tax_code: event.target.value })} />
             </label>
             <CustomerPosDetailDropdownField
               label="Nhóm"
@@ -512,7 +511,7 @@ function SelectedCustomerDetailDialog({
               value={form.customer_group_id}
               onClose={onCloseDropdown}
               onOpen={() => onToggleDropdown('group')}
-              onChange={(value) => onFormChange({ ...form, customer_group_id: value })}
+              onChange={(value) => setForm({ ...form, customer_group_id: value })}
             />
             <CustomerPosDetailDropdownField
               label="Loại khách"
@@ -525,19 +524,19 @@ function SelectedCustomerDetailDialog({
               value={form.customer_type}
               onClose={onCloseDropdown}
               onOpen={() => onToggleDropdown('type')}
-              onChange={(value) => onFormChange({ ...form, customer_type: value })}
+              onChange={(value) => setForm({ ...form, customer_type: value })}
             />
             <label className="customer-pos-detail-form-wide">
               <span>Công ty</span>
-              <input value={form.company_name} onChange={(event) => onFormChange({ ...form, company_name: event.target.value })} />
+              <input value={form.company_name} onChange={(event) => setForm({ ...form, company_name: event.target.value })} />
             </label>
             <label className="customer-pos-detail-form-wide">
               <span>Địa chỉ</span>
-              <textarea rows={1} value={form.address} onChange={(event) => onFormChange({ ...form, address: event.target.value })} />
+              <textarea rows={1} value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} />
             </label>
             <label className="customer-pos-detail-form-wide">
               <span>Ghi chú</span>
-              <textarea rows={1} value={form.note} onChange={(event) => onFormChange({ ...form, note: event.target.value })} />
+              <textarea rows={1} value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} />
             </label>
           </form>
         ) : null}
