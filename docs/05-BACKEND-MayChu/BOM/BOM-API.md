@@ -19,6 +19,8 @@
 
 Trong QC-OMS hiện tại, modal `+ Tạo hàng hóa` tạo combo theo 2 bước: `POST /products` để tạo sản phẩm `sell_method = combo`, sau đó `POST /products/{product_id}/bom` để lưu vật tư cấu thành cho combo vừa tạo. `PUT /products/{product_id}/bom` cũng được hỗ trợ như alias lưu/thay thế BOM hiện hành. Sau khi tạo, người dùng mở chi tiết hàng hóa để sửa BOM/version hiện hành. Khi bán combo, hệ thống trừ tồn vào vật tư cấu thành theo BOM active, không trừ tồn theo chính mã combo.
 
+**Owner 2026-07-20:** BOM import từ KiotViet được đặt `active` và dùng ngay khi bán. Endpoint `POST /v1/boms/{bom_id}/activate` vẫn có thể giữ cho BOM tạo/sửa tay trong app, nhưng **không** còn là bước bắt buộc sau import KiotViet.
+
 BOM không lưu `component_type`/`component_role` trên từng dòng và API từ chối các flag chính/phụ thủ công. `Vật tư phụ` là loại hàng/metadata của chính vật tư (`product_kind = auxiliary_material`); mọi vật tư còn lại được xem là vật tư chính. API lưu dòng BOM chỉ cần `component_product_id`, `quantity` và `notes`. API đọc BOM trả thêm metadata component gồm `product_kind` và `latest_purchase_cost` để UI hiển thị trạng thái dòng và giá vốn tạm. Logic tự hiệu chỉnh định mức từ kiểm kho, sửa tồn, khui vật tư và lịch sử sản xuất là phase sau.
 
 ---

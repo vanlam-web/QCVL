@@ -25,7 +25,7 @@ Current path:
 
 1. Product import and product list foundation: done.
    - Re-import KiotViet product files safely.
-   - Store product master data, price, source created time, unit conversion, provisional stock, and draft BOM.
+   - Store product master data, price, source created time, unit conversion, provisional stock, and BOM from `Hàng thành phần` (active/usable immediately per Owner 2026-07-20).
    - Default `/products` list and filters use real imported fields.
 
 2. Stocktake import: done as a supporting dependency.
@@ -130,7 +130,7 @@ Current status:
 - Purchase receipts: imported for the current data slice. List/table/detail shell is done. Import KV uses `DanhSachChiTietNhapHang_KV...xlsx`, groups rows by `Ma nhap hang`, maps supplier by `Ma nha cung cap`, maps product by `Ma hang`, and has a separate `Xoa du lieu cu` action. Current file `DanhSachChiTietNhapHang_KV12072026-135400-901.xlsx` imported 1,737 detail rows / 684 posted receipts. Blank supplier codes map to `NCC le` / `Nha cung cap le`; import upserts that supplier before writing receipts. Unit-conversion item codes such as `B260` resolve through `product_unit_conversions.source_code`. Historical KV-deleted product codes that still appear in receipts are created as inactive, non-inventory-tracked products so receipt history can match without making those products count as current operating stock. Posted imported receipts now read as `stock_movements.purchase_receipt` stock-in in dev-memory; conversion-code quantities are converted to the parent product stock unit.
 - Sales/POS: KiotViet invoice import is now the historical stock-out source for current local data. POS remains the live checkout source and is excluded from shared management UI cleanup.
 - Stocktake: KV import/detail/cancel/note foundation done; manual `+ Kiem kho` deferred for runnable version.
-- Products: product import and KV comparison data done. Stock-in from purchase receipts is available; stock-out from imported sales invoices is available in dev-memory. Imported balanced stocktakes now act as stock checkpoints: the movement story resets to `actual_qty` at the balanced time, then later purchase/sales movements continue from that checkpoint. Imported sales invoice rows for combo products now deduct draft BOM component stock, matching KV `Ban hang [Combo - Dong goi]` stock-card behavior. `/products` main table shows `Ton QCVL` from current `stock_movements`, while `Ton KV tam nhap` stays in the inventory detail as comparison evidence. This slice still does not include returns, live POS gaps, or the Postgres aggregate path.
+- Products: product import and KV comparison data done. Stock-in from purchase receipts is available; stock-out from imported sales invoices is available in dev-memory. Imported balanced stocktakes now act as stock checkpoints: the movement story resets to `actual_qty` at the balanced time, then later purchase/sales movements continue from that checkpoint. Imported sales invoice rows for combo products deduct BOM component stock (Owner 2026-07-20: KV BOM usable immediately; sell combo deducts components only), matching KV `Ban hang [Combo - Dong goi]` stock-card behavior. `/products` main table shows `Ton QCVL` from current `stock_movements`, while `Ton KV tam nhap` stays in the inventory detail as comparison evidence. This slice still does not include returns, live POS gaps, or the Postgres aggregate path.
 
 ### Reality Update 2026-07-12: Operating Stock Formula vs KiotViet
 
@@ -206,7 +206,7 @@ Use this file as the product import design record only. Do not treat the older u
 Accepted current behavior:
 
 - KiotViet product import can be run repeatedly by `Ma hang` upsert.
-- Product import writes real catalog fields, source `created_at`, default sale price, provisional stock, and draft BOM.
+- Product import writes real catalog fields, source `created_at`, default sale price, provisional stock, and BOM from `Hàng thành phần` (active/usable immediately per Owner 2026-07-20).
 - Product import does not create official stock movements.
 - Product import delete/reset is a separate explicit action, not an import checkbox.
 - `3202` and `3200` promotion must go through migrations and `npm run deploy:nas`.
@@ -239,7 +239,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 | `Đang kinh doanh` | `status = active` when `1`, otherwise `inactive` |
 | `Giá bán` | `price_list_items` of default active price list; not written to `products` |
 | `Tồn kho` | `inventory_provisional_balances` with `source_type = kiotviet_import`; not written to `stock_movements` |
-| `Hàng thành phần` | draft BOM in `product_boms`/`product_bom_items`; never auto-active |
+| `Hàng thành phần` | BOM active in `product_boms`/`product_bom_items`; used immediately when selling combo (Owner decision 2026-07-20; replaces older draft/review policy) |
 | `Thời gian tạo` | `products.created_at`; accepts KiotViet Excel serial date or `dd/MM/yyyy HH:mm`; repeated import updates old wrong import-time timestamps to the KiotViet source time |
 
 **Columns deferred by decision:**
@@ -254,7 +254,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 
 **Deletion rule:** The UI may offer `Xóa dữ liệu mẫu trước khi import`, but the server only deletes known demo products that have no real linked documents. Phase 1 demo patterns are `DEV20-SP-%`, `MICA-3MM`, `DECAL-PP`, and `CUT-CNC`. The server must refuse deletion for any matched product that appears in sales documents, purchase receipts, stock movements, BOM, price list items, or other real linked tables.
 
-**Out of scope for this plan:** NAS deploy, Git push, supplier relationship import, expected-out-of-stock calculation, activating BOM, and using KiotViet total stock as a direct source for real roll/sheet stock movements.
+**Out of scope for this plan:** NAS deploy, Git push, supplier relationship import, expected-out-of-stock calculation, and using KiotViet total stock as a direct source for real roll/sheet stock movements. BOM from KiotViet is usable immediately after import (Owner 2026-07-20); a separate activate-after-review step is no longer required for KV BOM.
 
 ---
 
@@ -263,7 +263,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 1. `Dự kiến hết hàng`: chưa làm. Phải có lịch sử bán/tiêu thụ thật và tồn kho chuẩn hóa trước, sau đó mới tính tốc độ dùng hàng. Không copy chuỗi dự kiến từ KiotViet.
 2. `Nhà cung cấp`: chưa làm ở import Hàng hóa. Nguồn đúng là phiếu nhập, vì một mã hàng có thể có nhiều nhà cung cấp.
 3. `Tồn KV tạm nhập`: đã lưu vào `inventory_provisional_balances`, nhưng chỉ dùng để đối chiếu. Không chuyển trực tiếp thành tồn kho thật/stock movements. Bước sau cần dữ liệu vận hành thật: phiếu nhập, bán hàng, kiểm kho/cân bằng kho và quy trình cuộn/tấm.
-4. BOM nháp: đã lưu draft BOM, nhưng chưa có quy trình duyệt/kích hoạt. POS chỉ được dùng BOM sau khi người dùng rà định mức và active.
+4. BOM từ KiotViet: Owner 2026-07-20 chốt lại — import xong dùng ngay (`active`), không còn nháp/duyệt trước khi trừ kho. Bán combo chỉ trừ thành phần. Quyết định cũ (draft → duyệt → active) đã bị thay; xem `docs/03-BUSINESS-NghiepVu/BOM/BOM-RULES.md` mục Import.
 5. Import nhiều file KV mới: upsert theo `Mã hàng` đã sẵn sàng. Khi KV đổi dữ liệu, import lại file mới để cập nhật; hệ thống không tự xóa mã vắng trong file mới.
 
 ## Reality Update 2026-07-10: Product Source Created Time
@@ -1385,7 +1385,7 @@ Import Hàng hóa dùng file Excel export từ KiotViet. Luồng chuẩn:
 
 Import dùng `Mã hàng` làm khóa upsert trong cùng organization. Lần import sau cập nhật lại tên, nhóm, loại, đơn vị, trạng thái và giá vốn. Không tự xóa hàng không còn trong file.
 
-Phase hiện tại đã ghi `Giá bán`, `Tồn kho` tạm và `Hàng thành phần` BOM nháp. Chỉ còn `Dự kiến hết hàng` làm sau bằng luồng có truy vết riêng.
+Phase hiện tại đã ghi `Giá bán`, `Tồn kho` tạm và `Hàng thành phần` (BOM dùng ngay theo Owner 2026-07-20). Chỉ còn `Dự kiến hết hàng` làm sau bằng luồng có truy vết riêng.
 ```
 
 - [ ] **Step 2: Full verification**

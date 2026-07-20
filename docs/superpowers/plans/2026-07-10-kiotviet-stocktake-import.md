@@ -4,7 +4,7 @@
 
 **Goal:** Import KiotViet stocktake history into the Inventory/Kiem kho module as reviewable historical data, with a later explicit option to choose one initial KV stocktake as QCVL opening balance.
 
-**Architecture:** Product import and stocktake import stay separate. Product import owns KiotViet catalog, prices, comparison-only provisional stock, and draft BOM. Stocktake import owns historical KiotViet stocktake documents and lines. Official QCVL stock is calculated from one Owner-selected opening checkpoint plus later QCVL movement sources: purchase/import receipts, sales deductions, returns, stocktake balance, and roll/sheet/object operations that write `stock_movements`.
+**Architecture:** Product import and stocktake import stay separate. Product import owns KiotViet catalog, prices, comparison-only provisional stock, and BOM from `Hàng thành phần` (active/usable immediately per Owner 2026-07-20). Stocktake import owns historical KiotViet stocktake documents and lines. Official QCVL stock is calculated from one Owner-selected opening checkpoint plus later QCVL movement sources: purchase/import receipts, sales deductions, returns, stocktake balance, and roll/sheet/object operations that write `stock_movements`.
 
 **Import reset rule:** Shared KiotViet import dialogs use a separate `Xóa dữ liệu cũ` action. Do not use a checkbox inside `Import` for cleanup. For stocktake import, the delete action removes only historical KiotViet stocktake documents/lines (`stocktakes.source_type = kiotviet_import` or `source_system = kiotviet`) and does not touch products, operating stock, or stock movements.
 

@@ -30,7 +30,7 @@ Reason: Owner imports KiotViet files on `3202` to verify Hang hoa/Kiem kho. Losi
 - Create: `database/migrations/0003_catalog_inventory_import.sql`
 - Test: `scripts/db-migrate.test.mjs`
 
-- [x] Add idempotent SQL for product catalog, inventory units, price lists, KiotViet provisional stock, stocktakes, and draft BOM tables.
+- [x] Add idempotent SQL for product catalog, inventory units, price lists, KiotViet provisional stock, stocktakes, and product BOM tables.
 - [x] Include `alter table ... add column if not exists` for old NAS tables.
 - [x] Include unique indexes used by import `on conflict`.
 - [x] Run: `npm run db:migrate:dry-run`

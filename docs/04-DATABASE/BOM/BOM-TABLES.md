@@ -78,15 +78,30 @@ Backend/database layer phải hỗ trợ:
 
 ## 4. Import KiotViet
 
-Dữ liệu `Hàng thành phần` từ KiotViet được import vào trạng thái nháp/cần rà soát.
+Dữ liệu `Hàng thành phần` từ KiotViet được import thành BOM **đang dùng** (`active`).
 
 Không lưu định dạng text `Ma:SoLuong|Ma:SoLuong` làm schema chính.
- 
-## Ghi chú triển khai import KiotViet 2026-07-10
+
+### Quyết định Owner 2026-07-20
+
+- Import xong dùng ngay khi bán combo trừ thành phần.
+- Không còn luồng nháp → duyệt → kích hoạt cho BOM KiotViet.
+- Không sản xuất sẵn trong phạm vi quyết định này.
+
+## Ghi chú triển khai import KiotViet
+
+### Lịch sử 2026-07-10 (đã superseded)
 
 - Parse `Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức`.
-- Lưu thành `product_boms.status = draft`, không tự active.
+- Lúc đó lưu `product_boms.status = draft`, không tự active.
+- Quyết định này **đã bị thay** bởi Owner 2026-07-20.
+
+### Hiện hành từ 2026-07-20
+
+- Parse `Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức`.
+- Lưu thành `product_boms.status = active`, dùng ngay khi bán.
 - Tạo version mới cho mỗi lần import lại mã có BOM.
-- Archive draft KiotViet cũ của cùng sản phẩm trước khi tạo draft mới.
+- Archive BOM KiotViet cũ (`draft` hoặc `active`) của cùng sản phẩm trước khi tạo version mới.
 - Thiếu sản phẩm cha hoặc thiếu component theo mã hàng thì bỏ qua BOM đó và tăng `bom_skipped_rows`.
-- Ghi source text vào `notes` để đối soát, schema chính vẫn là `product_bom_items`.
+- Ghi source text vào `notes` để đối soát; schema chính vẫn là `product_bom_items`.
+- Bán combo: trừ `product_bom_items`, không trừ tồn theo mã combo.

@@ -33,7 +33,7 @@ Remaining manual check only if this plan is reopened: open `http://127.0.0.1:320
 - Import result reports `price_created_rows`, `price_updated_rows`, and `price_skipped_rows`.
 - Hàng hóa list/detail shows `default_sale_price` from API.
 - Do not build separate Bảng giá import yet.
-- Superseded after this plan: stock is now written as KiotViet provisional stock, BOM is now written as draft BOM. Supplier relationship and expected-out-of-stock remain deferred.
+- Superseded after this plan: stock is now written as KiotViet provisional stock; BOM from `Hàng thành phần` is written for immediate use when selling combo (Owner 2026-07-20; older draft/review wording in this note is outdated). Supplier relationship and expected-out-of-stock remain deferred.
 
 ## Files
 
@@ -90,6 +90,6 @@ Remaining manual check only if this plan is reopened: open `http://127.0.0.1:320
 
 ## Self-Review
 
-- Scope matches Phase 2 only: price import and display. Later work has added provisional stock and draft BOM in the main product import plan; supplier and expected-out-of-stock remain deferred.
+- Scope matches Phase 2 only: price import and display. Later work has added provisional stock and BOM from `Hàng thành phần` in the main product import plan (usable immediately per Owner 2026-07-20); supplier and expected-out-of-stock remain deferred.
 - No fake UI: Hàng hóa price display must come from API `default_sale_price`.
 - Price ownership remains Bảng giá: import button lives in Hàng hóa, write target is `price_list_items`.

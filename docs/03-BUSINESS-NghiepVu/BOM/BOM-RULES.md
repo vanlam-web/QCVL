@@ -2,7 +2,8 @@
 
 > **Vai trò:** Source of Truth nghiệp vụ.
 > **Tham khảo:** PRD POS K02-A, export KiotViet `Hàng thành phần`
-> **Quyết định Owner:** Có BOM nhiều cấp; có thể sửa BOM; POS có thể dùng BOM phát sinh để trừ kho hoặc lưu thành combo mới
+> **Quyết định Owner 2026-07-01:** Có BOM nhiều cấp; có thể sửa BOM; POS có thể dùng BOM phát sinh để trừ kho hoặc lưu thành combo mới
+> **Quyết định Owner 2026-07-20 (chốt lại):** BOM từ KiotViet dùng ngay khi bán; không nháp/duyệt lại; không sản xuất sẵn; bán combo chỉ trừ hàng thành phần
 
 ---
 
@@ -123,7 +124,9 @@ Dòng combo/sản phẩm có BOM
 
 Vật tư `normal`, `roll`, `sheet` vẫn trừ theo rule Inventory tương ứng. BOM không được trừ tổng `m2` gộp nếu vật tư là cuộn/tấm vật lý.
 
-Combo không tính tồn kho riêng trong MVP. Nếu combo con thiếu vật tư, hệ thống xử lý như thiếu vật tư của một hàng thường: cảnh báo theo vật tư thành phần, cho đi tiếp theo rule tồn âm/cảnh báo, và hiện gợi ý `Khui vật tư` nếu vật tư thiếu có thể khui.
+**Owner 2026-07-20:** Combo không tính tồn kho riêng. Khi bán combo, hệ thống **chỉ trừ hàng thành phần** theo định mức; **không** trừ tồn theo chính mã combo. Không dùng phiếu sản xuất sẵn trong phạm vi quyết định này.
+
+Nếu combo con thiếu vật tư, hệ thống xử lý như thiếu vật tư của một hàng thường: cảnh báo theo vật tư thành phần, cho đi tiếp theo rule tồn âm/cảnh báo, và hiện gợi ý `Khui vật tư` nếu vật tư thiếu có thể khui.
 
 ### BR-BOM-09: Thiếu BOM không chặn bán trong MVP
 
@@ -170,14 +173,17 @@ Export KiotViet có cột `Hàng thành phần` dạng text, ví dụ:
 DCS:0.6|F5:0.3
 ```
 
-QC-OMS có thể dùng dữ liệu này để tạo draft BOM khi import, nhưng không dùng text này làm schema chính.
+QC-OMS parse cột này thành `product_bom_items`. Không dùng text gốc làm schema chính.
 
-Quy tắc import:
+### Quyết định Owner 2026-07-20 (thay quyết định nháp cũ)
 
-- parse cột thành danh sách thành phần nháp
-- giữ trạng thái cần rà soát nếu mã thành phần không rõ
-- không tự coi mọi BOM import là chính xác tuyệt đối
-- sau khi quản lý xác nhận, BOM mới trở thành BOM chuẩn
+- Import `Hàng thành phần` xong → BOM **đang dùng ngay** (`active`), không còn “nháp chờ duyệt”.
+- **Không** bắt quản lý duyệt/kích hoạt lại trước khi trừ kho.
+- Khi bán combo có BOM import từ KV → trừ thành phần theo định mức đã import.
+- Nếu thiếu mã thành phần trong catalog lúc import → bỏ qua BOM đó (ghi skipped), không tạo BOM nửa vời.
+- Import lại cùng mã hàng → archive BOM KiotViet cũ của mã đó, tạo version mới và đặt `active`.
+
+> Ghi chú lịch sử: trước 2026-07-20, doc cũ yêu cầu import vào `draft` rồi rà soát mới `active`. Quyết định đó **đã bị thay**.
 
 ---
 
@@ -192,3 +198,4 @@ Quy tắc import:
 - BOM thiếu cấu hình không chặn checkout trong MVP, nhưng phải có cảnh báo/flag.
 - BOM không tự tính hoặc ép giá bán.
 - Vật tư cuộn/tấm trong BOM trừ kho theo tồn vật lý, không trừ tổng `m2`.
+- BOM import từ KiotViet ở trạng thái dùng ngay; bán combo chỉ trừ thành phần, không trừ mã combo; không yêu cầu duyệt lại và không yêu cầu sản xuất sẵn.
