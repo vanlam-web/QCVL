@@ -96,6 +96,11 @@ Current status 2026-07-17:
 - Link record noi bo 2026-07-17 dung `?open=` de mo detail that, khong dung `?search=` neu muc tieu la mo ban ghi. Detail title cua ban ghi dang mo khong duoc la self-link; vi du ten khach hang/NCC hien tai chi hien text thuong, con link cheo den khach/NCC/hoa don/phieu nhap/so quy khac moi giu `ManagementRecordLink`.
 - Đã deploy batch này lên NAS `3200` với `QCVL_NAS_RESTART=false`; `verify:local`, `build:nas`, `verify:nas-bundle`, `db:migrate`, `health:nas` pass. Health trace `14a943e1-b214-4573-83c1-c3c6e859c208`, persistence `postgres`. Chưa chạy `smoke:nas` vì thiếu `QCVL_SMOKE_PASSWORD`.
 
+
+Current status 2026-07-20:
+
+- Owner chốt lại BOM/KiotViet: import `Hàng thành phần` xong dùng ngay (`active`); không nháp/duyệt lại; không sản xuất sẵn; bán combo chỉ trừ thành phần, không trừ mã combo. SoT: `docs/03-BUSINESS-NghiepVu/BOM/`. Docs sync trên branch `cursor/bom-kv-active-decision-0482`. Runtime code (import status, POS trừ kho, migrate draft cũ, UI copy) chưa làm cho đến khi Owner bảo triển khai.
+
 ---
 
 ## ÄÃ£ Merge VÃ o `main`

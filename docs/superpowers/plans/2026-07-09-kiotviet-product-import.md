@@ -73,7 +73,7 @@ Current path:
 7. Deferred until product stock is reliable:
    - `Nha cung cap`: derive from purchase/import receipt history, because one product can have multiple suppliers.
    - `Du kien het hang`: compute from reliable sales/purchase/stock movement history, not from copied KV text.
-   - BOM activation: use imported BOM as draft only until reviewed.
+   - BOM from KiotViet: import as `active` and use immediately when selling combo (Owner 2026-07-20; older draft/review wording superseded).
 
 Scope guard:
 
@@ -217,7 +217,7 @@ Still deferred:
 - `Du kien het hang`: compute after enough sales/purchase/stock history exists; do not copy KiotViet text.
 - Official operating stock: requires reliable QCVL movement sources and formula-based calculation. Do not convert provisional KV stock/history directly into stock movements.
 - Cross-module dependencies for official stock: Customer must be stable before invoice/POS stock-out; Supplier must be stable before purchase/import stock-in; Product stock display comes after those movement sources, not before them.
-- Draft BOM activation: requires human review before POS uses BOM.
+- BOM from KiotViet: already usable after import (`active`). Human review/activate-after-import is no longer required (Owner 2026-07-20).
 
 ---
 

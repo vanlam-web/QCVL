@@ -20,15 +20,18 @@
 
 ## Ghi chú BOM/Combo
 
-BOM/Combo chưa phải nghiệp vụ đã chốt sâu trong MVP. Hiện tại chỉ giữ ranh giới:
+> SoT đầy đủ: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md). **Owner 2026-07-20** đã chốt lại hướng KiotViet.
 
-- Combo là dòng bán hàng có snapshot.
-- Nhân viên có thể thêm/sửa BOM ngay trong POS.
-- Nếu chọn **Không lưu — Chỉ trừ kho**, BOM vừa nhập là định mức của dòng hàng đó và vẫn dùng để trừ kho khi chốt hóa đơn.
-- Nếu chọn **Lưu Combo mới**, cấu trúc đó được lưu thành combo mới trong danh mục để dùng lại sau.
-- Combo lồng nhau/deep-scan phức tạp để phase sau.
+Đã chốt cho vận hành hiện tại:
 
-Draft điều phối: Git history.
+- BOM import từ cột `Hàng thành phần` KiotViet dùng ngay (`active`); không nháp/duyệt lại.
+- Khi bán combo: trừ **thành phần** theo BOM; **không** trừ tồn theo mã combo; không sản xuất sẵn.
+- Combo là dòng bán hàng có snapshot BOM.
+- Nhân viên có thể thêm/sửa BOM ngay trong POS (`Không lưu — Chỉ trừ kho` / `Lưu Combo mới`).
+
+Vẫn để phase sâu hơn (không chặn bán combo phẳng cấp 1):
+
+- Combo lồng nhiều cấp / deep-scan phức tạp khi DB/API BOM nhiều cấp chưa đủ.
 
 ---
 

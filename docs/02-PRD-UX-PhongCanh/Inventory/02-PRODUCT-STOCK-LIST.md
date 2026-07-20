@@ -48,7 +48,7 @@ Export KiotViet file thật `DanhSachSanPham_KV09072026-215404-812.xlsx` đượ
 - Không đưa barcode/QR scan, tự động gợi ý thông tin hàng hóa, thuộc tính retail hoặc bảo hành/bảo trì vào MVP.
 - Nhà cung cấp chỉ đưa vào sau khi Purchase/phiếu nhập có dữ liệu thật. Quan hệ đúng là nhiều-nhiều giữa hàng hóa và nhà cung cấp, không dùng một `primary_supplier_id` duy nhất làm nguồn sự thật. Không làm vị trí kho trong scope hiện tại.
 - Tồn âm là dữ liệu thực tế nên danh sách/báo cáo cần hiển thị rõ để xử lý, không ẩn.
-- Cột `Vật tư cấu thành` xác nhận BOM/định mức là nghiệp vụ thật. QC-OMS hiện hỗ trợ nhập/sửa BOM cấp 1 khi tạo combo và trong chi tiết hàng hóa. Import script hiện import nhóm/hàng/đơn vị quy đổi qua public API và report BOM/tồn tạm trong dry-run; bulk import BOM/tồn tạm cần API riêng trước khi bật import thật cho phần này.
+- Cột `Vật tư cấu thành` xác nhận BOM/định mức là nghiệp vụ thật. QC-OMS hỗ trợ nhập/sửa BOM cấp 1 khi tạo combo và trong chi tiết hàng hóa. Import KiotViet đã ghi BOM từ `Hàng thành phần` vào `product_boms`/`product_bom_items` ở trạng thái dùng ngay (`active`, Owner 2026-07-20). Field API `draft_bom` giữ tên cũ nhưng nội dung là BOM đang dùng.
 
 ---
 

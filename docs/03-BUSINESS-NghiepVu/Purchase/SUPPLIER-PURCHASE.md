@@ -92,6 +92,14 @@ Quyết định Owner 2026-07-02 cho P2/P3:
 - P2/P3 có thể ghi nhận `paid_amount` trên phiếu để tính còn phải trả; tác động sổ quỹ chỉ phát sinh khi post theo P3, không phát sinh side effect ở draft P2.
 - Giảm giá phiếu nhập được giữ theo SoT nếu có UI/API hỗ trợ, nhưng backend vẫn phải tự tính tổng, không tin tổng từ client.
 
+### BR-PUR-04B: Không nhập tồn theo mã combo
+
+Theo Owner 2026-07-20 và [BOM-RULES.md](../BOM/BOM-RULES.md):
+
+- Phiếu nhập vận hành trên hàng tồn thật (`normal` / `roll` / `sheet` / vật tư).
+- Không dùng phiếu nhập để tăng tồn theo mã combo như một SKU tồn kho.
+- Combo chỉ tiêu hao thành phần khi bán; thành phần mới là đối tượng nhập/kiểm tồn.
+
 ---
 
 ## 4. Nhập theo loại tồn kho
@@ -259,6 +267,7 @@ Quyết định QC-OMS cho P5:
 - Danh sách NCC hiển thị tổng mua và nợ hiện tại từ dữ liệu chứng từ.
 - Phiếu nhập draft không tăng tồn, không ghi công nợ, không ghi sổ quỹ.
 - Phiếu nhập posted tăng tồn đúng theo `inventory_shape`.
+- Không nhập/tăng tồn theo mã combo; nhập trên hàng thành phần/tồn thật (Owner 2026-07-20).
 - Hàng cuộn/tấm nhập theo đối tượng vật lý, không nhập mua bằng tổng `m2`.
 - Phiếu nhập posted lưu được giá vốn tại thời điểm nhập.
 - Phiếu nhập trả chưa đủ sinh công nợ NCC.

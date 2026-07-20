@@ -21,6 +21,10 @@ Trong QC-OMS hiện tại, modal `+ Tạo hàng hóa` tạo combo theo 2 bước
 
 **Owner 2026-07-20:** BOM import từ KiotViet được đặt `active` và dùng ngay khi bán. Endpoint `POST /v1/boms/{bom_id}/activate` vẫn có thể giữ cho BOM tạo/sửa tay trong app, nhưng **không** còn là bước bắt buộc sau import KiotViet.
 
+**Tên field API `draft_bom`:** Product list/detail có thể vẫn trả `draft_bom` vì tương thích client cũ. Nghĩa nghiệp vụ hiện hành = metadata BOM đang dùng từ KV (thường `status = active`), **không** còn nghĩa “nháp chờ kích hoạt”. Client/UI không được hiện copy kiểu “BOM nháp / cần rà soát trước khi dùng”. Khi có migration breaking riêng mới đổi tên field.
+
+**Migration runtime:** DB còn BOM KV `draft` từ trước 2026-07-20 phải được promote/`active` (hoặc archive + import lại) trước khi coi code đã khớp SoT.
+
 BOM không lưu `component_type`/`component_role` trên từng dòng và API từ chối các flag chính/phụ thủ công. `Vật tư phụ` là loại hàng/metadata của chính vật tư (`product_kind = auxiliary_material`); mọi vật tư còn lại được xem là vật tư chính. API lưu dòng BOM chỉ cần `component_product_id`, `quantity` và `notes`. API đọc BOM trả thêm metadata component gồm `product_kind` và `latest_purchase_cost` để UI hiển thị trạng thái dòng và giá vốn tạm. Logic tự hiệu chỉnh định mức từ kiểm kho, sửa tồn, khui vật tư và lịch sử sản xuất là phase sau.
 
 ---

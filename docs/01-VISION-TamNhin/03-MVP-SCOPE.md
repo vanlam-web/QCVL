@@ -66,7 +66,7 @@ Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/onl
 |---|---|
 | Nha cung cap/Purchase | Co trong pham vi du an sau POS MVP; khi lam phai nhap dung cuon/tam mua vao, khong mua m2 cho hang cuon/tam |
 | Gia von/lai lo day du | Gia von tu phieu nhap phai duoc luu; bao cao loi nhuan day du lam khi Purchase, chi phi san xuat va phuong phap gia von da chot |
-| BOM/dinh muc vat tu nhieu cap | Co trong huong du an; POS MVP chi can khong lam sai ranh gioi, phase BOM sau se deep-scan vat tu con |
+| BOM/dinh muc vat tu nhieu cap | Combo phang cap 1 + BOM KV active dung ngay da chot (Owner 2026-07-20): ban combo chi tru thanh phan. Deep-scan nhieu cap van de phase sau |
 | May san xuat tu tru kho | Khi giai quyet duoc cach doi soat/chot tru kho tu du lieu may san xuat; MVP van cho may san xuat gui thong bao de tao hoa don nhap, nhung kho chi tru theo hoa don da luu |
 | Production/Work Orders | Neu sau nay can quan ly viec can san xuat/cho lay hang rieng voi POS |
 | Gui tin tu dong | Sau khi bill, khach hang va log gui on dinh; hien tai chi ho tro mo/copy de nhan vien gui |

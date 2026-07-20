@@ -123,7 +123,7 @@ Thành tiền = (Rộng × Dài × Số lượng) × Đơn giá
 
 ## TRƯỜNG HỢP 3: HÀNG COMBO / ĐỊNH MỨC VẬT TƯ (BOM)
 
-> **Ranh giới MVP:** BOM được thêm/sửa trong POS là định mức của dòng combo đó. Chọn `Không lưu — Chỉ trừ kho` thì vẫn trừ kho theo BOM này nhưng không tạo combo mới; chọn `Lưu Combo mới` thì lưu thành combo mới trong danh mục. Combo lồng nhau/deep-scan nhiều cấp để sau phase BOM.
+> **Ranh giới hiện tại (Owner 2026-07-20):** BOM từ danh mục/KV dùng ngay khi bán. BOM thêm/sửa trong POS là định mức của dòng combo đó. Chọn `Không lưu — Chỉ trừ kho` thì vẫn trừ kho theo BOM này nhưng không tạo combo mới; chọn `Lưu Combo mới` thì lưu thành combo mới trong danh mục. Bán combo chỉ trừ thành phần, không trừ mã combo. Combo lồng nhau/deep-scan nhiều cấp để phase sâu hơn.
 
 **Áp dụng:** Cụm thành phẩm gia công phức tạp — Biển bảng quảng cáo, Standee in UV, Bảng điện...
 

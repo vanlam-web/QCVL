@@ -105,3 +105,6 @@ Không lưu định dạng text `Ma:SoLuong|Ma:SoLuong` làm schema chính.
 - Thiếu sản phẩm cha hoặc thiếu component theo mã hàng thì bỏ qua BOM đó và tăng `bom_skipped_rows`.
 - Ghi source text vào `notes` để đối soát; schema chính vẫn là `product_bom_items`.
 - Bán combo: trừ `product_bom_items`, không trừ tồn theo mã combo.
+- **Migration dữ liệu cũ:** nếu DB còn `product_boms.status = draft` từ import trước 2026-07-20, khi triển khai quyết định này phải promote sang `active` (hoặc archive rồi import lại) trước khi coi runtime đã khớp SoT. Không để draft KV “chờ duyệt” còn hiệu lực.
+- Field API `draft_bom` trên product detail **giữ tên cũ** vì tương thích client; nghĩa nghiệp vụ hiện hành = BOM đang dùng (thường `active`), không còn nghĩa “nháp chờ kích hoạt”.
+- Endpoint `POST /v1/boms/{bom_id}/activate` giữ cho BOM tạo/sửa tay trong app; **không** bắt buộc sau import KiotViet.

@@ -99,6 +99,17 @@ Nếu máy sản xuất chạy khác với bill/đơn, phần lệch chỉ thể
 
 Sau MVP, nếu có quy trình match file máy sản xuất với bill đủ chắc, sẽ mở spec riêng để thay đổi thời điểm trừ kho.
 
+### BR-INV-03B: Combo / BOM — trừ thành phần, không trừ mã combo
+
+Áp dụng cùng lúc với [BOM-RULES.md](../BOM/BOM-RULES.md) (Owner 2026-07-20):
+
+- Sản phẩm combo (`product_kind = combo`, thường `track_inventory = false`) **không** có tồn kho riêng để trừ khi bán.
+- Khi hóa đơn chốt dòng combo có BOM: chỉ tạo stock movement cho **hàng thành phần** theo định mức/snapshot.
+- **Không** tạo stock-out theo chính mã combo.
+- BOM từ KiotViet (`Hàng thành phần`) đã `active` thì dùng ngay; không chờ duyệt.
+- Không dùng phiếu “sản xuất sẵn” để tăng tồn combo trước khi bán trong phạm vi quyết định này.
+- Nhập hàng / kiểm kho vận hành trên hàng tồn thật (thường, cuộn, tấm, vật tư). Không nhập/kiểm tồn theo mã combo như một SKU tồn kho.
+
 ---
 
 ## 4. Tồn âm
@@ -301,6 +312,7 @@ Sản phẩm ngưng bán:
 - Bán thiếu tồn hiển thị cảnh báo nhưng vẫn cho tiếp tục.
 - Tạo/lưu đơn bán chính thức có dòng cần trừ kho tạo stock movement.
 - Dữ liệu máy sản xuất không tự tạo stock movement trong MVP.
+- Combo có BOM: bán chỉ trừ thành phần; không trừ tồn mã combo; không sản xuất sẵn (Owner 2026-07-20).
 - Import tồn KiotViet ban đầu được phép là tồn tạm, nhưng hàng cuộn/tấm phải có trạng thái/chỉ dấu chưa chuẩn hóa vật lý.
 - Hàng `normal` cho sửa tổng tồn.
 - Hàng `roll` không cho sửa tổng tồn, phải sửa theo từng cuộn.

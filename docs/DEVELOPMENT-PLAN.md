@@ -108,7 +108,7 @@ Nguá»“n theo dÃµi chi tiáº¿t: [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md
 | Phase 2 | Giá» hÃ ng vÃ  hÃ³a Ä‘Æ¡n nhÃ¡p | ÄÃ£ cÃ³ POS direct checkout UI; nhÃ¡p production queue á»Ÿ 2B |
 | Phase 3 | BÃ¡o giÃ¡ vÃ  Bill Preview | BÃ¡o giÃ¡, má»Ÿ láº¡i bÃ¡o giÃ¡, Sales Documents readonly vÃ  quote print Ä‘Æ¡n giáº£n Ä‘Ã£ merge |
 | Phase 4 | Thanh toÃ¡n, kho cÆ¡ báº£n vÃ  cÃ´ng ná»£ | Checkout transaction, inventory/finance foundation Ä‘Ã£ lÃ m sá»›m á»Ÿ 1C/2A |
-| Phase 5 | Combo/BOM vÃ  quáº£n lÃ½ váº­t tÆ° | Purchase hÃ ng thÆ°á»ng Ä‘Ã£ merge; cuá»™n/táº¥m váº­t lÃ½ vÃ  BOM sÃ¢u cÃ²n phase riÃªng |
+| Phase 5 | Combo/BOM và quản lý vật tư | BOM KV active dùng ngay khi bán combo (Owner 2026-07-20) đã chốt ở SoT; deep-scan/BOM nhiều cấp và vật tư cuộn/tấm sâu còn phase riêng |
 | Phase 6 | HÃ ng Ä‘á»£i mÃ¡y sáº£n xuáº¥t realtime | Production queue foundation Ä‘Ã£ lÃ m sá»›m á»Ÿ 2B; ingestion/realtime Ä‘áº§y Ä‘á»§ cÃ²n phase sau |
 | Phase 7 | Bill nÃ¢ng cao vÃ  há»— trá»£ gá»­i khÃ¡ch | Quote print Ä‘Æ¡n giáº£n Ä‘Ã£ cÃ³; gá»­i tá»± Ä‘á»™ng/nhiá»u máº«u cÃ²n sau |
 | Phase 8 | Production vÃ  váº­n hÃ nh | backend cu da go Cloud/dev-staging Ä‘Ã£ cÃ³; production hardening cÃ²n sau |
@@ -290,7 +290,8 @@ Má»‘c phÃ¡t hÃ nh logic ban Ä‘áº§u:
 
 **Backend vÃ  Database**
 
-- Schema BOM vÃ  thÃ nh pháº§n BOM.
+- Schema BOM và thành phần BOM.
+- Import KiotViet BOM `active` dùng ngay; bán combo chỉ trừ thành phần (Owner 2026-07-20). Deep-scan nhiều cấp và sản xuất sẵn không thuộc slice này.
 - Deep-scan BOM khi checkout.
 - Quy Ä‘á»•i mÂ² sang mÃ©t dÃ i hoáº·c táº¥m.
 - Quáº£n lÃ½ lÃ´, phiÃªn váº­t tÆ° dá»Ÿ vÃ  hao há»¥t.
@@ -298,7 +299,7 @@ Má»‘c phÃ¡t hÃ nh logic ban Ä‘áº§u:
 
 **Äiá»u kiá»‡n nghiá»‡m thu**
 
-- Combo checkout thÃ nh cÃ´ng vÃ  trá»« Ä‘á»§ váº­t tÆ° con.
+- Combo checkout thành công: trừ đủ vật tư thành phần, không trừ tồn mã combo.
 - KhÃ´ng cho táº¡o vÃ²ng láº·p BOM.
 - Thiáº¿u tá»“n xá»­ lÃ½ Ä‘Ãºng chÃ­nh sÃ¡ch cáº£nh bÃ¡o.
 - Má»i thao tÃ¡c khui Ä‘á»u truy váº¿t Ä‘Æ°á»£c.
