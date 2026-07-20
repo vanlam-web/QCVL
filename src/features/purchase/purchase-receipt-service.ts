@@ -36,7 +36,7 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         supplier_id?: string
         page?: number
         page_size?: number
-        sort_key?: 'code' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
+        sort_key?: 'code' | 'received_at' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
         sort_direction?: 'asc' | 'desc'
       } = {},
     ) => {
@@ -49,8 +49,8 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       if (input.supplier_id) params.set('supplier_id', input.supplier_id)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'received_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<PurchaseReceiptListResponse>(`/api/v1/purchase/receipts${query ? `?${query}` : ''}`)
     },

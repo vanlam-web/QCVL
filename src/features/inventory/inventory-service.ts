@@ -69,8 +69,8 @@ export function createInventoryService(api: InventoryApiRequester) {
       if (input.created_by) params.set('created_by', input.created_by)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'created_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<StocktakeListResponse>(`/api/v1/inventory/stocktakes${query ? `?${query}` : ''}`)
     },

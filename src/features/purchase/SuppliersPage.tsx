@@ -31,7 +31,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import { supplierNumberFilterValue } from './supplier-filters'
@@ -51,7 +51,8 @@ const blankForm: SupplierInput = {
   status: 'active',
 }
 
-type SupplierSortKey = 'code' | 'name' | 'phone' | 'current_payable_amount' | 'total_purchase_amount' | 'status'
+type SupplierSortKey = 'code' | 'created_at' | 'name' | 'phone' | 'current_payable_amount' | 'total_purchase_amount' | 'status'
+const defaultSupplierSortState: NonNullable<ManagementSortState<SupplierSortKey>> = { key: 'created_at', direction: 'desc' }
 type SupplierDetailTab = 'info' | 'history' | 'debt'
 
 function SupplierCustomerLinkIcon() {
@@ -156,12 +157,13 @@ export function SuppliersPage({
     requestSort: requestSupplierSort,
   } = useManagementTableSort<Supplier, SupplierSortKey>(suppliers ?? [], {
     code: { kind: 'text', value: (supplier) => supplier.code },
+    created_at: { kind: 'date', value: (supplier) => supplier.created_at ?? supplier.source_created_at },
     name: { kind: 'text', value: (supplier) => supplier.name },
     phone: { kind: 'text', value: (supplier) => supplier.phone },
     current_payable_amount: { kind: 'number', value: (supplier) => supplier.current_payable_amount },
     total_purchase_amount: { kind: 'number', value: (supplier) => supplier.total_purchase_amount },
     status: { kind: 'text', value: (supplier) => supplier.status },
-  })
+  }, defaultSupplierSortState)
   const editingSupplier = editingId ? viewingSupplier ?? suppliers?.find((supplier) => supplier.id === editingId) ?? null : null
   const isCreatingSupplier = detailOpen && viewingSupplier === null && editingId === null && paymentSupplier === null
 
@@ -207,7 +209,7 @@ export function SuppliersPage({
         ...(totalPurchaseMaxFilter === undefined ? {} : { total_purchase_max: totalPurchaseMaxFilter }),
         ...(currentPayableMinFilter === undefined ? {} : { current_payable_min: currentPayableMinFilter }),
         ...(currentPayableMaxFilter === undefined ? {} : { current_payable_max: currentPayableMaxFilter }),
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultSupplierSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setSuppliers(result.items)
       setTotal(result.total)
@@ -559,7 +561,10 @@ export function SuppliersPage({
         : 'Thêm nhà cung cấp'
     const supplierStatus = isEditingSupplier ? (form.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động') : detailSupplier?.status === 'active' ? 'Đang hoạt động' : 'Ngừng hoạt động'
     const currentSupplierReceipts = detailSupplier
-      ? supplierReceipts.filter((receipt) => supplierReceiptBelongsToSupplier(receipt, detailSupplier))
+      ? sortManagementItemsByDateDesc(
+          supplierReceipts.filter((receipt) => supplierReceiptBelongsToSupplier(receipt, detailSupplier)),
+          (receipt) => receipt.received_at,
+        )
       : []
     const currentSupplierDebtReceipts = currentSupplierReceipts.filter((receipt) => supplierReceiptOutstanding(receipt) > 0)
 
@@ -832,7 +837,7 @@ export function SuppliersPage({
           <p>Không còn phiếu nhập posted cần trả cho NCC này.</p>
         ) : (
           <div className="receipt-lines">
-            {payableReceipts.map((receipt) => (
+            {sortManagementItemsByDateDesc(payableReceipts, (receipt) => receipt.received_at).map((receipt) => (
               <fieldset key={receipt.id}>
                 <legend>{receipt.code}</legend>
                 <p>Còn nợ: {supplierMoneyText(receipt.outstanding_amount)}</p>

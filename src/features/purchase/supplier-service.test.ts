@@ -21,7 +21,7 @@ it('builds supplier list filters from existing supplier fields', async () => {
 
   expect(calls).toEqual([
     [
-      '/api/v1/suppliers?q=nguyen&status=active&total_purchase_min=100000&total_purchase_max=900000&current_payable_min=50000&current_payable_max=300000&page=2&page_size=15',
+      '/api/v1/suppliers?q=nguyen&status=active&total_purchase_min=100000&total_purchase_max=900000&current_payable_min=50000&current_payable_max=300000&page=2&page_size=15&sort_key=created_at&sort_direction=desc',
       undefined,
     ],
   ])

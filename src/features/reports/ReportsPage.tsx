@@ -11,7 +11,7 @@ import {
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import type { CashbookEntry, CustomerDebtSummary } from '../finance/types'
 import type { InventoryProduct } from '../inventory/types'
 import type { SalesDocumentListItem } from '../sales-documents/types'
@@ -23,6 +23,8 @@ type ReportCashbookSortKey = 'code' | 'created_at' | 'finance_account' | 'direct
 type ReportSaleSortKey = 'code' | 'created_at' | 'customer' | 'seller' | 'total_amount' | 'payment_status'
 type ReportDebtSortKey = 'customer_code' | 'customer_name' | 'open_invoice_count' | 'oldest_order_code' | 'total_debt'
 type ReportInventorySortKey = 'code' | 'name' | 'inventory_shape' | 'available_qty' | 'status'
+const defaultReportCashbookSortState: NonNullable<ManagementSortState<ReportCashbookSortKey>> = { key: 'created_at', direction: 'desc' }
+const defaultReportSaleSortState: NonNullable<ManagementSortState<ReportSaleSortKey>> = { key: 'created_at', direction: 'desc' }
 
 export function ReportsPage({ service }: { service: ReportService }) {
   const initialRange = useMemo(() => quickDateRange('today'), [])
@@ -51,7 +53,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
     finance_account: { kind: 'text', value: (entry) => entry.finance_account.code },
     direction: { kind: 'text', value: (entry) => entry.direction },
     amount_delta: { kind: 'number', value: (entry) => Math.abs(entry.amount_delta) },
-  })
+  }, defaultReportCashbookSortState)
   const {
     sortedItems: sortedSales,
     sortState: reportSaleSortState,
@@ -63,7 +65,7 @@ export function ReportsPage({ service }: { service: ReportService }) {
     seller: { kind: 'text', value: (document) => document.seller.name },
     total_amount: { kind: 'number', value: (document) => document.total_amount },
     payment_status: { kind: 'text', value: (document) => document.payment_status },
-  })
+  }, defaultReportSaleSortState)
   const {
     sortedItems: sortedDebts,
     sortState: reportDebtSortState,

@@ -31,7 +31,7 @@ describe('finance-service', () => {
     expect(calls).toEqual([
       ['/api/v1/finance/customer-debts?search=an&page=2&page_size=20', undefined],
       [
-        '/api/v1/finance/cashbook?search=PT0001&search_scope=code&finance_account_id=bank-1&finance_account_type=bank&direction=in&status=posted&is_business_accounted=false&from=2026-07-01T00%3A00%3A00.000Z&to=2026-07-31T23%3A59%3A59.999Z&page=3&page_size=15',
+        '/api/v1/finance/cashbook?search=PT0001&search_scope=code&finance_account_id=bank-1&finance_account_type=bank&direction=in&status=posted&is_business_accounted=false&from=2026-07-01T00%3A00%3A00.000Z&to=2026-07-31T23%3A59%3A59.999Z&page=3&page_size=15&sort_key=created_at&sort_direction=desc',
         undefined,
       ],
       ['/api/v1/finance/cashbook/entry-1', undefined],

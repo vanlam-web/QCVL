@@ -40,7 +40,7 @@ export interface SupplierListFilters {
   current_payable_max?: number
   page?: number
   page_size?: number
-  sort_key?: 'code' | 'name' | 'phone' | 'current_payable_amount' | 'total_purchase_amount' | 'status'
+  sort_key?: 'code' | 'created_at' | 'name' | 'phone' | 'current_payable_amount' | 'total_purchase_amount' | 'status'
   sort_direction?: 'asc' | 'desc'
 }
 
@@ -56,8 +56,8 @@ export function createSupplierService(api: SupplierApiRequester) {
       if (input.current_payable_max !== undefined) params.set('current_payable_max', String(input.current_payable_max))
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'created_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<SupplierListResponse>(`/api/v1/suppliers${query ? `?${query}` : ''}`)
     },

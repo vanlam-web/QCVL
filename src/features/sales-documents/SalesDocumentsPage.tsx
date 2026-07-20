@@ -20,7 +20,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateRangeFromItems, displayDateRangeForData } from '../../lib/date-ranges'
@@ -97,6 +97,7 @@ function salesDocumentCreatedAtPayload(value: string) {
 }
 
 type SalesDocumentSortKey = 'code' | 'created_at' | 'customer_name' | 'subtotal_amount' | 'discount_amount' | 'total_amount' | 'paid_amount'
+const defaultSalesDocumentSortState: NonNullable<ManagementSortState<SalesDocumentSortKey>> = { key: 'created_at', direction: 'desc' }
 
 interface SalesDocumentsState {
   items: SalesDocumentListItem[]
@@ -203,7 +204,7 @@ export function SalesDocumentsPage({
         page: nextPage,
         page_size: nextPageSize,
       }),
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultSalesDocumentSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       if (result.items.length === 0) setSelected(null)
@@ -313,10 +314,11 @@ export function SalesDocumentsPage({
             setDetailError(formatApiError(cause, 'Không tải được chi tiết chứng từ.'))
           })
       }
-      const result = await service.listSalesDocuments(buildSalesDocumentListRequest({
-        search: routeFilters.search || routeFilters.open,
-        type: routeFilters.type,
-        status: defaultStatusFilters,
+      const result = await service.listSalesDocuments({
+        ...buildSalesDocumentListRequest({
+          search: routeFilters.search || routeFilters.open,
+          type: routeFilters.type,
+          status: defaultStatusFilters,
           paymentStatus: allPaymentStatusFilters,
           paymentMethod: 'all',
           seller: 'all',
@@ -326,7 +328,8 @@ export function SalesDocumentsPage({
           to: routeFilters.to,
           page: 1,
           page_size: defaultPageSize,
-      }))
+        }),
+      })
       if (!active) return
       setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       if (routeFilters.open && openDetailPromise) {
@@ -622,7 +625,7 @@ export function SalesDocumentsPage({
     discount_amount: { kind: 'number', value: (document) => document.discount_amount },
     total_amount: { kind: 'number', value: (document) => document.total_amount },
     paid_amount: { kind: 'number', value: (document) => document.paid_amount },
-  })
+  }, defaultSalesDocumentSortState)
   useEffect(() => {
     if (documentsSortInitialRender.current) {
       documentsSortInitialRender.current = false
@@ -1054,7 +1057,10 @@ function SalesDocumentDetailView({
   if (error) return <p role="alert">{error}</p>
   if (loading || !document) return <p>Đang tải chi tiết...</p>
 
-  const paymentReceipts = Array.isArray(document.payment_receipts) ? document.payment_receipts : []
+  const paymentReceipts = sortManagementItemsByDateDesc(
+    Array.isArray(document.payment_receipts) ? document.payment_receipts : [],
+    (receipt) => receipt.created_at,
+  )
 
   return (
     <div className="management-detail-panel">

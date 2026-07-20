@@ -45,12 +45,13 @@ export interface CustomerListFilters {
   total_debt_max?: number
   page?: number
   page_size?: number
-  sort_key?: 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
+  sort_key?: 'code' | 'created_at' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
   sort_direction?: 'asc' | 'desc'
 }
 
 export type ProductListSortKey =
   | 'code'
+  | 'created_at'
   | 'name'
   | 'latest_purchase_cost'
   | 'default_sale_price'
@@ -92,8 +93,8 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
       if (input.sort) params.set('sort', input.sort)
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'created_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<ProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
     },
@@ -212,8 +213,8 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.total_debt_max !== undefined) params.set('total_debt_max', String(input.total_debt_max))
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'created_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<CustomerListResponse>(`/api/v1/customers${query ? `?${query}` : ''}`)
     },

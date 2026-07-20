@@ -57,7 +57,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { normalizeManagementSearchText, preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
@@ -268,7 +268,8 @@ function writeReceiptCreateDraft(draft: PurchaseReceiptCreateDraft) {
 
 type ReceiptDetailTab = 'info' | 'payments'
 
-type PurchaseReceiptSortKey = 'code' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
+type PurchaseReceiptSortKey = 'code' | 'received_at' | 'supplier_name' | 'total_quantity' | 'subtotal_amount' | 'payable_amount' | 'paid_amount'
+const defaultPurchaseReceiptSortState: NonNullable<ManagementSortState<PurchaseReceiptSortKey>> = { key: 'received_at', direction: 'desc' }
 
 function receiptTotalQuantity(receipt: PurchaseReceipt) {
   return receipt.items.reduce((total, item) => total + Number(item.quantity || 0), 0)
@@ -287,14 +288,14 @@ function supplierPaymentMethodText(method: 'cash' | 'bank_transfer') {
 }
 
 function purchaseReceiptPaymentRows(receipt: PurchaseReceipt): PurchaseReceiptSupplierPayment[] {
-  if (receipt.status !== 'posted') return receipt.supplier_payments
+  if (receipt.status !== 'posted') return sortManagementItemsByDateDesc(receipt.supplier_payments, (payment) => payment.paid_at)
 
   const afterPostPaymentsTotal = receipt.supplier_payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0)
   const importPaidAmount = Math.max(Number(receipt.paid_amount || 0) - afterPostPaymentsTotal, 0)
 
-  if (importPaidAmount <= 0) return receipt.supplier_payments
+  if (importPaidAmount <= 0) return sortManagementItemsByDateDesc(receipt.supplier_payments, (payment) => payment.paid_at)
 
-  return [
+  return sortManagementItemsByDateDesc([
     {
       id: `${receipt.id}-import-payment`,
       code: `PC${receipt.code}`,
@@ -305,7 +306,7 @@ function purchaseReceiptPaymentRows(receipt: PurchaseReceipt): PurchaseReceiptSu
       amount: importPaidAmount,
     },
     ...receipt.supplier_payments,
-  ]
+  ], (payment) => payment.paid_at)
 }
 
 function initialPurchaseReceiptRouteFilters() {
@@ -462,12 +463,13 @@ export function PurchaseReceiptsPage({
     requestSort: requestReceiptSort,
   } = useManagementTableSort<PurchaseReceipt, PurchaseReceiptSortKey>(receipts ?? [], {
     code: { kind: 'text', value: (receipt) => receipt.code },
+    received_at: { kind: 'date', value: (receipt) => receipt.received_at },
     supplier_name: { kind: 'text', value: (receipt) => receipt.supplier.name },
     total_quantity: { kind: 'number', value: (receipt) => receiptTotalQuantity(receipt) },
     subtotal_amount: { kind: 'number', value: (receipt) => receipt.subtotal_amount },
     payable_amount: { kind: 'number', value: (receipt) => receipt.payable_amount },
     paid_amount: { kind: 'number', value: (receipt) => receipt.paid_amount },
-  })
+  }, defaultPurchaseReceiptSortState)
   const visibleReceipts = useMemo(() => {
     if (!showFavoriteReceiptsOnly) return sortedReceipts
     return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
@@ -582,7 +584,7 @@ export function PurchaseReceiptsPage({
         ...input,
         page: nextPage,
         page_size: nextPageSize,
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultPurchaseReceiptSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setReceipts(result.items)
       setTotal(result.total)

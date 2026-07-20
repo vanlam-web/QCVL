@@ -24,7 +24,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { appRoutes } from '../../app/routes'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
@@ -70,7 +70,8 @@ type BomFormLine = CatalogBomFormLine
 type StockAdjustForm = { actualQty: string; reason: string }
 type StocktakeNotice = { id: string; code: string }
 type ProductDetailTab = 'info' | 'unit-conversion' | 'bom' | 'inventory' | 'stock-card' | 'notes'
-type ProductSortKey = 'code' | 'name' | 'latest_purchase_cost' | 'default_sale_price' | 'operating_stock' | 'unit_name' | 'out_of_stock'
+type ProductSortKey = 'code' | 'created_at' | 'name' | 'latest_purchase_cost' | 'default_sale_price' | 'operating_stock' | 'unit_name' | 'out_of_stock'
+const defaultProductSortState: NonNullable<ManagementSortState<ProductSortKey>> = { key: 'created_at', direction: 'desc' }
 
 interface StockMovementState {
   items: ProductStockMovement[]
@@ -293,7 +294,7 @@ export function CatalogPage({
         ...(nextInventoryShape === 'all' ? {} : { inventory_shape: nextInventoryShape }),
         ...(nextCreatedFrom ? { created_from: nextCreatedFrom } : {}),
         ...(nextCreatedTo ? { created_to: nextCreatedTo } : {}),
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultProductSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setState({ products: result.items, page: result.page, pageSize: result.page_size, total: result.total, totalAll: result.total_all })
       setLastSearch(nextSearch)
@@ -792,13 +793,14 @@ export function CatalogPage({
     requestSort: requestProductSort,
   } = useManagementTableSort<Product, ProductSortKey>(defaultCatalogProductOrder(visibleProducts), {
     code: { kind: 'text', value: (product) => product.code },
+    created_at: { kind: 'date', value: (product) => product.created_at },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost ?? 0 },
     default_sale_price: { kind: 'number', value: (product) => product.default_sale_price },
     operating_stock: { kind: 'number', value: (product) => product.operating_stock?.quantity },
     unit_name: { kind: 'text', value: (product) => product.unit_name },
     out_of_stock: { kind: 'text', value: () => null },
-  })
+  }, defaultProductSortState)
   useEffect(() => {
     if (productSortInitialRender.current) {
       productSortInitialRender.current = false
@@ -1547,7 +1549,7 @@ export function CatalogPage({
                                             <td colSpan={8}>Chưa có</td>
                                           </tr>
                                         ) : null}
-                                        {movementState?.items.map((movement) => (
+                                        {sortManagementItemsByDateDesc(movementState?.items ?? [], (movement) => movement.created_at).map((movement) => (
                                           <tr key={movement.id}>
                                             <td>
                                               {movement.document_code && productDocumentHref(movement.document_code) ? (

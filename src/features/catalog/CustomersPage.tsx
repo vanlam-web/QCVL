@@ -50,7 +50,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
@@ -115,7 +115,8 @@ type CustomerDebtPaymentRow = CustomerDebtSummaryRow & {
   paid_before: number
   payment_amount: number
 }
-type CustomerSortKey = 'code' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
+type CustomerSortKey = 'code' | 'created_at' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
+const defaultCustomerSortState: NonNullable<ManagementSortState<CustomerSortKey>> = { key: 'created_at', direction: 'desc' }
 const customerHistoryPageSize = 10
 const customerDebtLedgerPageSize = 10
 const customerDebtLedgerFetchPageSize = 1000
@@ -282,7 +283,7 @@ export function CustomersPage({
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [customerSortState, setCustomerSortState] = useState<ManagementSortState<CustomerSortKey>>(null)
+  const [customerSortState, setCustomerSortState] = useState<ManagementSortState<CustomerSortKey>>(defaultCustomerSortState)
   const [form, setForm] = useState(createCustomerFormDefaults)
 
   async function load(filters: CustomerListFilters & {
@@ -327,7 +328,7 @@ export function CustomersPage({
           totalDebtMin: nextTotalDebtMin,
           totalDebtMax: nextTotalDebtMax,
         }),
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultCustomerSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setState({ customers: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
       setLastSearch(nextSearch)
@@ -506,7 +507,7 @@ export function CustomersPage({
   }
 
   async function requestCustomerSort(key: CustomerSortKey) {
-    const kind = key === 'total_debt_amount' || key === 'total_sales_amount' ? 'number' : 'text'
+    const kind = key === 'created_at' ? 'date' : key === 'total_debt_amount' || key === 'total_sales_amount' ? 'number' : 'text'
     const nextSortState = nextManagementSortState(customerSortState, key, kind)
     setCustomerSortState(nextSortState)
     setPage(1)

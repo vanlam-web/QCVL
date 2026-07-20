@@ -24,7 +24,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
@@ -44,6 +44,7 @@ import { dateRangeFromItems, displayDateRangeForData, quickDateRange, type Quick
 type InventoryView = 'products' | 'stocktakes' | 'objects'
 type StocktakeDateFilter = QuickDateRangePreset | 'custom'
 type StocktakeSortKey = 'code' | 'created_at' | 'product_code' | 'product_name' | 'product_system_qty' | 'product_actual_qty' | 'product_difference_qty' | 'status'
+const defaultStocktakeSortState: NonNullable<ManagementSortState<StocktakeSortKey>> = { key: 'created_at', direction: 'desc' }
 const stocktakeDateGroups: Array<{ title: string; presets: Array<Exclude<StocktakeDateFilter, 'custom'>> }> = [
   { title: 'Theo ngày', presets: ['today', 'yesterday'] },
   { title: 'Theo tuần', presets: ['week', 'last_week', 'last_7_days'] },
@@ -163,7 +164,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     product_actual_qty: { kind: 'number', value: (stocktake) => stocktake.product_actual_qty },
     product_difference_qty: { kind: 'number', value: (stocktake) => stocktake.product_difference_qty },
     status: { kind: 'text', value: (stocktake) => stocktakeStatusText(stocktake.status) },
-  })
+  }, defaultStocktakeSortState)
   useEffect(() => {
     if (stocktakeSortInitialRender.current) {
       stocktakeSortInitialRender.current = false
@@ -243,7 +244,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
         ...(nextCreatedBy !== 'all' ? { created_by: nextCreatedBy } : {}),
         page: nextPage,
         page_size: nextPageSize,
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultStocktakeSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       if (stocktakeListRequestId.current !== requestId) return
       setStocktakes(result.items)
@@ -1037,7 +1038,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
             <h3>Lịch sử xuất nhập tồn</h3>
             {movements.length === 0 ? <p>Chưa có biến động kho.</p> : (
               <ul>
-                {movements.map((movement) => (
+                {sortManagementItemsByDateDesc(movements, (movement) => movement.created_at).map((movement) => (
                   <li key={movement.id}>
                     <span>{movement.movement_type}</span>
                     <strong>{numberText(movement.quantity_delta)}</strong>
@@ -1052,7 +1053,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
             <h3>Phiếu kiểm kho gần đây</h3>
             {stocktakes.length === 0 ? <p>Chưa có phiếu kiểm kho.</p> : (
               <ul>
-                {stocktakes.map((item) => (
+                {sortManagementItemsByDateDesc(stocktakes, (item) => item.created_at).map((item) => (
                   <li key={item.id}>
                     <span>{item.code}</span>
                     <StatusChip tone={item.status === 'balanced' ? 'success' : 'neutral'}>{stocktakeStatusText(item.status)}</StatusChip>

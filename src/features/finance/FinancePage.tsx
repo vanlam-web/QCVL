@@ -18,7 +18,7 @@ import {
 } from '../../components/ui-shell/management-layout'
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
-import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { managementSortStatesEqual, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementDateTimeInput, parseManagementDateTimeInputText } from '../../components/ui-shell/management-date-time-input'
 import { formatMoney } from '../../lib/number-format'
 import type {
@@ -102,6 +102,7 @@ const defaultCashbookColumns: CashbookColumnKey[] = [
   'amount_delta',
   'note',
 ]
+const defaultCashbookSortState: NonNullable<ManagementSortState<CashbookColumnKey>> = { key: 'created_at', direction: 'desc' }
 const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }> = [
   { key: 'code', label: 'Mã phiếu' },
   { key: 'created_at', label: 'Thời gian' },
@@ -293,7 +294,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     status: { kind: 'text', value: (entry) => statusText(entry.status) },
     note: { kind: 'text', value: (entry) => entry.source?.source_note ?? entry.source?.transfer_content ?? entry.note },
     is_business_accounted: { kind: 'text', value: (entry) => (entry.is_business_accounted ? 'Có' : 'Không') },
-  })
+  }, defaultCashbookSortState)
   const pagedVisibleCashbookEntries = sortedVisibleCashbookEntries.length > cashbookPageSize
     ? sortedVisibleCashbookEntries.slice((cashbookPage - 1) * cashbookPageSize, cashbookPage * cashbookPageSize)
     : sortedVisibleCashbookEntries
@@ -489,7 +490,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         is_business_accounted: nextBusinessAccounted === 'all' ? undefined : nextBusinessAccounted === 'true',
         page: nextPage,
         page_size: nextPageSize,
-        ...(nextSortState === null ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
+        ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultCashbookSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
       })
       setCashbookEntries(result.items)
       void hydrateCashbookCounterparties(result.items)

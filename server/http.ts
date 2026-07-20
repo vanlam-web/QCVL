@@ -3943,6 +3943,7 @@ function sortItemsForRequest<Item extends object>(
 function sortCustomersForRequest(customers: readonly CustomerListData[], url: URL) {
   return sortItemsForRequest(customers, url, {
     code: { kind: 'text', value: (customer) => customer.code },
+    created_at: { kind: 'date', value: (customer) => customer.created_at },
     name: { kind: 'text', value: (customer) => customer.name },
     phone: { kind: 'text', value: (customer) => customer.phone },
     group: { kind: 'text', value: (customer) => customer.customer_group?.name },
@@ -3954,6 +3955,7 @@ function sortCustomersForRequest(customers: readonly CustomerListData[], url: UR
 function sortProductsForRequest(productsToSort: readonly ProductListData[], url: URL) {
   return sortItemsForRequest(productsToSort, url, {
     code: { kind: 'text', value: (product) => product.code },
+    created_at: { kind: 'date', value: (product) => product.created_at },
     name: { kind: 'text', value: (product) => product.name },
     latest_purchase_cost: { kind: 'number', value: (product) => product.latest_purchase_cost },
     default_sale_price: { kind: 'number', value: (product) => product.default_sale_price },
@@ -3961,29 +3963,31 @@ function sortProductsForRequest(productsToSort: readonly ProductListData[], url:
     unit_name: { kind: 'text', value: (product) => product.unit_name },
     sell_method: { kind: 'text', value: (product) => product.sell_method },
     out_of_stock: { kind: 'text', value: () => null },
-  })
+  }, newestFirst)
 }
 
 function sortSuppliersForRequest(suppliersToSort: readonly SupplierListData[], url: URL) {
   return sortItemsForRequest(suppliersToSort, url, {
     code: { kind: 'text', value: (supplier) => supplier.code },
+    created_at: { kind: 'date', value: (supplier) => supplier.created_at ?? supplier.source_created_at },
     name: { kind: 'text', value: (supplier) => supplier.name },
     phone: { kind: 'text', value: (supplier) => supplier.phone },
     current_payable_amount: { kind: 'number', value: (supplier) => supplier.current_payable_amount },
     total_purchase_amount: { kind: 'number', value: (supplier) => supplier.total_purchase_amount },
     status: { kind: 'text', value: (supplier) => supplier.status },
-  })
+  }, newestFirst)
 }
 
 function sortPurchaseReceiptsForRequest(receiptsToSort: readonly PurchaseReceiptData[], url: URL) {
   return sortItemsForRequest(receiptsToSort, url, {
     code: { kind: 'text', value: (receipt) => receipt.code },
+    received_at: { kind: 'date', value: (receipt) => receipt.received_at },
     supplier_name: { kind: 'text', value: (receipt) => receipt.supplier.name },
     total_quantity: { kind: 'number', value: (receipt) => receipt.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) },
     subtotal_amount: { kind: 'number', value: (receipt) => receipt.subtotal_amount },
     payable_amount: { kind: 'number', value: (receipt) => receipt.payable_amount },
     paid_amount: { kind: 'number', value: (receipt) => receipt.paid_amount },
-  })
+  }, newestFirst)
 }
 
 function sortSalesDocumentsForRequest(documentsToSort: readonly SalesDocumentData[], url: URL) {

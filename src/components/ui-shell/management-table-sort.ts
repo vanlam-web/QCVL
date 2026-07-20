@@ -14,6 +14,28 @@ export function firstManagementSortDirection(kind: ManagementSortKind): Manageme
   return kind === 'text' ? 'asc' : 'desc'
 }
 
+export function sortManagementItemsByDateDesc<Item>(
+  items: readonly Item[],
+  value: (item: Item) => string | null | undefined,
+): Item[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const leftTime = parseDateTimeValue(value(left.item) ?? '') ?? 0
+      const rightTime = parseDateTimeValue(value(right.item) ?? '') ?? 0
+      const compared = rightTime - leftTime
+      return compared === 0 ? left.index - right.index : compared
+    })
+    .map(({ item }) => item)
+}
+
+export function managementSortStatesEqual<Key extends string>(
+  left: ManagementSortState<Key>,
+  right: ManagementSortState<Key>,
+) {
+  return left?.key === right?.key && left?.direction === right?.direction
+}
+
 export function nextManagementSortState<Key extends string>(
   current: ManagementSortState<Key>,
   key: Key,
@@ -41,8 +63,9 @@ function compareSortValue(left: string | number | null | undefined, right: strin
 export function useManagementTableSort<Item, Key extends string>(
   items: readonly Item[],
   columns: Record<Key, ManagementSortColumn<Item>>,
+  initialSortState: ManagementSortState<Key> = null,
 ) {
-  const [sortState, setSortState] = useState<ManagementSortState<Key>>(null)
+  const [sortState, setSortState] = useState<ManagementSortState<Key>>(initialSortState)
   const sortedItems = useMemo(() => {
     if (sortState === null) return [...items]
     const column = columns[sortState.key]

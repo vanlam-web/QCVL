@@ -95,8 +95,8 @@ export function createFinanceService(api: FinanceApiRequester) {
       if (input.to) params.set('to', input.to)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
-      if (input.sort_key) params.set('sort_key', input.sort_key)
-      if (input.sort_direction) params.set('sort_direction', input.sort_direction)
+      params.set('sort_key', input.sort_key ?? 'created_at')
+      params.set('sort_direction', input.sort_direction ?? 'desc')
       const query = params.toString()
       return api.request<CashbookListResponse>(`/api/v1/finance/cashbook${query ? `?${query}` : ''}`)
     },

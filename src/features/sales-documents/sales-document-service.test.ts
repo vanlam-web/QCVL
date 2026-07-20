@@ -17,7 +17,7 @@ it('serializes supported sales document filter params', async () => {
   })
 
   expect(request).toHaveBeenCalledWith(
-    '/api/v1/sales-documents?status=completed&payment_status=paid&payment_method=bank_transfer&created_by=seller-1&price_list_id=pl-1&page=1&page_size=15',
+    '/api/v1/sales-documents?status=completed&payment_status=paid&payment_method=bank_transfer&created_by=seller-1&price_list_id=pl-1&page=1&page_size=15&sort_key=created_at&sort_direction=desc',
   )
 })
 
