@@ -180,7 +180,24 @@ function customerTypeLabel(customer: Customer) {
   }
 }
 
+const hiddenCustomerGroupNames = new Set(['cg-retail', 'cg retail', 'cg-vip', 'cg vip', 'khach le', 'khach si'])
+
+function normalizedCustomerGroupText(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+}
+
+function isHiddenCustomerGroup(group: Pick<CustomerGroup, 'id' | 'name'> | null | undefined) {
+  if (!group) return false
+  return hiddenCustomerGroupNames.has(normalizedCustomerGroupText(group.id)) ||
+    hiddenCustomerGroupNames.has(normalizedCustomerGroupText(group.name))
+}
+
 function customerGroupLabel(customer: Customer) {
+  if (isHiddenCustomerGroup(customer.customer_group)) return ''
   return customer.customer_group?.name?.trim() || ''
 }
 
@@ -724,6 +741,7 @@ export function CustomersPage({
   const fallbackCustomerSummary = customerVisibleSummary(state?.customers ?? [])
   const visibleDebtTotal = state?.summary?.total_debt_amount ?? fallbackCustomerSummary.visibleDebtTotal
   const visibleSalesTotal = state?.summary?.total_sales_amount ?? fallbackCustomerSummary.visibleSalesTotal
+  const visibleCustomerGroups = customerGroups.filter((group) => !isHiddenCustomerGroup(group))
   const customerVisibleDateRange = createdDateFilter === 'custom'
     ? { from: createdFrom, to: createdTo }
     : displayDateRangeForData(
@@ -738,7 +756,7 @@ export function CustomersPage({
     code: { kind: 'text', value: (customer) => customer.code },
     name: { kind: 'text', value: (customer) => customer.name },
     phone: { kind: 'text', value: (customer) => customer.phone },
-    group: { kind: 'text', value: (customer) => customer.customer_group?.name },
+    group: { kind: 'text', value: (customer) => customerGroupLabel(customer) },
     total_debt_amount: { kind: 'number', value: (customer) => customer.total_debt_amount },
     total_sales_amount: { kind: 'number', value: (customer) => customer.total_sales_amount },
   })
@@ -797,7 +815,7 @@ export function CustomersPage({
               onChange={(value) => void applySidebarFilters({ customerGroupId: value })}
             >
               <option value="all">Tất cả</option>
-              {customerGroups.map((group) => (
+              {visibleCustomerGroups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
                 </option>
@@ -1015,7 +1033,7 @@ export function CustomersPage({
                     onChange={(event) => setForm((current) => ({ ...current, customerGroupId: event.target.value }))}
                   >
                     <option value="">Chọn nhóm khách hàng</option>
-                    {customerGroups.map((group) => (
+                    {visibleCustomerGroups.map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.name}
                       </option>
@@ -1103,7 +1121,7 @@ export function CustomersPage({
                     key: 'group',
                     header: <ManagementSortableHeader kind="text" sortKey="group" sortState={customerSortState} onSort={requestCustomerSort}>Nhóm khách</ManagementSortableHeader>,
                     headerIsCell: true,
-                    cell: (customer) => customer.customer_group?.name ?? '',
+                    cell: (customer) => customerGroupLabel(customer),
                   },
                   {
                     key: 'debt',

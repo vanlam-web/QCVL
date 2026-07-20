@@ -336,6 +336,56 @@ it('leaves missing customer list values blank instead of showing hyphen placehol
   expect(row).not.toHaveTextContent('-')
 })
 
+it('treats legacy seed customer groups as no group in customer management', async () => {
+  const service = makeService({
+    listCustomers: vi.fn(async () => ({
+      items: [
+        {
+          id: 'customer-seed-group',
+          code: 'KH000523',
+          name: 'Minh Võ (May)',
+          phone: null,
+          tax_code: null,
+          address: null,
+          customer_group_id: 'cg-retail',
+          customer_group: { id: 'cg-retail', code: 'LE', name: 'cg-retail' },
+          customer_type: 'individual',
+          created_by: { id: 'user-admin', name: 'Admin' },
+          created_at: '2026-07-20T03:00:00Z',
+          note: null,
+          status: 'active',
+          total_sales_amount: 700000,
+          total_debt_amount: 0,
+        },
+      ],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+    listCustomerGroups: vi.fn(async () => ({
+      items: [
+        { id: 'cg-retail', code: 'LE', name: 'cg-retail', price_list_id: 'pl-default', is_active: true },
+        { id: 'cg-vip', code: 'SI', name: 'Khach si', price_list_id: 'pl-vip', is_active: true },
+        { id: 'cg-25', code: '25', name: '25', price_list_id: 'pl-25', is_active: true },
+      ],
+    })),
+  })
+
+  render(<CustomersPage service={service} orderService={makeOrderService()} />)
+
+  const row = await screen.findByRole('row', { name: /KH000523 Minh Võ \(May\)/ })
+  const cells = Array.from(row.querySelectorAll('td'))
+  expect(cells[4]).toHaveTextContent('')
+  expect(screen.getByRole('option', { name: '25' })).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'cg-retail' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: 'Khach si' })).not.toBeInTheDocument()
+
+  await userEvent.click(within(row).getByRole('button', { name: 'KH000523' }))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000523' })
+  expect(detail).not.toHaveTextContent('cg-retail')
+  expect(detail).not.toHaveTextContent('Khach si')
+})
+
 it('does not open customer detail when clicking the row checkbox', async () => {
   render(<CustomersPage service={makeService()} orderService={makeOrderService()} />)
 
