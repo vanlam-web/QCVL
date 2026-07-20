@@ -35,6 +35,14 @@ PRD/UX: [../../02-PRD-UX-PhongCanh/Inventory/](../../02-PRD-UX-PhongCanh/Invento
 | F | MVP: cảnh báo tồn âm, không chặn bán; máy sản xuất **không** tự trừ kho |
 | G | Mục tiêu dài: cuộn/tấm quản lý theo **object vật lý**, không chỉ tổng m² gộp |
 
+### Owner 2026-07-20 — Đợt import KiotViet đã xong
+
+- Dữ liệu chuyển đổi ban đầu (hàng hóa, khách, NCC, phiếu nhập, hóa đơn, kiểm kho, sổ quỹ… theo các file đã nạp) **đã import đủ** cho vận hành hiện tại.
+- **Không** mở thêm đợt import KiotViet mới làm việc tiếp theo (không xếp “import file KV nữa” vào queue).
+- Việc còn lại là **vận hành trên dữ liệu đã có**: chốt/hiển thị tồn QCVL đúng, POS/trừ kho, đối soát — không phụ thuộc import thêm.
+- Giữ nút/API import trong app chỉ như công cụ kỹ thuật phòng hờ (re-import/sửa sự cố); **không** coi là bước nghiệp vụ đang mở.
+- Chọn **mốc mở** từ phiếu kiểm kho **đã import sẵn** (nếu Owner chọn) vẫn là thao tác cấu hình trên dữ liệu hiện có — **không** phải import file mới.
+
 ### Hiển thị V1 (đã chấp nhận tạm)
 
 - Cột list Hàng hóa được phép **fallback số** từ `Tồn KV tạm nhập` khi chưa có `operating_stock`, để màn hình không trống sau import.
@@ -54,7 +62,7 @@ PRD/UX: [../../02-PRD-UX-PhongCanh/Inventory/](../../02-PRD-UX-PhongCanh/Invento
 | List Hàng hóa fallback KV khi chưa có movement | Có (`CatalogPage`) | Khớp hiển thị V1 tạm |
 | Chi tiết tách QCVL / KV; nguồn “Chưa chốt mốc…” | Có | Một phần |
 | `operating_stock` Postgres | Latest/`ending_qty` từ `stock_movements`; recompute **cộng mọi movement từ 0** | **Không** (thiếu mốc mở + lọc sau mốc) |
-| Chọn mốc mở (UI/API/bảng) | **Chưa** | **Không** |
+| Chọn mốc mở (UI/API/bảng) | **Chưa** — làm trên dữ liệu KK đã import; **không** cần import file KV mới | **Không** |
 | Import kiểm kho KV → movement | Không (đúng) | Có |
 | Dev-memory: balanced stocktake (kể cả KV?) như checkpoint | Có hành vi reset trong memory path | **Lệch** SoT “chỉ khi Owner chọn” — không lấy làm chuẩn Postgres |
 | PN posted / HD import / POS → `stock_movements` | Có (aggregate theo mã hàng) | Một phần |
@@ -71,12 +79,13 @@ PRD/UX: [../../02-PRD-UX-PhongCanh/Inventory/](../../02-PRD-UX-PhongCanh/Invento
 
 | Hạng mục | Ghi chú |
 |---|---|
-| UI/API chọn phiếu KV / ngày làm mốc mở | Bắt buộc để nghiệm thu công thức C |
+| UI/API chọn phiếu KV / ngày làm mốc mở | Trên dữ liệu KK **đã import**; Owner 2026-07-20: không mở đợt import KV mới |
 | Lọc movement trước/sau mốc | Tránh tính trùng lịch sử trước mốc |
 | Trả hàng / đảo chứng từ sau mốc | Movement đảo |
 | Cuộn/tấm object + kiểm kho theo object + POS chọn object | PRD 03-ROLL-SHEET; V1 freeze 2026-07-14 giữ dormant |
 | Khui roll/sheet đầy đủ | Hiện chỉ normal |
-| Báo cáo đối chiếu KV ↔ QCVL theo bộ lọc | Queue V1 |
+| Báo cáo đối chiếu KV ↔ QCVL theo bộ lọc | Queue V1 — trên dữ liệu đã có |
+| Import thêm file KiotViet (hàng/KK/PN/HD/…) | **Đóng** theo Owner 2026-07-20 — đã import hết |
 | Máy sản xuất tự trừ kho | **Không** trong MVP (xem PRODUCTION-RECONCILIATION) |
 
 ---

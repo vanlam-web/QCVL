@@ -28,7 +28,9 @@ Màn Kiểm kho dài hạn giúp người dùng:
 - cân bằng kho
 - hủy phiếu tạm
 
-Trạng thái MVP hiện tại: ưu tiên xem/import lịch sử KiotViet, lọc danh sách, mở chi tiết, sửa ghi chú và hủy phiếu. `+ Kiểm kho`, `Xuất file`, `In` và `Sao chép` chưa là chức năng vận hành; nếu UI còn giữ nút placeholder thì phải để disabled hoặc không tính là đã làm.
+Trạng thái MVP hiện tại: ưu tiên xem lịch sử KiotViet **đã import**, lọc danh sách, mở chi tiết, sửa ghi chú và hủy phiếu. `+ Kiểm kho`, `Xuất file`, `In` và `Sao chép` chưa là chức năng vận hành; nếu UI còn giữ nút placeholder thì phải để disabled hoặc không tính là đã làm.
+
+**Owner 2026-07-20:** đợt import KiotViet đã xong — không mở thêm import file kiểm kho/hàng hóa KV làm việc tiếp theo. Mốc mở (nếu có) chọn từ phiếu **đã có trong hệ thống**.
 
 QC-OMS phải hỗ trợ kiểm kho theo tổng cho hàng thường và theo từng cuộn/tấm cho hàng cuộn/tấm.
 
