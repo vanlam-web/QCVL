@@ -263,7 +263,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 1. `Dự kiến hết hàng`: chưa làm. Phải có lịch sử bán/tiêu thụ thật và tồn kho chuẩn hóa trước, sau đó mới tính tốc độ dùng hàng. Không copy chuỗi dự kiến từ KiotViet.
 2. `Nhà cung cấp`: chưa làm ở import Hàng hóa. Nguồn đúng là phiếu nhập, vì một mã hàng có thể có nhiều nhà cung cấp.
 3. `Tồn KV tạm nhập`: đã lưu vào `inventory_provisional_balances`, nhưng chỉ dùng để đối chiếu. Không chuyển trực tiếp thành tồn kho thật/stock movements. Bước sau cần dữ liệu vận hành thật: phiếu nhập, bán hàng, kiểm kho/cân bằng kho và quy trình cuộn/tấm.
-4. BOM từ KiotViet: Owner 2026-07-20 chốt lại — import xong dùng ngay (`active`), không còn nháp/duyệt trước khi trừ kho. Bán combo chỉ trừ thành phần. Quyết định cũ (draft → duyệt → active) đã bị thay; xem `docs/03-BUSINESS-NghiepVu/BOM/BOM-RULES.md` mục Import.
+4. BOM từ KiotViet: Owner 2026-07-20 chốt SoT — import `active`, bán chỉ trừ thành phần. **Runtime chưa khớp** (vẫn `draft` + UI nháp). Bảng trạng thái: `docs/03-BUSINESS-NghiepVu/BOM/README.md` mục 2. Quyết định draft→duyệt cũ đã superseded.
 5. Import nhiều file KV mới: upsert theo `Mã hàng` đã sẵn sàng. Khi KV đổi dữ liệu, import lại file mới để cập nhật; hệ thống không tự xóa mã vắng trong file mới.
 
 ## Reality Update 2026-07-10: Product Source Created Time

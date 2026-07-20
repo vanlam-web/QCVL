@@ -132,7 +132,7 @@ Tab chi tiết gồm:
 |---|---|
 | Thông tin | Thông tin chính của hàng hóa: mã, tên, loại hàng, đơn vị, cách tính bán, giá vốn, giá bán, loại tồn, trạng thái |
 | Đơn vị & quy đổi | Đơn vị hiện tại, cách tính bán, loại tồn, danh sách đơn vị quy đổi, đơn vị mặc định khi mua và đơn vị mặc định khi bán. Nếu chưa có dữ liệu quy đổi thì hiển thị `Chưa có` |
-| BOM/Vật tư cấu thành | Nhập/sửa định mức vật tư cho combo hoặc sản phẩm có BOM; combo có thể hiển thị tóm tắt vật tư ở tab `Thông tin`, nhưng nguồn sửa chính vẫn là tab này để tránh làm tab Thông tin quá nặng. BOM import từ KiotViet (Owner 2026-07-20) dùng ngay khi bán combo trừ thành phần; tab này hiện `Hàng thành phần KiotViet` và số vật tư, không còn cảnh báo “cần rà soát trước khi kích hoạt” |
+| BOM/Vật tư cấu thành | Nhập/sửa định mức. **SoT Owner 2026-07-20:** BOM KV dùng ngay khi bán combo trừ thành phần; không cảnh báo “cần rà soát trước khi kích hoạt”. **Runtime 2026-07-20:** UI vẫn hiện copy nháp/rà soát; `GET/POST .../bom` còn stub — xem [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md) mục 2 |
 | Tồn kho | Hiển thị dữ liệu tồn theo loại hàng. Nếu có tồn tạm import từ KiotViet, tab này hiện `Tồn KV tạm nhập` để đối soát, không xem là tồn kho vận hành và không thay thế stock movement |
 | Thẻ kho | Bảng lịch sử biến động kho theo sản phẩm, dùng API stock movements hiện có |
 | Ghi chú | Ghi chú nội bộ đơn giản; không ảnh hưởng POS, tồn kho, giá hoặc BOM |
