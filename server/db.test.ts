@@ -1567,6 +1567,60 @@ describe('createPgRepository product units', () => {
     }))
   })
 
+  test('updates PostgreSQL cashbook entries without writing derived payment_method column', async () => {
+    const { createPgRepository } = await import('./db')
+    const cashbookRow = {
+      id: 'cashbook-tt001848',
+      code: 'TT001848',
+      status: 'posted',
+      direction: 'in',
+      amount_delta: 96000,
+      finance_account: { id: 'bank-vcb', code: '0000000000', name: 'VCB', account_type: 'bank', account_number: '0000000000' },
+      counterparty: { type: 'customer', name: 'Dao Tuan', phone: null },
+      note: 'Thu no HD011155',
+      source_type: 'kiotviet_cashbook',
+      source: {},
+      allocations: [],
+      is_business_accounted: true,
+      created_by: { id: 'user-1', name: 'Admin' },
+      created_at: new Date('2026-07-20T00:17:00.000Z'),
+    }
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from cashbook_entries')) return { rows: [cashbookRow], rowCount: 1 }
+      if (sql.includes('from finance_accounts')) return {
+        rows: [{
+          id: 'bank-vcb',
+          code: 'VCB',
+          name: 'VCB',
+          account_type: 'bank',
+          is_default_cash: false,
+          is_active: true,
+          account_number: '0000000000',
+          account_holder: 'Admin',
+          opening_balance: 0,
+          note: null,
+          notify_on_transaction: true,
+        }],
+        rowCount: 1,
+      }
+      if (sql.includes('update cashbook_entries')) return { rows: [cashbookRow], rowCount: 1 }
+      if (sql.includes('from users')) return { rows: [{ id: 'user-1', display_name: 'Admin' }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.updateCashbookEntry?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      id: 'TT001848',
+      created_at: '2026-07-20T00:17:00.000Z',
+      finance_account_id: 'bank-vcb',
+    })
+
+    const updateSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('update cashbook_entries'))?.[0])
+    expect(updateSql).toContain('finance_account = $5')
+    expect(updateSql).not.toContain('payment_method')
+  })
+
   test('paginates PostgreSQL cashbook rows in SQL and keeps summary in the database', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {

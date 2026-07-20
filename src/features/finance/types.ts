@@ -208,11 +208,17 @@ export interface FinanceSalesDocumentSummary {
 }
 
 export interface CashbookEntryDetail extends CashbookEntry {
-  created_by: { id: string; name: string }
+  created_by: { id: string; name: string } | null
   counterparty: CashbookCounterparty
   payment_method: 'cash' | 'bank_transfer' | 'manual'
   source: NonNullable<CashbookEntry['source']>
   allocations: PaymentReceiptAllocation[]
+}
+
+export interface UpdateCashbookEntryInput {
+  created_at?: string
+  finance_account_id?: string
+  note?: string | null
 }
 
 export interface CashbookVoucher {

@@ -39,6 +39,35 @@ describe('finance-service', () => {
     ])
   })
 
+  it('patches cashbook entries', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'entry-1' } as T
+    }
+    const service = createFinanceService({ request })
+
+    await service.updateCashbookEntry('entry-1', {
+      created_at: '2026-07-14T08:15:00.000Z',
+      finance_account_id: 'bank-1',
+      note: 'Sửa phiếu',
+    })
+
+    expect(calls).toEqual([
+      [
+        '/api/v1/finance/cashbook/entry-1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({
+            created_at: '2026-07-14T08:15:00.000Z',
+            finance_account_id: 'bank-1',
+            note: 'Sửa phiếu',
+          }),
+        },
+      ],
+    ])
+  })
+
   it('posts debt collection payload', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -270,7 +299,7 @@ describe('finance-service', () => {
         counterparty: { type: 'supplier', name: 'Thu Nghĩa', phone: '000100' },
       },
     ])).toBe([
-      '\uFEFFMã phiếu,Thời gian,Người tạo,Loại thu chi,Số tài khoản,Người nộp/nhận,Giá trị,Ghi chú',
+      '\uFEFFMã phiếu,Thời gian,Người tạo,Loại phiếu,Số tài khoản,Người nộp/nhận,Giá trị,Ghi chú',
       'CTM001180,2026-07-04T07:46:00.000Z,,,,Thu Nghĩa,-30000,Vận chuyển',
     ].join('\n'))
   })

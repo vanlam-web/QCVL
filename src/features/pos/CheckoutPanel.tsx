@@ -544,7 +544,7 @@ export function CheckoutPanel({
       {selectedCustomer !== null && debtLookupError ? <p role="status">{debtLookupError}</p> : null}
 
       <fieldset className="checkout-payment-methods">
-        <legend>Phương thức thanh toán</legend>
+        <legend>Phương thức TT</legend>
         <label className={paymentMode === 'cash' ? 'checkout-payment-method-active' : undefined}>
           <input
             checked={paymentMode === 'cash'}

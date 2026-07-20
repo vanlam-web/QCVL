@@ -63,7 +63,7 @@ describe('finance presenter', () => {
   it('maps finance account labels', () => {
     expect(accountTypeText('cash')).toBe('Tiền mặt')
     expect(accountTypeText('bank')).toBe('Ngân hàng')
-    expect(financeAccountChoiceLabel(bankAccount)).toBe('VCB · Vietcombank')
+    expect(financeAccountChoiceLabel(bankAccount)).toBe('VCB: 123456')
     expect(bankAccountDisplayText(bankAccount)).toBe('123456 - Vietcombank - CONG TY QC')
     expect(bankAccountTriggerText(bankAccount)).toBe('123456')
     expect(bankAccountDisplayParts(bankAccount)).toEqual({

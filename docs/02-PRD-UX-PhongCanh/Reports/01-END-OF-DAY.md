@@ -44,7 +44,7 @@ Báo cáo cuối ngày là báo cáo động theo dữ liệu hiện tại. Nế
 | Khách hàng | Tìm theo mã, tên, SĐT nếu có |
 | Nhân viên bán | Lọc người bán trên hóa đơn |
 | Người tạo | Lọc người tạo chứng từ |
-| Phương thức thanh toán | Tiền mặt, từng tài khoản ngân hàng |
+| Phương thức TT | Tiền mặt, từng tài khoản ngân hàng |
 
 Không có bộ lọc kênh bán, VAT/HĐĐT hoặc phương thức bán hàng retail.
 

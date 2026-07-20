@@ -25,7 +25,7 @@ const dashboardData: DashboardData = {
     label: 'So với cùng kỳ tháng trước',
   },
   monthNetRevenue: '69 280 508',
-  monthRevenuePoints: [100_000, 250_000, 50_000],
+  monthRevenuePoints: [100_000, 0, 250_000, 0, 50_000],
   weekdayBars: [
     { label: 'T2', value: 20 },
     { label: 'T3', value: 80 },
@@ -367,6 +367,8 @@ it('shows account-based modules without requiring a POS machine', async () => {
   expect(screen.getByText('Nhân viên bán hàng')).toBeInTheDocument()
   expect(screen.getByRole('region', { name: 'Biểu đồ doanh thu thuần' })).toHaveClass('dashboard-chart-card')
   expect(screen.getByRole('img', { name: 'Biểu đồ cột doanh thu thuần' })).toBeInTheDocument()
+  expect(screen.queryByText('02')).not.toBeInTheDocument()
+  expect(screen.queryByText('04')).not.toBeInTheDocument()
   await userEvent.click(screen.getByRole('tab', { name: 'Theo giờ' }))
   expect(screen.getByRole('tab', { name: 'Theo giờ' })).toHaveAttribute('aria-selected', 'true')
   expect(screen.getByRole('tab', { name: 'Theo ngày' })).toHaveAttribute('aria-selected', 'false')

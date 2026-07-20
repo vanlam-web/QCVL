@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState, type MouseEvent } from 'react'
+import { Fragment, useCallback, useEffect, useState, type FormEvent, type MouseEvent } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
@@ -7,6 +7,7 @@ import {
   ManagementDateRangeInputs,
   ManagementConfirmDialog,
   ManagementDetailRow,
+  ManagementDropdownField,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -18,6 +19,8 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
+import { ManagementDateTimeInput, parseManagementDateTimeInputText } from '../../components/ui-shell/management-date-time-input'
+import { formatMoney } from '../../lib/number-format'
 import type {
   CashbookBusinessAccountedFilter,
   CashbookColumnKey,
@@ -45,6 +48,9 @@ import {
   bankAccountDisplayParts,
   businessAccountedText,
   bankAccountTriggerText,
+  cashbookDetailCategoryText,
+  cashbookDetailCounterpartyText,
+  cashbookDetailCreatorText,
   cashbookCounterpartyHasName,
   cashbookCounterpartyDisplayName,
   cashbookCounterpartyLabel,
@@ -99,7 +105,7 @@ const defaultCashbookColumns: CashbookColumnKey[] = [
 const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }> = [
   { key: 'code', label: 'Mã phiếu' },
   { key: 'created_at', label: 'Thời gian' },
-  { key: 'source_type', label: 'Loại thu chi' },
+  { key: 'source_type', label: 'Loại phiếu' },
   { key: 'counterparty', label: 'Người nộp/nhận' },
   { key: 'finance_account', label: 'Loại sổ quỹ' },
   { key: 'amount_delta', label: 'Giá trị' },
@@ -127,7 +133,7 @@ function initialFinanceRouteFilters() {
 
 function cashbookColumnLabel(column: CashbookColumnKey) {
   if (column === 'created_by') return 'Người tạo'
-  if (column === 'finance_account') return 'Số tài khoản'
+  if (column === 'finance_account') return 'Phương thức TT'
   return cashbookColumnDefinitions.find((definition) => definition.key === column)?.label ?? column
 }
 
@@ -146,7 +152,13 @@ function financeAccountPayload(account: FinanceAccount): Omit<FinanceAccount, 'i
   }
 }
 
-export function FinancePage({ service }: { service: FinanceService }) {
+type CashbookEditForm = {
+  createdAt: string
+  financeAccountId: string
+  note: string
+}
+
+export function FinancePage({ service, currentUserName = '' }: { service: FinanceService; currentUserName?: string }) {
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [routeFilters] = useState(initialFinanceRouteFilters)
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
@@ -199,6 +211,8 @@ export function FinancePage({ service }: { service: FinanceService }) {
   const [cashbookDetail, setCashbookDetail] = useState<CashbookEntryDetail | null>(null)
   const [cashbookDeleteTarget, setCashbookDeleteTarget] = useState<CashbookEntryDetail | null>(null)
   const [cashbookEditPreview, setCashbookEditPreview] = useState<CashbookEntryDetail | null>(null)
+  const [cashbookEditForm, setCashbookEditForm] = useState<CashbookEditForm>({ createdAt: '', financeAccountId: '', note: '' })
+  const [savingCashbookEdit, setSavingCashbookEdit] = useState(false)
   const [deletingCashbookEntry, setDeletingCashbookEntry] = useState(false)
   const [cashbookFavoriteIds, setCashbookFavoriteIds] = useState<string[]>(() => readCashbookFavoriteIds())
   const [showCashbookFavoritesOnly, setShowCashbookFavoritesOnly] = useState(false)
@@ -247,6 +261,15 @@ export function FinancePage({ service }: { service: FinanceService }) {
     .filter((account) => account.account_type === 'bank' && isDeletedFinanceAccount(account))
     .sort((left, right) => bankAccountDisplayText(left).localeCompare(bankAccountDisplayText(right), 'vi'))
   const selectedBankAccount = sortedBankAccounts.find((account) => account.id === cashbookAccountId)
+  const selectedCashbookEditAccount = sortedActiveAccounts.find((account) => account.id === cashbookEditForm.financeAccountId)
+    ?? (cashbookEditPreview?.finance_account.id === cashbookEditForm.financeAccountId ? cashbookEditPreview.finance_account : null)
+  const cashbookEditPaymentMethod = selectedCashbookEditAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash'
+  const cashbookEditAccountOptions = cashbookEditPaymentMethod === 'bank_transfer'
+    ? [
+        ...(cashbookEditPreview?.finance_account.account_type === 'bank' ? [cashbookEditPreview.finance_account] : []),
+        ...activeBankAccounts.filter((account) => account.id !== cashbookEditPreview?.finance_account.id),
+      ]
+    : sortedActiveAccounts.filter((account) => account.account_type === 'cash')
   const fundFilteredCashbookEntries = (cashbookEntries ?? []).filter((entry) => (
     cashbookEntryMatchesFundMode(entry, cashbookFundMode, cashbookAccountId)
     && cashbookEntryMatchesSearch(entry, cashbookSearch)
@@ -824,8 +847,8 @@ export function FinancePage({ service }: { service: FinanceService }) {
       )
     }
     if (column === 'created_at') return dateText(entry.created_at)
-    if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? ''
-    if (column === 'finance_account') return entry.finance_account.account_type === 'bank' ? entry.finance_account.code : ''
+    if (column === 'created_by') return entry.source?.source_creator_name ?? entry.created_by?.name ?? currentUserName
+    if (column === 'finance_account') return financeAccountChoiceLabel(entry.finance_account)
     if (column === 'source_type') return entry.source?.category_name ?? sourceTypeText(entry.source_type)
     if (column === 'counterparty') {
       if (!cashbookCounterpartyHasName(entry.counterparty)) return ''
@@ -1006,6 +1029,56 @@ export function FinancePage({ service }: { service: FinanceService }) {
       return
     }
     setCashbookEditPreview(detail)
+    setCashbookEditForm({
+      createdAt: dateText(detail.created_at),
+      financeAccountId: detail.finance_account.id,
+      note: detail.note ?? detail.source.source_note ?? '',
+    })
+  }
+
+  function closeCashbookEditPreview() {
+    setCashbookEditPreview(null)
+    setCashbookEditForm({ createdAt: '', financeAccountId: '', note: '' })
+  }
+
+  function changeCashbookEditPaymentMethod(paymentMethod: 'cash' | 'bank_transfer') {
+    const nextAccount = paymentMethod === 'bank_transfer'
+      ? (selectedCashbookEditAccount?.account_type === 'bank' ? selectedCashbookEditAccount : activeBankAccounts[0])
+      : (selectedCashbookEditAccount?.account_type === 'cash' ? selectedCashbookEditAccount : sortedActiveAccounts.find((account) => account.account_type === 'cash'))
+    setCashbookEditForm((current) => ({ ...current, financeAccountId: nextAccount?.id ?? '' }))
+  }
+
+  async function saveCashbookEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (!cashbookEditPreview) return
+    const createdAt = parseManagementDateTimeInputText(cashbookEditForm.createdAt)
+    if (!createdAt) {
+      setError('Thời gian không đúng định dạng dd/mm/yyyy hh:mm.')
+      return
+    }
+    setSavingCashbookEdit(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const financeAccountId = cashbookEditForm.financeAccountId === cashbookEditPreview.finance_account.id
+        ? undefined
+        : cashbookEditForm.financeAccountId
+      const saved = await hydrateCashbookDetail(await service.updateCashbookEntry(cashbookEditPreview.id, {
+        created_at: `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}-${String(createdAt.getDate()).padStart(2, '0')}T${String(createdAt.getHours()).padStart(2, '0')}:${String(createdAt.getMinutes()).padStart(2, '0')}:00.000Z`,
+        ...(financeAccountId !== undefined ? { finance_account_id: financeAccountId } : {}),
+        note: cashbookEditForm.note.trim() || null,
+      }))
+      setCashbookDetail((current) => current?.id === saved.id ? saved : current)
+      setCashbookEntries((current) => current?.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)) ?? current)
+      setSelectedCashbookEntry((current) => current?.id === saved.id ? { ...current, ...saved } : current)
+      closeCashbookEditPreview()
+      await Promise.all([loadCashbook({ page: cashbookPage }), loadReferenceData()])
+      setCashbookEntries((current) => current?.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)) ?? current)
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không lưu được phiếu thu chi.'))
+    } finally {
+      setSavingCashbookEdit(false)
+    }
   }
 
   const voucherDialogLabel = voucherMode === null
@@ -1382,7 +1455,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                   />
                 </label>
                 <label>
-                  Phương thức thanh toán
+                  Phương thức TT
                   <select
                     value={voucherPaymentMethod}
                     onChange={(event) => chooseVoucherPaymentMethod(event.target.value as CashbookEntryDetail['payment_method'])}
@@ -1766,6 +1839,7 @@ export function FinancePage({ service }: { service: FinanceService }) {
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>
                           <FinanceDetailPanel
                             detail={cashbookDetail}
+                            currentUserName={currentUserName}
                             onDeleteRequest={setCashbookDeleteTarget}
                             onEditRequest={openCashbookDetailEdit}
                           />
@@ -1870,16 +1944,106 @@ export function FinancePage({ service }: { service: FinanceService }) {
                 aria-label={`Đóng popup sửa phiếu ${cashbookEditPreview.code}`}
                 className="management-icon-button"
                 type="button"
-                onClick={() => setCashbookEditPreview(null)}
+                onClick={closeCashbookEditPreview}
               >
                 <X aria-hidden="true" size={18} />
               </button>
             </header>
-            <FinanceDetailPanel detail={cashbookEditPreview} showActionFooter={false} />
-            <footer className="management-modal-footer">
-              <button className="button button-secondary" type="button" onClick={() => setCashbookEditPreview(null)}>Bỏ qua</button>
-              <button className="button button-primary" disabled title="Phiếu tự động/import chưa hỗ trợ sửa trực tiếp" type="button">Lưu</button>
-            </footer>
+            <div className="finance-cashbook-edit-meta-line">
+              <span><strong>Người tạo</strong> {cashbookDetailCreatorText(cashbookEditPreview) || currentUserName}</span>
+              <span><strong>Khách hàng</strong> {cashbookDetailCounterpartyText(cashbookEditPreview) || '---'}</span>
+            </div>
+            <form aria-label={`Sửa phiếu ${cashbookEditPreview.code}`} className="management-modal-form finance-cashbook-edit-form" onSubmit={saveCashbookEdit}>
+              <div className="management-modal-form-grid finance-cashbook-edit-form-grid">
+                <ManagementDateTimeInput
+                  className="finance-cashbook-edit-date-field"
+                  dateButtonLabel="Chọn ngày phiếu"
+                  datePickerLabel="Lịch chọn ngày phiếu"
+                  inputLabel="Sửa thời gian phiếu"
+                  label="Thời gian"
+                  timeButtonLabel="Chọn giờ phiếu"
+                  timePickerLabel="Chọn giờ phiếu"
+                  value={cashbookEditForm.createdAt}
+                  onChange={(createdAt) => setCashbookEditForm((current) => ({ ...current, createdAt }))}
+                />
+                <label>
+                  Loại thu/chi
+                  <input readOnly value={cashbookDetailCategoryText(cashbookEditPreview)} />
+                </label>
+                <ManagementDropdownField
+                  label="Phương thức TT"
+                  menuLabel="Chọn phương thức TT"
+                  options={[
+                    { value: 'cash', label: 'Tiền mặt' },
+                    { value: 'bank_transfer', label: 'Chuyển khoản' },
+                  ]}
+                  value={cashbookEditPaymentMethod}
+                  onChange={(value) => changeCashbookEditPaymentMethod(value as 'cash' | 'bank_transfer')}
+                />
+                {cashbookEditPaymentMethod === 'bank_transfer' ? (
+                  <ManagementDropdownField
+                    label="Số tài khoản"
+                    menuLabel="Chọn số tài khoản"
+                    options={cashbookEditAccountOptions.map((account) => ({
+                      value: account.id,
+                      label: financeAccountChoiceLabel(account),
+                    }))}
+                    value={cashbookEditForm.financeAccountId}
+                    onChange={(financeAccountId) => setCashbookEditForm((current) => ({ ...current, financeAccountId }))}
+                  />
+                ) : null}
+                <label className="management-modal-field-wide">
+                  Tổng tiền {cashbookEditPreview.direction === 'in' ? 'thu' : 'chi'}
+                  <input readOnly value={formatMoney(Math.abs(cashbookEditPreview.amount_delta))} />
+                </label>
+                <label className="management-modal-field-wide">
+                  Ghi chú
+                  <input
+                    placeholder="Ghi chú..."
+                    value={cashbookEditForm.note}
+                    onChange={(event) => setCashbookEditForm((current) => ({ ...current, note: event.target.value }))}
+                  />
+                </label>
+              </div>
+              {cashbookEditPreview.allocations.length > 0 ? (
+                <section aria-label="Phân bổ vào hóa đơn" className="finance-cashbook-edit-allocation">
+                  <label className="management-modal-checkbox-row finance-cashbook-edit-allocation-checkbox">
+                    <input checked readOnly type="checkbox" />
+                    <span>Phân bổ vào hóa đơn</span>
+                  </label>
+                  <ManagementTableViewport>
+                    <table aria-label="Phân bổ vào hóa đơn" className="management-table management-detail-table finance-cashbook-edit-allocation-table">
+                      <thead>
+                        <tr>
+                          <th>Mã phiếu</th>
+                          <th>Thời gian</th>
+                          <th>Giá trị phiếu</th>
+                          <th>Đã thu trước</th>
+                          <th>Tiền thu/chi</th>
+                          <th>Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cashbookEditPreview.allocations.map((allocation) => (
+                          <tr key={allocation.order_id || allocation.order_code}>
+                            <td>{allocation.order_code}</td>
+                            <td>{dateText(cashbookEditPreview.created_at)}</td>
+                            <td><MoneyText value={allocation.order_total_amount} /></td>
+                            <td><MoneyText value={allocation.collected_before} /></td>
+                            <td><MoneyText value={allocation.allocated_amount} /></td>
+                            <td><StatusChip tone={allocation.remaining_after <= 0 ? 'success' : 'warning'}>{allocation.remaining_after <= 0 ? 'Đã thanh toán' : 'Thanh toán 1 phần'}</StatusChip></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </ManagementTableViewport>
+                </section>
+              ) : null}
+              <footer className="management-modal-footer">
+                <button className="button button-secondary" type="button" onClick={closeCashbookEditPreview}>Bỏ qua</button>
+                <button className="button button-primary" disabled={savingCashbookEdit || !cashbookEditForm.financeAccountId} type="submit">Lưu</button>
+              </footer>
+            </form>
           </section>
         </div>
       ) : null}

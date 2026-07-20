@@ -75,7 +75,7 @@ Nếu sau khi cấn hết nợ cũ vẫn còn dư, phần còn lại là tiền 
 
 MVP không lưu phần dư thành khách trả trước.
 
-### BR-CHK-02C: Phương thức thanh toán
+### BR-CHK-02C: Phương thức TT
 
 POS ghi nhận và UI hiển thị ba kiểu thanh toán nghiệp vụ: **Tiền mặt**, **Chuyển khoản** và **Kết hợp**.
 

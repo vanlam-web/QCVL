@@ -4143,6 +4143,49 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return hydrateCashbookEntryLink(pool, input.organizationId, entry)
     },
 
+    async updateCashbookEntry(input) {
+      await ensureSalesFinanceTables(pool)
+      const current = await pool.query(
+        `
+          select *
+          from cashbook_entries
+          where organization_id = $1
+            and (id = $2 or code = $2)
+          limit 1
+        `,
+        [input.organizationId, input.id],
+      )
+      if (!current.rows[0]) return null
+      const accounts = await listFinanceAccountsForExclusion(pool, input.organizationId)
+      const currentEntry = mapCashbookRow(current.rows[0])
+      const account = input.finance_account_id ? accounts.find((item) => item.id === input.finance_account_id) : null
+      if (input.finance_account_id && !account) return null
+      const nextAccount = account ? cashbookFinanceAccountSnapshot(account) : currentEntry.finance_account
+      const nextCreatedAt = input.created_at ?? currentEntry.created_at
+      const nextNote = input.note !== undefined ? input.note : currentEntry.note
+      const result = await pool.query(
+        `
+          update cashbook_entries
+          set created_at = $3,
+              note = $4,
+              finance_account = $5
+          where organization_id = $1
+            and id = $2
+          returning *
+        `,
+        [
+          input.organizationId,
+          currentEntry.id,
+          nextCreatedAt,
+          nextNote,
+          JSON.stringify(nextAccount),
+        ],
+      )
+      const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
+      const entry = hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(mapCashbookRow(result.rows[0]), userDisplayNames), accounts)
+      return hydrateCashbookEntryLink(pool, input.organizationId, entry)
+    },
+
     async getCustomerFinancialTotals(organizationId) {
       await ensureSalesFinanceTables(pool)
       const sales = await pool.query(

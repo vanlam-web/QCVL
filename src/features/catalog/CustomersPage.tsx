@@ -1869,7 +1869,7 @@ function CustomerDebtPaymentDialog({
               </span>
             </label>
             <label>
-              <span>Phương thức thanh toán</span>
+              <span>Phương thức TT</span>
               <select value={form.method} onChange={(event) => updateField('method', event.target.value)}>
                 <option value="cash">Tiền mặt</option>
                 <option value="bank_transfer">Chuyển khoản</option>

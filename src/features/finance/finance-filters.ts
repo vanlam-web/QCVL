@@ -1,5 +1,6 @@
 import { quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatKvDateTime } from '../../lib/date-format'
+import { formatMoney } from '../../lib/number-format'
 import { normalizeManagementSearchText } from '../../components/ui-shell/management-search'
 import type { CashbookDirection, CashbookEntry, CashbookStatus } from './types'
 
@@ -78,7 +79,7 @@ export function dateTimeInputText(date: Date) {
 export function formatVoucherAmountInput(value: string) {
   const digits = value.replace(/\D/g, '')
   if (digits === '') return ''
-  return Number(digits).toLocaleString('vi-VN')
+  return formatMoney(Number(digits))
 }
 
 export function parseVoucherAmountInput(value: string) {

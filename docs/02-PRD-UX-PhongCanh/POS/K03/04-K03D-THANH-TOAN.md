@@ -143,7 +143,7 @@ Layout thanh toán trên POS tham khảo cách gom nhóm của KiotViet nhưng c
 - Trường **Tổng nợ hiện tại** chỉ hiển thị khi đã chọn khách có hồ sơ công nợ.
 - Trường **Thanh toán nợ cũ** mặc định `0`; nếu nhập lớn hơn `0`, hệ thống ghi nhận thêm một khoản thu nợ cũ.
 - Tiền thanh toán nợ cũ được tự động cấn vào các hóa đơn còn nợ theo thứ tự cũ nhất trước.
-- Phương thức thanh toán hiển thị gồm **Tiền mặt**, **Chuyển khoản** và **Kết hợp**. **Thẻ** và **Ví** không hiển thị trong QCVL MVP.
+- Phương thức TT hiển thị gồm **Tiền mặt**, **Chuyển khoản** và **Kết hợp**. **Thẻ** và **Ví** không hiển thị trong QCVL MVP.
 - Nếu chọn **Tiền mặt**, chỉ nhập tiền mặt; hệ thống ghi vào quỹ tiền mặt.
 - Nếu chọn **Chuyển khoản**, chỉ nhập tiền chuyển khoản, bắt buộc chọn tài khoản nhận tiền; có thể nhập mã giao dịch/ghi chú chuyển khoản; hệ thống ghi vào đúng quỹ ngân hàng đã chọn.
 - Nếu chọn **Kết hợp**, nhập cả tiền mặt và chuyển khoản; tổng thực thu là tổng hai khoản.

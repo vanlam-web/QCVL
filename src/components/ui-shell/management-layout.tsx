@@ -1,5 +1,5 @@
 import { Fragment, cloneElement, isValidElement, useEffect, useRef, useState, type AriaRole, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref, type SyntheticEvent } from 'react'
-import { ArrowDownToLine, CalendarDays, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
+import { ArrowDownToLine, CalendarDays, ChevronDown, ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 import { normalizeDateInput, toDisplayDateInput } from '../../lib/date-ranges'
 import { currentSystemDate } from '../../lib/system-clock'
 import { managementPageSizeOptions } from '../../lib/management-page-size'
@@ -158,6 +158,91 @@ export function ManagementFilterSelectField({
         {children}
       </select>
     </label>
+  )
+}
+
+export interface ManagementDropdownOption {
+  value: string
+  label: ReactNode
+  ariaLabel?: string
+}
+
+export function ManagementDropdownField({
+  label,
+  menuLabel = label,
+  value,
+  options,
+  className,
+  onChange,
+}: {
+  label: string
+  menuLabel?: string
+  value: string
+  options: ManagementDropdownOption[]
+  className?: string
+  onChange: (value: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const selectedOption = options.find((option) => option.value === value) ?? options[0]
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    function closeWhenOutside(event: Event) {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (rootRef.current?.contains(target)) return
+      setOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeWhenOutside, true)
+    document.addEventListener('click', closeWhenOutside, true)
+    return () => {
+      document.removeEventListener('pointerdown', closeWhenOutside, true)
+      document.removeEventListener('click', closeWhenOutside, true)
+    }
+  }, [open])
+
+  function chooseOption(nextValue: string) {
+    onChange(nextValue)
+    setOpen(false)
+  }
+
+  return (
+    <div className={`management-dropdown-field${className ? ` ${className}` : ''}`} ref={rootRef}>
+      <span className="management-dropdown-label">{label}</span>
+      <div className="management-dropdown-control">
+        <button
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          aria-label={label}
+          className="management-dropdown-trigger"
+          type="button"
+          onClick={() => setOpen((current) => !current)}
+        >
+          <span>{selectedOption?.label ?? ''}</span>
+          <ChevronDown aria-hidden="true" size={15} />
+        </button>
+        {open ? (
+          <div aria-label={menuLabel} className="management-dropdown-menu" role="listbox">
+            {options.map((option) => (
+              <button
+                aria-label={option.ariaLabel}
+                aria-selected={option.value === value}
+                className="management-dropdown-option"
+                key={option.value}
+                role="option"
+                type="button"
+                onClick={() => chooseOption(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 

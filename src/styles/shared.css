@@ -2158,6 +2158,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 }
 
 .finance-cashbook-data-table thead th {
+  font-size: 0.7rem;
   text-transform: none;
 }
 
@@ -2435,20 +2436,193 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 }
 
 .finance-cashbook-edit-preview-dialog {
-  gap: var(--space-3);
-  width: min(48rem, calc(100vw - var(--space-4)));
+  gap: var(--space-2);
+  width: min(37.5rem, calc(100vw - var(--space-4)));
   max-height: calc(100vh - 7rem);
   padding: var(--space-3);
 }
 
-.finance-cashbook-edit-preview-dialog .management-detail-panel {
+.finance-cashbook-edit-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+}
+
+.finance-cashbook-edit-meta-line strong {
+  margin-right: var(--space-1);
+  color: var(--color-text);
+  font-weight: 400;
+}
+
+.finance-cashbook-edit-form input:not([type="checkbox"]):not([type="radio"]),
+.finance-cashbook-edit-form select,
+.finance-cashbook-edit-form textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 2rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.finance-cashbook-edit-form input:not([type="checkbox"]):not([type="radio"]),
+.finance-cashbook-edit-form select,
+.finance-cashbook-edit-form textarea {
+  grid-column: 2;
+}
+
+.finance-cashbook-edit-form .management-modal-field-wide {
+  grid-column: 1 / -1;
+}
+
+.finance-cashbook-edit-form .management-modal-field-wide input,
+.finance-cashbook-edit-form .management-modal-field-wide textarea {
+  width: 100%;
+}
+
+.finance-cashbook-edit-form input[readonly],
+.finance-cashbook-edit-form textarea[readonly] {
+  border-bottom-color: transparent;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.finance-cashbook-edit-form select:focus,
+.finance-cashbook-edit-form input:focus,
+.finance-cashbook-edit-form textarea:focus {
+  outline: none;
+  border-bottom-color: var(--color-primary);
+  box-shadow: none;
+}
+
+.management-date-time-input-field {
+  position: relative;
+}
+
+.management-date-time-input-shell {
+  position: relative;
+  min-width: 0;
+}
+
+.management-date-time-input-shell input {
+  padding-right: 4.25rem !important;
+}
+
+.management-date-time-input-button {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0;
+  cursor: pointer;
+}
+
+.management-date-time-input-button-date {
+  right: 1.85rem;
+}
+
+.management-date-time-input-button-time {
+  right: 0.35rem;
+}
+
+.management-date-time-picker {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  right: 0;
+  z-index: calc(var(--z-shell) + 4);
+  display: grid;
+  gap: var(--space-2);
+  min-width: 16rem;
+  max-width: min(20rem, calc(100vw - var(--space-8)));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-2);
+}
+
+.management-date-time-date-picker header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   gap: var(--space-2);
 }
 
-.finance-cashbook-edit-preview-dialog .management-detail-header,
-.finance-cashbook-edit-preview-dialog .management-detail-meta-grid,
-.finance-cashbook-edit-preview-dialog .management-detail-inline-note {
+.management-date-time-date-picker header strong {
+  justify-self: center;
+  font-size: 0.8rem;
+}
+
+.management-date-time-date-picker header button {
+  min-width: 1.75rem;
+  min-height: 1.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.management-date-time-weekdays,
+.management-date-time-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.management-date-time-weekdays {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+.management-date-time-calendar-grid button,
+.management-date-time-time-picker button {
+  min-height: 1.85rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+  font-size: 0.8rem;
+}
+
+.management-date-time-calendar-grid button:hover,
+.management-date-time-time-picker button:hover {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+}
+
+.management-date-time-muted-day {
+  color: var(--color-text-muted);
+}
+
+.management-date-time-time-picker {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  max-height: 15rem;
+  overflow: auto;
+}
+
+.finance-cashbook-edit-allocation {
+  display: grid;
   gap: var(--space-2);
+}
+
+.finance-cashbook-edit-allocation-checkbox {
+  font-size: 0.875rem;
 }
 
 .catalog-product-group-dialog {
@@ -2499,6 +2673,111 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
+}
+
+.finance-cashbook-edit-form {
+  gap: var(--space-2);
+}
+
+.management-modal-form-grid.finance-cashbook-edit-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.finance-cashbook-edit-form label {
+  display: grid;
+  grid-template-columns: 6.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  min-height: 2rem;
+}
+
+.finance-cashbook-edit-form .management-dropdown-field {
+  display: grid;
+  grid-template-columns: 6.25rem minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-text);
+  font-size: 0.8125rem;
+  font-weight: 400;
+  min-height: 2rem;
+}
+
+.finance-cashbook-edit-form .management-dropdown-label {
+  min-width: 0;
+}
+
+.finance-cashbook-edit-form .management-dropdown-control {
+  position: relative;
+  min-width: 0;
+}
+
+.finance-cashbook-edit-form .management-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-width: 0;
+  min-height: 2rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.25rem 0;
+  font-size: 0.875rem;
+  font-weight: 400;
+  text-align: left;
+}
+
+.finance-cashbook-edit-form .management-dropdown-trigger:hover,
+.finance-cashbook-edit-form .management-dropdown-trigger:focus-visible,
+.finance-cashbook-edit-form .management-dropdown-trigger[aria-expanded='true'] {
+  outline: none;
+  border-bottom-color: var(--color-primary);
+}
+
+.finance-cashbook-edit-form .management-dropdown-trigger span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finance-cashbook-edit-form .management-dropdown-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 8;
+  display: grid;
+  gap: var(--space-1);
+  min-width: 100%;
+  max-height: 16rem;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+}
+
+.finance-cashbook-edit-form .management-dropdown-option {
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  padding: 0.5rem var(--space-2);
+  text-align: left;
+}
+
+.finance-cashbook-edit-form .management-dropdown-option:hover,
+.finance-cashbook-edit-form .management-dropdown-option:focus-visible,
+.finance-cashbook-edit-form .management-dropdown-option[aria-selected='true'] {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  outline: none;
 }
 
 .management-modal-form-stack {
@@ -2589,6 +2868,42 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 .management-modal-form input[readonly],
 .management-modal-form select:disabled {
   color: var(--color-text-muted);
+}
+
+.finance-cashbook-edit-form input:not([type="checkbox"]):not([type="radio"]),
+.finance-cashbook-edit-form select,
+.finance-cashbook-edit-form textarea {
+  width: 100% !important;
+  min-width: 0;
+  min-height: 2rem;
+  border: 0 !important;
+  border-bottom: 1px solid var(--color-border) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding: 0.25rem 0 !important;
+  box-shadow: none !important;
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 400;
+  grid-column: 2;
+}
+
+.finance-cashbook-edit-form .management-modal-field-wide input,
+.finance-cashbook-edit-form .management-modal-field-wide textarea {
+  width: 100% !important;
+}
+
+.finance-cashbook-edit-form input[readonly],
+.finance-cashbook-edit-form textarea[readonly] {
+  border-bottom: 0 !important;
+  font-weight: 500;
+}
+
+.finance-cashbook-edit-form select:focus,
+.finance-cashbook-edit-form input:focus,
+.finance-cashbook-edit-form textarea:focus {
+  outline: none;
+  border-bottom-color: var(--color-primary) !important;
 }
 
 .management-input-with-icon {
@@ -3093,6 +3408,20 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 .management-detail-table td {
   border-bottom: 1px solid var(--color-border-muted);
   padding: var(--space-2);
+}
+
+.management-table-viewport > table.finance-cashbook-linked-documents-table th,
+.management-table-viewport > table.finance-cashbook-linked-documents-table td,
+.management-table-viewport > table.finance-cashbook-edit-allocation-table th,
+.management-table-viewport > table.finance-cashbook-edit-allocation-table td {
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.7rem;
+  text-transform: none;
+}
+
+.management-table-viewport > table.finance-cashbook-linked-documents-table tbody td,
+.management-table-viewport > table.finance-cashbook-edit-allocation-table tbody td {
+  font-size: 0.8125rem;
 }
 
 .management-detail-lines-table th,

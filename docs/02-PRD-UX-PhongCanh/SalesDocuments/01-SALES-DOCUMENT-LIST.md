@@ -105,7 +105,7 @@ QC-OMS chỉ làm luồng **bán đứt**:
 | Loại hóa đơn | Checkbox nhiều chọn: Hóa đơn, Báo giá. Mặc định chọn cả hai. API nhận `type=invoice,quote`; nếu bỏ hết thì gửi `__none__` và trả rỗng. |
 | Trạng thái hóa đơn | Checkbox nhiều chọn: Đang hiệu lực, Hoàn tất, Đã hủy. Mặc định chọn `active,completed`; `cancelled` chỉ hiện khi người dùng chọn. API nhận `status=active,completed,cancelled`. |
 | Thanh toán | Checkbox nhiều chọn: Chưa thanh toán, Thanh toán một phần, Đã thanh toán. Mặc định chọn cả ba. API nhận `payment_status=unpaid,partial,paid`. |
-| Phương thức thanh toán | Tất cả, Tiền mặt, Chuyển khoản, Kết hợp nếu có dữ liệu |
+| Phương thức TT | Tất cả, Tiền mặt, Chuyển khoản, Kết hợp nếu có dữ liệu |
 | Khách hàng | Chọn khách hoặc nhập nhanh tên/mã/SĐT |
 | Người bán/người tạo | Trong QC-OMS hiện tại hai khái niệm này dùng cùng tài khoản tạo/chốt chứng từ; UI chỉ cần một filter người bán/người tạo |
 | Bảng giá | Giá chung hoặc bảng giá theo nhóm khách |

@@ -841,9 +841,9 @@ export function SalesDocumentsPage({
               )
             })}
           </ManagementFilterGroup>
-          <ManagementFilterGroup title="Phương thức thanh toán">
+          <ManagementFilterGroup title="Phương thức TT">
             <select
-              aria-label="Phương thức thanh toán"
+              aria-label="Phương thức TT"
               className="management-filter-select"
               value={paymentMethodFilter}
               onChange={(event) => void applyPaymentMethodFilter(event.target.value as PaymentMethodFilter)}

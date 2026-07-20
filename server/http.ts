@@ -712,6 +712,13 @@ export interface ServerRepository {
   listCashbookEntries?(input: { organizationId: string; url: URL }): Promise<CashbookEntryData[]>
   listCashbookEntriesPage?(input: { organizationId: string; url: URL }): Promise<CashbookListPageData>
   getCashbookEntry?(input: { organizationId: string; id: string }): Promise<CashbookEntryData | null>
+  updateCashbookEntry?(input: {
+    organizationId: string
+    id: string
+    created_at?: string
+    finance_account_id?: string
+    note?: string | null
+  }): Promise<CashbookEntryData | null>
   getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
     organizationId: string
@@ -3587,9 +3594,64 @@ async function getDevApiResponse(
         return {
           found: true,
           data: await enrichCashbookEntryDetail(entry, async (code) => (
-            salesDocuments.find((document) => document.code === code) ?? null
+          salesDocuments.find((document) => document.code === code) ?? null
           )),
         }
+      },
+      updateCashbookEntry: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request)
+        const createdAt = optionalIsoDateTime(body.created_at, 'created_at')
+        const financeAccountId = body.finance_account_id === undefined ? undefined : nullableString(body.finance_account_id) ?? undefined
+        const note = body.note === undefined ? undefined : nullableString(body.note)
+        if (createdAt === undefined && financeAccountId === undefined && body.note === undefined) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'No cashbook fields to update.')
+        }
+        if (repository.updateCashbookEntry) {
+          const entry = await repository.updateCashbookEntry({
+            organizationId: currentUser.organization.id,
+            id,
+            ...(createdAt !== undefined ? { created_at: createdAt } : {}),
+            ...(financeAccountId !== undefined ? { finance_account_id: financeAccountId } : {}),
+            ...(body.note !== undefined ? { note } : {}),
+          })
+          if (entry === null) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook entry not found.' }, status: 404 }
+          return {
+            found: true,
+            data: await enrichCashbookEntryDetail(entry, async (code) => {
+              const directDocument = await repository.getSalesDocument?.({ organizationId: currentUser.organization.id, id: code })
+              if (directDocument) return directDocument
+              const searchUrl = new URL('http://api.local/api/v1/sales-documents')
+              searchUrl.searchParams.set('search', code)
+              searchUrl.searchParams.set('type', 'invoice')
+              const documents = await repository.listSalesDocuments?.({ organizationId: currentUser.organization.id, url: searchUrl })
+              return documents?.find((document) => document.code === code) ?? null
+            }),
+          }
+        }
+        const index = cashbookEntries.findIndex((entry) => entry.id === id || entry.code === id)
+        if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook entry not found.' }, status: 404 }
+        const current = cashbookEntries[index]
+        const account = financeAccountId ? financeAccounts.find((item) => item.id === financeAccountId) : null
+        if (financeAccountId && !account) throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.')
+        const nextFinanceAccount = account
+          ? {
+              id: account.id,
+              code: account.account_type === 'bank' ? account.account_number ?? account.code : account.code,
+              name: account.name,
+              account_type: account.account_type,
+              account_number: account.account_number,
+              account_holder: account.account_holder,
+            }
+          : current.finance_account
+        cashbookEntries[index] = {
+          ...current,
+          ...(createdAt !== undefined ? { created_at: createdAt } : {}),
+          ...(body.note !== undefined ? { note } : {}),
+          finance_account: nextFinanceAccount,
+          payment_method: nextFinanceAccount.account_type === 'bank' ? 'bank_transfer' : 'cash',
+        }
+        return { found: true, data: await enrichCashbookEntryDetail(cashbookEntries[index], async (code) => salesDocuments.find((document) => document.code === code) ?? null) }
       },
       createCashbookVoucher: async () => ({ found: true, data: { id: randomUUID(), code: 'PC0002', source_type: 'manual_voucher', status: 'posted', amount: Number((await readJson(request)).amount ?? 0) }, status: 201 }),
       cancelCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }),

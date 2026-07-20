@@ -345,7 +345,7 @@ function FinanceRoute() {
 
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
-      <FinancePage service={service} />
+      <FinancePage currentUserName={currentUser.user.display_name || currentUser.user.email} service={service} />
     </AppShell>
   )
 }

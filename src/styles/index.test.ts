@@ -238,8 +238,12 @@ it('shares modal layout for management forms', () => {
   expect(cssRule('.management-modal-dialog')).toContain('border-radius: var(--radius-md)')
   expect(cssRule('.management-modal-backdrop:has(.finance-cashbook-edit-preview-dialog)')).toContain('place-items: start center')
   expect(cssRule('.management-modal-backdrop:has(.finance-cashbook-edit-preview-dialog)')).toContain('padding-top: 5.5rem')
-  expect(cssRule('.finance-cashbook-edit-preview-dialog')).toContain('width: min(48rem, calc(100vw - var(--space-4)))')
+  expect(cssRule('.finance-cashbook-edit-preview-dialog')).toContain('width: min(37.5rem, calc(100vw - var(--space-4)))')
+  expect(cssRule('.finance-cashbook-edit-meta-line')).toContain('display: flex')
   expect(cssRule('.finance-cashbook-edit-preview-dialog')).toContain('padding: var(--space-3)')
+  expect(cssRule('.management-table-viewport > table.finance-cashbook-linked-documents-table th,\n.management-table-viewport > table.finance-cashbook-linked-documents-table td,\n.management-table-viewport > table.finance-cashbook-edit-allocation-table th,\n.management-table-viewport > table.finance-cashbook-edit-allocation-table td')).toContain('font-size: 0.7rem')
+  expect(cssRule('.management-table-viewport > table.finance-cashbook-linked-documents-table th,\n.management-table-viewport > table.finance-cashbook-linked-documents-table td,\n.management-table-viewport > table.finance-cashbook-edit-allocation-table th,\n.management-table-viewport > table.finance-cashbook-edit-allocation-table td')).toContain('text-transform: none')
+  expect(cssRule('.management-table-viewport > table.finance-cashbook-linked-documents-table tbody td,\n.management-table-viewport > table.finance-cashbook-edit-allocation-table tbody td')).toContain('font-size: 0.8125rem')
   expect(cssRule('.catalog-product-group-dialog')).toContain('overflow: visible')
   expect(cssRule('.catalog-product-group-dialog')).toContain('width: min(26.5rem, calc(100vw - var(--space-4)))')
   expect(cssRule('.catalog-product-group-dialog .management-filter-product-group-popover')).toContain('position: absolute')
@@ -722,6 +726,7 @@ it('keeps dashboard activity sidebar sticky and chart surface modern', () => {
 
 it('keeps the cashbook data table in a KV-like layout with project colors', () => {
   expect(cssRule('.finance-cashbook-data-table thead th')).toContain('text-transform: none')
+  expect(cssRule('.finance-cashbook-data-table thead th')).toContain('font-size: 0.7rem')
   expect(cssRule('.finance-cashbook-data-table tbody td')).toContain('color: var(--color-text)')
   expect(cssRule('.finance-cashbook-data-table tbody td')).toContain('font-weight: 400')
   expect(cssRule('.finance-cashbook-data-table .management-link-button,\n.finance-cashbook-data-table .finance-cashbook-counterparty-link')).toContain('color: var(--color-text)')

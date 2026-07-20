@@ -805,8 +805,8 @@ it('filters sales documents by supported invoice payment seller and price list f
     page_size: 15,
   }))
 
-  const paymentMethodGroup = within(sidebar).getByRole('region', { name: 'Phương thức thanh toán' })
-  await userEvent.selectOptions(within(paymentMethodGroup).getByRole('combobox', { name: 'Phương thức thanh toán' }), 'bank_transfer')
+  const paymentMethodGroup = within(sidebar).getByRole('region', { name: 'Phương thức TT' })
+  await userEvent.selectOptions(within(paymentMethodGroup).getByRole('combobox', { name: 'Phương thức TT' }), 'bank_transfer')
   expect(service.listSalesDocuments).toHaveBeenLastCalledWith(expect.objectContaining({
     payment_method: 'bank_transfer',
     payment_status: 'paid',

@@ -20,6 +20,7 @@ import type {
   FinanceSalesDocumentSummary,
   KiotVietCashbookDeleteResult,
   KiotVietCashbookImportPreview,
+  UpdateCashbookEntryInput,
 } from './types'
 
 export interface FinanceApiRequester {
@@ -89,6 +90,11 @@ export function createFinanceService(api: FinanceApiRequester) {
       return api.request<CashbookListResponse>(`/api/v1/finance/cashbook${query ? `?${query}` : ''}`)
     },
     getCashbookEntry: (entryId: string) => api.request<CashbookEntryDetail>(`/api/v1/finance/cashbook/${entryId}`),
+    updateCashbookEntry: (entryId: string, input: UpdateCashbookEntryInput) =>
+      api.request<CashbookEntryDetail>(`/api/v1/finance/cashbook/${entryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
     getSalesDocumentByCode: async (code: string) => {
       const params = new URLSearchParams({
         search: code,
@@ -133,7 +139,7 @@ export type FinanceService = ReturnType<typeof createFinanceService>
 
 export function buildCashbookCsv(items: CashbookEntry[]) {
   const exportRows = [
-    ['Mã phiếu', 'Thời gian', 'Người tạo', 'Loại thu chi', 'Số tài khoản', 'Người nộp/nhận', 'Giá trị', 'Ghi chú'],
+    ['Mã phiếu', 'Thời gian', 'Người tạo', 'Loại phiếu', 'Số tài khoản', 'Người nộp/nhận', 'Giá trị', 'Ghi chú'],
     ...items.map((entry) => [
       entry.code,
       entry.created_at,

@@ -29,6 +29,7 @@ import type { CashbookEntryDetail } from './types'
 
 interface FinanceDetailPanelProps {
   detail: CashbookEntryDetail | null
+  currentUserName?: string
   onDeleteRequest?: (detail: CashbookEntryDetail) => void
   onEditRequest?: (detail: CashbookEntryDetail) => void
   showActionFooter?: boolean
@@ -40,7 +41,7 @@ function linkedDocumentHref(code: string) {
   return null
 }
 
-export function FinanceDetailPanel({ detail, onDeleteRequest, onEditRequest, showActionFooter = true }: FinanceDetailPanelProps) {
+export function FinanceDetailPanel({ detail, currentUserName = '', onDeleteRequest, onEditRequest, showActionFooter = true }: FinanceDetailPanelProps) {
   if (detail === null) return <p>Đang tải chi tiết...</p>
   const counterpartyLabel = cashbookDetailCounterpartyLabel(detail)
   const counterpartyText = cashbookDetailCounterpartyText(detail)
@@ -61,11 +62,11 @@ export function FinanceDetailPanel({ detail, onDeleteRequest, onEditRequest, sho
       <ManagementDetailInfoList
         columns="three"
         items={[
-          { label: 'Người tạo:', value: cashbookDetailCreatorText(detail) },
+          { label: 'Người tạo:', value: cashbookDetailCreatorText(detail) || currentUserName },
           { label: 'Thời gian:', value: financeDateText(detail.created_at) },
           { label: 'Số tiền', value: <MoneyText value={detail.amount_delta} /> },
           { label: cashbookDetailAmountLabel(detail), value: cashbookDetailCategoryText(detail) },
-          { label: 'Phương thức thanh toán', value: cashbookDetailPaymentMethodText(detail) },
+          { label: 'Phương thức TT', value: cashbookDetailPaymentMethodText(detail) },
           { label: counterpartyLabel, value: counterpartyText },
         ]}
       />

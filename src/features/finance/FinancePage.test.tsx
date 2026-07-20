@@ -239,6 +239,19 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     collectCustomerDebt: vi.fn(async () => ({ payment_receipt_id: 'receipt-1', allocated_amount: 500000 })),
     createFinanceAccount: vi.fn(async (input) => ({ ...input, id: 'created-bank-account' })),
     updateFinanceAccount: vi.fn(async (accountId, input) => ({ ...accounts.find((account) => account.id === accountId) ?? accounts[1], ...input, id: accountId })),
+    updateCashbookEntry: vi.fn(async (entryId, input) => ({
+      ...cashbookDetail,
+      id: entryId,
+      code: cashbookDetail.code,
+      created_at: input.created_at ?? cashbookDetail.created_at,
+      finance_account: input.finance_account_id === 'cash-1'
+        ? accounts[0]
+        : input.finance_account_id === 'bank-1'
+          ? accounts[1]
+          : cashbookDetail.finance_account,
+      note: input.note ?? cashbookDetail.note,
+      payment_method: input.finance_account_id === 'bank-1' ? 'bank_transfer' as const : 'cash' as const,
+    })),
     createCashbookVoucher: vi.fn(async () => ({
       id: 'voucher-2',
       code: 'PC000001',
@@ -628,7 +641,7 @@ describe('FinancePage', () => {
       finance_account_id: undefined,
       finance_account_type: 'bank',
     }))
-    expect(screen.getByText('0771000598653')).toBeInTheDocument()
+    expect(screen.getByText('VCB: 0771000598653')).toBeInTheDocument()
 
     await userEvent.click(within(sidebar).getByRole('button', { name: 'Chọn tài khoản' }))
     expect(within(sidebar).queryByRole('option', { name: /0771000598653/ })).not.toBeInTheDocument()
@@ -800,8 +813,8 @@ describe('FinancePage', () => {
     expect(within(table).getByRole('columnheader', { name: 'Mã phiếu' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Thời gian' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Người tạo' })).toBeInTheDocument()
-    expect(within(table).getByRole('columnheader', { name: 'Loại thu chi' })).toBeInTheDocument()
-    expect(within(table).getByRole('columnheader', { name: 'Số tài khoản' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Loại phiếu' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Phương thức TT' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Người nộp/nhận' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Giá trị' })).toBeInTheDocument()
     expect(within(table).getByRole('columnheader', { name: 'Ghi chú' })).toBeInTheDocument()
@@ -1044,7 +1057,7 @@ describe('FinancePage', () => {
       'Thời gian:',
       'Số tiền',
       'Loại thu',
-      'Phương thức thanh toán',
+      'Phương thức TT',
       'Người nộp',
     ])
     expect(detail.querySelector('.management-detail-meta-rows')).toBeNull()
@@ -1063,7 +1076,7 @@ describe('FinancePage', () => {
     expect(detailText).toContain('Thời gian:')
     expect(within(detail).getByText('Số tiền')).toBeInTheDocument()
     expect(within(detail).getByText('Loại thu')).toBeInTheDocument()
-    expect(within(detail).getByText('Phương thức thanh toán')).toBeInTheDocument()
+    expect(within(detail).getByText('Phương thức TT')).toBeInTheDocument()
     expect(within(detail).getByText('Người nộp')).toBeInTheDocument()
     expect(within(detail).getByText('Anh Nam, 0900000000')).toBeInTheDocument()
     expect(within(detail).queryByText('Đối tượng nộp')).not.toBeInTheDocument()
@@ -1092,9 +1105,25 @@ describe('FinancePage', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' }))
     const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PT0001' })
     expect(within(editDialog).getByRole('heading', { name: 'Sửa phiếu PT0001' })).toBeInTheDocument()
-    expect(within(editDialog).getByRole('button', { name: 'Lưu' })).toBeDisabled()
-    await userEvent.click(within(editDialog).getByRole('button', { name: 'Đóng popup sửa phiếu PT0001' }))
-    expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument()
+    expect(within(editDialog).queryByLabelText('Mã phiếu')).not.toBeInTheDocument()
+    expect(within(editDialog).getByText((_, node) => node?.textContent === 'Người tạo Văn Viết Phương Lâm')).toBeInTheDocument()
+    expect(within(editDialog).getByText((_, node) => node?.textContent === 'Khách hàng Anh Nam, 0900000000')).toBeInTheDocument()
+    const createdAtInput = within(editDialog).getByLabelText('Sửa thời gian phiếu')
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Chọn ngày phiếu' }))
+    expect(within(editDialog).getByRole('region', { name: 'Lịch chọn ngày phiếu' })).toBeInTheDocument()
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Chọn giờ phiếu' }))
+    expect(within(editDialog).getByRole('region', { name: 'Chọn giờ phiếu' })).toBeInTheDocument()
+    await userEvent.clear(createdAtInput)
+    await userEvent.type(createdAtInput, '14/07/2026 08:15')
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Phương thức TT' }))
+    await userEvent.click(within(editDialog).getByRole('option', { name: 'Chuyển khoản' }))
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(service.updateCashbookEntry).toHaveBeenCalledWith('entry-1', {
+      created_at: '2026-07-14T08:15:00.000Z',
+      finance_account_id: 'bank-1',
+      note: 'Thu nợ',
+    }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument())
     expect(within(detail).getByRole('button', { name: 'In phiếu PT0001' })).toBeEnabled()
     expect(within(detail).getAllByText('HD0001').length).toBeGreaterThan(0)
     expect(service.getCashbookEntry).toHaveBeenCalledWith('entry-1')
@@ -1121,6 +1150,125 @@ describe('FinancePage', () => {
     expect(service.getCashbookEntry).toHaveBeenCalledTimes(callsBeforeUtilityClicks)
   })
 
+  it('falls back to logged in account name when cashbook creator data is missing', async () => {
+    const entryWithoutCreator: CashbookEntry = {
+      ...entry,
+      created_by: null,
+      source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001', source_creator_name: null },
+    }
+    const service = makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: [entryWithoutCreator],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+      getCashbookEntry: vi.fn(async () => ({
+        ...cashbookDetail,
+        created_by: null,
+        source: { ...cashbookDetail.source, source_creator_name: null },
+      } as CashbookEntryDetail)),
+    })
+    render(<FinancePage currentUserName="Văn Lâm" service={service} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    const row = within(table).getByRole('row', { name: /PT0001/ })
+    expect(row.textContent).toContain('Văn Lâm')
+    await userEvent.click(within(row).getByRole('button', { name: 'Mở chi tiết PT0001' }))
+
+    const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT0001' })
+    expect(detail.textContent).toContain('Người tạo:')
+    expect(detail.textContent).toContain('Văn Lâm')
+  })
+
+  it('keeps historical bank method in cashbook edit and updates the outside row after saving', async () => {
+    const historicalBankEntry: CashbookEntry = {
+      ...entry,
+      finance_account: { id: 'bank-history', code: '0000000000', name: 'Vietcombank', account_type: 'bank', account_number: '0000000000' },
+    }
+    const historicalBankDetail: CashbookEntryDetail = {
+      ...cashbookDetail,
+      finance_account: historicalBankEntry.finance_account,
+      payment_method: 'bank_transfer',
+    }
+    const savedBankDetail: CashbookEntryDetail = {
+      ...historicalBankDetail,
+      finance_account: { id: 'bank-1', code: 'MB01', name: 'MB Bank', account_type: 'bank', account_number: '0947900909' },
+      payment_method: 'bank_transfer',
+    }
+    const service = makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: [historicalBankEntry],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+      getCashbookEntry: vi.fn(async () => historicalBankDetail),
+      updateCashbookEntry: vi.fn(async () => savedBankDetail),
+    })
+    render(<FinancePage service={service} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    const row = within(table).getByRole('row', { name: /PT0001/ })
+    expect(row).toHaveTextContent('VCB: 0000000000')
+    await userEvent.click(within(row).getByRole('button', { name: 'Mở chi tiết PT0001' }))
+    const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT0001' })
+    await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' }))
+
+    const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PT0001' })
+    expect(within(editDialog).getByRole('button', { name: 'Phương thức TT' })).toHaveTextContent('Chuyển khoản')
+    expect(within(editDialog).getByRole('button', { name: 'Số tài khoản' })).toHaveTextContent('VCB: 0000000000')
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Số tài khoản' }))
+    await userEvent.click(within(editDialog).getByRole('option', { name: 'MB Bank: MB01' }))
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Lưu' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument())
+    expect(service.updateCashbookEntry).toHaveBeenCalledWith('entry-1', expect.objectContaining({ finance_account_id: 'bank-1' }))
+    expect(row).toHaveTextContent('MB Bank: 0947900909')
+  })
+
+  it('preserves historical cashbook account without resending its account id when unchanged', async () => {
+    const historicalBankEntry: CashbookEntry = {
+      ...entry,
+      finance_account: { id: 'bank-history', code: '0000000000', name: 'Vietcombank', account_type: 'bank', account_number: '0000000000' },
+    }
+    const historicalBankDetail: CashbookEntryDetail = {
+      ...cashbookDetail,
+      finance_account: historicalBankEntry.finance_account,
+      payment_method: 'bank_transfer',
+    }
+    const updateCashbookEntry = vi.fn(async () => historicalBankDetail)
+    const service = makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: [historicalBankEntry],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+      getCashbookEntry: vi.fn(async () => historicalBankDetail),
+      updateCashbookEntry,
+    })
+    render(<FinancePage service={service} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    const row = within(table).getByRole('row', { name: /PT0001/ })
+    await userEvent.click(within(row).getByRole('button', { name: 'Mở chi tiết PT0001' }))
+    const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT0001' })
+    await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PT0001' }))
+
+    const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PT0001' })
+    expect(within(editDialog).getByRole('button', { name: 'Phương thức TT' })).toHaveTextContent('Chuyển khoản')
+    expect(within(editDialog).getByRole('button', { name: 'Số tài khoản' })).toHaveTextContent('VCB: 0000000000')
+    await userEvent.click(within(editDialog).getByRole('button', { name: 'Lưu' }))
+
+    await waitFor(() => expect(updateCashbookEntry).toHaveBeenCalled())
+    expect(updateCashbookEntry).toHaveBeenCalledWith('entry-1', expect.not.objectContaining({ finance_account_id: expect.anything() }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Sửa phiếu PT0001' })).not.toBeInTheDocument())
+  })
+
   it('shows expense cashbook detail with payer-free log and expense allocation wording', async () => {
     const service = makeService({
       getCashbookEntry: vi.fn(async () => expenseCashbookDetail),
@@ -1142,7 +1290,7 @@ describe('FinancePage', () => {
     expect(detailText).toContain('Người tạo:')
     expect(detailText).toContain('Văn Viết Phương Lâm')
     expect(detailText).not.toContain('Người chi')
-    expect(within(detail).getByText('Phương thức thanh toán')).toBeInTheDocument()
+    expect(within(detail).getByText('Phương thức TT')).toBeInTheDocument()
     expect(within(detail).getByText('MB Bank: MB01')).toBeInTheDocument()
     expect(within(detail).getByText('Phiếu chi tự động được gắn với phiếu nhập hàng PN000679.')).toBeInTheDocument()
     const linkedDocumentsTable = within(detail).getByRole('table', { name: 'Chứng từ liên kết' })

@@ -328,11 +328,14 @@ export function DashboardPage({
 }
 
 function dashboardRevenueBars(points: number[], axisMax: number) {
-  return points.map((point, index) => ({
-    label: String(index + 1).padStart(2, '0'),
-    amount: formatCompactChartMoney(point),
-    height: axisMax > 0 && point > 0 ? Math.max(4, Math.round((point / axisMax) * 100)) : 0,
-  }))
+  return points.flatMap((point, index) => {
+    if (point <= 0) return []
+    return [{
+      label: String(index + 1).padStart(2, '0'),
+      amount: formatCompactChartMoney(point),
+      height: axisMax > 0 ? Math.max(4, Math.round((point / axisMax) * 100)) : 0,
+    }]
+  })
 }
 
 function dashboardRevenueAxisMax(points: number[]) {

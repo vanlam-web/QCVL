@@ -702,7 +702,7 @@ it('expands customer details directly under the selected row and closes on secon
   await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán' }))
   const paymentDialog = screen.getByRole('dialog', { name: 'Thanh toán công nợ KH000123' })
   expect(within(paymentDialog).getByText(/Người thu: Admin/)).toBeInTheDocument()
-  expect(within(paymentDialog).getByLabelText('Phương thức thanh toán')).toHaveValue('cash')
+  expect(within(paymentDialog).getByLabelText('Phương thức TT')).toHaveValue('cash')
   expect(within(paymentDialog).getByRole('table', { name: 'Danh sách phân bổ hóa đơn công nợ' })).toBeInTheDocument()
   expect(within(paymentDialog).getByLabelText('Số tiền')).toHaveValue('')
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('')

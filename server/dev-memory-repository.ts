@@ -1091,6 +1091,24 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const entry = [...cashbookEntries.values()].find((item) => item.id === input.id || item.code === input.id)
       return entry ? hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(entry, users), financeAccounts) : null
     },
+    async updateCashbookEntry(input) {
+      const entry = [...cashbookEntries.values()].find((item) => item.id === input.id || item.code === input.id)
+      if (!entry) return null
+      const account = input.finance_account_id ? financeAccounts.get(input.finance_account_id) : null
+      if (input.finance_account_id && !account) return null
+      const nextAccount = account ? cashbookFinanceAccountSnapshot(account) : entry.finance_account
+      const nextEntry = {
+        ...entry,
+        ...(input.created_at !== undefined ? { created_at: input.created_at } : {}),
+        ...(input.note !== undefined ? { note: input.note } : {}),
+        finance_account: nextAccount,
+        payment_method: nextAccount.account_type === 'bank' ? 'bank_transfer' : 'cash',
+      }
+      cashbookEntries.set(entry.id, nextEntry)
+      rebuildKiotVietCashbookLedger(cashbookEntries, salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return hydrateCashbookEntryFinanceAccount(hydrateCashbookEntryUserSnapshot(nextEntry, users), financeAccounts)
+    },
     async listStockMovements(input) {
       const productId = input.url.searchParams.get('product_id')
       return stockMovementsFromDocuments(purchaseReceipts, purchaseReceiptItems, salesDocuments, salesDocumentItems, stocktakes, stocktakeItems, products, draftBoms)

@@ -50,7 +50,7 @@ describe('finance filters', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-09T10:30:00+07:00'))
 
-    expect(formatVoucherAmountInput('1a200000')).toBe('1.200.000')
+    expect(formatVoucherAmountInput('1a200000')).toBe('1 200 000')
     expect(parseVoucherAmountInput('1.200.000')).toBe(1200000)
     expect(cashbookQuickTimeRange('today')).toEqual({ from: '2026-07-09', to: '2026-07-09' })
     expect(dateTimeInputText(new Date('2026-07-09T10:30:00+07:00'))).toMatch(/09\/07\/2026/)

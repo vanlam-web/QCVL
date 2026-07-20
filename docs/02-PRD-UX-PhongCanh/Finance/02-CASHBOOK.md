@@ -126,7 +126,7 @@ Hiện trạng detail inline sau ngày `06/07/2026`:
 - Không hiển thị dòng `Tiền chưa phân bổ: 0` trong detail.
 - Footer detail dùng shared component `ManagementDetailActionFooter`, tương ứng CSS chung `management-detail-footer-actions` và `button button-danger/button-secondary/button-primary`. Sổ quỹ có `Xóa` canh trái, `Sửa` và `In` canh phải. `Xóa` mở `ManagementConfirmDialog`; chỉ phiếu thu/chi thủ công trạng thái `posted` được hủy mềm qua `POST /finance/cashbook-vouchers/{id}/cancel`, không xóa vật lý khỏi sổ quỹ. Phiếu KiotViet, POS/thu nợ hoặc phiếu tự động không hủy tại đây; dialog hiển thị lý do và yêu cầu xử lý qua luồng import/chứng từ gốc.
 
-Field còn thiếu để giống KV tuyệt đối: loại thu/chi chi tiết theo `voucher_type`, mã/tên/số điện thoại đối tượng đầy đủ trong detail, lịch sử sửa/hủy phiếu nếu KV có. Tài khoản ngân hàng hiện chỉ cần hiển thị mức vận hành là tên ngân hàng viết tắt + số tài khoản trong `Phương thức thanh toán`; không hiển thị thêm dòng tài khoản nguồn/đích nếu làm trùng thông tin. Không hiển thị `Chi nhánh`, `Người thu` hoặc `Người chi` riêng trong MVP.
+Field còn thiếu để giống KV tuyệt đối: loại thu/chi chi tiết theo `voucher_type`, mã/tên/số điện thoại đối tượng đầy đủ trong detail, lịch sử sửa/hủy phiếu nếu KV có. Tài khoản ngân hàng hiện chỉ cần hiển thị mức vận hành là tên ngân hàng viết tắt + số tài khoản trong `Phương thức TT`; không hiển thị thêm dòng tài khoản nguồn/đích nếu làm trùng thông tin. Không hiển thị `Chi nhánh`, `Người thu` hoặc `Người chi` riêng trong MVP.
 
 ---
 

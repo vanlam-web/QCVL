@@ -150,6 +150,17 @@ function persistentRepository(passwordHash: string, displayName = 'Admin'): Serv
     async getCashbookEntry(input) {
       return cashbook.find((entry) => entry.id === input.id || entry.code === input.id) ?? null
     },
+    async updateCashbookEntry(input) {
+      const entry = cashbook.find((item) => item.id === input.id || item.code === input.id)
+      if (!entry) return null
+      if (input.created_at !== undefined) entry.created_at = input.created_at
+      if (input.note !== undefined) entry.note = input.note
+      if (input.finance_account_id === 'bank-main') {
+        entry.finance_account = { id: 'bank-main', code: '0947900909', name: 'Văn Viết Phương Lâm', account_type: 'bank' }
+        entry.payment_method = 'bank_transfer'
+      }
+      return entry
+    },
     async getCustomerDebt(input) {
       const invoices = documents
         .filter((document) => document.order_type === 'invoice' && document.customer.id === input.customerId && document.debt_amount > 0)
@@ -269,6 +280,13 @@ function persistentRepository(passwordHash: string, displayName = 'Admin'): Serv
     },
     async getCashbookEntry(input) {
       return cashbook.find((entry) => entry.id === input.id) ?? null
+    },
+    async updateCashbookEntry(input) {
+      const entry = cashbook.find((item) => item.id === input.id || item.code === input.id)
+      if (!entry) return null
+      if (input.created_at !== undefined) entry.created_at = input.created_at
+      if (input.note !== undefined) entry.note = input.note
+      return entry
     },
     async getCustomerFinancialTotals() {
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number }>()

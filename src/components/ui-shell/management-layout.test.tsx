@@ -20,6 +20,7 @@ import {
   ManagementDetailSummary,
   ManagementDetailRow,
   ManagementDataTable,
+  ManagementDropdownField,
   ManagementFilterGroup,
   ManagementDateRangeInputs,
   ManagementFilterNumberRange,
@@ -393,6 +394,37 @@ it('renders shared filter select and number range fields', async () => {
   expect(onStatusChange).toHaveBeenCalledWith('inactive')
   expect(onFromChange).toHaveBeenLastCalledWith('1000')
   expect(onToChange).toHaveBeenLastCalledWith('2000')
+})
+
+it('renders shared dropdown field with custom menu options', async () => {
+  const onChange = vi.fn()
+
+  function DropdownExample() {
+    const [value, setValue] = useState('cash')
+    return (
+      <ManagementDropdownField
+        label="Phương thức TT"
+        menuLabel="Chọn phương thức TT"
+        options={[
+          { value: 'cash', label: 'Tiền mặt' },
+          { value: 'bank_transfer', label: 'Chuyển khoản' },
+        ]}
+        value={value}
+        onChange={(nextValue) => {
+          setValue(nextValue)
+          onChange(nextValue)
+        }}
+      />
+    )
+  }
+
+  render(<DropdownExample />)
+
+  await userEvent.click(screen.getByRole('button', { name: 'Phương thức TT' }))
+  await userEvent.click(screen.getByRole('option', { name: 'Chuyển khoản' }))
+
+  expect(screen.getByRole('button', { name: 'Phương thức TT' })).toHaveTextContent('Chuyển khoản')
+  expect(onChange).toHaveBeenCalledWith('bank_transfer')
 })
 
 it('renders filter sidebar content without a duplicated header summary', () => {
@@ -795,13 +827,13 @@ it('stacks every shared detail info item when one item cannot fit on one line', 
       columns="three"
       items={[
         { label: 'Người tạo:', value: 'Văn Lâm' },
-        { label: 'Phương thức thanh toán', value: 'MBBank: 0947900909' },
+        { label: 'Phương thức TT', value: 'MBBank: 0947900909' },
         { label: 'Ghi chú', value: '-' },
       ]}
     />,
   )
 
-  const grid = screen.getByText('Phương thức thanh toán').closest('dl') as HTMLElement
+  const grid = screen.getByText('Phương thức TT').closest('dl') as HTMLElement
   const items = Array.from(grid.querySelectorAll(':scope > div')) as HTMLElement[]
 
   items.forEach((item, index) => {

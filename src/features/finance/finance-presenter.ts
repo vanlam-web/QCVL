@@ -13,9 +13,17 @@ export function accountTypeText(type: FinanceAccount['account_type']) {
   return type === 'cash' ? 'Tiền mặt' : 'Ngân hàng'
 }
 
-export function financeAccountChoiceLabel(account: FinanceAccount) {
+export function financeAccountChoiceLabel(account: {
+  account_type: FinanceAccount['account_type']
+  name: string
+  account_number?: string | null
+  code: string
+}) {
   if (account.account_type === 'cash') return 'Tiền mặt'
-  return `${account.code} · ${account.name}`
+  const bankName = compactBankNameText(cleanDeletedFinanceAccountText(account.name))
+  const accountNumber = cleanDeletedFinanceAccountText(account.account_number?.trim() || account.code)
+  if (bankName && accountNumber) return `${bankName}: ${accountNumber}`
+  return bankName || accountNumber || 'Ngân hàng'
 }
 
 export function bankAccountDisplayText(account: FinanceAccount) {
@@ -48,6 +56,11 @@ export function isDeletedFinanceAccount(account: FinanceAccount) {
 
 function cleanDeletedFinanceAccountText(value: string | null | undefined) {
   return value?.replaceAll('{DEL}', '').trim() ?? ''
+}
+
+function compactBankNameText(value: string) {
+  if (value.toLocaleLowerCase('vi') === 'vietcombank') return 'VCB'
+  return value
 }
 
 function uniqueNonEmpty(values: Array<string | null | undefined>) {
