@@ -16,6 +16,7 @@ This is the first file for any Codex worker. Keep it short and current.
 - NAS surface: `http://100.84.228.125:3200`.
 - Runtime data source: PostgreSQL on NAS.
 - Runtime does not use Supabase.
+- For local `3202` bugs, verify actual `3100`/`3202` process command lines before editing; API and UI can be running from different repo folders.
 
 ## Start Every Task
 
@@ -29,6 +30,14 @@ Then state:
 - worker location: outside LAN or inside LAN
 - scope: module, files, page/API
 - target: `3202`, `3200`, docs only, or deploy
+
+If target is `3202`, run:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '3100|3202|server/index|vite|tsx' } | Select-Object ProcessId,CommandLine
+```
+
+Patch/pull/restart the repo that is actually serving `3100`; do not assume it matches the current shell folder.
 
 Before editing files, read and update `Y:\TeamAI\WORKER-NOW.md` with your active scope. After finishing a task, read it again before starting the next task so new pull / restart / overlap notes are not missed. `preflight` also validates this board so a missing or malformed shared status file blocks local test/build/deploy scripts.
 

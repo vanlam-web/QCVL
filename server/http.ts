@@ -499,7 +499,12 @@ export interface ServerRepository {
     code?: string
     name: string
     phone?: string | null
+    tax_code?: string | null
+    address?: string | null
+    note?: string | null
     customer_group_id?: string | null
+    customer_type?: string | null
+    company_name?: string | null
     created_by?: { id: string; name: string } | null
   }): Promise<CustomerListData>
   updateCustomer?(input: {
@@ -2732,7 +2737,17 @@ async function getDevApiResponse(
         return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
       },
       createCustomer: async () => {
-        const body = await readJson(request) as { code?: string; name?: string; phone?: string; customer_group_id?: string | null }
+        const body = await readJson(request) as {
+          code?: string
+          name?: string
+          phone?: string
+          tax_code?: string | null
+          address?: string | null
+          note?: string | null
+          customer_group_id?: string | null
+          customer_type?: string | null
+          company_name?: string | null
+        }
         const name = requiredString(body.name, 'name')
         const createdBy = { id: currentUser.user.id, name: currentUser.user.display_name }
         const created = repository.createCustomer
@@ -2741,7 +2756,12 @@ async function getDevApiResponse(
               code: body.code,
               name,
               phone: body.phone ?? null,
+              tax_code: nullableString(body.tax_code),
+              address: nullableString(body.address),
+              note: nullableString(body.note),
               customer_group_id: body.customer_group_id ?? null,
+              customer_type: nullableString(body.customer_type),
+              company_name: nullableString(body.company_name),
               created_by: createdBy,
             })
           : {

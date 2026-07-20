@@ -6,6 +6,7 @@
 
 - Runtime source of truth: Node API + PostgreSQL on NAS.
 - Dev UI: `127.0.0.1:3202`; NAS runtime: `100.84.228.125:3200`.
+- Truoc khi sua bug thay tren `3202`, kiem tra process that cua `3100`/`3202` dang chay tu repo nao. Da tung gap frontend `3202` chay workspace nay nhung API `3100` chay `D:\phan mem\QCVL`; sua nham repo lam UI van loi.
 - Historical KiotViet export archive for verification: `Y:\DuLieuKV`.
 - Use `Y:\DuLieuKV` first when checking data exported from KiotViet before `12/07` or when cross-checking import source files.
 - Do not revive Supabase, RAM-only sales/finance, or demo fixture storage for runtime.
@@ -35,6 +36,7 @@ Docker chi dung de chay container app va PostgreSQL tren NAS. Khong dung Docker 
 - Khach hang import KiotViet co `source_creator_name` phai map sang QCVL user bang `users.username` sau khi bo `{DEL}`. Khong map bang ten hien thi, SDT, hoac email. List API phai resolve lai theo tai khoan hien tai de du lieu import cu va doi ten hien thi van cap nhat dung.
 - Khach hang import KiotViet trong dev-memory phai duoc luu vao `logs/dev-memory-state.json` giong hang hoa/kiem kho. Khong chi giu trong mang RAM, vi API dev restart se lam mat du lieu import va detail se mat `Nguoi tao`.
 - API dev bat buoc chay bang `npm run api:dev`. Script nay dung `tsx watch server/index.ts` de tu restart khi sua `server/**`; khong chay tay `tsx server/index.ts` vi se giu backend cu va route moi co the tra 404.
+- Khi UI co code moi nhung du lieu khong luu/search khong ra, chay `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '3100|3202|server/index|vite|tsx' }` de xem `3100` dang load `server/index.ts` tu thu muc nao. Neu process chay tu repo khac, can patch/pull dung repo dang chay hoac restart API tu repo hien tai.
 - Neu API dev co `DATABASE_URL`, du lieu nam trong PostgreSQL cua URL do.
 - Neu API dev khong co `DATABASE_URL`, du lieu nam trong dev-memory repository va phai duoc luu vao `logs/dev-memory-state.json`.
 - Khong restart API dev bang memory rong khi dang test import Hang hoa/Kiem kho; se lam mat du lieu import tren 3202.
@@ -47,6 +49,7 @@ Docker chi dung de chay container app va PostgreSQL tren NAS. Khong dung Docker 
 - File Hang hoa KiotViet `DanhSachSanPham_KV*.xlsx` co cot `Thoi gian tao`; day la ngay tao goc cua san pham. Khong duoc dung ngay import/local write time lam ngay tao nghiep vu. Khi don du lieu sau mot moc ngay, khong xoa products/catalog theo `created_at` neu gia tri do chua duoc doi chieu tu cot `Thoi gian tao`.
 - Danh sach Hang hoa mac dinh sap xep theo `products.created_at desc` voi gia tri ngay tao goc tu cot KV `Thoi gian tao`; hang moi nhat len truoc. Khong dung `updated_at` lam thu tu mac dinh vi moi lan import/sua se day hang vua ghi len dau. Bang gia co the giu thu tu `Ma hang`/`Ten hang` de de so sanh gia. POS quick products van dung `sort=pos_usage`.
 - Neu frontend bao `Khong tim thay du lieu can thao tac` ngay sau khi them route/import moi, goi truc tiep API `3100` de kiem tra. Neu route tra `RESOURCE_NOT_FOUND`, backend dang chay ban cu: dung process 3100 va bat lai bang `npm run api:dev`.
+- Neu tao khach/hang/chung tu moi bao OK nhung refresh mat, khong chap nhan flow chi push vao RAM trong `server/http.ts`. Repository PostgreSQL/dev-memory phai co method create/upsert that va test phai chung minh record doc lai duoc sau create.
 - Nut `Xoa du lieu cu` trong cac dialog import KiotViet khong duoc dung `window.confirm`. Phai dung hop xac nhan inline trong modal de in-app browser va user thay ro buoc xac nhan; native confirm da tung lam nut nhin nhu khong tac dung.
 - Neu UI bao `Khong xoa duoc du lieu import cu` nhung goi truc tiep `DELETE /api/v1/.../import/kiotviet` thanh cong, kiem tra frontend service dang bi Vite/HMR giu ban cu. Cach xu ly: touch/sua nhe service file, reload trang 3202, roi test lai flow UI. Khong do loi backend khi request UI chua goi dung method moi.
 - Nut `Xoa du lieu cu` cua import Khach hang phai don ca du lieu import `customer-kv-*` va du lieu mau local `DEV20-KH-*`. Khong xoa `khachle`, khong xoa khach tao tay. Neu sau nay co PostgreSQL references hoa don/cong no thi repository phai tra `blocked_rows`.
