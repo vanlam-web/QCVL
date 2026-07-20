@@ -744,6 +744,10 @@ export interface ServerRepository {
     organizationId: string
     entry: CashbookEntryData
   }): Promise<CashbookEntryData>
+  cancelCashbookVoucher?(input: {
+    organizationId: string
+    id: string
+  }): Promise<CashbookEntryData | null>
   getCustomerFinancialTotals?(organizationId: string): Promise<Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>>
   ensureSalesFinanceSeed?(input: {
     organizationId: string
@@ -1920,7 +1924,7 @@ function cashbookVoucherListItem(entry: CashbookEntryData) {
   return {
     id: entry.id,
     code: entry.code,
-    source_type: 'manual_voucher',
+    source_type: entry.source?.type === 'payment_receipt' ? 'payment_receipt' : 'manual_voucher',
     status: entry.status === 'cancelled' ? 'cancelled' : 'posted',
     amount: Math.abs(entry.amount_delta),
   }
@@ -3919,8 +3923,19 @@ async function getDevApiResponse(
         if (!repository.createCashbookVoucher) cashbookEntries.unshift(created)
         return { found: true, data: cashbookVoucherListItem(created), status: 201 }
       },
-      cancelCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'cancelled', amount: 1000000 } }),
-      reviseCashbookVoucher: async () => ({ found: true, data: { id: path.split('/')[4], code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }),
+      cancelCashbookVoucher: async () => {
+        const pathParts = path.split('/').filter(Boolean)
+        const voucherId = pathParts.at(-2) ?? ''
+        const cancelled = repository.cancelCashbookVoucher
+          ? await repository.cancelCashbookVoucher({ organizationId: currentUser.organization.id, id: voucherId })
+          : null
+        if (!cancelled) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook voucher not found.' }, status: 404 }
+        return { found: true, data: cashbookVoucherListItem(cancelled) }
+      },
+      reviseCashbookVoucher: async () => {
+        const pathParts = path.split('/').filter(Boolean)
+        return { found: true, data: { id: pathParts.at(-2) ?? '', code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }
+      },
     },
   )
   if (financeRoute.found) return financeRoute

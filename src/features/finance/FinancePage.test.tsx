@@ -1361,7 +1361,7 @@ describe('FinancePage', () => {
     expect(await screen.findByText(/Đã hủy phiếu PCTM000001/)).toBeInTheDocument()
   })
 
-  it('does not cancel automatic cashbook entries from detail delete dialog', async () => {
+  it('cancels self-entered customer payment receipts from detail delete dialog', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
@@ -1370,10 +1370,10 @@ describe('FinancePage', () => {
     await userEvent.click(within(detail).getByRole('button', { name: /Xóa phiếu PT0001/ }))
 
     const dialog = await screen.findByRole('dialog', { name: /Xóa phiếu PT0001/ })
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Đã hiểu' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Xóa' }))
 
-    expect(service.cancelCashbookVoucher).not.toHaveBeenCalled()
-    expect(await screen.findByText(/Chỉ xóa\/hủy được phiếu thu\/chi thủ công/)).toBeInTheDocument()
+    expect(service.cancelCashbookVoucher).toHaveBeenCalledWith('receipt-1')
+    expect(await screen.findByText(/Đã hủy phiếu PCTM000001/)).toBeInTheDocument()
   })
 
   it('hides linked document shell when the cashbook row has no linked document', async () => {

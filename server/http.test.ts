@@ -3544,6 +3544,50 @@ describe('createHttpHandler', () => {
     ]))
   })
 
+  test('routes self-entered payment receipt cancellation to repository with voucher id', async () => {
+    const cancelCashbookVoucher = vi.fn(async () => ({
+      id: 'cashbook-tt001849',
+      code: 'TT001849',
+      status: 'cancelled',
+      direction: 'in' as const,
+      amount_delta: 1400000,
+      finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' as const },
+      is_business_accounted: true,
+      source_type: 'payment_receipt_method',
+      created_at: '2026-07-20T10:15:00.000Z',
+      note: 'Thu no',
+      counterparty: { type: 'customer', name: 'Ut Teo', phone: null },
+      created_by: { id: 'user-dev-admin', name: 'Admin' },
+      source: { type: 'payment_receipt', id: 'receipt-tt001849', code: 'TT001849', order_code: null, customer_id: 'customer-ut' },
+      allocations: [],
+    }))
+    const testRepository = {
+      ...repository(await hashPassword('ChangeMe123!')),
+      cancelCashbookVoucher,
+    }
+    const handler = createHttpHandler({ repository: testRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook-vouchers/receipt-tt001849/cancel', {
+        method: 'POST',
+        headers: { authorization },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(cancelCashbookVoucher).toHaveBeenCalledWith({ organizationId: 'org-1', id: 'receipt-tt001849' })
+    expect(body.data).toMatchObject({ code: 'TT001849', source_type: 'payment_receipt', status: 'cancelled', amount: 1400000 })
+  })
+
   test('revises a completed invoice by creating .01 and cancelling the old invoice', async () => {
     const repository = await createDevMemoryRepository()
     const handler = createHttpHandler({ repository })

@@ -2020,6 +2020,97 @@ describe('createPgRepository product units', () => {
       },
     })
   })
+
+  test('cancels QCVL customer debt payment receipts and rolls allocations back', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('select *') && sql.includes('from cashbook_entries') && sql.includes('limit 1') && sql.includes('for update')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt001849',
+            code: 'TT001849',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '9000000',
+            finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
+            is_business_accounted: true,
+            source_type: 'payment_receipt_method',
+            created_at: new Date('2026-07-20T13:15:00.000Z'),
+            note: 'Thu no',
+            counterparty: { type: 'customer', name: 'Ut Teo', phone: null },
+            created_by: null,
+            source: { type: 'payment_receipt', id: 'receipt-tt001849', code: 'TT001849', customer_id: 'customer-kv-ut' },
+            allocations: [
+              { order_id: 'order-hd011163', order_code: 'HD011163', order_total_amount: 209300, collected_before: 0, allocated_amount: 209300, remaining_after: 0 },
+              { order_id: 'adjustment-pn000566', order_code: 'PN000566', order_total_amount: 17642587, collected_before: 0, allocated_amount: 15914394, remaining_after: 1728193 },
+            ],
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select *') && sql.includes('source_type = \'payment_receipt_method\'') && sql.includes('for update')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt001849',
+            code: 'TT001849',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '9000000',
+            finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
+            is_business_accounted: true,
+            source_type: 'payment_receipt_method',
+            created_at: new Date('2026-07-20T13:15:00.000Z'),
+            note: 'Thu no',
+            counterparty: { type: 'customer', name: 'Ut Teo', phone: null },
+            created_by: null,
+            source: { type: 'payment_receipt', id: 'receipt-tt001849', code: 'TT001849', customer_id: 'customer-kv-ut' },
+            allocations: [
+              { order_id: 'order-hd011163', order_code: 'HD011163', order_total_amount: 209300, collected_before: 0, allocated_amount: 209300, remaining_after: 0 },
+              { order_id: 'adjustment-pn000566', order_code: 'PN000566', order_total_amount: 17642587, collected_before: 0, allocated_amount: 15914394, remaining_after: 1728193 },
+            ],
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select *') && sql.includes('where organization_id = $1') && sql.includes('and id = $2')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt001849',
+            code: 'TT001849',
+            status: 'cancelled',
+            direction: 'in',
+            amount_delta: '9000000',
+            finance_account: { id: 'cash-main', code: 'TM', name: 'Tien mat', account_type: 'cash' },
+            is_business_accounted: true,
+            source_type: 'payment_receipt_method',
+            created_at: new Date('2026-07-20T13:15:00.000Z'),
+            note: 'Thu no',
+            counterparty: { type: 'customer', name: 'Ut Teo', phone: null },
+            created_by: null,
+            source: { type: 'payment_receipt', id: 'receipt-tt001849', code: 'TT001849', customer_id: 'customer-kv-ut' },
+            allocations: [],
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.cancelCashbookVoucher?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      id: 'receipt-tt001849',
+    })
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+
+    expect(result).toEqual(expect.objectContaining({ code: 'TT001849', status: 'cancelled' }))
+    expect(sqlCalls.some((sql) => sql.includes('update customer_debt_entries cde'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('update orders'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('update customer_debt_adjustments'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes("set status = 'cancelled'"))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('delete from payment_receipts'))).toBe(true)
+  })
 })
 
 describe('createPgRepository sales document paging', () => {

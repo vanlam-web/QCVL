@@ -1050,14 +1050,14 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }
 
   function canDeleteCashbookDetail(detail: CashbookEntryDetail) {
-    return detail.source.type === 'manual_voucher' && detail.status === 'posted'
+    return (detail.source.type === 'manual_voucher' || detail.source.type === 'payment_receipt') && detail.status === 'posted'
   }
 
   async function confirmCashbookDelete() {
     if (cashbookDeleteTarget === null) return
     if (!canDeleteCashbookDetail(cashbookDeleteTarget)) {
       setCashbookDeleteTarget(null)
-      setError('Chỉ xóa/hủy được phiếu thu/chi thủ công. Dữ liệu KiotViet hoặc phiếu tự động cần xử lý qua luồng import/chứng từ gốc.')
+      setError('Chỉ hủy được phiếu tự nhập. Dữ liệu KiotViet cần xử lý qua luồng import/chứng từ gốc.')
       return
     }
 
@@ -1991,8 +1991,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         loading={deletingCashbookEntry}
         message={
           cashbookDeleteTarget && canDeleteCashbookDetail(cashbookDeleteTarget)
-            ? `Phiếu ${cashbookDeleteTarget.code} sẽ được hủy mềm, không xóa vật lý khỏi sổ quỹ.`
-            : 'Chỉ xóa/hủy được phiếu thu/chi thủ công. Dữ liệu KiotViet hoặc phiếu tự động cần xử lý qua luồng import/chứng từ gốc.'
+            ? `Phiếu ${cashbookDeleteTarget.code} sẽ được hủy mềm và hoàn lại phân bổ công nợ liên quan.`
+            : 'Chỉ hủy được phiếu tự nhập. Dữ liệu KiotViet cần xử lý qua luồng import/chứng từ gốc.'
         }
         open={cashbookDeleteTarget !== null}
         title={cashbookDeleteTarget ? `Xóa phiếu ${cashbookDeleteTarget.code}` : 'Xóa phiếu'}
