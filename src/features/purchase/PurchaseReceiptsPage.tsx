@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards } from 'lucide-react'
+import { Banknote, ChevronLeft, ChevronRight, Copy, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateTimeLocalInputValue, formatKvDateTime } from '../../lib/date-format'
 import { currentSystemDate } from '../../lib/system-clock'
@@ -1480,6 +1480,8 @@ function clearReceiptCreateDraft() {
                     : []),
                 ]}
                 rightActions={[
+                  { label: 'Sao chép', disabled: true, title: 'Chưa hỗ trợ sao chép phiếu nhập', icon: <Copy aria-hidden="true" size={15} /> },
+                  { label: 'Xuất file', disabled: true, title: 'Chưa hỗ trợ xuất file phiếu nhập', icon: <FileOutput aria-hidden="true" size={15} /> },
                   { label: 'In', icon: <Printer aria-hidden="true" size={15} />, onClick: () => window.print() },
                 ]}
               />
@@ -2509,6 +2511,10 @@ function clearReceiptCreateDraft() {
             onChange={changeReceiptSearch}
           />
           <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
+          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file phiếu nhập" type="button">
+            <FileOutput aria-hidden="true" size={16} />
+            Xuất file
+          </button>
         </ManagementCompactToolbar>
       )}
       kpis={receiptKpis}

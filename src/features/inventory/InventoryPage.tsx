@@ -607,6 +607,10 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               <button className="button button-secondary" disabled type="button">Khui vật tư</button>
               <ManagementImportButton onClick={() => setStocktakeImportOpen(true)}>Import</ManagementImportButton>
               <button className="button button-secondary" type="button">Xuất file</button>
+              <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất nhiều phiếu kiểm kho" type="button">
+                <FileOutput aria-hidden="true" size={16} />
+                Xuất file nhiều phiếu
+              </button>
             </ManagementCompactToolbar>
           ) : (
             <div className="management-page-actions">

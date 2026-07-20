@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, FileOutput, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -745,6 +745,10 @@ export function SalesDocumentsPage({
             onChange={changeDocumentSearch}
           />
           <ManagementImportButton onClick={() => setImportOpen(true)}>Import</ManagementImportButton>
+          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file chứng từ bán hàng" type="button">
+            <FileOutput aria-hidden="true" size={16} />
+            Xuất file
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={documentKpis}
@@ -1263,6 +1267,7 @@ function SalesDocumentDetailView({
         rightActions={[
           { label: 'Sửa', disabled: editDisabled, icon: <Pencil aria-hidden="true" size={15} />, onClick: onEdit },
           { label: savingNote ? 'Đang lưu' : 'Lưu', disabled: savingNote || !onSaveNote, icon: <Save aria-hidden="true" size={15} />, onClick: () => void saveNote() },
+          { label: 'Xuất file', disabled: true, title: 'Chưa hỗ trợ xuất file chứng từ bán hàng', icon: <FileOutput aria-hidden="true" size={15} /> },
           { label: 'In', icon: <Printer aria-hidden="true" size={15} /> },
         ]}
       />

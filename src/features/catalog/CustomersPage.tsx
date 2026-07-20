@@ -800,6 +800,10 @@ export function CustomersPage({
             onChange={changeCustomerSearch}
           />
           <ManagementImportButton onClick={() => setCustomerImportOpen(true)}>Import</ManagementImportButton>
+          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file khách hàng" type="button">
+            <FileDown aria-hidden="true" size={16} />
+            Xuất file
+          </button>
         </ManagementCompactToolbar>
       }
       kpis={customerKpis}

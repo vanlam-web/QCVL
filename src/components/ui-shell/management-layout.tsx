@@ -1226,6 +1226,7 @@ export interface ManagementDetailAction {
   icon?: ReactNode
   ariaLabel?: string
   disabled?: boolean
+  title?: string
   variant?: 'primary' | 'secondary'
   danger?: boolean
   onClick?: () => void
@@ -1237,6 +1238,7 @@ function ManagementDetailActionButton({ action }: { action: ManagementDetailActi
       aria-label={action.ariaLabel}
       className={`button button-${action.danger ? 'danger' : action.variant ?? 'secondary'}`}
       disabled={action.disabled}
+      title={action.title}
       type="button"
       onClick={action.onClick}
     >

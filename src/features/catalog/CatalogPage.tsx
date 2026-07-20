@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Search, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Edit3, FileOutput, FolderPlus, Lock, Search, Trash2, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { parseDateTimeValue } from '../../lib/date-format'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
@@ -12,6 +12,7 @@ import {
   ManagementDataTable,
   type ManagementDataTableColumn,
   ManagementDateRangeInputs,
+  ManagementDetailActionFooter,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementImportButton,
@@ -929,7 +930,15 @@ export function CatalogPage({
             value={search}
             onChange={changeProductSearch}
           />
+          <button className="button button-secondary" type="button" onClick={openProductGroupCreateDialog}>
+            <FolderPlus aria-hidden="true" size={16} />
+            Tạo nhóm
+          </button>
           <ManagementImportButton onClick={() => setProductImportOpen(true)} />
+          <button className="button button-secondary" disabled title="Chưa hỗ trợ xuất file hàng hóa" type="button">
+            <FileOutput aria-hidden="true" size={16} />
+            Xuất file
+          </button>
         </ManagementCompactToolbar>
       }
       filter={
@@ -1595,12 +1604,16 @@ export function CatalogPage({
                                 </header>
                               </section>
                             ) : null}
-                            <footer className="management-detail-footer-actions">
-                              <div className="management-detail-footer-actions-left" />
-                              <div className="management-detail-footer-actions-right">
-                                <button className="button button-secondary" type="button">Sửa</button>
-                              </div>
-                            </footer>
+                            <ManagementDetailActionFooter
+                              leftActions={[
+                                { label: 'Xóa', danger: true, disabled: true, title: 'Chưa hỗ trợ xóa hàng hóa', icon: <Trash2 aria-hidden="true" size={15} /> },
+                              ]}
+                              rightActions={[
+                                { label: 'Sao chép', disabled: true, title: 'Chưa hỗ trợ sao chép hàng hóa', icon: <Copy aria-hidden="true" size={15} /> },
+                                { label: product.status === 'active' ? 'Ngừng kinh doanh' : 'Mở kinh doanh', disabled: true, title: 'Chưa hỗ trợ đổi trạng thái hàng hóa', icon: <Lock aria-hidden="true" size={15} /> },
+                                { label: 'Sửa', disabled: true, title: 'Chưa hỗ trợ sửa hàng hóa tại đây', variant: 'primary', icon: <Edit3 aria-hidden="true" size={15} /> },
+                              ]}
+                            />
                           </div>
                 )}
                 selectedRowKey={selectedProductId}
