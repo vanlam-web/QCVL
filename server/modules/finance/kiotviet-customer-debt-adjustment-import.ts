@@ -147,7 +147,7 @@ function valueByHeader(row: KiotVietRawCustomerDebtAdjustmentRow, ...headers: st
 }
 
 function customerDebtAdjustmentSourceCode(sourceCode: string) {
-  return /^CB/i.test(sourceCode)
+  return /^(CB|CKKH)/i.test(sourceCode)
 }
 
 function kiotVietDate(value: unknown) {

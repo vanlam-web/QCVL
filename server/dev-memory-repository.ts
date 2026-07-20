@@ -847,7 +847,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
 
       const customer = [...customers.values()].find((item) => item.id === input.customerId) ?? null
       const receiptCode = nextPaymentReceiptCode(cashbookEntries)
-      const createdAt = new Date().toISOString()
+      const createdAt = input.createdAt ?? new Date().toISOString()
       const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
       const note = input.note?.trim() ? `${input.note.trim()} - ${allocationCodes}` : `Thu no ${allocationCodes}`
       const baseEntry = {

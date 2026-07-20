@@ -79,6 +79,7 @@ describe('finance-service', () => {
     await service.collectCustomerDebt({
       customer_id: 'customer-1',
       amount: 500000,
+      created_at: '2026-07-20T08:15:00.000Z',
       payment_method: {
         cash_amount: 200000,
         bank_amount: 300000,
@@ -96,6 +97,7 @@ describe('finance-service', () => {
           body: JSON.stringify({
             customer_id: 'customer-1',
             amount: 500000,
+            created_at: '2026-07-20T08:15:00.000Z',
             payment_method: {
               cash_amount: 200000,
               bank_amount: 300000,

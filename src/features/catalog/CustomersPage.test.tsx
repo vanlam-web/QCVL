@@ -852,6 +852,10 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('90 000')
   expect(within(paymentDialog).getByRole('button', { name: 'Tạo phiếu thu' })).toBeEnabled()
   await userEvent.clear(within(paymentDialog).getByLabelText('Số tiền'))
+  await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '120000')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('20 000')
+  expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('100 000')
+  await userEvent.clear(within(paymentDialog).getByLabelText('Số tiền'))
   await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '250000')
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('150 000')
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('100 000')
@@ -1372,6 +1376,29 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
   expect(within(receiptRow).getByRole('link', { name: 'PN000449' })).toHaveAttribute('href', '/purchase/receipts?open=PN000449')
   expect(within(receiptRow).getAllByRole('cell')[3]).toHaveTextContent('-280 320')
   expect(within(receiptRow).getAllByRole('cell')[4]).toHaveTextContent('1 510 080')
+})
+
+it('submits edited customer debt payment time to the finance service', async () => {
+  const collectCustomerDebt = vi.fn(async () => ({ payment_receipt_id: 'TT000002', allocated_amount: 100000 }))
+  const financeService = makeFinanceService({ collectCustomerDebt })
+  render(<CustomersPage service={makeService()} orderService={makeOrderService()} salesDocumentService={makeSalesDocumentService()} financeService={financeService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000123' })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán' }))
+  const paymentDialog = screen.getByRole('dialog', { name: 'Thanh toán công nợ KH000123' })
+
+  await userEvent.clear(within(paymentDialog).getByLabelText('Thời gian'))
+  await userEvent.type(within(paymentDialog).getByLabelText('Thời gian'), '18/07/2026 08:20')
+  await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '100000')
+  await userEvent.click(within(paymentDialog).getByRole('button', { name: 'Tạo phiếu thu' }))
+
+  await waitFor(() => expect(collectCustomerDebt).toHaveBeenCalled())
+  expect(collectCustomerDebt).toHaveBeenCalledWith(expect.objectContaining({
+    amount: 100000,
+    created_at: '2026-07-18T01:20:00.000Z',
+  }))
 })
 
 it('shows the current imported debt balance in the customer debt summary when it is above invoice debt', async () => {

@@ -3920,7 +3920,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
       await pool.query('begin')
       try {
-        const [debtRows, adjustmentRows, anchorRows, totalsBefore] = await Promise.all([
+        const [debtRows, openOrderRows, adjustmentRows, anchorRows, totalsBefore] = await Promise.all([
           pool.query(
             `
               select
@@ -3940,6 +3940,29 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 and cde.remaining_debt > 0
               order by cde.created_at asc
               for update of cde, o
+            `,
+            [input.organizationId, input.customerId],
+          ),
+          pool.query(
+            `
+              select
+                null::text as debt_id,
+                o.debt_amount as remaining_debt,
+                o.id as order_id,
+                o.code as order_code,
+                o.total_amount,
+                o.paid_amount,
+                o.debt_amount,
+                o.customer_snapshot
+              from orders o
+              where o.organization_id = $1
+                and o.customer_id = $2
+                and o.order_type = 'invoice'
+                and o.status <> 'cancelled'
+                and o.debt_amount > 0
+                and o.payment_status <> 'paid'
+              order by o.created_at asc, o.code asc
+              for update of o
             `,
             [input.organizationId, input.customerId],
           ),
@@ -3998,14 +4021,19 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           allocated_amount: number
           remaining_after: number
         }> = []
+        const debtRowsByOrderId = new Set(debtRows.rows.map((row) => row.order_id))
+        const openDebtRows = [
+          ...debtRows.rows,
+          ...openOrderRows.rows.filter((row) => !debtRowsByOrderId.has(row.order_id)),
+        ]
         const debtAllocationRows = requestedAllocations.length > 0
           ? requestedAllocations
               .map((allocation) => ({
                 allocation,
-                row: debtRows.rows.find((row) => row.order_id === allocation.order_id || row.order_code === allocation.order_code),
+                row: openDebtRows.find((row) => row.order_id === allocation.order_id || row.order_code === allocation.order_code),
               }))
               .filter((item): item is { allocation: typeof requestedAllocations[number]; row: typeof debtRows.rows[number] } => Boolean(item.row))
-          : debtRows.rows.map((row) => ({ allocation: null, row }))
+          : openDebtRows.map((row) => ({ allocation: null, row }))
 
         for (const { allocation, row } of debtAllocationRows) {
           if (remainingPayment <= 0) break
@@ -4013,17 +4041,19 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           const nextDebt = Math.max(Number(row.remaining_debt) - allocated, 0)
           const nextPaid = Number(row.paid_amount) + allocated
           const paymentStatus = nextDebt <= 0 ? 'paid' : nextPaid <= 0 ? 'unpaid' : 'partial'
-          await pool.query(
-            `
-              update customer_debt_entries
-              set paid_amount = paid_amount + $1,
-                  remaining_debt = $2,
-                  status = case when $2::numeric <= 0 then 'closed' else 'open' end,
-                  updated_at = now()
-              where id = $3
-            `,
-            [allocated, nextDebt, row.debt_id],
-          )
+          if (row.debt_id) {
+            await pool.query(
+              `
+                update customer_debt_entries
+                set paid_amount = paid_amount + $1,
+                    remaining_debt = $2,
+                    status = case when $2::numeric <= 0 then 'closed' else 'open' end,
+                    updated_at = now()
+                where id = $3
+              `,
+              [allocated, nextDebt, row.debt_id],
+            )
+          }
           await pool.query(
             `
               update orders
@@ -4127,6 +4157,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         )
         const receiptCodeSeq = Number(receiptCodeRow.rows[0]?.max_seq ?? 0) + 1
         const receiptCode = `TT${String(receiptCodeSeq).padStart(6, '0')}`
+        const createdAt = input.createdAt ?? new Date().toISOString()
         const firstCustomer = debtRows.rows[0]?.customer_snapshot ?? adjustmentRows.rows[0]?.customer_snapshot ?? { name: 'Khach hang', phone: null }
         const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
         const note = input.note?.trim() ? `${input.note.trim()} - ${allocationCodes}` : `Thu no ${allocationCodes}`
@@ -4135,9 +4166,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         await pool.query(
           `
             insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
-            values ($1, $2, $3, $4, $5, $6, $7, now())
+            values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
           `,
-          [receiptId, input.organizationId, receiptCode, input.customerId, receiptOrderId, allocatedAmount, note],
+          [receiptId, input.organizationId, receiptCode, input.customerId, receiptOrderId, allocatedAmount, note, createdAt],
         )
 
         const entries: CashbookEntryData[] = []
@@ -4154,7 +4185,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 organization_id, payment_receipt_id, order_id, method,
                 finance_account_id, amount, bank_transaction_ref, allocations, created_at
               )
-              values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, now())
+              values ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::timestamptz)
             `,
             [
               input.organizationId,
@@ -4165,6 +4196,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               method.amount,
               method.method === 'bank_transfer' ? input.bankTransactionRef ?? null : null,
               JSON.stringify(allocations),
+              createdAt,
             ],
           )
           entries.push({
@@ -4176,7 +4208,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             finance_account: method.account,
             is_business_accounted: true,
             source_type: 'payment_receipt_method',
-            created_at: new Date().toISOString(),
+            created_at: createdAt,
             note: method.method === 'bank_transfer' && input.bankTransactionRef ? `${note} (${input.bankTransactionRef})` : note,
             counterparty: { type: 'customer', name: firstCustomer.name, phone: firstCustomer.phone },
             source: { type: 'payment_receipt', id: receiptId, code: receiptCode, order_code: receiptOrderCode, customer_id: input.customerId },

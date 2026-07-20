@@ -105,6 +105,7 @@ export interface CustomerDebtDetail {
 export interface DebtCollectionInput {
   customer_id: string
   amount: number
+  created_at?: string
   allocations?: Array<{
     order_id: string
     order_code: string

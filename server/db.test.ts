@@ -557,6 +557,7 @@ describe('createPgRepository product units', () => {
       organizationId: '11111111-1111-1111-1111-111111111111',
       customerId: 'customer-kv-kh000384',
       amount: 200000,
+      createdAt: '2026-07-20T08:15:00.000Z',
       cashAmount: 200000,
       bankAmount: 0,
     })
@@ -568,6 +569,95 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('insert into cashbook_entries'))).toBe(true)
     const receiptInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into payment_receipts'))
     expect(receiptInsert?.[1]?.[4]).toBeNull()
+    expect(receiptInsert?.[1]?.[7]).toBe('2026-07-20T08:15:00.000Z')
+  })
+
+  test('links requested customer debt payment allocations to invoices even when debt entry rows are missing', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('from customer_debt_entries cde')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from orders o') && sql.includes('o.customer_snapshot') && sql.includes('for update')) {
+        return {
+          rows: [{
+            debt_id: null,
+            remaining_debt: '105000',
+            order_id: 'order-hd011111',
+            order_code: 'HD011111',
+            total_amount: '105000',
+            paid_amount: '0',
+            debt_amount: '105000',
+            customer_snapshot: { name: 'Chú Bình TTYTTP', phone: null },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from customer_debt_adjustments') && sql.includes('status = \'open\'')) {
+        return {
+          rows: [{
+            id: 'adjustment-ckkh000228',
+            source_code: 'CKKH000228',
+            amount_delta: '122400',
+            paid_amount: '0',
+            remaining_amount: '122400',
+            balance_after: '879900',
+            customer_snapshot: { name: 'Chú Bình TTYTTP', phone: null },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('limit 1') && sql.includes('balance_after') && sql.includes('for update')) {
+        return {
+          rows: [{
+            id: 'adjustment-ckkh000228',
+            source_code: 'CKKH000228',
+            paid_amount: '0',
+            balance_after: '879900',
+            customer_snapshot: { name: 'Chú Bình TTYTTP', phone: null },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kh000015',
+            customer_code: 'KH000015',
+            customer_name: 'Chú Bình TTYTTP',
+            total_debt: '879900',
+            open_invoice_count: 1,
+            oldest_order_code: 'HD011111',
+            has_kiotviet_anchor: true,
+            last_activity_at: new Date('2026-07-20T00:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('regexp_match')) return { rows: [{ max_seq: 1849 }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.collectCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kh000015',
+      amount: 10500,
+      createdAt: '2026-07-20T09:10:00.000Z',
+      cashAmount: 10500,
+      bankAmount: 0,
+      allocations: [{ order_id: 'order-hd011111', order_code: 'HD011111', allocated_amount: 10500 }],
+    })
+
+    expect(result).toEqual({ payment_receipt_id: 'TT001850', allocated_amount: 10500 })
+    const receiptInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into payment_receipts'))
+    expect(receiptInsert?.[1]?.[4]).toBe('order-hd011111')
+    expect(receiptInsert?.[1]?.[6]).toBe('Thu no HD011111')
+    const cashbookInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into cashbook_entries'))
+    expect(cashbookInsert?.[1]?.[8]).toBe('Thu no HD011111')
+    expect(cashbookInsert?.[1]?.[14]).toBe('2026-07-20T09:10:00.000Z')
+    expect(JSON.parse(String(cashbookInsert?.[1]?.[10]))).toMatchObject({ order_code: 'HD011111' })
+    expect(pgMock.query.mock.calls.some(([sql, params]) => String(sql).includes('update orders') && params?.[3] === 'order-hd011111')).toBe(true)
+    expect(pgMock.query.mock.calls.some(([sql]) => String(sql).includes('update customer_debt_adjustments'))).toBe(false)
   })
 
   test('loads product unit conversions from PostgreSQL instead of a placeholder array', async () => {

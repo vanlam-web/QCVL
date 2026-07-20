@@ -719,6 +719,7 @@ export interface ServerRepository {
     organizationId: string
     customerId: string
     amount: number
+    createdAt?: string
     allocations?: Array<{
       order_id: string
       order_code: string
@@ -2193,6 +2194,7 @@ async function collectCustomerDebt(request: Request) {
   const body = await readJson(request) as {
     customer_id?: string
     amount?: number
+    created_at?: string
     allocations?: Array<{
       order_id?: string
       order_code?: string
@@ -2281,7 +2283,7 @@ async function collectCustomerDebt(request: Request) {
   }
 
   const receiptCode = `TT${String(cashbookEntries.length + 1).padStart(6, '0')}`
-  const createdAt = runtimeIso()
+  const createdAt = optionalIsoDateTime(body.created_at, 'created_at') ?? runtimeIso()
   const customerName = customer?.name ?? debt.customer_name
   const customerPhone = customer && 'phone' in customer ? customer.phone : null
   const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
@@ -3677,6 +3679,7 @@ async function getDevApiResponse(
           const body = await readJson(request) as {
             customer_id?: string
             amount?: number
+            created_at?: string
             allocations?: Array<{
               order_id?: string
               order_code?: string
@@ -3696,6 +3699,7 @@ async function getDevApiResponse(
               organizationId: currentUser.organization.id,
               customerId: body.customer_id ?? '',
               amount: Math.max(Number(body.amount ?? 0), 0),
+              createdAt: optionalIsoDateTime(body.created_at, 'created_at'),
               allocations: Array.isArray(body.allocations)
                 ? body.allocations.map((allocation) => ({
                     order_id: String(allocation.order_id ?? ''),

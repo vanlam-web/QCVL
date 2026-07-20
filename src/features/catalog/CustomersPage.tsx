@@ -665,9 +665,11 @@ export function CustomersPage({
     setSavingDebtPayment(true)
     setDebtPaymentError(null)
     try {
+      const paidAt = parseCustomerDebtAdjustmentDateTime(form.paidAt)
       const result = await financeService.collectCustomerDebt({
         customer_id: customer.id,
         amount,
+        ...(paidAt ? { created_at: paidAt.toISOString() } : {}),
         allocations: paymentRows
           .filter((row) => row.payment_amount > 0)
           .map((row) => ({
@@ -1393,13 +1395,23 @@ function buildCustomerDebtSummaryRows(
 
 function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {
   let remainingPayment = Math.max(paymentAmount, 0)
-  return summaryRows.map((row) => {
+  const paymentById = new Map<string, number>()
+  const oldestRows = [...summaryRows].sort((left, right) => {
+    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
+    if (timeDiff !== 0) return timeDiff
+    return left.code.localeCompare(right.code)
+  })
+  for (const row of oldestRows) {
     const paymentAmountForRow = Math.min(row.remaining_debt, remainingPayment)
+    paymentById.set(row.id, paymentAmountForRow)
     remainingPayment -= paymentAmountForRow
+    if (remainingPayment <= 0) break
+  }
+  return summaryRows.map((row) => {
     return {
       ...row,
       paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
-      payment_amount: paymentAmountForRow,
+      payment_amount: paymentById.get(row.id) ?? 0,
     }
   })
 }

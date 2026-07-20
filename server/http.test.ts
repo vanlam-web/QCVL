@@ -4751,6 +4751,7 @@ describe('createHttpHandler', () => {
         body: JSON.stringify({
           customer_id: 'customer-011',
           amount: 100000,
+          created_at: '2026-07-18T04:20:00.000Z',
           payment_method: { cash_amount: 0, bank_amount: 100000, bank_account_id: 'bank-main', bank_transaction_ref: 'VCB-KH011' },
           note: 'Thu no KH011',
         }),

@@ -3440,6 +3440,7 @@ describe('createDevMemoryRepository persistence', () => {
       organizationId: 'org-dev-memory',
       customerId,
       amount: 150000,
+      createdAt: '2026-07-20T08:15:00.000Z',
       cashAmount: 150000,
       bankAmount: 0,
     })
@@ -3467,7 +3468,7 @@ describe('createDevMemoryRepository persistence', () => {
       url: new URL('http://api.local/api/v1/finance/cashbook?page=1&page_size=100&status=posted'),
     })
     const receiptEntry = cashbook?.find((entry) => entry.code === collected?.payment_receipt_id)
-    expect(receiptEntry).toMatchObject({ direction: 'in', amount_delta: 150000, source_type: 'payment_receipt_method' })
+    expect(receiptEntry).toMatchObject({ direction: 'in', amount_delta: 150000, source_type: 'payment_receipt_method', created_at: '2026-07-20T08:15:00.000Z' })
     expect(receiptEntry?.allocations?.map((allocation) => [allocation.order_code, allocation.allocated_amount])).toEqual([
       ['HD020001', 100000],
       ['HD020002', 50000],
