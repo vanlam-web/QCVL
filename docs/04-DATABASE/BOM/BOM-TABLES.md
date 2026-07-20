@@ -1,7 +1,9 @@
 # BOM Tables — Phác thảo dữ liệu định mức vật tư
 
-> **Vai trò:** Source of Truth mức thiết kế dữ liệu; tên bảng/cột có thể tinh chỉnh khi implement.
+> **Vai trò:** Thiết kế dữ liệu mục tiêu.
 > **Business:** [BOM-RULES.md](../../03-BUSINESS-NghiepVu/BOM/BOM-RULES.md)
+> **Trạng thái runtime / path trừ kho:** [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · [DOC-CLEANUP-CHECKLIST](../../DOC-CLEANUP-CHECKLIST.md)
+> *(README BOM 3 lớp đầy đủ trên PR #4 nếu chưa merge.)*
 
 ---
 
@@ -15,8 +17,10 @@
 | `product_id` | Sản phẩm/combo sở hữu BOM |
 | `version` | Số version tăng dần |
 | `status` | `draft`, `active`, `archived` |
-| `notes` | Nullable |
+| `notes` | Nullable; import KV có thể ghi source text |
 | `created_by`, `created_at` | Audit |
+
+**SoT từ 2026-07-20:** BOM import từ KiotViet phải là `active`. `draft` không dùng làm “chờ duyệt KV”.
 
 Chỉ một BOM `active` hiện hành cho một sản phẩm tại một thời điểm.
 
@@ -28,65 +32,36 @@ Chỉ một BOM `active` hiện hành cho một sản phẩm tại một thời 
 | `bom_id` | FK `product_boms` |
 | `component_product_id` | Vật tư/sản phẩm thành phần |
 | `quantity` | Định mức |
-| `unit_id` | Đơn vị định mức |
-| `calculation_payload` | JSON cho kích thước, diện tích, mét tới nếu có |
-| `sort_order` | Thứ tự hiển thị |
+| `unit_id` | Đơn vị định mức (nullable tùy implement) |
+| `calculation_payload` | JSON nếu có (hướng dài) |
+| `sort_order` | Thứ tự |
 | `notes` | Nullable |
-
-Thành phần có thể là vật tư lá hoặc sản phẩm có BOM con.
 
 ---
 
-## 2. Snapshot trên chứng từ
+## 2. Snapshot trên chứng từ *(hướng dài)*
 
 ### `order_item_bom_snapshots`
 
-| Cột | Ghi chú |
-|---|---|
-| `id` | UUID |
-| `order_item_id` | Dòng hóa đơn/báo giá |
-| `source_type` | `standard_bom`, `line_override` |
-| `source_bom_id` | Nullable |
-| `source_bom_version` | Nullable |
-| `snapshot_payload` | JSON đầy đủ thành phần đã dùng |
-| `created_at` | Audit |
-
-Snapshot bắt buộc để hóa đơn cũ không đổi khi BOM chuẩn được sửa.
-
-Với combo cha chứa combo con, snapshot phải giữ được cả:
-
-- dòng combo con như một thành phần tham chiếu trong combo cha
-- `source_bom_id` / `source_bom_version` hoặc dữ liệu tương đương của combo con tại thời điểm bán
-- danh sách vật tư lá đã deep-scan nếu backend đã tính ở thời điểm chốt
-
-Chứng từ cũ đọc theo snapshot/version đã lưu, không đọc lại BOM active mới nhất.
-
-Khi lưu combo mới từ POS, BOM chuẩn mới giữ combo con là component tham chiếu. Không tự flatten combo con thành vật tư lá nếu người dùng không yêu cầu.
+Mục tiêu: hóa đơn cũ không đổi khi BOM chuẩn sửa sau. **Chưa bắt buộc** nghiệm thu slice trừ thành phần cấp 1.
 
 ---
 
-## 3. Validation bắt buộc
+## 3. Import KiotViet
 
-Backend/database layer phải hỗ trợ:
+### Mục tiêu SoT (Owner 2026-07-20)
 
-- chặn vòng lặp BOM
-- giới hạn deep-scan mặc định 5 cấp
-- không cho xóa BOM version đã được chứng từ tham chiếu nếu chưa có cơ chế archive an toàn
-- sửa BOM active bằng cách tạo version mới
+- Parse `Mã:Định mức|Mã:Định mức` → `product_bom_items`.
+- `status = active`.
+- Import lại: archive BOM KV cũ → version mới `active`.
+- Bán combo: trừ items; không trừ mã combo.
 
----
+### Runtime (2026-07-20) — chưa khớp
 
-## 4. Import KiotViet
+- `upsertDraftProductBoms` vẫn insert `draft` + note *Review before activating*.
+- Field API `draft_bom` vẫn mang nghĩa draft/UI nháp.
+- Khi làm code: đổi sang active, migrate draft cũ, bỏ copy nháp.
 
-Dữ liệu `Hàng thành phần` từ KiotViet được import vào trạng thái nháp/cần rà soát.
+### Lịch sử (superseded)
 
-Không lưu định dạng text `Ma:SoLuong|Ma:SoLuong` làm schema chính.
- 
-## Ghi chú triển khai import KiotViet 2026-07-10
-
-- Parse `Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức`.
-- Lưu thành `product_boms.status = draft`, không tự active.
-- Tạo version mới cho mỗi lần import lại mã có BOM.
-- Archive draft KiotViet cũ của cùng sản phẩm trước khi tạo draft mới.
-- Thiếu sản phẩm cha hoặc thiếu component theo mã hàng thì bỏ qua BOM đó và tăng `bom_skipped_rows`.
-- Ghi source text vào `notes` để đối soát, schema chính vẫn là `product_bom_items`.
+2026-07-10 từng chốt import `draft` rồi duyệt. **Đã thay** bởi 2026-07-20.

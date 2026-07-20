@@ -114,7 +114,7 @@ TÃ¬m sáº£n pháº©m kÃ¨m thÃ´ng tin tá»“n kho tá»•ng há»£p.
 
 - `kiotviet_provisional_stock`: tồn tạm từ `inventory_provisional_balances`, lấy từ export Hàng hóa KiotViet.
 - `latest_kiotviet_stocktake`: phiếu kiểm kho KiotViet gần nhất từ `stocktakes`/`stocktake_items`, chỉ dùng làm bằng chứng đối soát.
-- `draft_bom`: BOM nháp import từ KiotViet.
+- `draft_bom`: tên field giữ cũ. **SoT:** nghĩa = BOM đang dùng (thường `active`), không UI “nháp chờ duyệt”. **Runtime:** vẫn join/trả kiểu draft + copy nháp — [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · DOC-CLEANUP-CHECKLIST.
 
 `latest_kiotviet_stocktake.actual_qty` không được dùng để cập nhật `inventory_provisional_balances`, tồn vận hành, hoặc tạo `stock_movements`.
 
@@ -201,6 +201,8 @@ Cáº­p nháº­t cáº¥u hÃ¬nh tá»“n kho cá»§a sáº£n pháº©m.
 ---
 
 ## 5. Roll inventory
+
+> **Runtime 2026-07-20:** `GET/POST/PATCH /inventory/rolls` là sample/stub hoặc docs-ahead — **không** coi là object kho vận hành thật. V1 freeze: roll/sheet dormant. SoT object-level: [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) mục 3 · PRD [03-ROLL-SHEET-OBJECTS.md](../../02-PRD-UX-PhongCanh/Inventory/03-ROLL-SHEET-OBJECTS.md).
 
 ### `GET /inventory/rolls`
 
@@ -311,6 +313,8 @@ Endpoint nÃ y chá»‰ Ä‘á» xuáº¥t, khÃ´ng trá»« kho.
 ---
 
 ## 6. Sheet inventory
+
+> **Runtime 2026-07-20:** `GET/POST/PATCH /inventory/sheets` sample/stub hoặc docs-ahead — không object kho thật. Cùng V1 freeze với roll. Inventory README mục 2–3.
 
 ### `GET /inventory/sheets`
 

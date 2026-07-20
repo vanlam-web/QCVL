@@ -35,6 +35,8 @@
 - [x] **Tồn QCVL / KV tạm / mốc mở** — Inventory README 3 lớp; chốt mâu thuẫn fallback list; roll/sheet stub; API notes · PR #5
 - [x] **Owner: đã import hết** — không mở đợt import KV mới; nút import = phòng hờ · ghi trong Inventory README + PHASE + PRD · PR #5
 - [x] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory** — bảng path × SoT trên Sales README + POS-CHECKOUT · PR #5
+- [x] **Stub BOM API / UI “BOM nháp”** — dọn vệ tinh PRD/API/plan/POS-TABLES/BOM-TABLES theo SoT+runtime · PR #5
+- [x] **Material opening / roll-sheet API docs** — banner stub trên §5–6 INVENTORY-API; khui roll/sheet = docs-ahead · PR #5
 
 ---
 
@@ -44,14 +46,9 @@
 
 ### P1 — Lệch docs↔runtime dễ gây hiểu nhầm
 
-- [x] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory** · PR #5 (Sales README)
-- [ ] **Stub BOM API / UI “BOM nháp”** (docs mirror runtime)  
-  PR #4 đã mô tả; rà lại sau khi #4 merge xem còn file vệ tinh sót trên `main`.  
-  Xong khi: grep không còn “đã active / dùng ngay” như runtime đã xong (trừ SoT mục tiêu).
-
-- [ ] **Material opening / roll-sheet API docs**  
-  PR #5 đã sửa chỗ “đang xử lý roll/sheet”; rà `INVENTORY-API.md` còn đoạn encoding/mô tả ship giả.  
-  Xong khi: mọi đoạn khui/object ghi rõ normal-only hoặc docs-ahead.
+- [x] **Trừ kho bán hàng** · PR #5
+- [x] **Stub BOM API / UI “BOM nháp”** · PR #5 (vệ tinh trên `main`/branch này)
+- [x] **Material opening / roll-sheet API docs** · PR #5
 
 ### P2 — Module chưa có bảng trạng thái 3 lớp
 
@@ -88,6 +85,7 @@
 | 2026-07-20 | PRD tồn: fallback KV vs “không lấp QCVL” | Đã chốt đọc trong Inventory README | [x] PR #5 |
 | 2026-07-20 | Roll-sheet PRD nói “API thật” | Đổi thành stub/docs-ahead | [x] PR #5 |
 | 2026-07-20 | Postgres POS live trừ cả mã combo | Ghi bảng path trên Sales README; SoT = chỉ thành phần | [x] PR #5 |
+| 2026-07-20 | Nhiều doc vẫn SoT cũ “BOM nháp / draft chờ duyệt” | Đổi SoT+runtime trên PRD/API/plan/TABLES | [x] PR #5 |
 | | | | [ ] |
 
 ---
