@@ -55,9 +55,11 @@ Mỗi giao dịch công nợ có số dư sau giao dịch.
 
 Số dư sau giao dịch là số dư lũy kế ngay sau khi ghi nhận giao dịch đó.
 
-### BR-DEBT-06: Không dùng trả trước trong MVP
+### BR-DEBT-06: Hiển thị âm đối soát vs thu live (Owner 2026-07-21)
 
-MVP không quản lý số dư âm hoặc khách trả trước.
+- **Hiển thị:** được phép hiện **số âm** trên báo cáo / tab nợ / đối soát lịch sử để đối chiếu dữ liệu import KV hoặc lệch chứng từ.
+- **Thu nợ live:** không cho trả nhiều hơn số nợ còn lại — **không** tạo trả trước / không sinh âm vận hành mới từ thao tác thu.
+- MVP vẫn **không** quản lý module “khách trả trước” như số dư có lợi riêng.
 
 Nếu khách trả dư khi thanh toán đơn mới:
 

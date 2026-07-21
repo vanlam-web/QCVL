@@ -24,6 +24,8 @@
 | C | Lọc theo chế độ công nợ đối tác (tính / không tính / không có công nợ) khi SoT đã chốt |
 | D | Công nợ khách: công thức chuẩn ở backend Finance (ledger/invoice-level) — UI Customers/Finance chỉ hiển thị |
 | E | Owner 2026-07-20: **đã import hết** So quỹ KV cần dùng — không mở đợt import mới |
+| F | Owner 2026-07-21: **được hiển thị số âm** trên báo cáo/đối soát/lịch sử (đối chiếu import KV) |
+| G | Owner 2026-07-21: **thu nợ live** không cho trả nhiều hơn nợ còn lại (không tạo trả trước / âm vận hành mới) — [POS-CUSTOMER-DEBT](../Sales/POS-CUSTOMER-DEBT.md) |
 
 ---
 
@@ -43,10 +45,9 @@
 
 ## 3. Hướng dài / chưa làm
 
-> Owner 2026-07-21: nâng cấp sâu đóng băng cùng P4 chung — **trước khi code** cần chốt SoT nợ (âm đối soát vs “không trả trước”) trong mục dưới.
+> SoT nợ F/G đã chốt (mục 1). Nâng cấp sâu (đối soát cuối ngày / chuyển quỹ) đóng băng cùng P4 chung trừ khi Owner mở.
 
 - Đối soát cuối ngày / chuyển quỹ sâu nếu chưa đủ
-- **Chốt SoT debt trước khi code:** số âm trên báo cáo đối soát **được phép hiển thị** để đối chiếu lịch sử; rule nghiệp vụ “không trả trước / không âm vận hành” vẫn áp khi thu nợ live — không gộp hai nghĩa
 - Báo cáo tài chính nâng cao
 - Không xếp “import So quỹ KV nữa” vào queue
 

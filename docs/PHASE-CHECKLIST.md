@@ -110,7 +110,8 @@ Current status 2026-07-21 (đóng băng V1 tạm — Owner):
 - **Bản hiện tại dùng được tạm.** Slice BOM/POS KV đã lên `main` (migrate `0008`, POS skip parent combo, UI/`/bom`). Không re-import Excel.
 - P4 / hướng dài (mốc mở tồn, Purchase persist stub, deep-scan BOM, Lưu Combo, object cuộn-tấm) = **nâng cấp làm sau** — đóng băng, không mở code cho đến khi Owner bảo.
 - Docs tạm: [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) · [BOM README](./03-BUSINESS-NghiepVu/BOM/README.md) · [Inventory README](./03-BUSINESS-NghiepVu/Inventory/README.md).
-- **Queue tiếp theo (chờ Owner chọn module):** vận hành/đối soát V1 trên dữ liệu đã có — không gồm các mục P4 đóng băng ở trên. Ví dụ ứng viên: cứng hóa UI/filter, Finance/So quỹ vận hành, re-check `REV-2026-07-08-001`.
+- **Owner 2026-07-21 — công nợ:** được hiện số âm khi đối soát; thu nợ live không cho trả thừa (xem Finance README F/G · POS-CUSTOMER-DEBT BR-DEBT-06).
+- **Hướng tiếp theo (Owner):** **vận hành đơn mới sau import** — không import file KV mới. Nhập các đơn phát sinh trên QCVL; UI tạo đơn còn thiếu ở một số loại; sau khi nhập xong thì **đối soát trùng/lệch với chứng từ KV đã import**. Chi tiết: [Sales README — Vận hành sau import](./03-BUSINESS-NghiepVu/Sales/README.md).
 
 
 ---
@@ -147,15 +148,15 @@ Current status 2026-07-21 (đóng băng V1 tạm — Owner):
 
 Chỉ mở khi Owner chọn và Spec còn đúng với runtime. **Tách 2 nhóm** (Owner 2026-07-21 đóng băng P4).
 
-### A — V1 vận hành / cứng hóa (có thể chọn)
+### A — V1 vận hành đơn mới sau import (Owner 2026-07-21)
 
 | Việc | Ghi chú |
 |---|---|
-| V1 functional gaps (UI detail, nút thêm/sửa/xóa, filter) | Làm `3202` trước, xong mới `3200` |
-| Finance / Sổ quỹ vận hành | Accounts + voucher; **không** import So quỹ KV mới |
-| Re-check `REV-2026-07-08-001` | Nếu còn mở trên REVIEW-ISSUES |
-| PriceBook product groups/filter | Chỉ khi Owner cần |
-| Sales Documents edit/cancel/reversal | Cần chốt thêm spec đảo kho/tiền/nợ |
+| **Ưu tiên hướng:** nhập đơn mới trên QCVL + đối soát trùng KV | [Sales README — Vận hành sau import](./03-BUSINESS-NghiepVu/Sales/README.md) |
+| UI đủ để nhập loại đơn Owner chọn | Hiện: POS HD/BG + phiếu thu/chi OK; **PN live stub**; tạo SP stub |
+| Đối soát trùng/lệch với chứng từ KV đã import | Chưa có màn riêng; DB unique mã; cần Spec khi Owner mở |
+| V1 functional gaps (nút/filter) | Chỉ làm nếu chặn nhập đơn đang chọn |
+| Finance voucher / debt hiển thị | SoT nợ đã chốt (âm đối soát + thu live không trả thừa) |
 
 ### B — P4 đóng băng (nâng cấp sau — không mở code)
 
