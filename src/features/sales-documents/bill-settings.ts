@@ -108,8 +108,8 @@ export function billTemplateLabel(template: BillTemplateId) {
 
 export function billTemplateDescription(template: BillTemplateId) {
   return template === 'k80'
-    ? 'Khổ hẹp ~80mm cho máy in nhiệt quầy. Có thể ẩn cột mã hàng, ĐVT, CK trong Quản lý mẫu in.'
-    : 'Khổ giấy A4 — đủ cột, phù hợp in laser/in PDF gửi khách.'
+    ? 'Khổ ~80mm cho máy in nhiệt quầy.'
+    : 'Khổ A4 — in laser / PDF gửi khách.'
 }
 
 export function isWalkInCustomerCode(code: string | null | undefined) {

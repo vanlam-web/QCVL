@@ -206,7 +206,10 @@ export function FoundationAdminPage({
   const [activeTab, setActiveTab] = useState<AdminSettingsPanel>('users')
   const [savingUser, setSavingUser] = useState(false)
   const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettingsCache())
-  const [billSettingsNotice, setBillSettingsNotice] = useState<string | null>(null)
+  const [billSettingsNotice, setBillSettingsNotice] = useState<{
+    tone: 'success' | 'warning'
+    text: string
+  } | null>(null)
   const [billSettingsLoading, setBillSettingsLoading] = useState(false)
   const [shopDraft, setShopDraft] = useState(() => {
     const settings = readOrganizationBillSettingsCache()
@@ -266,8 +269,15 @@ export function FoundationAdminPage({
       const next = await service.getOrganizationBillSettings()
       applyBillSettings(next)
     } catch (cause) {
-      setBillSettingsNotice(formatApiError(cause, 'Không tải được cấu hình bill từ server. Đang dùng bản cache máy này.'))
       applyBillSettings(readOrganizationBillSettingsCache())
+      if (cause instanceof ApiError && (cause.code === 'AUTH_REQUIRED' || cause.code === 'PERMISSION_DENIED')) {
+        setBillSettingsNotice({ tone: 'warning', text: formatApiError(cause, 'Không tải được cấu hình bill từ server.') })
+      } else {
+        setBillSettingsNotice({
+          tone: 'warning',
+          text: 'Không tải được cấu hình bill từ server. Đang dùng bản máy này — kiểm tra API đã chạy migration bill settings.',
+        })
+      }
     } finally {
       setBillSettingsLoading(false)
     }
@@ -279,9 +289,19 @@ export function FoundationAdminPage({
     try {
       const saved = await service.updateOrganizationBillSettings(next)
       applyBillSettings(saved)
-      setBillSettingsNotice('Đã lưu cấu hình bill lên server (dùng chung mọi máy).')
+      setBillSettingsNotice({
+        tone: 'success',
+        text: 'Đã lưu cấu hình bill lên server (dùng chung mọi máy).',
+      })
     } catch (cause) {
-      setBillSettingsNotice(formatApiError(cause, 'Không lưu được cấu hình bill lên server.'))
+      const text =
+        cause instanceof ApiError && cause.code === 'RESOURCE_NOT_FOUND'
+          ? 'API chưa có endpoint cấu hình bill. Cập nhật/restart server rồi thử lại.'
+          : formatApiError(cause, 'Không lưu được cấu hình bill lên server.')
+      setBillSettingsNotice({
+        tone: 'warning',
+        text,
+      })
     } finally {
       setBillSettingsLoading(false)
     }
@@ -608,7 +628,9 @@ export function FoundationAdminPage({
         />
       }
     >
-      {error && !userDialogOpen ? <p role="alert">{error}</p> : null}
+      {error && !userDialogOpen && (activeTab === 'users' || activeTab === 'roles') ? (
+        <p role="alert">{error}</p>
+      ) : null}
       {state === null && error === null && (activeTab === 'users' || activeTab === 'roles') ? (
         <p>Đang tải dữ liệu quản trị...</p>
       ) : null}
@@ -621,11 +643,18 @@ export function FoundationAdminPage({
               <p>Hiện trên đầu hóa đơn / báo giá khi in. Lưu trên server — dùng chung mọi máy POS.</p>
             </div>
             <p className="admin-settings-panel-meta">
-              Mẫu mặc định hiện tại: <strong>{billTemplateLabel(billSettings.default_bill_template)}</strong>
+              Mẫu mặc định: <strong>{billTemplateLabel(billSettings.default_bill_template)}</strong>
             </p>
           </header>
-          {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
-          {billSettingsLoading ? <p>Đang tải cấu hình bill...</p> : null}
+          {billSettingsNotice ? (
+            <p
+              className={`admin-settings-notice is-${billSettingsNotice.tone}`}
+              role={billSettingsNotice.tone === 'success' ? 'status' : 'alert'}
+            >
+              {billSettingsNotice.text}
+            </p>
+          ) : null}
+          {billSettingsLoading ? <p className="admin-settings-loading">Đang tải cấu hình bill...</p> : null}
           <div className="admin-settings-bill-layout">
             <form
               className="admin-settings-form"
@@ -684,14 +713,21 @@ export function FoundationAdminPage({
           <header className="admin-settings-panel-header">
             <div>
               <h2>Quản lý mẫu in</h2>
-              <p>Chỉnh khổ mặc định, tiêu đề, chân bill, cột hiển thị và logo. Lưu trên server.</p>
+              <p>Khổ mặc định, tiêu đề, chân bill, cột và logo — lưu server, dùng chung mọi máy.</p>
             </div>
             <p className="admin-settings-panel-meta">
-              Đầu bill: <strong>{billSettings.shop_name}</strong>
+              Cửa hàng: <strong>{billSettings.shop_name}</strong>
             </p>
           </header>
-          {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
-          {billSettingsLoading ? <p>Đang tải cấu hình bill...</p> : null}
+          {billSettingsNotice ? (
+            <p
+              className={`admin-settings-notice is-${billSettingsNotice.tone}`}
+              role={billSettingsNotice.tone === 'success' ? 'status' : 'alert'}
+            >
+              {billSettingsNotice.text}
+            </p>
+          ) : null}
+          {billSettingsLoading ? <p className="admin-settings-loading">Đang tải cấu hình bill...</p> : null}
           <div className="admin-settings-bill-layout">
             <form
               className="admin-settings-form"
@@ -705,35 +741,38 @@ export function FoundationAdminPage({
                 value={templateDraft.default_bill_template}
                 onChange={(value) => setTemplateDraft((current) => ({ ...current, default_bill_template: value }))}
               />
+              <div className="admin-settings-form-grid">
+                <label>
+                  Tiêu đề hóa đơn
+                  <input
+                    disabled={billSettingsLoading}
+                    name="invoice_title"
+                    value={templateDraft.invoice_title}
+                    onChange={(event) => setTemplateDraft((current) => ({ ...current, invoice_title: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Tiêu đề báo giá
+                  <input
+                    disabled={billSettingsLoading}
+                    name="quote_title"
+                    value={templateDraft.quote_title}
+                    onChange={(event) => setTemplateDraft((current) => ({ ...current, quote_title: event.target.value }))}
+                  />
+                </label>
+              </div>
               <label>
-                Tiêu đề hóa đơn
-                <input
-                  disabled={billSettingsLoading}
-                  name="invoice_title"
-                  value={templateDraft.invoice_title}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, invoice_title: event.target.value }))}
-                />
-              </label>
-              <label>
-                Tiêu đề báo giá
-                <input
-                  disabled={billSettingsLoading}
-                  name="quote_title"
-                  value={templateDraft.quote_title}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, quote_title: event.target.value }))}
-                />
-              </label>
-              <label>
-                Dòng chân bill (để trống = mặc định)
+                Dòng chân bill
                 <textarea
                   disabled={billSettingsLoading}
                   name="footer_note"
+                  placeholder="Để trống = dùng câu mặc định khi in"
                   rows={2}
                   value={templateDraft.footer_note}
                   onChange={(event) => setTemplateDraft((current) => ({ ...current, footer_note: event.target.value }))}
                 />
               </label>
-              <fieldset className="admin-settings-checkboxes">
+              <fieldset className="admin-settings-checkboxes admin-settings-checkboxes-inline">
                 <legend>Cột trên bill</legend>
                 <label>
                   <input
@@ -767,28 +806,32 @@ export function FoundationAdminPage({
                   Hiện cột CK
                 </label>
               </fieldset>
-              <label>
-                Logo cửa hàng (PNG/JPG/WEBP, ≤280KB)
-                <input
-                  accept="image/png,image/jpeg,image/webp"
-                  disabled={billSettingsLoading}
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) return
-                    void readImageFileAsDataUrl(file)
-                      .then((logo_data_url) => {
-                        setTemplateDraft((current) => ({ ...current, logo_data_url }))
-                        setBillSettingsNotice(null)
-                      })
-                      .catch((cause: unknown) => {
-                        setBillSettingsNotice(cause instanceof Error ? cause.message : 'Không đọc được logo.')
-                      })
-                  }}
-                />
-              </label>
-              {templateDraft.logo_data_url ? (
-                <div className="admin-settings-form-actions">
+              <div className="admin-settings-logo-row">
+                <label>
+                  Logo cửa hàng
+                  <span className="admin-settings-field-hint">PNG / JPG / WEBP · tối đa ~280KB</span>
+                  <input
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={billSettingsLoading}
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      void readImageFileAsDataUrl(file)
+                        .then((logo_data_url) => {
+                          setTemplateDraft((current) => ({ ...current, logo_data_url }))
+                          setBillSettingsNotice(null)
+                        })
+                        .catch((cause: unknown) => {
+                          setBillSettingsNotice({
+                            tone: 'warning',
+                            text: cause instanceof Error ? cause.message : 'Không đọc được logo.',
+                          })
+                        })
+                    }}
+                  />
+                </label>
+                {templateDraft.logo_data_url ? (
                   <button
                     className="button button-secondary"
                     disabled={billSettingsLoading}
@@ -797,8 +840,8 @@ export function FoundationAdminPage({
                   >
                     Xóa logo
                   </button>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
               <div className="admin-settings-form-actions">
                 <button className="button button-primary" disabled={billSettingsLoading} type="submit">
                   Lưu mẫu in
