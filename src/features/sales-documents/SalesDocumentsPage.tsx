@@ -1330,7 +1330,28 @@ function SalesDocumentDetailView({
           { label: 'Sửa', disabled: editDisabled, icon: <Pencil aria-hidden="true" size={15} />, onClick: onEdit },
           { label: savingNote ? 'Đang lưu' : 'Lưu', disabled: savingNote || !onSaveNote, icon: <Save aria-hidden="true" size={15} />, onClick: () => void saveNote() },
           { label: 'Xuất file', disabled: true, title: 'Chưa hỗ trợ xuất file chứng từ bán hàng', icon: <FileOutput aria-hidden="true" size={15} /> },
-          { label: 'In', icon: <Printer aria-hidden="true" size={15} /> },
+          {
+            label: 'In',
+            icon: <Printer aria-hidden="true" size={15} />,
+            disabled:
+              (document.order_type === 'invoice' && (!document.code.startsWith('HD') || !onOpenInvoicePrint))
+              || (document.order_type === 'quote' && (!document.code.startsWith('BG') || !onOpenQuotePrint)),
+            title:
+              document.order_type === 'invoice'
+                ? 'Xem/In hóa đơn'
+                : document.order_type === 'quote'
+                  ? 'Xem/In báo giá'
+                  : 'In chứng từ',
+            onClick: () => {
+              if (document.order_type === 'invoice' && document.code.startsWith('HD') && onOpenInvoicePrint) {
+                onOpenInvoicePrint(document.id)
+                return
+              }
+              if (document.order_type === 'quote' && document.code.startsWith('BG') && onOpenQuotePrint) {
+                onOpenQuotePrint(document.id)
+              }
+            },
+          },
         ]}
       />
     </div>
