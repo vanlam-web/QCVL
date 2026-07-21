@@ -64,12 +64,26 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
       shop_address: 'Xưởng in và thi công quảng cáo',
       shop_phone: '',
       default_bill_template: 'a4' as const,
+      invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+      quote_title: 'BÁO GIÁ',
+      footer_note: '',
+      show_product_code: true,
+      show_unit: true,
+      show_discount: true,
+      logo_data_url: null,
     })),
     updateOrganizationBillSettings: vi.fn(async (input) => ({
       shop_name: input.shop_name ?? 'QCVL',
       shop_address: input.shop_address ?? 'Xưởng in và thi công quảng cáo',
       shop_phone: input.shop_phone ?? '',
       default_bill_template: input.default_bill_template ?? ('a4' as const),
+      invoice_title: input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG',
+      quote_title: input.quote_title ?? 'BÁO GIÁ',
+      footer_note: input.footer_note ?? '',
+      show_product_code: input.show_product_code ?? true,
+      show_unit: input.show_unit ?? true,
+      show_discount: input.show_discount ?? true,
+      logo_data_url: input.logo_data_url !== undefined ? input.logo_data_url : null,
     })),
     ...overrides,
   }
@@ -590,13 +604,20 @@ it('saves shop info and default bill template from Thiết lập panels', async 
   expect(await within(shopPanel).findByRole('status')).toHaveTextContent('Đã lưu cấu hình bill lên server')
   expect(within(shopPanel).getByRole('complementary', { name: 'Xem trước đầu bill' })).toHaveTextContent('In ảnh Văn Lâm')
 
-  await userEvent.click(within(sidebar).getByRole('button', { name: 'Mẫu in' }))
-  const templatePanel = await screen.findByRole('region', { name: 'Mẫu in' })
+  await userEvent.click(within(sidebar).getByRole('button', { name: 'Quản lý mẫu in' }))
+  const templatePanel = await screen.findByRole('region', { name: 'Quản lý mẫu in' })
   await userEvent.click(within(templatePanel).getByRole('radio', { name: /K80 \(nhiệt\)/ }))
-  await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu mẫu mặc định' }))
+  await userEvent.clear(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề hóa đơn' }))
+  await userEvent.type(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề hóa đơn' }), 'PHIẾU BÁN HÀNG')
+  await userEvent.click(within(templatePanel).getByRole('checkbox', { name: 'Hiện mã hàng' }))
+  await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu mẫu in' }))
   await waitFor(() =>
-    expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith({
-      default_bill_template: 'k80',
-    }),
+    expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        default_bill_template: 'k80',
+        invoice_title: 'PHIẾU BÁN HÀNG',
+        show_product_code: false,
+      }),
+    ),
   )
 })

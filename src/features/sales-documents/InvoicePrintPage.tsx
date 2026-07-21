@@ -3,6 +3,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { displayPriceListName } from '../../lib/price-list-display'
 import { BillPrintToolbar } from './BillPrintToolbar'
 import {
+  invoiceFooterText,
   isBillTemplateId,
   readOrganizationBillSettingsCache,
   writeOrganizationBillSettingsCache,
@@ -114,12 +115,15 @@ export function InvoicePrintPage({
       <article className="quote-print-page" aria-label={`Hóa đơn ${document.code}`}>
         <header className="quote-print-heading">
           <div>
+            {settings.logo_data_url ? (
+              <img alt="" className="quote-print-logo" src={settings.logo_data_url} />
+            ) : null}
             <strong>{settings.shop_name}</strong>
             {settings.shop_address ? <p>{settings.shop_address}</p> : null}
             {settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
           </div>
           <div>
-            <h1>HÓA ĐƠN BÁN HÀNG</h1>
+            <h1>{settings.invoice_title}</h1>
             <dl>
               <div>
                 <dt>Mã</dt>
@@ -158,12 +162,12 @@ export function InvoicePrintPage({
           <thead>
             <tr>
               <th>STT</th>
-              <th>Mã hàng</th>
+              {settings.show_product_code ? <th>Mã hàng</th> : null}
               <th>Nội dung</th>
-              <th>ĐVT</th>
+              {settings.show_unit ? <th>ĐVT</th> : null}
               <th>SL</th>
               <th>Đơn giá</th>
-              <th>CK</th>
+              {settings.show_discount ? <th>CK</th> : null}
               <th>Thành tiền</th>
             </tr>
           </thead>
@@ -173,16 +177,18 @@ export function InvoicePrintPage({
               return (
                 <tr key={item.id}>
                   <td>{item.line_no}</td>
-                  <td>{item.product.code}</td>
+                  {settings.show_product_code ? <td>{item.product.code}</td> : null}
                   <td>
                     <strong>{item.product.name}</strong>
                     {dimension ? <p>{dimension}</p> : null}
                     {item.note ? <p>{item.note}</p> : null}
                   </td>
-                  <td>{item.product.unit_name}</td>
+                  {settings.show_unit ? <td>{item.product.unit_name}</td> : null}
                   <td>{salesDocumentMeasureText(item.quantity)}</td>
                   <td>{salesDocumentMoneyText(item.unit_price)}</td>
-                  <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
+                  {settings.show_discount ? (
+                    <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
+                  ) : null}
                   <td>{salesDocumentMoneyText(item.line_total)}</td>
                 </tr>
               )
@@ -230,7 +236,7 @@ export function InvoicePrintPage({
           </section>
         ) : null}
 
-        <p className="quote-print-footnote">Bill nội bộ — không phải hóa đơn điện tử.</p>
+        <p className="quote-print-footnote">{invoiceFooterText(settings)}</p>
       </article>
     </main>
   )

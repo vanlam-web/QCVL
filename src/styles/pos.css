@@ -1987,7 +1987,8 @@
 }
 
 .admin-settings-form input,
-.admin-settings-form select {
+.admin-settings-form select,
+.admin-settings-form textarea {
   min-height: 2.25rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
@@ -1996,6 +1997,45 @@
   padding: 0 var(--space-2);
   font: inherit;
   font-weight: 400;
+}
+
+.admin-settings-form textarea {
+  min-height: 4.5rem;
+  padding: var(--space-2);
+  resize: vertical;
+}
+
+.admin-settings-form input[type='file'] {
+  min-height: auto;
+  padding: var(--space-2) 0;
+  border: 0;
+}
+
+.admin-settings-checkboxes {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.admin-settings-checkboxes legend {
+  padding: 0 var(--space-1);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.admin-settings-checkboxes label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 500;
+}
+
+.admin-settings-checkboxes input {
+  width: 1rem;
+  min-height: 1rem;
 }
 
 .admin-settings-form-actions {

@@ -69,11 +69,25 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     shop_address: string
     shop_phone: string
     default_bill_template: 'a4' | 'k80'
+    invoice_title: string
+    quote_title: string
+    footer_note: string
+    show_product_code: boolean
+    show_unit: boolean
+    show_discount: boolean
+    logo_data_url: string | null
   } = {
     shop_name: organization.name,
     shop_address: 'Xưởng in và thi công quảng cáo',
     shop_phone: '',
     default_bill_template: 'a4',
+    invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+    quote_title: 'BÁO GIÁ',
+    footer_note: '',
+    show_product_code: true,
+    show_unit: true,
+    show_discount: true,
+    logo_data_url: null,
   }
   const adminAuthUser: AuthUserRow = {
     ...adminUser,
@@ -309,6 +323,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         shop_address: input.patch.shop_address ?? organizationBillSettings.shop_address,
         shop_phone: input.patch.shop_phone ?? organizationBillSettings.shop_phone,
         default_bill_template: input.patch.default_bill_template ?? organizationBillSettings.default_bill_template,
+        invoice_title: input.patch.invoice_title ?? organizationBillSettings.invoice_title,
+        quote_title: input.patch.quote_title ?? organizationBillSettings.quote_title,
+        footer_note: input.patch.footer_note ?? organizationBillSettings.footer_note,
+        show_product_code: input.patch.show_product_code ?? organizationBillSettings.show_product_code,
+        show_unit: input.patch.show_unit ?? organizationBillSettings.show_unit,
+        show_discount: input.patch.show_discount ?? organizationBillSettings.show_discount,
+        logo_data_url: input.patch.logo_data_url !== undefined
+          ? input.patch.logo_data_url
+          : organizationBillSettings.logo_data_url,
       }
       return { ...organizationBillSettings }
     },

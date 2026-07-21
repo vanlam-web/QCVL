@@ -880,6 +880,13 @@ export interface OrganizationBillSettingsData {
   shop_address: string
   shop_phone: string
   default_bill_template: 'a4' | 'k80'
+  invoice_title: string
+  quote_title: string
+  footer_note: string
+  show_product_code: boolean
+  show_unit: boolean
+  show_discount: boolean
+  logo_data_url: string | null
 }
 
 export interface HttpHandlerOptions {
@@ -4961,15 +4968,39 @@ function isBillTemplateId(value: unknown): value is OrganizationBillSettingsData
   return value === 'a4' || value === 'k80'
 }
 
+function isBillLogoDataUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value) return false
+  return /^data:image\/(png|jpeg|jpg|webp);base64,/i.test(value) && value.length <= 400_000
+}
+
+function readBooleanField(value: unknown, field: string) {
+  if (typeof value === 'boolean') return value
+  if (value === 'true' || value === '1') return true
+  if (value === 'false' || value === '0') return false
+  throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be boolean.`, { [field]: [`${field} must be boolean.`] })
+}
+
 function normalizeOrganizationBillSettingsData(
   input: Partial<OrganizationBillSettingsData> & { organization_name?: string },
 ): OrganizationBillSettingsData {
   const fallbackName = (input.organization_name ?? input.shop_name ?? 'QCVL').trim() || 'QCVL'
+  const logo = input.logo_data_url
   return {
     shop_name: (input.shop_name ?? fallbackName).trim() || fallbackName,
     shop_address: (input.shop_address ?? '').trim(),
     shop_phone: (input.shop_phone ?? '').trim(),
     default_bill_template: isBillTemplateId(input.default_bill_template) ? input.default_bill_template : 'a4',
+    invoice_title: (input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG').trim() || 'HÓA ĐƠN BÁN HÀNG',
+    quote_title: (input.quote_title ?? 'BÁO GIÁ').trim() || 'BÁO GIÁ',
+    footer_note: (input.footer_note ?? '').trim(),
+    show_product_code: input.show_product_code ?? true,
+    show_unit: input.show_unit ?? true,
+    show_discount: input.show_discount ?? true,
+    logo_data_url: logo === null || logo === ''
+      ? null
+      : isBillLogoDataUrl(logo)
+        ? logo
+        : null,
   }
 }
 
@@ -4985,6 +5016,23 @@ function parseOrganizationBillSettingsPatch(body: Record<string, unknown>): Part
       })
     }
     patch.default_bill_template = body.default_bill_template
+  }
+  if ('invoice_title' in body) patch.invoice_title = requiredString(body.invoice_title, 'invoice_title')
+  if ('quote_title' in body) patch.quote_title = requiredString(body.quote_title, 'quote_title')
+  if ('footer_note' in body) patch.footer_note = String(body.footer_note ?? '').trim()
+  if ('show_product_code' in body) patch.show_product_code = readBooleanField(body.show_product_code, 'show_product_code')
+  if ('show_unit' in body) patch.show_unit = readBooleanField(body.show_unit, 'show_unit')
+  if ('show_discount' in body) patch.show_discount = readBooleanField(body.show_discount, 'show_discount')
+  if ('logo_data_url' in body) {
+    if (body.logo_data_url === null || body.logo_data_url === '') {
+      patch.logo_data_url = null
+    } else if (isBillLogoDataUrl(body.logo_data_url)) {
+      patch.logo_data_url = body.logo_data_url
+    } else {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'logo_data_url must be a small PNG/JPG/WEBP data URL.', {
+        logo_data_url: ['logo_data_url must be a small PNG/JPG/WEBP data URL.'],
+      })
+    }
   }
   if (Object.keys(patch).length === 0) {
     throw new HttpError(400, 'VALIDATION_ERROR', 'At least one bill settings field is required.')
