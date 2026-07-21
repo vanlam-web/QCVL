@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
+import { loadEnv } from 'vite'
 import { defineConfig } from 'vitest/config'
 import { VitePWA, type VitePWAOptions } from 'vite-plugin-pwa'
 
@@ -36,28 +37,32 @@ export const pwaOptions = {
   },
 } satisfies Partial<VitePWAOptions>
 
-export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    ...(process.env.VITE_ENABLE_PWA === 'true' ? [VitePWA(pwaOptions)] : []),
-  ],
-  server: {
-    watch: {
-      ignored: ['**/backups/**', '**/logs/**', '**/dist/**', '**/dist-server/**', '**/coverage/**'],
-    },
-    proxy: {
-      '/api': {
-        target: process.env.VITE_DEV_API_PROXY_TARGET ?? 'http://127.0.0.1:3100',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+      ...(env.VITE_ENABLE_PWA === 'true' ? [VitePWA(pwaOptions)] : []),
+    ],
+    server: {
+      watch: {
+        ignored: ['**/backups/**', '**/logs/**', '**/dist/**', '**/dist-server/**', '**/coverage/**'],
+      },
+      proxy: {
+        '/api': {
+          target: env.VITE_DEV_API_PROXY_TARGET ?? 'http://100.84.228.125:3200',
+          changeOrigin: true,
+        },
       },
     },
-  },
-  test: {
-    exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
-    environment: 'jsdom',
-    globals: true,
-    setupFiles: './src/test/setup.ts',
-    testTimeout: 10_000,
-  },
+    test: {
+      exclude: ['**/node_modules/**', '**/dist/**', '**/.worktrees/**'],
+      environment: 'jsdom',
+      globals: true,
+      setupFiles: './src/test/setup.ts',
+      testTimeout: 10_000,
+    },
+  }
 })
