@@ -365,7 +365,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherMode(direction)
     setVoucherAccountId(revisionAccount?.id ?? '')
     setVoucherType(voucherDetail?.source?.category_name && voucherTypeOptions(direction).some((option) => option.value === voucherDetail.source.category_name)
-      ? voucherDetail.source.category_name
+      ? voucherDetail.source.category_name as CreateCashbookVoucherInput['voucher_type']
       : direction === 'in' ? 'other_income' : 'operating_expense')
     setVoucherAmount(formatVoucherAmountInput(String(voucher.amount)))
     setVoucherIssuedAt(dateTimeInputText(voucherDetail ? new Date(voucherDetail.created_at) : currentSystemDate()))

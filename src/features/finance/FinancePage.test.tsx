@@ -1315,7 +1315,13 @@ describe('FinancePage', () => {
         total: 1,
       })),
       getCashbookEntry: vi.fn(async () => manualVoucherDetail),
-      reviseCashbookVoucher: vi.fn(async () => manualVoucherDetail),
+      reviseCashbookVoucher: vi.fn(async () => ({
+        id: manualVoucherDetail.source.id,
+        code: manualVoucherDetail.source.code,
+        source_type: 'manual_voucher' as const,
+        status: 'posted' as const,
+        amount: Math.abs(manualVoucherDetail.amount_delta),
+      })),
     })
     render(<FinancePage service={service} currentUserName="Văn Lâm" />)
 
