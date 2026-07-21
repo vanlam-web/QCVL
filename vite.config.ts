@@ -44,7 +44,7 @@ export default defineConfig({
   ],
   server: {
     watch: {
-      ignored: ['**/backups/**', '**/logs/**'],
+      ignored: ['**/backups/**', '**/logs/**', '**/dist/**', '**/dist-server/**', '**/coverage/**'],
     },
     proxy: {
       '/api': {
