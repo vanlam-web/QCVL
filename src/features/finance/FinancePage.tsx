@@ -1072,6 +1072,12 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     return entry.is_business_accounted ? 'Có' : 'Không'
   }
 
+  function cashbookCellClassName(column: CashbookColumnKey) {
+    if (column === 'amount_delta') return 'finance-cashbook-money-column'
+    if (column === 'note') return 'management-table-cell-truncate'
+    return undefined
+  }
+
   async function openDebt(debt: CustomerDebtSummary) {
     if (debt.customer_id === null) return
     setError(null)
@@ -2114,9 +2120,15 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                             ☆
                           </button>
                         </td>
-                        {visibleCashbookColumns.map((column) => (
-                          <td className={column === 'amount_delta' ? 'finance-cashbook-money-column' : undefined} key={column}>{cashbookCell(entry, column)}</td>
-                        ))}
+                        {visibleCashbookColumns.map((column) => {
+                          const content = cashbookCell(entry, column)
+                          const text = typeof content === 'string' ? content : undefined
+                          return (
+                            <td className={cashbookCellClassName(column)} key={column} title={column === 'note' ? text : undefined}>
+                              {column === 'note' ? <span className="management-table-cell-truncate-content">{content}</span> : content}
+                            </td>
+                          )
+                        })}
                       </tr>
                       {selectedCashbookEntry?.id === entry.id ? (
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>

@@ -87,6 +87,16 @@ it('keeps shared management inline notes evenly spaced inside detail panels', ()
   expect(noteRule).toContain('margin: var(--space-3) 0')
 })
 
+it('keeps long management table cells visually shortened', () => {
+  expect(cssRule('.management-table-cell-truncate')).toContain('max-width: 14rem')
+  const contentRule = cssRule('.management-table-cell-truncate-content')
+
+  expect(contentRule).toContain('display: block')
+  expect(contentRule).toContain('overflow: hidden')
+  expect(contentRule).toContain('text-overflow: ellipsis')
+  expect(contentRule).toContain('white-space: nowrap')
+})
+
 it('keeps selected shell and inline tabs on the same active treatment', () => {
   const sharedTabBaseSelector =
     '.shell-nav-link,\n.inline-detail-tabs button,\n.dashboard-chart-tabs button'

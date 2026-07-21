@@ -466,6 +466,28 @@ describe('FinancePage', () => {
     expect(within(table).getByRole('columnheader', { name: 'Mã phiếu' })).toHaveAttribute('aria-sort', 'ascending')
   })
 
+  it('clamps long cashbook notes in the table without losing the full title text', async () => {
+    const longNote = 'Thu no HD010671, HD010670, HD010669, HD010660, HD010649, HD010648, HD010647'
+    render(<FinancePage service={makeService({
+      listCashbookEntries: vi.fn(async () => ({
+        summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
+        items: [{
+          ...entry,
+          note: longNote,
+          source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD010671', source_note: longNote },
+        }],
+        page: 1,
+        page_size: 15,
+        total: 1,
+      })),
+    })} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    const noteCell = within(table).getByTitle(longNote)
+    expect(noteCell).toHaveClass('management-table-cell-truncate')
+    expect(noteCell.querySelector('span')).toHaveTextContent(longNote)
+  })
+
   it('filters cashbook entries from the header search', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)

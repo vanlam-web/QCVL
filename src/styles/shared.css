@@ -2000,6 +2000,17 @@
   vertical-align: middle;
 }
 
+.management-table-cell-truncate {
+  max-width: 14rem;
+}
+
+.management-table-cell-truncate-content {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .management-pagination {
   display: flex;
   flex: 0 0 auto;
