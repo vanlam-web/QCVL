@@ -4,7 +4,8 @@ import { displayPriceListName } from '../../lib/price-list-display'
 import { BillPrintToolbar } from './BillPrintToolbar'
 import {
   isBillTemplateId,
-  readOrganizationBillSettings,
+  readOrganizationBillSettingsCache,
+  writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
 } from './bill-settings'
@@ -22,17 +23,19 @@ export function QuotePrintPage({
   service,
   onClose,
   initialTemplate,
+  loadBillSettings,
 }: {
   documentId: string
   service: SalesDocumentService
   onClose: () => void
   initialTemplate?: string | null
+  loadBillSettings?: () => Promise<OrganizationBillSettings>
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [settings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettings())
+  const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettingsCache())
   const [template, setTemplate] = useState<BillTemplateId>(() =>
-    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettings().default_bill_template,
+    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettingsCache().default_bill_template,
   )
 
   useEffect(() => {
@@ -41,9 +44,19 @@ export function QuotePrintPage({
     async function loadDocument() {
       setError(null)
       try {
-        const result = await service.getSalesDocument(documentId)
+        const [result, remoteSettings] = await Promise.all([
+          service.getSalesDocument(documentId),
+          loadBillSettings ? loadBillSettings().catch(() => null) : Promise.resolve(null),
+        ])
         if (!active) return
         setDocument(result)
+        if (remoteSettings) {
+          const saved = writeOrganizationBillSettingsCache(remoteSettings)
+          setSettings(saved)
+          if (!isBillTemplateId(initialTemplate)) {
+            setTemplate(saved.default_bill_template)
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được báo giá.'))
       }
@@ -54,7 +67,7 @@ export function QuotePrintPage({
     return () => {
       active = false
     }
-  }, [documentId, service])
+  }, [documentId, initialTemplate, loadBillSettings, service])
 
   if (error) {
     return (

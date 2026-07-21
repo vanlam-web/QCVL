@@ -17,7 +17,7 @@ Schema runtime toi thieu nam trong [../../../database/schema.sql](../../../datab
 
 | Bang | Vai tro |
 |---|---|
-| `organizations` | Tenant/to chuc |
+| `organizations` | Tenant/to chuc; bill settings: `shop_name`, `shop_address`, `shop_phone`, `default_bill_template` (`a4`\|`k80`) — migration `0009` |
 | `users` | Tai khoan dang nhap, password hash, display name, status |
 | `workstations` | May/quay su dung POS |
 | `permissions` | Danh muc ma quyen |

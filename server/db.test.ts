@@ -472,7 +472,7 @@ describe('createPgRepository product units', () => {
 
     expect(debt?.total_debt).toBe(100000 - 40000 - 10000 + 5000)
     expect(debt?.adjustments.map((row) => row.source_code)).toContain('CKKH000001')
-    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual([
+    expect(debt?.ledger_rows.map((row) => row.code)).toEqual([
       'HD000001',
       'TT000001',
       'CKKH000001',
@@ -549,7 +549,7 @@ describe('createPgRepository product units', () => {
 
     expect(debt?.invoices).toEqual([])
     expect(debt?.total_debt).toBe(0)
-    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual(['HD000099', 'TT000099'])
+    expect(debt?.ledger_rows.map((row) => row.code)).toEqual(['HD000099', 'TT000099'])
   })
 
   test('subtracts linked supplier receipts from linked customer debt view', async () => {
@@ -622,7 +622,7 @@ describe('createPgRepository product units', () => {
     const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
 
     expect(debt?.total_debt).toBe(510000)
-    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual(['HD010729', 'PN000685'])
+    expect(debt?.ledger_rows.map((row) => row.code)).toEqual(['HD010729', 'PN000685'])
     expect(debt?.linked_supplier_receipts).toEqual([expect.objectContaining({ code: 'PN000685', remaining_amount: 90000 })])
     expect(list).toEqual([expect.objectContaining({ customer_id: 'customer-kv-kh000384', total_debt: 510000 })])
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
@@ -1585,7 +1585,7 @@ describe('createPgRepository product units', () => {
 
     expect(updatedSupplier?.total_purchase_amount).toBe(3206581)
     expect(updatedSupplier?.current_payable_amount).toBe(2206581)
-    expect((updatedSupplier as any)?.debt_ledger_rows.map((row: { code: string }) => row.code)).toEqual(['PN000566', 'PCPN000566'])
+    expect(updatedSupplier?.debt_ledger_rows?.map((row) => row.code)).toEqual(['PN000566', 'PCPN000566'])
   })
 
   test('writes PostgreSQL stock movements from imported KiotViet invoices', async () => {

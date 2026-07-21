@@ -353,6 +353,87 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows as WorkstationData[]
     },
 
+    async getOrganizationBillSettings(input) {
+      await ensureOrganizationBillSettingsColumns(pool)
+      const result = await pool.query(
+        `
+          select
+            coalesce(nullif(btrim(shop_name), ''), name) as shop_name,
+            coalesce(shop_address, '') as shop_address,
+            coalesce(shop_phone, '') as shop_phone,
+            case
+              when default_bill_template in ('a4', 'k80') then default_bill_template
+              else 'a4'
+            end as default_bill_template
+          from organizations
+          where id = $1
+          limit 1
+        `,
+        [input.organizationId],
+      )
+      const row = result.rows[0]
+      if (!row) {
+        return {
+          shop_name: 'QCVL',
+          shop_address: '',
+          shop_phone: '',
+          default_bill_template: 'a4' as const,
+        }
+      }
+      return {
+        shop_name: String(row.shop_name),
+        shop_address: String(row.shop_address ?? ''),
+        shop_phone: String(row.shop_phone ?? ''),
+        default_bill_template: row.default_bill_template === 'k80' ? 'k80' : 'a4',
+      }
+    },
+
+    async updateOrganizationBillSettings(input) {
+      await ensureOrganizationBillSettingsColumns(pool)
+      const currentResult = await pool.query(
+        `
+          select
+            coalesce(nullif(btrim(shop_name), ''), name) as shop_name,
+            coalesce(shop_address, '') as shop_address,
+            coalesce(shop_phone, '') as shop_phone,
+            case
+              when default_bill_template in ('a4', 'k80') then default_bill_template
+              else 'a4'
+            end as default_bill_template
+          from organizations
+          where id = $1
+          limit 1
+        `,
+        [input.organizationId],
+      )
+      const row = currentResult.rows[0]
+      const current = {
+        shop_name: String(row?.shop_name ?? 'QCVL'),
+        shop_address: String(row?.shop_address ?? ''),
+        shop_phone: String(row?.shop_phone ?? ''),
+        default_bill_template: (row?.default_bill_template === 'k80' ? 'k80' : 'a4') as 'a4' | 'k80',
+      }
+      const next = {
+        shop_name: input.patch.shop_name ?? current.shop_name,
+        shop_address: input.patch.shop_address ?? current.shop_address,
+        shop_phone: input.patch.shop_phone ?? current.shop_phone,
+        default_bill_template: input.patch.default_bill_template ?? current.default_bill_template,
+      }
+      await pool.query(
+        `
+          update organizations
+          set
+            shop_name = $2,
+            shop_address = $3,
+            shop_phone = $4,
+            default_bill_template = $5
+          where id = $1
+        `,
+        [input.organizationId, next.shop_name, next.shop_address, next.shop_phone, next.default_bill_template],
+      )
+      return next
+    },
+
     async getPosProductUsageCounts(organizationId) {
       await ensurePosProductUsageTable(pool)
       const result = await pool.query(
@@ -7864,6 +7945,35 @@ async function ensureUserManagementColumns(pool: pg.Pool) {
     where username is not null and btrim(username) <> ''
   `)
   await pool.query('create index if not exists users_org_created_idx on users (organization_id, created_at desc)')
+}
+
+async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
+  await pool.query('alter table organizations add column if not exists shop_name text')
+  await pool.query('alter table organizations add column if not exists shop_address text')
+  await pool.query('alter table organizations add column if not exists shop_phone text')
+  await pool.query('alter table organizations add column if not exists default_bill_template text')
+  await pool.query(`
+    update organizations
+    set shop_name = coalesce(nullif(btrim(shop_name), ''), name)
+    where shop_name is null or btrim(shop_name) = ''
+  `)
+  await pool.query(`
+    update organizations
+    set shop_address = coalesce(shop_address, '')
+    where shop_address is null
+  `)
+  await pool.query(`
+    update organizations
+    set shop_phone = coalesce(shop_phone, '')
+    where shop_phone is null
+  `)
+  await pool.query(`
+    update organizations
+    set default_bill_template = 'a4'
+    where default_bill_template is null
+       or btrim(default_bill_template) = ''
+       or default_bill_template not in ('a4', 'k80')
+  `)
 }
 
 async function replacePermissionsForUser(pool: pg.Pool, userId: string, permissions: `perm.${string}`[]) {

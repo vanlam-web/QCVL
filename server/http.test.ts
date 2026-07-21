@@ -14,6 +14,12 @@ const user = {
 function repository(passwordHash: string, displayName = 'Admin'): ServerRepository {
   const sessions = new Map<string, string>()
   const userWithPassword = { ...user, display_name: displayName, password_hash: passwordHash }
+  let billSettings = {
+    shop_name: 'Xuong Van Lam',
+    shop_address: 'Xưởng in và thi công quảng cáo',
+    shop_phone: '',
+    default_bill_template: 'a4' as const,
+  }
 
   return {
     async findUserByEmail(email) {
@@ -34,12 +40,24 @@ function repository(passwordHash: string, displayName = 'Admin'): ServerReposito
             user: { id: user.id, email: user.email, display_name: displayName },
             organization: { id: 'org-1', code: 'VAN-LAM', name: 'Xuong Van Lam' },
             workstation: null,
-            permissions: ['perm.create_order', 'perm.manage_users'],
+            permissions: ['perm.create_order', 'perm.manage_users', 'perm.access_admin_panel'],
           }
         : null
     },
     async listWorkstations() {
       return [{ id: 'ws-1', code: 'POS-01', name: 'Quay 1', status: 'active' }]
+    },
+    async getOrganizationBillSettings() {
+      return { ...billSettings }
+    },
+    async updateOrganizationBillSettings(input) {
+      billSettings = {
+        shop_name: input.patch.shop_name ?? billSettings.shop_name,
+        shop_address: input.patch.shop_address ?? billSettings.shop_address,
+        shop_phone: input.patch.shop_phone ?? billSettings.shop_phone,
+        default_bill_template: input.patch.default_bill_template ?? billSettings.default_bill_template,
+      }
+      return { ...billSettings }
     },
   }
 }
@@ -365,6 +383,86 @@ describe('createHttpHandler', () => {
     expect(me.status).toBe(200)
     expect(meBody.data.user.email).toBe('admin@qc-oms.local')
     expect(meBody.data.permissions).toContain('perm.manage_users')
+  })
+
+  test('reads and updates shared organization bill settings', async () => {
+    const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json() as { data: { access_token: string } }
+    const headers = { authorization: `Bearer ${loginBody.data.access_token}` }
+
+    const initial = await handler(new Request('http://api.local/api/v1/organization/bill-settings', { headers }))
+    const initialBody = await initial.json() as { data: { shop_name: string; default_bill_template: string } }
+    expect(initial.status).toBe(200)
+    expect(initialBody.data.shop_name).toBe('Xuong Van Lam')
+    expect(initialBody.data.default_bill_template).toBe('a4')
+
+    const updated = await handler(
+      new Request('http://api.local/api/v1/organization/bill-settings', {
+        method: 'PATCH',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          shop_name: 'In ảnh Văn Lâm',
+          shop_address: '12 Nguyễn Trãi',
+          shop_phone: '0909111222',
+          default_bill_template: 'k80',
+        }),
+      }),
+    )
+    const updatedBody = await updated.json()
+    expect(updated.status).toBe(200)
+    expect(updatedBody.data).toMatchObject({
+      shop_name: 'In ảnh Văn Lâm',
+      shop_address: '12 Nguyễn Trãi',
+      shop_phone: '0909111222',
+      default_bill_template: 'k80',
+    })
+
+    const reread = await handler(new Request('http://api.local/api/v1/organization/bill-settings', { headers }))
+    const rereadBody = await reread.json()
+    expect(rereadBody.data.default_bill_template).toBe('k80')
+  })
+
+  test('rejects bill settings updates without admin panel permission', async () => {
+    const base = repository(await hashPassword('ChangeMe123!'))
+    const limited: ServerRepository = {
+      ...base,
+      async getSessionUser(token) {
+        const session = await base.getSessionUser(token)
+        if (!session) return null
+        return {
+          ...session,
+          permissions: ['perm.create_order'],
+        }
+      },
+    }
+    const handler = createHttpHandler({ repository: limited })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json() as { data: { access_token: string } }
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/organization/bill-settings', {
+        method: 'PATCH',
+        headers: {
+          authorization: `Bearer ${loginBody.data.access_token}`,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ shop_name: 'Nope' }),
+      }),
+    )
+    const body = await response.json()
+    expect(response.status).toBe(403)
+    expect(body.error.code).toBe('PERMISSION_DENIED')
   })
 
   test('logs in with username or phone instead of requiring an email address', async () => {

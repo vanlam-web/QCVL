@@ -4,6 +4,10 @@ create table if not exists organizations (
   id uuid primary key default gen_random_uuid(),
   code text not null unique,
   name text not null,
+  shop_name text not null default '',
+  shop_address text not null default '',
+  shop_phone text not null default '',
+  default_bill_template text not null default 'a4' check (default_bill_template in ('a4', 'k80')),
   created_at timestamptz not null default now()
 );
 

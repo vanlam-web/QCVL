@@ -30,8 +30,8 @@ import {
 } from './admin-presenter'
 import {
   billTemplateLabel,
-  readOrganizationBillSettings,
-  writeOrganizationBillSettings,
+  readOrganizationBillSettingsCache,
+  writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
 } from '../sales-documents/bill-settings'
@@ -204,10 +204,11 @@ export function FoundationAdminPage({
   const [roleForm, setRoleForm] = useState({ name: '', description: '', permissions: [] as Permission['code'][] })
   const [activeTab, setActiveTab] = useState<AdminSettingsPanel>('users')
   const [savingUser, setSavingUser] = useState(false)
-  const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettings())
+  const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettingsCache())
   const [billSettingsNotice, setBillSettingsNotice] = useState<string | null>(null)
+  const [billSettingsLoading, setBillSettingsLoading] = useState(false)
   const [shopDraft, setShopDraft] = useState(() => {
-    const settings = readOrganizationBillSettings()
+    const settings = readOrganizationBillSettingsCache()
     return {
       shop_name: settings.shop_name,
       shop_address: settings.shop_address,
@@ -215,7 +216,7 @@ export function FoundationAdminPage({
     }
   })
   const [templateDraft, setTemplateDraft] = useState<BillTemplateId>(
-    () => readOrganizationBillSettings().default_bill_template,
+    () => readOrganizationBillSettingsCache().default_bill_template,
   )
   const [userSearch, setUserSearch] = useState('')
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
@@ -223,23 +224,8 @@ export function FoundationAdminPage({
   const [lastUserStatus, setLastUserStatus] = useState<UserStatusFilter>('all')
   const createUserDisplayNameRef = useRef<HTMLInputElement | null>(null)
 
-  function openSettingsPanel(panel: AdminSettingsPanel) {
-    setActiveTab(panel)
-    setBillSettingsNotice(null)
-    if (panel === 'shop' || panel === 'bill-templates') {
-      const next = readOrganizationBillSettings()
-      setBillSettings(next)
-      setShopDraft({
-        shop_name: next.shop_name,
-        shop_address: next.shop_address,
-        shop_phone: next.shop_phone,
-      })
-      setTemplateDraft(next.default_bill_template)
-    }
-  }
-
-  function saveBillSettings(next: Partial<OrganizationBillSettings>) {
-    const saved = writeOrganizationBillSettings(next)
+  function applyBillSettings(next: OrganizationBillSettings) {
+    const saved = writeOrganizationBillSettingsCache(next)
     setBillSettings(saved)
     setShopDraft({
       shop_name: saved.shop_name,
@@ -247,7 +233,38 @@ export function FoundationAdminPage({
       shop_phone: saved.shop_phone,
     })
     setTemplateDraft(saved.default_bill_template)
-    setBillSettingsNotice('Đã lưu cấu hình bill trên máy này.')
+    return saved
+  }
+
+  async function openSettingsPanel(panel: AdminSettingsPanel) {
+    setActiveTab(panel)
+    setBillSettingsNotice(null)
+    if (panel !== 'shop' && panel !== 'bill-templates') return
+
+    setBillSettingsLoading(true)
+    try {
+      const next = await service.getOrganizationBillSettings()
+      applyBillSettings(next)
+    } catch (cause) {
+      setBillSettingsNotice(formatApiError(cause, 'Không tải được cấu hình bill từ server. Đang dùng bản cache máy này.'))
+      applyBillSettings(readOrganizationBillSettingsCache())
+    } finally {
+      setBillSettingsLoading(false)
+    }
+  }
+
+  async function saveBillSettings(next: Partial<OrganizationBillSettings>) {
+    setBillSettingsLoading(true)
+    setBillSettingsNotice(null)
+    try {
+      const saved = await service.updateOrganizationBillSettings(next)
+      applyBillSettings(saved)
+      setBillSettingsNotice('Đã lưu cấu hình bill lên server (dùng chung mọi máy).')
+    } catch (cause) {
+      setBillSettingsNotice(formatApiError(cause, 'Không lưu được cấu hình bill lên server.'))
+    } finally {
+      setBillSettingsLoading(false)
+    }
   }
 
   async function load(input: { search?: string; status?: UserStatusFilter } = {}) {
@@ -581,24 +598,26 @@ export function FoundationAdminPage({
           <header className="admin-settings-panel-header">
             <div>
               <h2>Thông tin cửa hàng</h2>
-              <p>Hiện trên đầu hóa đơn / báo giá khi in. Lưu trên máy/trình duyệt này.</p>
+              <p>Hiện trên đầu hóa đơn / báo giá khi in. Lưu trên server — dùng chung mọi máy POS.</p>
             </div>
             <p className="admin-settings-panel-meta">
               Mẫu mặc định hiện tại: <strong>{billTemplateLabel(billSettings.default_bill_template)}</strong>
             </p>
           </header>
           {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
+          {billSettingsLoading ? <p>Đang tải cấu hình bill...</p> : null}
           <div className="admin-settings-bill-layout">
             <form
               className="admin-settings-form"
               onSubmit={(event) => {
                 event.preventDefault()
-                saveBillSettings(shopDraft)
+                void saveBillSettings(shopDraft)
               }}
             >
               <label>
                 Tên cửa hàng / xưởng
                 <input
+                  disabled={billSettingsLoading}
                   name="shop_name"
                   required
                   value={shopDraft.shop_name}
@@ -608,6 +627,7 @@ export function FoundationAdminPage({
               <label>
                 Địa chỉ
                 <input
+                  disabled={billSettingsLoading}
                   name="shop_address"
                   value={shopDraft.shop_address}
                   onChange={(event) => setShopDraft((current) => ({ ...current, shop_address: event.target.value }))}
@@ -616,13 +636,14 @@ export function FoundationAdminPage({
               <label>
                 Điện thoại
                 <input
+                  disabled={billSettingsLoading}
                   name="shop_phone"
                   value={shopDraft.shop_phone}
                   onChange={(event) => setShopDraft((current) => ({ ...current, shop_phone: event.target.value }))}
                 />
               </label>
               <div className="admin-settings-form-actions">
-                <button className="button button-primary" type="submit">
+                <button className="button button-primary" disabled={billSettingsLoading} type="submit">
                   Lưu thông tin cửa hàng
                 </button>
               </div>
@@ -637,18 +658,19 @@ export function FoundationAdminPage({
           <header className="admin-settings-panel-header">
             <div>
               <h2>Mẫu in / bill</h2>
-              <p>Chọn mẫu mở mặc định. Trên màn in vẫn đổi được A4 ↔ K80 trước khi bấm In.</p>
+              <p>Chọn mẫu mở mặc định (lưu server). Trên màn in vẫn đổi được A4 ↔ K80 trước khi bấm In.</p>
             </div>
             <p className="admin-settings-panel-meta">
               Đầu bill: <strong>{billSettings.shop_name}</strong>
             </p>
           </header>
           {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
+          {billSettingsLoading ? <p>Đang tải cấu hình bill...</p> : null}
           <form
             className="admin-settings-form"
             onSubmit={(event) => {
               event.preventDefault()
-              saveBillSettings({ default_bill_template: templateDraft })
+              void saveBillSettings({ default_bill_template: templateDraft })
             }}
           >
             <BillTemplatePicker
@@ -657,7 +679,7 @@ export function FoundationAdminPage({
               onChange={setTemplateDraft}
             />
             <div className="admin-settings-form-actions">
-              <button className="button button-primary" type="submit">
+              <button className="button button-primary" disabled={billSettingsLoading} type="submit">
                 Lưu mẫu mặc định
               </button>
             </div>

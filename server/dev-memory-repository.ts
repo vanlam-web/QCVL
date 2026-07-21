@@ -64,6 +64,17 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const userOrder: string[] = []
   const groupIds = new Map<string, string>()
   const groupNamesById = new Map<string, string>()
+  let organizationBillSettings: {
+    shop_name: string
+    shop_address: string
+    shop_phone: string
+    default_bill_template: 'a4' | 'k80'
+  } = {
+    shop_name: organization.name,
+    shop_address: 'Xưởng in và thi công quảng cáo',
+    shop_phone: '',
+    default_bill_template: 'a4',
+  }
   const adminAuthUser: AuthUserRow = {
     ...adminUser,
     password_hash: await hashPassword(process.env.QCVL_DEV_PASSWORD ?? 'ChangeMe123!'),
@@ -288,6 +299,18 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async listWorkstations() {
       return [{ id: 'ws-dev', code: 'DEV', name: 'May dev', status: 'active' }]
+    },
+    async getOrganizationBillSettings() {
+      return { ...organizationBillSettings }
+    },
+    async updateOrganizationBillSettings(input) {
+      organizationBillSettings = {
+        shop_name: input.patch.shop_name ?? organizationBillSettings.shop_name,
+        shop_address: input.patch.shop_address ?? organizationBillSettings.shop_address,
+        shop_phone: input.patch.shop_phone ?? organizationBillSettings.shop_phone,
+        default_bill_template: input.patch.default_bill_template ?? organizationBillSettings.default_bill_template,
+      }
+      return { ...organizationBillSettings }
     },
     async getPosProductUsageCounts() {
       return posProductUsageCountsFromSalesDocuments(salesDocuments)
