@@ -218,7 +218,7 @@ Lenh kiem tra trang thai moi truong:
 ```powershell
 $env:QCVL_ENV_NAME='nas'
 $env:QCVL_ENV_BASE_URL='http://100.84.228.125:3200'
-$env:DATABASE_URL='<DATABASE_URL cua NAS hoac dev>'
+$env:DATABASE_URL = '<DATABASE_URL cua NAS hoac dev>'
 npm run env:status
 Remove-Item Env:\QCVL_ENV_NAME
 Remove-Item Env:\QCVL_ENV_BASE_URL
