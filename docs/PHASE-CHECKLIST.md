@@ -153,7 +153,7 @@ Chỉ mở khi Owner chọn và Spec còn đúng với runtime. **Tách 2 nhóm*
 | Việc | Ghi chú |
 |---|---|
 | **Ưu tiên hướng:** nhập đơn mới trên QCVL + đối soát trùng KV | [Sales README — Vận hành sau import](./03-BUSINESS-NghiepVu/Sales/README.md) |
-| UI đủ để nhập loại đơn Owner chọn | Hiện: POS HD/BG + phiếu thu/chi + PN hàng thường + **tạo SP** (`POST /products`) OK; P4 object cuộn/tấm vẫn đóng băng |
+| UI đủ để nhập loại đơn Owner chọn | Hiện: POS HD/BG + phiếu thu/chi + PN hàng thường + **tạo SP** + **tạo NCC** OK; P4 object cuộn/tấm vẫn đóng băng |
 | Đối soát trùng/lệch với chứng từ KV đã import | Chưa có màn riêng; DB unique mã; cần Spec khi Owner mở |
 | V1 functional gaps (nút/filter) | Chỉ làm nếu chặn nhập đơn đang chọn |
 | Finance voucher / debt hiển thị | SoT nợ đã chốt (âm đối soát + thu live không trả thừa) |
