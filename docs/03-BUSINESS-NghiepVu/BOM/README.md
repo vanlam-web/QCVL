@@ -45,11 +45,13 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 
 ## 2. Hiện trạng code (rà soát 2026-07-21)
 
+**Owner 2026-07-20: đã import hết KV.** Không mở đợt import mới. Dữ liệu BOM đã có → **chỉ migrate** (`0008`) promote `draft` → `active`. Đổi path import/`upsertDraftProductBoms` chỉ để nút Import (khẩn) nếu bấm lại cũng ghi `active` — **không** yêu cầu chạy lại file Excel.
+
 | Hạng mục | Runtime hiện tại | Khớp SoT? |
 |---|---|---|
-| Parse `Hàng thành phần`, ép `product_kind = combo`, `track_inventory = false` | Có | Có |
-| Import ghi `product_boms.status` | **`active`** + note *Trusted for stock deduction* | Có |
-| Migrate BOM KV `draft` → `active` | Migration `0008_promote_kiotviet_bom_active.sql` | Có |
+| Parse `Hàng thành phần`, ép `product_kind = combo`, `track_inventory = false` | Có (path emergency) | Có |
+| Path import ghi `product_boms.status` (nếu bấm Import lại) | **`active`** + note *Trusted for stock deduction* | Có |
+| **Dữ liệu đã import:** migrate BOM KV `draft` → `active` | Migration `0008_promote_kiotviet_bom_active.sql` — **không cần re-import** | Có |
 | Field API `draft_bom` | Trả BOM `active` (fallback `draft`); tên field giữ tương thích | Có |
 | UI Catalog / import dialog | “BOM KiotViet” / “Đang dùng khi bán”; bỏ copy nháp | Có |
 | Trừ thành phần khi bán (Postgres) | BOM `draft` **và** `active` | Có |
@@ -65,7 +67,7 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 | Việc | Trạng thái |
 |---|---|
 | SoT 3 lớp (quyết định / runtime / hướng dài) | Xong |
-| Runtime slice KV: (1) import `active` + migrate · (2) POS skip parent · (3) `draft_bom`/UI · (4) GET\|POST `/bom` | **Xong** — PR runtime slice |
+| Runtime slice KV: (1) migrate BOM đã có → `active` (+ sửa path Import khẩn) · (2) POS skip parent · (3) `draft_bom`/UI · (4) GET\|POST `/bom` | **Xong** — PR runtime slice |
 | Hướng dài mục 3 | **Chưa** — không nhầm với slice KV |
 
 **Quy tắc:** Doc vệ tinh chỉ được viết “import `active` / dùng ngay” như **SoT đã khớp runtime** khi mục 2 ghi Có. Không viết “nháp chờ duyệt” cho BOM KV.

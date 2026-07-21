@@ -1,4 +1,5 @@
 -- Promote KiotViet-imported draft BOMs to active (SoT 2026-07-20: dùng ngay khi bán).
+-- Owner đã import hết: KHÔNG cần re-import Excel. Chỉ chạy migration trên DB hiện có.
 
 -- Keep only the newest KV draft per product; archive older drafts.
 with ranked as (

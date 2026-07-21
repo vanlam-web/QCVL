@@ -84,10 +84,8 @@ Không lưu định dạng text `Ma:SoLuong|Ma:SoLuong` làm schema chính.
 
 ## Ghi chú triển khai import KiotViet (cập nhật 2026-07-21)
 
-- Parse `Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức`.
-- Lưu thành `product_boms.status = active` với note `Trusted for stock deduction`.
-- Tạo version mới cho mỗi lần import lại mã có BOM.
-- Archive BOM KiotViet cũ (`draft` hoặc `active`) của cùng sản phẩm trước khi tạo bản mới.
-- Migration `0008_promote_kiotviet_bom_active.sql` promote draft KV cũ → `active`.
+- **Đã import hết:** không mở đợt import mới. BOM `draft` sẵn có → migration `0008_promote_kiotviet_bom_active.sql`.
+- Path Import (nút khẩn): parse `Hàng thành phần` → `product_boms.status = active`, note `Trusted for stock deduction`.
+- Mỗi lần Import lại (khẩn): version mới; archive BOM KV cũ (`draft`|`active`) cùng sản phẩm.
 - Thiếu sản phẩm cha hoặc thiếu component theo mã hàng thì bỏ qua BOM đó và tăng `bom_skipped_rows`.
 - Ghi source text vào `notes` để đối soát, schema chính vẫn là `product_bom_items`.
