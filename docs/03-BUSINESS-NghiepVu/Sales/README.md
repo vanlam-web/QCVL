@@ -79,6 +79,7 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 | Hóa đơn bán POS → `HD…` | **Có** (Postgres) | Mã = `max(HD)+1` trên tập đã có (gồm HD import) |
 | Báo giá → `BG…` | **Có** | Qua POS |
 | Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
+| Tạo nhanh KH/NCC từ phiếu thu/chi | **Có** (UI) | Nút `Tạo mới` → `POST /customers` / `POST /suppliers` |
 | Phiếu nhập → `PN…` | **Có** (hàng thường) | Draft/post Postgres; P4 object cuộn/tấm vẫn đóng băng — [Purchase README](../Purchase/README.md) |
 | Tạo NCC mới | **Có** | `POST /suppliers` persist `supplier_snapshots` manual; mã trống → `NCC…`; trùng → 409 |
 | Tạo hàng hóa mới | **Có** | `POST /products` persist Postgres/dev-memory; trùng mã → 409; combo/service ép `track_inventory=false` theo KV |
