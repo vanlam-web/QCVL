@@ -272,6 +272,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [voucherPartnerDebtMode, setVoucherPartnerDebtMode] = useState<PartnerDebtMode>('no_partner_debt')
   const [voucherBusinessAccounted, setVoucherBusinessAccounted] = useState(true)
   const [voucherCounterpartyType, setVoucherCounterpartyType] = useState<CreateCashbookVoucherInput['counterparty_type']>('other')
+  const [voucherCounterpartyId, setVoucherCounterpartyId] = useState('')
   const [voucherCounterpartyName, setVoucherCounterpartyName] = useState('')
   const [voucherCounterpartyOptions, setVoucherCounterpartyOptions] = useState<CashbookVoucherCounterpartyOption[]>([])
   const [voucherCounterpartyPhone, setVoucherCounterpartyPhone] = useState('')
@@ -354,7 +355,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       )
 
   useEffect(() => {
-    if (voucherMode === null || (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier')) {
+    if (voucherMode === null || (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier' && voucherCounterpartyType !== 'employee')) {
       return undefined
     }
     let active = true
@@ -375,6 +376,14 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     }
   }, [service, voucherCounterpartyName, voucherCounterpartyType, voucherMode])
 
+  useEffect(() => {
+    if (!voucherCounterpartyName.trim() || voucherCounterpartyId) return
+    const selected = voucherCounterpartyOptions.find((option) => option.name === voucherCounterpartyName || `${option.code} - ${option.name}` === voucherCounterpartyName)
+    if (!selected) return
+    setVoucherCounterpartyId(selected.id)
+    setVoucherCounterpartyPhone(selected.phone ?? '')
+  }, [voucherCounterpartyId, voucherCounterpartyName, voucherCounterpartyOptions])
+
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
     const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
@@ -390,6 +399,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherPartnerDebtMode('no_partner_debt')
     setVoucherBusinessAccounted(direction === 'out')
     setVoucherCounterpartyType(defaultCounterpartyType)
+    setVoucherCounterpartyId('')
     setVoucherCounterpartyName('')
     setVoucherCounterpartyOptions([])
     setVoucherCounterpartyPhone('')
@@ -438,6 +448,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       : 'no_partner_debt')
     setVoucherBusinessAccounted(voucherDetail?.is_business_accounted ?? true)
     setVoucherCounterpartyType(voucherDetail?.counterparty?.type ?? 'other')
+    setVoucherCounterpartyId(voucherDetail?.counterparty?.id ?? '')
     setVoucherCounterpartyName(voucherDetail?.counterparty?.name ?? '')
     setVoucherCounterpartyOptions([])
     setVoucherCounterpartyPhone(voucherDetail?.counterparty?.phone ?? '')
@@ -472,6 +483,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
 
   function chooseVoucherCounterpartyType(type: CreateCashbookVoucherInput['counterparty_type']) {
     setVoucherCounterpartyType(type)
+    setVoucherCounterpartyId('')
     setVoucherCounterpartyName('')
     setVoucherCounterpartyPhone('')
     setVoucherCounterpartyOptions([])
@@ -484,6 +496,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   function chooseVoucherCounterpartyName(name: string) {
     setVoucherCounterpartyName(name)
     const selected = voucherCounterpartyOptions.find((option) => option.name === name || `${option.code} - ${option.name}` === name)
+    setVoucherCounterpartyId(selected?.id ?? '')
     setVoucherCounterpartyPhone(selected?.phone ?? '')
   }
 
@@ -529,6 +542,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         if (current.some((item) => item.id === created.id)) return current
         return [created, ...current]
       })
+      setVoucherCounterpartyId(created.id)
       setVoucherCounterpartyName(created.name)
       setVoucherCounterpartyPhone(created.phone ?? '')
       closeVoucherCounterpartyCreate()
@@ -1149,6 +1163,10 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setError('Nhập lý do cho phiếu thu chi.')
       return
     }
+    if (voucherCounterpartyType === 'employee' && voucherCounterpartyId.trim() === '') {
+      setError('Chọn nhân viên từ danh sách nhân viên đã lưu.')
+      return
+    }
     const issuedAt = parseManagementDateTimeInputText(voucherIssuedAt)
     if (issuedAt === null) {
       setError('Thời gian phiếu không hợp lệ.')
@@ -1167,6 +1185,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         partner_debt_mode: voucherPartnerDebtMode,
         is_business_accounted: voucherBusinessAccounted,
         counterparty_type: voucherCounterpartyType,
+        ...(voucherCounterpartyId.trim() ? { counterparty_id: voucherCounterpartyId.trim() } : {}),
         ...(voucherCounterpartyName.trim() ? { counterparty_name: voucherCounterpartyName.trim() } : {}),
         ...(voucherCounterpartyPhone.trim() ? { counterparty_phone: voucherCounterpartyPhone.trim() } : {}),
         reason: voucherReason.trim(),

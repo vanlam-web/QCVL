@@ -155,6 +155,7 @@ export interface CashbookBalanceListResponse {
 }
 
 export interface CashbookCounterparty {
+  id?: string | null
   type: 'customer' | 'supplier' | 'employee' | 'other' | 'none'
   name: string | null
   phone: string | null
@@ -257,6 +258,7 @@ export interface CreateCashbookVoucherInput {
   partner_debt_mode?: PartnerDebtMode
   is_business_accounted?: boolean
   counterparty_type?: 'customer' | 'supplier' | 'employee' | 'delivery_partner' | 'other' | 'none'
+  counterparty_id?: string
   counterparty_name?: string
   counterparty_phone?: string
   reason: string

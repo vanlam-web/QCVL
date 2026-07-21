@@ -127,6 +127,7 @@ describe('finance-service', () => {
       partner_debt_mode: 'not_affect_partner_debt',
       is_business_accounted: false,
       counterparty_type: 'employee',
+      counterparty_id: 'user-employee-1',
       counterparty_name: 'Nguyen Van A',
       counterparty_phone: '0900000000',
       reason: 'Mua văn phòng phẩm',
@@ -145,12 +146,30 @@ describe('finance-service', () => {
             partner_debt_mode: 'not_affect_partner_debt',
             is_business_accounted: false,
             counterparty_type: 'employee',
+            counterparty_id: 'user-employee-1',
             counterparty_name: 'Nguyen Van A',
             counterparty_phone: '0900000000',
             reason: 'Mua văn phòng phẩm',
           }),
         },
       ],
+    ])
+  })
+
+  it('lists active users as voucher employee counterparties', async () => {
+    const request: FinanceApiRequester['request'] = async <T>(path: string) => {
+      expect(path).toBe('/api/v1/users?search=Lam&status=active')
+      return {
+        items: [
+          { id: 'user-1', email: 'lam@example.test', username: 'lam', phone: '0900000000', display_name: 'Văn Lâm', status: 'active', permissions: [] },
+        ],
+        total: 1,
+      } as T
+    }
+    const service = createFinanceService({ request })
+
+    await expect(service.listVoucherCounterparties({ type: 'employee', search: 'Lam' })).resolves.toEqual([
+      { id: 'user-1', code: 'lam', name: 'Văn Lâm', phone: '0900000000' },
     ])
   })
 

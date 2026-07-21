@@ -26,6 +26,7 @@ import type {
   UpdateCustomerDebtAdjustmentInput,
   UpdateCashbookEntryInput,
 } from './types'
+import type { UserListResponse } from '../users/types'
 
 export interface FinanceApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
@@ -118,9 +119,19 @@ export function createFinanceService(api: FinanceApiRequester) {
       const result = await api.request<{ items: FinanceSalesDocumentSummary[] }>(`/api/v1/sales-documents?${params.toString()}`)
       return result.items.find((item) => item.code === code) ?? null
     },
-    listVoucherCounterparties: async (input: { type: 'customer' | 'supplier'; search?: string }) => {
+    listVoucherCounterparties: async (input: { type: 'customer' | 'supplier' | 'employee'; search?: string }) => {
       const params = new URLSearchParams()
       if (input.search?.trim()) params.set('search', input.search.trim())
+      if (input.type === 'employee') {
+        params.set('status', 'active')
+        const result = await api.request<UserListResponse>(`/api/v1/users?${params.toString()}`)
+        return result.items.slice(0, 8).map((item) => ({
+          id: item.id,
+          code: item.username ?? item.phone ?? item.email ?? item.id,
+          name: item.display_name,
+          phone: item.phone ?? null,
+        }))
+      }
       params.set('page', '1')
       params.set('page_size', '8')
       if (input.type === 'supplier') params.set('status', 'active')

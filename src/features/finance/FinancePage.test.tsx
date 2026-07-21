@@ -284,7 +284,9 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     listCashbookBalances: vi.fn(async () => ({ items: balances })),
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
-    listVoucherCounterparties: vi.fn(async () => [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]),
+    listVoucherCounterparties: vi.fn(async (input) => input.type === 'employee'
+      ? [{ id: 'user-employee-1', code: 'nv-a', name: 'Nguyen Van A', phone: '0900000000' }]
+      : [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]),
     createVoucherCustomer: vi.fn(async (input) => ({
       id: 'customer-created',
       code: 'KH000099',
@@ -1067,6 +1069,7 @@ describe('FinancePage', () => {
     await userEvent.type(within(form).getByLabelText('Số tiền'), '45000')
     await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nhận'), 'employee')
     await userEvent.type(within(form).getByLabelText('Tên người nhận'), 'Nguyen Van A')
+    await waitFor(() => expect(service.listVoucherCounterparties).toHaveBeenLastCalledWith({ type: 'employee', search: 'Nguyen Van A' }))
     await userEvent.click(within(form).getByLabelText('Hạch toán kết quả kinh doanh'))
     await userEvent.type(within(form).getByLabelText('Ghi chú'), 'Mua văn phòng phẩm')
     expect(within(form).getByRole('button', { name: 'Bỏ qua' })).toBeInTheDocument()
@@ -1082,7 +1085,9 @@ describe('FinancePage', () => {
       partner_debt_mode: 'no_partner_debt',
       is_business_accounted: false,
       counterparty_type: 'employee',
+      counterparty_id: 'user-employee-1',
       counterparty_name: 'Nguyen Van A',
+      counterparty_phone: '0900000000',
       reason: 'Mua văn phòng phẩm',
     })
     await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledTimes(2))

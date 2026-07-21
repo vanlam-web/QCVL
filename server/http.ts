@@ -372,6 +372,7 @@ export interface CashbookEntryData {
   created_at: string
   note: string | null
   counterparty: {
+    id?: string | null
     type: string
     name: string
     phone: string | null
@@ -2087,6 +2088,7 @@ type ManualCashbookVoucherRequest = {
   partnerDebtMode: string
   isBusinessAccounted: boolean
   counterpartyType: string
+  counterpartyId: string
   counterpartyName: string
   counterpartyPhone: string | null
   reason: string
@@ -2121,6 +2123,7 @@ function manualCashbookVoucherRequestFromBody(body: Record<string, unknown>): Ma
     partnerDebtMode: typeof body.partner_debt_mode === 'string' && body.partner_debt_mode.trim() ? body.partner_debt_mode.trim() : 'no_partner_debt',
     isBusinessAccounted: body.is_business_accounted === undefined ? true : body.is_business_accounted === true,
     counterpartyType,
+    counterpartyId: typeof body.counterparty_id === 'string' ? body.counterparty_id.trim() : '',
     counterpartyName: typeof body.counterparty_name === 'string' ? body.counterparty_name.trim() : '',
     counterpartyPhone: typeof body.counterparty_phone === 'string' && body.counterparty_phone.trim() ? body.counterparty_phone.trim() : null,
     reason,
@@ -2171,6 +2174,7 @@ function makeManualCashbookVoucherEntry(
     created_at: request.createdAt,
     note: request.reason,
     counterparty: {
+      ...(request.counterpartyId ? { id: request.counterpartyId } : {}),
       type: request.counterpartyType,
       name: request.counterpartyName,
       phone: request.counterpartyPhone,
@@ -2184,6 +2188,7 @@ function makeManualCashbookVoucherEntry(
       category_name: request.voucherType,
       source_note: request.reason,
       transfer_content: request.partnerDebtMode,
+      ...(request.counterpartyId ? { counterparty_id: request.counterpartyId } : {}),
     },
     allocations: [],
     payment_method: account.account_type === 'bank' ? 'bank_transfer' : 'cash',
@@ -4535,10 +4540,21 @@ async function getDevApiResponse(
         const accountRows = repository.listFinanceAccounts
           ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/finance/accounts?is_active=true') })
           : financeAccounts
-        const account = accountRows.find((item) => item.id === voucherRequest.financeAccountId)
-        if (!account) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.', { finance_account_id: ['finance_account_id is invalid.'] })
+      const account = accountRows.find((item) => item.id === voucherRequest.financeAccountId)
+      if (!account) {
+        throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.', { finance_account_id: ['finance_account_id is invalid.'] })
+      }
+      if (voucherRequest.counterpartyType === 'employee') {
+        const users = repository.listUsers
+          ? await repository.listUsers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/users?status=active') })
+          : []
+        const employee = users.find((item) => item.id === voucherRequest.counterpartyId)
+        if (!employee) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active employee.'] })
         }
+        voucherRequest.counterpartyName = employee.display_name
+        voucherRequest.counterpartyPhone = employee.phone ?? null
+      }
         const entriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
         const existingEntries = repository.listCashbookEntries
           ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
