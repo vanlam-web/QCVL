@@ -9,6 +9,7 @@ import {
   quoteFooterText,
   readOrganizationBillSettings,
   resolveBillTemplate,
+  resolvePrintTemplateContent,
   writeOrganizationBillSettings,
 } from './bill-settings'
 
@@ -17,8 +18,8 @@ describe('organization bill settings', () => {
     window.localStorage.clear()
   })
 
-  it('returns defaults when storage is empty', () => {
-    expect(readOrganizationBillSettings()).toEqual(defaultOrganizationBillSettings)
+  it('returns seeded defaults when storage is empty', () => {
+    expect(readOrganizationBillSettings()).toEqual(normalizeOrganizationBillSettings(defaultOrganizationBillSettings))
   })
 
   it('persists shop fields and default template', () => {
@@ -53,8 +54,12 @@ describe('organization bill settings', () => {
   })
 
   it('uses custom footer when set', () => {
-    expect(invoiceFooterText({ ...defaultOrganizationBillSettings, footer_note: 'Cảm ơn quý khách' })).toBe('Cảm ơn quý khách')
-    expect(quoteFooterText(defaultOrganizationBillSettings)).toMatch(/báo giá/i)
+    const withFooter = normalizeOrganizationBillSettings({
+      ...defaultOrganizationBillSettings,
+      footer_note: 'Cảm ơn quý khách',
+    })
+    expect(invoiceFooterText(withFooter)).toBe('Cảm ơn quý khách')
+    expect(quoteFooterText(normalizeOrganizationBillSettings(defaultOrganizationBillSettings))).toMatch(/báo giá/i)
   })
 
   it('detects walk-in customer code', () => {
@@ -88,13 +93,16 @@ describe('organization bill settings', () => {
         orgDefault: 'a4',
       }),
     ).toBe('a4')
-    expect(
-      resolveBillTemplate({
-        queryTemplate: null,
-        customerCode: 'KH001',
-        preferredTemplate: null,
-        orgDefault: 'a4',
-      }),
-    ).toBe('a4')
+  })
+
+  it('seeds named templates and resolves print content by paper size', () => {
+    const settings = normalizeOrganizationBillSettings({
+      default_bill_template: 'k80',
+      invoice_title: 'PHIẾU BÁN',
+    })
+    expect(settings.templates.length).toBe(4)
+    expect(settings.default_bill_template).toBe('k80')
+    expect(settings.invoice_title).toBe('PHIẾU BÁN')
+    expect(resolvePrintTemplateContent(settings, 'invoice', 'k80').title).toBe('PHIẾU BÁN')
   })
 })

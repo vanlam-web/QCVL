@@ -9,6 +9,10 @@ import {
   type AllocatablePurchaseReceipt,
 } from './modules/finance/kiotviet-cashbook-allocation.js'
 import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
+import {
+  mergeOrganizationBillSettingsPatch,
+  normalizeOrganizationBillSettingsData,
+} from './bill-settings.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
 const defaultPriceList = { id: 'pl-dev-default', name: 'Bang gia le' }
@@ -64,19 +68,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const userOrder: string[] = []
   const groupIds = new Map<string, string>()
   const groupNamesById = new Map<string, string>()
-  let organizationBillSettings: {
-    shop_name: string
-    shop_address: string
-    shop_phone: string
-    default_bill_template: 'a4' | 'k80'
-    invoice_title: string
-    quote_title: string
-    footer_note: string
-    show_product_code: boolean
-    show_unit: boolean
-    show_discount: boolean
-    logo_data_url: string | null
-  } = {
+  let organizationBillSettings = normalizeOrganizationBillSettingsData({
     shop_name: organization.name,
     shop_address: 'Xưởng in và thi công quảng cáo',
     shop_phone: '',
@@ -88,7 +80,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     show_unit: true,
     show_discount: true,
     logo_data_url: null,
-  }
+  })
   const adminAuthUser: AuthUserRow = {
     ...adminUser,
     password_hash: await hashPassword(process.env.QCVL_DEV_PASSWORD ?? 'ChangeMe123!'),
@@ -315,25 +307,11 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       return [{ id: 'ws-dev', code: 'DEV', name: 'May dev', status: 'active' }]
     },
     async getOrganizationBillSettings() {
-      return { ...organizationBillSettings }
+      return { ...organizationBillSettings, templates: [...organizationBillSettings.templates] }
     },
     async updateOrganizationBillSettings(input) {
-      organizationBillSettings = {
-        shop_name: input.patch.shop_name ?? organizationBillSettings.shop_name,
-        shop_address: input.patch.shop_address ?? organizationBillSettings.shop_address,
-        shop_phone: input.patch.shop_phone ?? organizationBillSettings.shop_phone,
-        default_bill_template: input.patch.default_bill_template ?? organizationBillSettings.default_bill_template,
-        invoice_title: input.patch.invoice_title ?? organizationBillSettings.invoice_title,
-        quote_title: input.patch.quote_title ?? organizationBillSettings.quote_title,
-        footer_note: input.patch.footer_note ?? organizationBillSettings.footer_note,
-        show_product_code: input.patch.show_product_code ?? organizationBillSettings.show_product_code,
-        show_unit: input.patch.show_unit ?? organizationBillSettings.show_unit,
-        show_discount: input.patch.show_discount ?? organizationBillSettings.show_discount,
-        logo_data_url: input.patch.logo_data_url !== undefined
-          ? input.patch.logo_data_url
-          : organizationBillSettings.logo_data_url,
-      }
-      return { ...organizationBillSettings }
+      organizationBillSettings = mergeOrganizationBillSettingsPatch(organizationBillSettings, input.patch)
+      return { ...organizationBillSettings, templates: [...organizationBillSettings.templates] }
     },
     async getPosProductUsageCounts() {
       return posProductUsageCountsFromSalesDocuments(salesDocuments)

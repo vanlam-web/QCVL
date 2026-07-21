@@ -66,6 +66,13 @@ import {
   type InvoiceImportRepository,
   type KiotVietInvoiceImportRow,
 } from './modules/sales/kiotviet-invoice-import.js'
+import {
+  mergeOrganizationBillSettingsPatch,
+  normalizeOrganizationBillSettingsData,
+  type OrganizationBillSettingsData,
+} from './bill-settings.js'
+
+export type { OrganizationBillSettingsData, BillPrintTemplateData } from './bill-settings.js'
 
 export type UserStatus = 'active' | 'inactive'
 
@@ -875,20 +882,6 @@ export interface ServerRepository {
     organizationId: string
     patch: Partial<OrganizationBillSettingsData>
   }): Promise<OrganizationBillSettingsData>
-}
-
-export interface OrganizationBillSettingsData {
-  shop_name: string
-  shop_address: string
-  shop_phone: string
-  default_bill_template: 'a4' | 'k80'
-  invoice_title: string
-  quote_title: string
-  footer_note: string
-  show_product_code: boolean
-  show_unit: boolean
-  show_discount: boolean
-  logo_data_url: string | null
 }
 
 export interface HttpHandlerOptions {
@@ -2982,12 +2975,10 @@ async function getDevApiResponse(
         }),
       }
     }
+    const current = await readOrganizationBillSettingsForUser(repository, currentUser)
     return {
       found: true,
-      data: normalizeOrganizationBillSettingsData({
-        ...(await readOrganizationBillSettingsForUser(repository, currentUser)),
-        ...patch,
-      }),
+      data: mergeOrganizationBillSettingsPatch(current, patch),
     }
   }
 
@@ -5015,30 +5006,6 @@ function readBooleanField(value: unknown, field: string) {
   throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be boolean.`, { [field]: [`${field} must be boolean.`] })
 }
 
-function normalizeOrganizationBillSettingsData(
-  input: Partial<OrganizationBillSettingsData> & { organization_name?: string },
-): OrganizationBillSettingsData {
-  const fallbackName = (input.organization_name ?? input.shop_name ?? 'QCVL').trim() || 'QCVL'
-  const logo = input.logo_data_url
-  return {
-    shop_name: (input.shop_name ?? fallbackName).trim() || fallbackName,
-    shop_address: (input.shop_address ?? '').trim(),
-    shop_phone: (input.shop_phone ?? '').trim(),
-    default_bill_template: isBillTemplateId(input.default_bill_template) ? input.default_bill_template : 'a4',
-    invoice_title: (input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG').trim() || 'HÓA ĐƠN BÁN HÀNG',
-    quote_title: (input.quote_title ?? 'BÁO GIÁ').trim() || 'BÁO GIÁ',
-    footer_note: (input.footer_note ?? '').trim(),
-    show_product_code: input.show_product_code ?? true,
-    show_unit: input.show_unit ?? true,
-    show_discount: input.show_discount ?? true,
-    logo_data_url: logo === null || logo === ''
-      ? null
-      : isBillLogoDataUrl(logo)
-        ? logo
-        : null,
-  }
-}
-
 function parseOrganizationBillSettingsPatch(body: Record<string, unknown>): Partial<OrganizationBillSettingsData> {
   const patch: Partial<OrganizationBillSettingsData> = {}
   if ('shop_name' in body) patch.shop_name = requiredString(body.shop_name, 'shop_name')
@@ -5069,6 +5036,14 @@ function parseOrganizationBillSettingsPatch(body: Record<string, unknown>): Part
       })
     }
   }
+  if ('templates' in body) {
+    if (!Array.isArray(body.templates)) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'templates must be an array.', {
+        templates: ['templates must be an array.'],
+      })
+    }
+    patch.templates = body.templates as OrganizationBillSettingsData['templates']
+  }
   if (Object.keys(patch).length === 0) {
     throw new HttpError(400, 'VALIDATION_ERROR', 'At least one bill settings field is required.')
   }
@@ -5080,7 +5055,9 @@ async function readOrganizationBillSettingsForUser(
   currentUser: CurrentUserData,
 ): Promise<OrganizationBillSettingsData> {
   if (repository.getOrganizationBillSettings) {
-    return repository.getOrganizationBillSettings({ organizationId: currentUser.organization.id })
+    return normalizeOrganizationBillSettingsData(
+      await repository.getOrganizationBillSettings({ organizationId: currentUser.organization.id }),
+    )
   }
   return normalizeOrganizationBillSettingsData({
     organization_name: currentUser.organization.name,

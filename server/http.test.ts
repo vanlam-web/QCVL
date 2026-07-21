@@ -1,6 +1,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { createDevMemoryRepository } from './dev-memory-repository'
 import { createHttpHandler, hashPassword, type ServerRepository } from './http'
+import { mergeOrganizationBillSettingsPatch, normalizeOrganizationBillSettingsData } from './bill-settings'
 
 const user = {
   id: 'user-1',
@@ -14,7 +15,7 @@ const user = {
 function repository(passwordHash: string, displayName = 'Admin'): ServerRepository {
   const sessions = new Map<string, string>()
   const userWithPassword = { ...user, display_name: displayName, password_hash: passwordHash }
-  let billSettings = {
+  let billSettings = normalizeOrganizationBillSettingsData({
     shop_name: 'Xuong Van Lam',
     shop_address: 'Xưởng in và thi công quảng cáo',
     shop_phone: '',
@@ -26,7 +27,7 @@ function repository(passwordHash: string, displayName = 'Admin'): ServerReposito
     show_unit: true,
     show_discount: true,
     logo_data_url: null as string | null,
-  }
+  })
 
   return {
     async findUserByEmail(email) {
@@ -55,23 +56,11 @@ function repository(passwordHash: string, displayName = 'Admin'): ServerReposito
       return [{ id: 'ws-1', code: 'POS-01', name: 'Quay 1', status: 'active' }]
     },
     async getOrganizationBillSettings() {
-      return { ...billSettings }
+      return { ...billSettings, templates: [...billSettings.templates] }
     },
     async updateOrganizationBillSettings(input) {
-      billSettings = {
-        shop_name: input.patch.shop_name ?? billSettings.shop_name,
-        shop_address: input.patch.shop_address ?? billSettings.shop_address,
-        shop_phone: input.patch.shop_phone ?? billSettings.shop_phone,
-        default_bill_template: input.patch.default_bill_template ?? billSettings.default_bill_template,
-        invoice_title: input.patch.invoice_title ?? billSettings.invoice_title,
-        quote_title: input.patch.quote_title ?? billSettings.quote_title,
-        footer_note: input.patch.footer_note ?? billSettings.footer_note,
-        show_product_code: input.patch.show_product_code ?? billSettings.show_product_code,
-        show_unit: input.patch.show_unit ?? billSettings.show_unit,
-        show_discount: input.patch.show_discount ?? billSettings.show_discount,
-        logo_data_url: input.patch.logo_data_url !== undefined ? input.patch.logo_data_url : billSettings.logo_data_url,
-      }
-      return { ...billSettings }
+      billSettings = mergeOrganizationBillSettingsPatch(billSettings, input.patch)
+      return { ...billSettings, templates: [...billSettings.templates] }
     },
   }
 }

@@ -30,14 +30,12 @@ import {
 } from './admin-presenter'
 import {
   billTemplateLabel,
-  readImageFileAsDataUrl,
   readOrganizationBillSettingsCache,
   writeOrganizationBillSettingsCache,
-  type BillTemplateId,
   type OrganizationBillSettings,
 } from '../sales-documents/bill-settings'
 import { BillShopHeaderPreview } from '../sales-documents/BillShopHeaderPreview'
-import { BillTemplatePicker } from '../sales-documents/BillTemplatePicker'
+import { BillTemplateManager } from '../sales-documents/BillTemplateManager'
 
 interface AdminState {
   users: UserListItem[]
@@ -219,19 +217,6 @@ export function FoundationAdminPage({
       shop_phone: settings.shop_phone,
     }
   })
-  const [templateDraft, setTemplateDraft] = useState(() => {
-    const settings = readOrganizationBillSettingsCache()
-    return {
-      default_bill_template: settings.default_bill_template as BillTemplateId,
-      invoice_title: settings.invoice_title,
-      quote_title: settings.quote_title,
-      footer_note: settings.footer_note,
-      show_product_code: settings.show_product_code,
-      show_unit: settings.show_unit,
-      show_discount: settings.show_discount,
-      logo_data_url: settings.logo_data_url,
-    }
-  })
   const [userSearch, setUserSearch] = useState('')
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
   const [lastUserSearch, setLastUserSearch] = useState('')
@@ -245,16 +230,6 @@ export function FoundationAdminPage({
       shop_name: saved.shop_name,
       shop_address: saved.shop_address,
       shop_phone: saved.shop_phone,
-    })
-    setTemplateDraft({
-      default_bill_template: saved.default_bill_template,
-      invoice_title: saved.invoice_title,
-      quote_title: saved.quote_title,
-      footer_note: saved.footer_note,
-      show_product_code: saved.show_product_code,
-      show_unit: saved.show_unit,
-      show_discount: saved.show_discount,
-      logo_data_url: saved.logo_data_url,
     })
     return saved
   }
@@ -709,11 +684,11 @@ export function FoundationAdminPage({
       ) : null}
 
       {activeTab === 'bill-templates' ? (
-        <section aria-label="Quản lý mẫu in" className="admin-settings-panel admin-settings-panel-bill">
+        <section aria-label="Quản lý mẫu in" className="admin-settings-panel admin-settings-panel-bill admin-settings-panel-bill-manager">
           <header className="admin-settings-panel-header">
             <div>
               <h2>Quản lý mẫu in</h2>
-              <p>Khổ mặc định, tiêu đề, chân bill, cột và logo — lưu server, dùng chung mọi máy.</p>
+              <p>Danh sách mẫu theo hóa đơn/báo giá — sửa tên, khổ, tiêu đề, cột, chân bill. Lưu server.</p>
             </div>
             <p className="admin-settings-panel-meta">
               Cửa hàng: <strong>{billSettings.shop_name}</strong>
@@ -728,136 +703,13 @@ export function FoundationAdminPage({
             </p>
           ) : null}
           {billSettingsLoading ? <p className="admin-settings-loading">Đang tải cấu hình bill...</p> : null}
-          <div className="admin-settings-bill-layout">
-            <form
-              className="admin-settings-form"
-              onSubmit={(event) => {
-                event.preventDefault()
-                void saveBillSettings(templateDraft)
-              }}
-            >
-              <BillTemplatePicker
-                legend="Mẫu in gợi ý (khổ mặc định)"
-                value={templateDraft.default_bill_template}
-                onChange={(value) => setTemplateDraft((current) => ({ ...current, default_bill_template: value }))}
-              />
-              <p className="admin-settings-field-hint admin-settings-hint-block">
-                A4 cho laser/PDF gửi khách · K80 cho máy in nhiệt quầy. Có thể đổi lại khi in từng bill.
-              </p>              <div className="admin-settings-form-grid">
-                <label>
-                  Tiêu đề hóa đơn
-                  <input
-                    disabled={billSettingsLoading}
-                    name="invoice_title"
-                    value={templateDraft.invoice_title}
-                    onChange={(event) => setTemplateDraft((current) => ({ ...current, invoice_title: event.target.value }))}
-                  />
-                </label>
-                <label>
-                  Tiêu đề báo giá
-                  <input
-                    disabled={billSettingsLoading}
-                    name="quote_title"
-                    value={templateDraft.quote_title}
-                    onChange={(event) => setTemplateDraft((current) => ({ ...current, quote_title: event.target.value }))}
-                  />
-                </label>
-              </div>
-              <label>
-                Dòng chân bill
-                <textarea
-                  disabled={billSettingsLoading}
-                  name="footer_note"
-                  placeholder="Để trống = dùng câu mặc định khi in"
-                  rows={2}
-                  value={templateDraft.footer_note}
-                  onChange={(event) => setTemplateDraft((current) => ({ ...current, footer_note: event.target.value }))}
-                />
-              </label>
-              <fieldset className="admin-settings-checkboxes admin-settings-checkboxes-inline">
-                <legend>Cột trên bill</legend>
-                <label>
-                  <input
-                    checked={templateDraft.show_product_code}
-                    disabled={billSettingsLoading}
-                    type="checkbox"
-                    onChange={(event) =>
-                      setTemplateDraft((current) => ({ ...current, show_product_code: event.target.checked }))
-                    }
-                  />
-                  Hiện mã hàng
-                </label>
-                <label>
-                  <input
-                    checked={templateDraft.show_unit}
-                    disabled={billSettingsLoading}
-                    type="checkbox"
-                    onChange={(event) => setTemplateDraft((current) => ({ ...current, show_unit: event.target.checked }))}
-                  />
-                  Hiện ĐVT
-                </label>
-                <label>
-                  <input
-                    checked={templateDraft.show_discount}
-                    disabled={billSettingsLoading}
-                    type="checkbox"
-                    onChange={(event) =>
-                      setTemplateDraft((current) => ({ ...current, show_discount: event.target.checked }))
-                    }
-                  />
-                  Hiện cột CK
-                </label>
-              </fieldset>
-              <div className="admin-settings-logo-row">
-                <label>
-                  Logo cửa hàng
-                  <span className="admin-settings-field-hint">PNG / JPG / WEBP · tối đa ~280KB</span>
-                  <input
-                    accept="image/png,image/jpeg,image/webp"
-                    disabled={billSettingsLoading}
-                    type="file"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0]
-                      if (!file) return
-                      void readImageFileAsDataUrl(file)
-                        .then((logo_data_url) => {
-                          setTemplateDraft((current) => ({ ...current, logo_data_url }))
-                          setBillSettingsNotice(null)
-                        })
-                        .catch((cause: unknown) => {
-                          setBillSettingsNotice({
-                            tone: 'warning',
-                            text: cause instanceof Error ? cause.message : 'Không đọc được logo.',
-                          })
-                        })
-                    }}
-                  />
-                </label>
-                {templateDraft.logo_data_url ? (
-                  <button
-                    className="button button-secondary"
-                    disabled={billSettingsLoading}
-                    type="button"
-                    onClick={() => setTemplateDraft((current) => ({ ...current, logo_data_url: null }))}
-                  >
-                    Xóa logo
-                  </button>
-                ) : null}
-              </div>
-              <div className="admin-settings-form-actions">
-                <button className="button button-primary" disabled={billSettingsLoading} type="submit">
-                  Lưu mẫu in
-                </button>
-              </div>
-            </form>
-            <BillShopHeaderPreview
-              logo_data_url={templateDraft.logo_data_url}
-              shop_address={billSettings.shop_address}
-              shop_name={billSettings.shop_name}
-              shop_phone={billSettings.shop_phone}
-              title={templateDraft.invoice_title}
-            />
-          </div>
+          <BillTemplateManager
+            key={`bill-templates-${billSettings.templates.map((item) => item.id).join('-')}-${billSettings.logo_data_url ?? 'nologo'}-${billSettings.invoice_title}`}
+            settings={billSettings}
+            loading={billSettingsLoading}
+            onLogoError={(text) => setBillSettingsNotice({ tone: 'warning', text })}
+            onSave={(patch) => saveBillSettings(patch)}
+          />
         </section>
       ) : null}
 

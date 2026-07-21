@@ -34,6 +34,11 @@ import type {
   UserListItemData,
   WorkstationData,
 } from './http.js'
+import {
+  mergeOrganizationBillSettingsPatch,
+  normalizeOrganizationBillSettingsData,
+  type OrganizationBillSettingsData,
+} from './bill-settings.js'
 
 const { Pool } = pg
 
@@ -371,7 +376,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             coalesce(show_product_code, true) as show_product_code,
             coalesce(show_unit, true) as show_unit,
             coalesce(show_discount, true) as show_discount,
-            logo_data_url
+            logo_data_url,
+            coalesce(bill_templates, '[]'::jsonb) as bill_templates
           from organizations
           where id = $1
           limit 1
@@ -380,19 +386,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       )
       const row = result.rows[0]
       if (!row) {
-        return {
+        return normalizeOrganizationBillSettingsData({
           shop_name: 'QCVL',
           shop_address: '',
           shop_phone: '',
-          default_bill_template: 'a4' as const,
-          invoice_title: 'HÓA ĐƠN BÁN HÀNG',
-          quote_title: 'BÁO GIÁ',
-          footer_note: '',
-          show_product_code: true,
-          show_unit: true,
-          show_discount: true,
-          logo_data_url: null,
-        }
+          default_bill_template: 'a4',
+        })
       }
       return mapOrganizationBillSettingsRow(row)
     },
@@ -415,7 +414,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             coalesce(show_product_code, true) as show_product_code,
             coalesce(show_unit, true) as show_unit,
             coalesce(show_discount, true) as show_discount,
-            logo_data_url
+            logo_data_url,
+            coalesce(bill_templates, '[]'::jsonb) as bill_templates
           from organizations
           where id = $1
           limit 1
@@ -424,32 +424,13 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       )
       const mapped = current.rows[0]
         ? mapOrganizationBillSettingsRow(current.rows[0])
-        : {
+        : normalizeOrganizationBillSettingsData({
             shop_name: 'QCVL',
             shop_address: '',
             shop_phone: '',
-            default_bill_template: 'a4' as const,
-            invoice_title: 'HÓA ĐƠN BÁN HÀNG',
-            quote_title: 'BÁO GIÁ',
-            footer_note: '',
-            show_product_code: true,
-            show_unit: true,
-            show_discount: true,
-            logo_data_url: null,
-          }
-      const next = {
-        shop_name: input.patch.shop_name ?? mapped.shop_name,
-        shop_address: input.patch.shop_address ?? mapped.shop_address,
-        shop_phone: input.patch.shop_phone ?? mapped.shop_phone,
-        default_bill_template: input.patch.default_bill_template ?? mapped.default_bill_template,
-        invoice_title: input.patch.invoice_title ?? mapped.invoice_title,
-        quote_title: input.patch.quote_title ?? mapped.quote_title,
-        footer_note: input.patch.footer_note ?? mapped.footer_note,
-        show_product_code: input.patch.show_product_code ?? mapped.show_product_code,
-        show_unit: input.patch.show_unit ?? mapped.show_unit,
-        show_discount: input.patch.show_discount ?? mapped.show_discount,
-        logo_data_url: input.patch.logo_data_url !== undefined ? input.patch.logo_data_url : mapped.logo_data_url,
-      }
+            default_bill_template: 'a4',
+          })
+      const next = mergeOrganizationBillSettingsPatch(mapped, input.patch)
       await pool.query(
         `
           update organizations
@@ -464,7 +445,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             show_product_code = $9,
             show_unit = $10,
             show_discount = $11,
-            logo_data_url = $12
+            logo_data_url = $12,
+            bill_templates = $13::jsonb
           where id = $1
         `,
         [
@@ -480,6 +462,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           next.show_unit,
           next.show_discount,
           next.logo_data_url,
+          JSON.stringify(next.templates),
         ],
       )
       return next
@@ -8063,6 +8046,12 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   await pool.query('alter table organizations add column if not exists show_unit boolean')
   await pool.query('alter table organizations add column if not exists show_discount boolean')
   await pool.query('alter table organizations add column if not exists logo_data_url text')
+  await pool.query('alter table organizations add column if not exists bill_templates jsonb')
+  await pool.query(`
+    update organizations
+    set bill_templates = coalesce(bill_templates, '[]'::jsonb)
+    where bill_templates is null
+  `)
   await pool.query(`
     update organizations
     set shop_name = coalesce(nullif(btrim(shop_name), ''), name)
@@ -8112,7 +8101,7 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
 }
 
 function mapOrganizationBillSettingsRow(row: Record<string, unknown>) {
-  return {
+  return normalizeOrganizationBillSettingsData({
     shop_name: String(row.shop_name ?? 'QCVL'),
     shop_address: String(row.shop_address ?? ''),
     shop_phone: String(row.shop_phone ?? ''),
@@ -8124,7 +8113,14 @@ function mapOrganizationBillSettingsRow(row: Record<string, unknown>) {
     show_unit: row.show_unit !== false,
     show_discount: row.show_discount !== false,
     logo_data_url: typeof row.logo_data_url === 'string' && row.logo_data_url ? row.logo_data_url : null,
-  }
+    templates: Array.isArray(row.bill_templates)
+      ? row.bill_templates
+      : typeof row.bill_templates === 'string'
+        ? JSON.parse(row.bill_templates)
+        : row.bill_templates && typeof row.bill_templates === 'object'
+          ? (row.bill_templates as OrganizationBillSettingsData['templates'])
+          : [],
+  })
 }
 
 async function replacePermissionsForUser(pool: pg.Pool, userId: string, permissions: `perm.${string}`[]) {

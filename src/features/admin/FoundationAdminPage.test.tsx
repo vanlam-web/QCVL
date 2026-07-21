@@ -71,6 +71,56 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
       show_unit: true,
       show_discount: true,
       logo_data_url: null,
+      templates: [
+        {
+          id: 'tpl-invoice-a4',
+          name: 'Hóa đơn A4',
+          document_type: 'invoice' as const,
+          paper_size: 'a4' as const,
+          title: 'HÓA ĐƠN BÁN HÀNG',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: true,
+          is_default: true,
+        },
+        {
+          id: 'tpl-invoice-k80',
+          name: 'Hóa đơn K80',
+          document_type: 'invoice' as const,
+          paper_size: 'k80' as const,
+          title: 'HÓA ĐƠN BÁN HÀNG',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: true,
+          is_default: false,
+        },
+        {
+          id: 'tpl-quote-a4',
+          name: 'Báo giá A4',
+          document_type: 'quote' as const,
+          paper_size: 'a4' as const,
+          title: 'BÁO GIÁ',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: true,
+          is_default: true,
+        },
+        {
+          id: 'tpl-quote-k80',
+          name: 'Báo giá K80',
+          document_type: 'quote' as const,
+          paper_size: 'k80' as const,
+          title: 'BÁO GIÁ',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: true,
+          is_default: false,
+        },
+      ],
     })),
     updateOrganizationBillSettings: vi.fn(async (input) => ({
       shop_name: input.shop_name ?? 'QCVL',
@@ -84,6 +134,7 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
       show_unit: input.show_unit ?? true,
       show_discount: input.show_discount ?? true,
       logo_data_url: input.logo_data_url !== undefined ? input.logo_data_url : null,
+      templates: input.templates ?? [],
     })),
     ...overrides,
   }
@@ -606,17 +657,24 @@ it('saves shop info and default bill template from Thiết lập panels', async 
 
   await userEvent.click(within(sidebar).getByRole('button', { name: 'Quản lý mẫu in' }))
   const templatePanel = await screen.findByRole('region', { name: 'Quản lý mẫu in' })
-  await userEvent.click(within(templatePanel).getByRole('radio', { name: /K80 \(nhiệt\)/ }))
-  await userEvent.clear(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề hóa đơn' }))
-  await userEvent.type(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề hóa đơn' }), 'PHIẾU BÁN HÀNG')
+  await userEvent.click(within(templatePanel).getByRole('button', { name: /Hóa đơn K80/ }))
+  await userEvent.clear(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề trên bill' }))
+  await userEvent.type(within(templatePanel).getByRole('textbox', { name: 'Tiêu đề trên bill' }), 'PHIẾU BÁN HÀNG')
   await userEvent.click(within(templatePanel).getByRole('checkbox', { name: 'Hiện mã hàng' }))
+  await userEvent.click(within(templatePanel).getByRole('checkbox', { name: /Đặt làm mẫu mặc định/ }))
   await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu mẫu in' }))
   await waitFor(() =>
     expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith(
       expect.objectContaining({
-        default_bill_template: 'k80',
-        invoice_title: 'PHIẾU BÁN HÀNG',
-        show_product_code: false,
+        templates: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'Hóa đơn K80',
+            paper_size: 'k80',
+            title: 'PHIẾU BÁN HÀNG',
+            show_product_code: false,
+            is_default: true,
+          }),
+        ]),
       }),
     ),
   )

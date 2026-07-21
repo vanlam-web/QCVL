@@ -8,6 +8,7 @@ import {
   quoteFooterText,
   readOrganizationBillSettingsCache,
   resolveBillTemplate,
+  resolvePrintTemplateContent,
   writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
@@ -126,6 +127,8 @@ export function QuotePrintPage({
     )
   }
 
+  const printContent = resolvePrintTemplateContent(settings, 'quote', template)
+
   return (
     <main className={`quote-print-shell bill-template-${template}`}>
       <BillPrintToolbar
@@ -147,7 +150,7 @@ export function QuotePrintPage({
             {settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
           </div>
           <div>
-            <h1>{settings.quote_title}</h1>
+            <h1>{printContent.title}</h1>
             <dl>
               <div>
                 <dt>Mã</dt>
@@ -186,12 +189,12 @@ export function QuotePrintPage({
           <thead>
             <tr>
               <th>STT</th>
-              {settings.show_product_code ? <th>Mã hàng</th> : null}
+              {printContent.show_product_code ? <th>Mã hàng</th> : null}
               <th>Nội dung</th>
-              {settings.show_unit ? <th>ĐVT</th> : null}
+              {printContent.show_unit ? <th>ĐVT</th> : null}
               <th>SL</th>
               <th>Đơn giá</th>
-              {settings.show_discount ? <th>CK</th> : null}
+              {printContent.show_discount ? <th>CK</th> : null}
               <th>Thành tiền</th>
             </tr>
           </thead>
@@ -199,16 +202,16 @@ export function QuotePrintPage({
             {document.items.map((item) => (
               <tr key={item.id}>
                 <td>{item.line_no}</td>
-                {settings.show_product_code ? <td>{item.product.code}</td> : null}
+                {printContent.show_product_code ? <td>{item.product.code}</td> : null}
                 <td>
                   <strong>{item.product.name}</strong>
                   <p>{salesDocumentQuoteLineDimensionText(item)}</p>
                   {item.note ? <p>{item.note}</p> : null}
                 </td>
-                {settings.show_unit ? <td>{item.product.unit_name}</td> : null}
+                {printContent.show_unit ? <td>{item.product.unit_name}</td> : null}
                 <td>{salesDocumentMeasureText(item.quantity)}</td>
                 <td>{salesDocumentMoneyText(item.unit_price)}</td>
-                {settings.show_discount ? (
+                {printContent.show_discount ? (
                   <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
                 ) : null}
                 <td>{salesDocumentMoneyText(item.line_total)}</td>
@@ -241,7 +244,7 @@ export function QuotePrintPage({
           </section>
         ) : null}
 
-        <p className="quote-print-footnote">{quoteFooterText(settings)}</p>
+        <p className="quote-print-footnote">{quoteFooterText(printContent)}</p>
       </article>
     </main>
   )
