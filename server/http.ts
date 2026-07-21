@@ -3087,7 +3087,12 @@ async function getDevApiResponse(
                 ...normalized,
               })
             : (() => {
-                const fallback: ProductListData = {
+                const resolvedGroup =
+                  (normalized.product_group_id
+                    ? productGroups.find((group) => group.id === normalized.product_group_id)
+                    : productGroups.find((group) => group.is_default))
+                  ?? products[0].product_group
+                const fallback = {
                   ...products[0],
                   id: randomUUID(),
                   code: normalized.code,
@@ -3098,14 +3103,12 @@ async function getDevApiResponse(
                   sell_method: normalized.sell_method,
                   inventory_shape: normalized.inventory_shape,
                   track_inventory: normalized.track_inventory,
-                  product_group_id: normalized.product_group_id,
-                  product_group: normalized.product_group_id
-                    ? productGroups.find((group) => group.id === normalized.product_group_id) ?? products[0].product_group
-                    : productGroups.find((group) => group.is_default) ?? products[0].product_group,
+                  product_group_id: resolvedGroup.id,
+                  product_group: { id: resolvedGroup.id, code: resolvedGroup.code, name: resolvedGroup.name },
                   latest_purchase_cost: normalized.latest_purchase_cost,
                   latest_purchase_cost_at: normalized.latest_purchase_cost === null ? null : nowIso,
-                  default_sale_price: null,
-                  unit_conversions: normalized.unit_conversions,
+                  default_sale_price: null as number | null,
+                  unit_conversions: normalized.unit_conversions as typeof products[number]['unit_conversions'],
                   created_at: nowIso,
                   updated_at: nowIso,
                 }
