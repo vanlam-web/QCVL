@@ -1,4 +1,5 @@
 import {
+  billTemplateDescription,
   billTemplateLabel,
   defaultOrganizationBillSettings,
   isBillTemplateId,
@@ -36,5 +37,10 @@ describe('organization bill settings', () => {
     expect(isBillTemplateId('k80')).toBe(true)
     expect(isBillTemplateId('thermal')).toBe(false)
     expect(billTemplateLabel('k80')).toBe('K80 (nhiệt)')
+  })
+
+  it('describes templates for the settings UI', () => {
+    expect(billTemplateDescription('a4')).toMatch(/A4/)
+    expect(billTemplateDescription('k80')).toMatch(/80mm/)
   })
 })

@@ -32,8 +32,11 @@ import {
   billTemplateLabel,
   readOrganizationBillSettings,
   writeOrganizationBillSettings,
+  type BillTemplateId,
   type OrganizationBillSettings,
 } from '../sales-documents/bill-settings'
+import { BillShopHeaderPreview } from '../sales-documents/BillShopHeaderPreview'
+import { BillTemplatePicker } from '../sales-documents/BillTemplatePicker'
 
 interface AdminState {
   users: UserListItem[]
@@ -203,6 +206,17 @@ export function FoundationAdminPage({
   const [savingUser, setSavingUser] = useState(false)
   const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettings())
   const [billSettingsNotice, setBillSettingsNotice] = useState<string | null>(null)
+  const [shopDraft, setShopDraft] = useState(() => {
+    const settings = readOrganizationBillSettings()
+    return {
+      shop_name: settings.shop_name,
+      shop_address: settings.shop_address,
+      shop_phone: settings.shop_phone,
+    }
+  })
+  const [templateDraft, setTemplateDraft] = useState<BillTemplateId>(
+    () => readOrganizationBillSettings().default_bill_template,
+  )
   const [userSearch, setUserSearch] = useState('')
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
   const [lastUserSearch, setLastUserSearch] = useState('')
@@ -213,13 +227,26 @@ export function FoundationAdminPage({
     setActiveTab(panel)
     setBillSettingsNotice(null)
     if (panel === 'shop' || panel === 'bill-templates') {
-      setBillSettings(readOrganizationBillSettings())
+      const next = readOrganizationBillSettings()
+      setBillSettings(next)
+      setShopDraft({
+        shop_name: next.shop_name,
+        shop_address: next.shop_address,
+        shop_phone: next.shop_phone,
+      })
+      setTemplateDraft(next.default_bill_template)
     }
   }
 
   function saveBillSettings(next: Partial<OrganizationBillSettings>) {
     const saved = writeOrganizationBillSettings(next)
     setBillSettings(saved)
+    setShopDraft({
+      shop_name: saved.shop_name,
+      shop_address: saved.shop_address,
+      shop_phone: saved.shop_phone,
+    })
+    setTemplateDraft(saved.default_bill_template)
     setBillSettingsNotice('Đã lưu cấu hình bill trên máy này.')
   }
 
@@ -550,67 +577,106 @@ export function FoundationAdminPage({
       ) : null}
 
       {activeTab === 'shop' ? (
-        <section aria-label="Thông tin cửa hàng" className="admin-settings-panel">
-          <h2>Thông tin cửa hàng</h2>
-          <p>Dùng làm đầu bill in. Lưu trên máy/trình duyệt này (Tầng B1).</p>
+        <section aria-label="Thông tin cửa hàng" className="admin-settings-panel admin-settings-panel-bill">
+          <header className="admin-settings-panel-header">
+            <div>
+              <h2>Thông tin cửa hàng</h2>
+              <p>Hiện trên đầu hóa đơn / báo giá khi in. Lưu trên máy/trình duyệt này.</p>
+            </div>
+            <p className="admin-settings-panel-meta">
+              Mẫu mặc định hiện tại: <strong>{billTemplateLabel(billSettings.default_bill_template)}</strong>
+            </p>
+          </header>
           {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
-          <form
-            className="admin-settings-form"
-            onSubmit={(event) => {
-              event.preventDefault()
-              const form = new FormData(event.currentTarget)
-              saveBillSettings({
-                shop_name: String(form.get('shop_name') ?? ''),
-                shop_address: String(form.get('shop_address') ?? ''),
-                shop_phone: String(form.get('shop_phone') ?? ''),
-              })
-            }}
-          >
-            <label>
-              Tên cửa hàng / xưởng
-              <input name="shop_name" defaultValue={billSettings.shop_name} required />
-            </label>
-            <label>
-              Địa chỉ
-              <input name="shop_address" defaultValue={billSettings.shop_address} />
-            </label>
-            <label>
-              Điện thoại
-              <input name="shop_phone" defaultValue={billSettings.shop_phone} />
-            </label>
-            <button className="button button-primary" type="submit">
-              Lưu
-            </button>
-          </form>
+          <div className="admin-settings-bill-layout">
+            <form
+              className="admin-settings-form"
+              onSubmit={(event) => {
+                event.preventDefault()
+                saveBillSettings(shopDraft)
+              }}
+            >
+              <label>
+                Tên cửa hàng / xưởng
+                <input
+                  name="shop_name"
+                  required
+                  value={shopDraft.shop_name}
+                  onChange={(event) => setShopDraft((current) => ({ ...current, shop_name: event.target.value }))}
+                />
+              </label>
+              <label>
+                Địa chỉ
+                <input
+                  name="shop_address"
+                  value={shopDraft.shop_address}
+                  onChange={(event) => setShopDraft((current) => ({ ...current, shop_address: event.target.value }))}
+                />
+              </label>
+              <label>
+                Điện thoại
+                <input
+                  name="shop_phone"
+                  value={shopDraft.shop_phone}
+                  onChange={(event) => setShopDraft((current) => ({ ...current, shop_phone: event.target.value }))}
+                />
+              </label>
+              <div className="admin-settings-form-actions">
+                <button className="button button-primary" type="submit">
+                  Lưu thông tin cửa hàng
+                </button>
+              </div>
+            </form>
+            <BillShopHeaderPreview {...shopDraft} />
+          </div>
         </section>
       ) : null}
 
       {activeTab === 'bill-templates' ? (
-        <section aria-label="Mẫu in" className="admin-settings-panel">
-          <h2>Mẫu in / bill</h2>
-          <p>Chọn mẫu mặc định khi mở bill. Có thể đổi lại trên màn in.</p>
+        <section aria-label="Mẫu in" className="admin-settings-panel admin-settings-panel-bill">
+          <header className="admin-settings-panel-header">
+            <div>
+              <h2>Mẫu in / bill</h2>
+              <p>Chọn mẫu mở mặc định. Trên màn in vẫn đổi được A4 ↔ K80 trước khi bấm In.</p>
+            </div>
+            <p className="admin-settings-panel-meta">
+              Đầu bill: <strong>{billSettings.shop_name}</strong>
+            </p>
+          </header>
           {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
           <form
             className="admin-settings-form"
             onSubmit={(event) => {
               event.preventDefault()
-              const form = new FormData(event.currentTarget)
-              saveBillSettings({
-                default_bill_template: String(form.get('default_bill_template')) === 'k80' ? 'k80' : 'a4',
-              })
+              saveBillSettings({ default_bill_template: templateDraft })
             }}
           >
-            <label>
-              Mẫu mặc định
-              <select name="default_bill_template" defaultValue={billSettings.default_bill_template}>
-                <option value="a4">{billTemplateLabel('a4')}</option>
-                <option value="k80">{billTemplateLabel('k80')}</option>
-              </select>
-            </label>
-            <button className="button button-primary" type="submit">
-              Lưu
-            </button>
+            <BillTemplatePicker
+              legend="Mẫu mặc định"
+              value={templateDraft}
+              onChange={setTemplateDraft}
+            />
+            <div className="admin-settings-form-actions">
+              <button className="button button-primary" type="submit">
+                Lưu mẫu mặc định
+              </button>
+            </div>
           </form>
+          <div className="admin-settings-bill-layout">
+            <BillShopHeaderPreview
+              shop_address={billSettings.shop_address}
+              shop_name={billSettings.shop_name}
+              shop_phone={billSettings.shop_phone}
+            />
+            <aside aria-label="Gợi ý mẫu đang chọn" className="bill-template-hint">
+              <h3>{billTemplateLabel(templateDraft)}</h3>
+              <p>
+                {templateDraft === 'k80'
+                  ? 'Phù hợp in nhiệt tại quầy. Bill hẹp, đọc nhanh.'
+                  : 'Phù hợp in A4 hoặc lưu PDF gửi Zalo/email.'}
+              </p>
+            </aside>
+          </div>
         </section>
       ) : null}
 

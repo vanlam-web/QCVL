@@ -3561,6 +3561,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.5rem;
   max-width: 52rem;
   margin: 0 auto 1rem;
@@ -3583,6 +3584,25 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   color: #111827;
   padding: 0 0.5rem;
   font: inherit;
+}
+
+.quote-print-toolbar .bill-template-cards {
+  color: #111827;
+}
+
+.quote-print-toolbar .bill-template-card {
+  background: white;
+  border-color: #cbd5e1;
+}
+
+.quote-print-toolbar .bill-template-card.is-selected {
+  border-color: #1f2937;
+  box-shadow: 0 0 0 1px #1f2937;
+  background: #f8fafc;
+}
+
+.quote-print-toolbar .bill-template-card-title {
+  font-size: 0.8125rem;
 }
 
 .quote-print-toolbar button,

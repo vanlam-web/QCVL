@@ -58,3 +58,9 @@ export function writeOrganizationBillSettings(input: Partial<OrganizationBillSet
 export function billTemplateLabel(template: BillTemplateId) {
   return template === 'k80' ? 'K80 (nhiệt)' : 'A4'
 }
+
+export function billTemplateDescription(template: BillTemplateId) {
+  return template === 'k80'
+    ? 'Khổ hẹp ~80mm cho máy in nhiệt quầy. Ẩn bớt cột mã hàng, ĐVT, CK.'
+    : 'Khổ giấy A4 — đủ cột, phù hợp in laser/in PDF gửi khách.'
+}
