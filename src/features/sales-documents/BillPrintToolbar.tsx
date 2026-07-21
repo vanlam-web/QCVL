@@ -6,11 +6,13 @@ export function BillPrintToolbar({
   onTemplateChange,
   onPrint,
   onClose,
+  preferenceStatus,
 }: {
   template: BillTemplateId
   onTemplateChange: (template: BillTemplateId) => void
   onPrint: () => void
   onClose: () => void
+  preferenceStatus?: string | null
 }) {
   return (
     <div className="quote-print-toolbar">
@@ -21,6 +23,11 @@ export function BillPrintToolbar({
         value={template}
         onChange={onTemplateChange}
       />
+      {preferenceStatus ? (
+        <p className="quote-print-preference-status" role="status">
+          {preferenceStatus}
+        </p>
+      ) : null}
       <button type="button" onClick={onPrint}>
         In
       </button>

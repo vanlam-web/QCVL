@@ -462,6 +462,78 @@ describe('createHttpHandler', () => {
     expect(rereadBody.data.invoice_title).toBe('PHIẾU BÁN HÀNG')
   })
 
+  test('patches customer preferred bill template and rejects walk-in preference', async () => {
+    const passwordHash = await hashPassword('ChangeMe123!')
+    const base = repository(passwordHash)
+    const updateCustomer = vi.fn(async (input: {
+      organizationId: string
+      id: string
+      patch: { preferred_bill_template?: 'a4' | 'k80' | null }
+    }) => {
+      if (input.id === 'customer-retail') {
+        throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })
+      }
+      return {
+        id: input.id,
+        code: 'DEV20-KH-02',
+        name: 'Khach demo 02',
+        phone: '0908000002',
+        tax_code: null,
+        address: null,
+        customer_group_id: 'cg-retail',
+        customer_group: { id: 'cg-retail', code: 'LE', name: 'Khach le' },
+        created_at: new Date().toISOString(),
+        total_sales_amount: 0,
+        total_debt_amount: 0,
+        preferred_bill_template: input.patch.preferred_bill_template ?? null,
+      }
+    })
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        updateCustomer,
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json() as { data: { access_token: string } }
+    const headers = {
+      authorization: `Bearer ${loginBody.data.access_token}`,
+      'content-type': 'application/json',
+    }
+
+    const saved = await handler(
+      new Request('http://api.local/api/v1/customers/customer-02', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ preferred_bill_template: 'k80' }),
+      }),
+    )
+    const savedBody = await saved.json()
+    expect(saved.status).toBe(200)
+    expect(savedBody.data.preferred_bill_template).toBe('k80')
+    expect(updateCustomer).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      id: 'customer-02',
+      patch: { preferred_bill_template: 'k80' },
+    })
+
+    const walkIn = await handler(
+      new Request('http://api.local/api/v1/customers/customer-retail', {
+        method: 'PATCH',
+        headers,
+        body: JSON.stringify({ preferred_bill_template: 'a4' }),
+      }),
+    )
+    const walkInBody = await walkIn.json()
+    expect(walkIn.status).toBe(400)
+    expect(walkInBody.error.message).toMatch(/Walk-in/i)
+  })
+
   test('rejects bill settings updates without admin panel permission', async () => {
     const base = repository(await hashPassword('ChangeMe123!'))
     const limited: ServerRepository = {

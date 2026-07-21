@@ -271,6 +271,7 @@ export interface Customer {
   kiotviet_current_debt?: number | null
   kiotviet_net_sales?: number | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
+  preferred_bill_template?: 'a4' | 'k80' | null
 }
 
 export interface CustomerListResponse {

@@ -112,6 +112,23 @@ export function billTemplateDescription(template: BillTemplateId) {
     : 'Khổ giấy A4 — đủ cột, phù hợp in laser/in PDF gửi khách.'
 }
 
+export function isWalkInCustomerCode(code: string | null | undefined) {
+  return (code ?? '').trim().toLowerCase() === 'khachle'
+}
+
+export function resolveBillTemplate(input: {
+  queryTemplate?: string | null
+  customerCode?: string | null
+  preferredTemplate?: string | null
+  orgDefault: BillTemplateId
+}): BillTemplateId {
+  if (isBillTemplateId(input.queryTemplate)) return input.queryTemplate
+  if (!isWalkInCustomerCode(input.customerCode) && isBillTemplateId(input.preferredTemplate)) {
+    return input.preferredTemplate
+  }
+  return input.orgDefault
+}
+
 export function invoiceFooterText(settings: OrganizationBillSettings) {
   return settings.footer_note.trim() || 'Bill nội bộ — không phải hóa đơn điện tử.'
 }

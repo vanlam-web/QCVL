@@ -238,6 +238,27 @@ describe('catalog-service', () => {
     ])
   })
 
+  it('patches preferred bill template without requiring name', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return { id: 'customer-1', preferred_bill_template: 'k80' } as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.updateCustomer('customer-1', { preferred_bill_template: 'k80' })
+
+    expect(calls).toEqual([
+      [
+        '/api/v1/customers/customer-1',
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ preferred_bill_template: 'k80' }),
+        },
+      ],
+    ])
+  })
+
   it('gets and saves product BOM', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

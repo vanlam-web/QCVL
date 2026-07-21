@@ -1142,12 +1142,18 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const entry = [...customers.entries()].find(([, customer]) => customer.id === input.id || customer.code === input.id)
       if (!entry) return null
       const [key, customer] = entry
+      if (
+        (customer.code ?? '').trim().toLowerCase() === 'khachle'
+        && input.patch.preferred_bill_template !== undefined
+      ) {
+        throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })
+      }
       const groupId = input.patch.customer_group_id === undefined ? customer.customer_group_id : input.patch.customer_group_id
       const groupName = groupId ? customerGroupNamesById.get(groupId) ?? customer.customer_group?.name ?? groupId : null
       const updated = hydrateCustomerLinkedSupplier(hydrateCustomerCreator({
         ...customer,
         code: input.patch.code ?? customer.code,
-        name: input.patch.name,
+        name: input.patch.name ?? customer.name,
         phone: input.patch.phone === undefined ? customer.phone : input.patch.phone,
         tax_code: input.patch.tax_code === undefined ? customer.tax_code : input.patch.tax_code,
         address: input.patch.address === undefined ? customer.address : input.patch.address,
@@ -1156,6 +1162,10 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         customer_group: groupId && groupName ? { id: groupId, code: groupName, name: groupName } : null,
         customer_type: input.patch.customer_type === undefined ? customer.customer_type : input.patch.customer_type,
         company_name: input.patch.company_name === undefined ? customer.company_name : input.patch.company_name,
+        preferred_bill_template:
+          input.patch.preferred_bill_template !== undefined
+            ? input.patch.preferred_bill_template
+            : customer.preferred_bill_template ?? null,
       }, users), suppliers)
       if (updated.code !== key) customers.delete(key)
       customers.set(updated.code, updated)
@@ -1614,7 +1624,19 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         ? salesDocumentItemsToDetailItems(rawItems, products)
         : document.items
       const hydratedCashbookEntries = [...cashbookEntries.values()].map((entry) => hydrateCashbookEntryUserSnapshot(entry, users))
-      return hydrateSalesDocumentPaymentReceipts({ ...hydratedDocument, items: hydratedItems }, hydratedCashbookEntries)
+      const withReceipts = hydrateSalesDocumentPaymentReceipts({ ...hydratedDocument, items: hydratedItems }, hydratedCashbookEntries)
+      const liveCustomer = resolveDocumentCustomer(withReceipts, customers)
+      const preferred =
+        liveCustomer && (liveCustomer.code ?? '').trim().toLowerCase() !== 'khachle'
+          ? liveCustomer.preferred_bill_template ?? null
+          : null
+      return {
+        ...withReceipts,
+        customer: {
+          ...withReceipts.customer,
+          preferred_bill_template: preferred === 'a4' || preferred === 'k80' ? preferred : null,
+        },
+      }
     },
     async cancelSalesDocument(input) {
       const entry = [...salesDocuments.entries()].find(([, document]) => document.id === input.id || document.code === input.id)

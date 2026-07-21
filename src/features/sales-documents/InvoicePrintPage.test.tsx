@@ -172,3 +172,81 @@ it('honors initialTemplate when opening the bill', async () => {
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
   expect(screen.getByRole('radio', { name: /K80 \(nhiệt\)/ })).toBeChecked()
 })
+
+it('uses customer preferred bill template when query template is absent', async () => {
+  const preferred = {
+    ...invoiceDetail,
+    customer: { ...invoiceDetail.customer, preferred_bill_template: 'k80' as const },
+  }
+  const { container } = render(
+    <InvoicePrintPage documentId="invoice-1" service={makeService(preferred)} onClose={vi.fn()} />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-k80')
+})
+
+it('lets query template override customer preference', async () => {
+  const preferred = {
+    ...invoiceDetail,
+    customer: { ...invoiceDetail.customer, preferred_bill_template: 'k80' as const },
+  }
+  const { container } = render(
+    <InvoicePrintPage
+      documentId="invoice-1"
+      service={makeService(preferred)}
+      onClose={vi.fn()}
+      initialTemplate="a4"
+    />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-a4')
+})
+
+it('saves customer preference when staff changes template', async () => {
+  const saveCustomerBillPreference = vi.fn(async () => undefined)
+
+  render(
+    <InvoicePrintPage
+      documentId="invoice-1"
+      service={makeService()}
+      onClose={vi.fn()}
+      saveCustomerBillPreference={saveCustomerBillPreference}
+    />,
+  )
+
+  await userEvent.click(await screen.findByRole('radio', { name: /K80 \(nhiệt\)/ }))
+
+  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'k80')
+  expect(await screen.findByRole('status')).toHaveTextContent('Đã nhớ mẫu cho khách')
+})
+
+it('does not save preference for walk-in customers', async () => {
+  const walkIn = {
+    ...invoiceDetail,
+    customer: {
+      id: 'walk-1',
+      code: 'khachle',
+      name: 'Khách lẻ',
+      phone: null,
+      preferred_bill_template: 'k80' as const,
+    },
+  }
+  const saveCustomerBillPreference = vi.fn(async () => undefined)
+  const { container } = render(
+    <InvoicePrintPage
+      documentId="invoice-1"
+      service={makeService(walkIn)}
+      onClose={vi.fn()}
+      saveCustomerBillPreference={saveCustomerBillPreference}
+    />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-a4')
+
+  await userEvent.click(screen.getByRole('radio', { name: /K80 \(nhiệt\)/ }))
+  expect(saveCustomerBillPreference).not.toHaveBeenCalled()
+  expect(screen.queryByRole('status')).not.toBeInTheDocument()
+})

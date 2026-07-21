@@ -135,7 +135,7 @@ export interface SalesDocumentData {
   order_type: 'invoice' | 'quote'
   status: string
   created_at: string
-  customer: { id: string; code: string; name: string; phone: string | null }
+  customer: { id: string; code: string; name: string; phone: string | null; preferred_bill_template?: 'a4' | 'k80' | null }
   seller: { id: string; name: string }
   subtotal_amount: number
   discount_amount: number
@@ -303,6 +303,7 @@ export interface CustomerListData {
   kiotviet_net_sales?: number | null
   status?: string | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
+  preferred_bill_template?: 'a4' | 'k80' | null
 }
 export interface SupplierListData {
   id: string
@@ -582,7 +583,7 @@ export interface ServerRepository {
     id: string
     patch: {
       code?: string
-      name: string
+      name?: string
       phone?: string | null
       tax_code?: string | null
       address?: string | null
@@ -590,6 +591,7 @@ export interface ServerRepository {
       customer_group_id?: string | null
       customer_type?: string | null
       company_name?: string | null
+      preferred_bill_template?: 'a4' | 'k80' | null
     }
   }): Promise<CustomerListData | null>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
@@ -3353,7 +3355,7 @@ async function getDevApiResponse(
         const id = getIdFromPath(path) ?? ''
         const patch: {
           code?: string
-          name: string
+          name?: string
           phone?: string | null
           tax_code?: string | null
           address?: string | null
@@ -3361,9 +3363,9 @@ async function getDevApiResponse(
           customer_group_id?: string | null
           customer_type?: string | null
           company_name?: string | null
-        } = {
-          name: requiredString(body.name, 'name'),
-        }
+          preferred_bill_template?: 'a4' | 'k80' | null
+        } = {}
+        if (body.name !== undefined) patch.name = requiredString(body.name, 'name')
         if (body.code !== undefined) patch.code = requiredString(body.code, 'code')
         if (body.phone !== undefined) patch.phone = nullableString(body.phone)
         if (body.tax_code !== undefined) patch.tax_code = nullableString(body.tax_code)
@@ -3372,22 +3374,47 @@ async function getDevApiResponse(
         if (body.customer_group_id !== undefined) patch.customer_group_id = nullableString(body.customer_group_id)
         if (body.customer_type !== undefined) patch.customer_type = nullableString(body.customer_type)
         if (body.company_name !== undefined) patch.company_name = nullableString(body.company_name)
-        const repositoryCustomer = await repository.updateCustomer?.({
-          organizationId: currentUser.organization.id,
-          id,
-          patch,
-        })
+        if ('preferred_bill_template' in body) {
+          if (body.preferred_bill_template === null || body.preferred_bill_template === '') {
+            patch.preferred_bill_template = null
+          } else if (body.preferred_bill_template === 'a4' || body.preferred_bill_template === 'k80') {
+            patch.preferred_bill_template = body.preferred_bill_template
+          } else {
+            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_template must be a4 or k80.', {
+              preferred_bill_template: ['preferred_bill_template must be a4 or k80.'],
+            })
+          }
+        }
+        if (Object.keys(patch).length === 0) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'At least one customer field is required.')
+        }
+        let repositoryCustomer: CustomerListData | null | undefined
+        try {
+          repositoryCustomer = await repository.updateCustomer?.({
+            organizationId: currentUser.organization.id,
+            id,
+            patch,
+          })
+        } catch (error) {
+          if (error instanceof Error && (error as { code?: string }).code === 'WALK_IN_BILL_PREFERENCE_FORBIDDEN') {
+            throw new HttpError(400, 'VALIDATION_ERROR', 'Walk-in customers cannot store bill template preference.')
+          }
+          throw error
+        }
         if (repositoryCustomer) return { found: true, data: repositoryCustomer }
 
         const index = customers.findIndex((customer) => customer.id === id)
         if (index < 0) return { found: true, data: { message: 'Customer not found' }, status: 404 }
+        if (isWalkInCustomerCode(customers[index].code) && 'preferred_bill_template' in patch) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'Walk-in customers cannot store bill template preference.')
+        }
         const group = patch.customer_group_id
           ? customerGroups.find((item) => item.id === patch.customer_group_id) ?? null
           : null
         const updated = {
           ...customers[index],
           code: patch.code ?? customers[index].code,
-          name: patch.name,
+          name: patch.name ?? customers[index].name,
           phone: patch.phone === undefined ? customers[index].phone : patch.phone,
           tax_code: patch.tax_code === undefined ? customers[index].tax_code : patch.tax_code,
           address: patch.address === undefined ? customers[index].address : patch.address,
@@ -3396,6 +3423,10 @@ async function getDevApiResponse(
           customer_group: patch.customer_group_id === undefined ? customers[index].customer_group : group,
           customer_type: patch.customer_type === undefined ? customers[index].customer_type : patch.customer_type,
           company_name: patch.company_name === undefined ? customers[index].company_name : patch.company_name,
+          preferred_bill_template:
+            patch.preferred_bill_template !== undefined
+              ? patch.preferred_bill_template
+              : customers[index].preferred_bill_template ?? null,
         }
         customers[index] = updated
         return { found: true, data: updated }
@@ -4966,6 +4997,10 @@ function nullableString(value: unknown) {
 
 function isBillTemplateId(value: unknown): value is OrganizationBillSettingsData['default_bill_template'] {
   return value === 'a4' || value === 'k80'
+}
+
+function isWalkInCustomerCode(code: string | null | undefined) {
+  return (code ?? '').trim().toLowerCase() === 'khachle'
 }
 
 function isBillLogoDataUrl(value: unknown): value is string {
