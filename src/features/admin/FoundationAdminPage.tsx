@@ -742,7 +742,7 @@ export function FoundationAdminPage({
                 onChange={(value) => setTemplateDraft((current) => ({ ...current, default_bill_template: value }))}
               />
               <p className="admin-settings-field-hint admin-settings-hint-block">
-                Giống KiotViet: A4 cho laser/PDF, K80 cho máy in nhiệt quầy. Nhiều mẫu đặt tên + editor HTML làm sau.
+                A4 cho laser/PDF gửi khách · K80 cho máy in nhiệt quầy. Có thể đổi lại khi in từng bill.
               </p>              <div className="admin-settings-form-grid">
                 <label>
                   Tiêu đề hóa đơn
