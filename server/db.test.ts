@@ -1087,7 +1087,11 @@ describe('createPgRepository product units', () => {
     })
 
     const stockInsertCall = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into stock_movements'))
+    const productLookupSql = String(pgMock.query.mock.calls.find(([sql]) => (
+      String(sql).includes('from products p') && String(sql).includes('product_unit_conversions puc')
+    ))?.[0])
     expect(result).toMatchObject({ receipts_created: 1, items_created: 1, skipped_rows: 0 })
+    expect(productLookupSql).toContain('join inventory_units sale_unit')
     expect(stockInsertCall?.[1]).toEqual(expect.arrayContaining([
       'product-bt',
       'purchase_receipt',

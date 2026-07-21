@@ -45,6 +45,13 @@ describe('purchase receipt calculations', () => {
     expect(defaultPhysicalPayload('sheet')).toEqual({ sheet_groups: [{ width_m: 1, length_m: 1, quantity: 1 }] })
     expect(purchaseUnitForProduct({ inventory_shape: 'roll' } as PurchaseReceiptProduct)).toBe('cuộn')
     expect(purchaseUnitForProduct({ inventory_shape: 'normal', unit_name: 'cái' } as PurchaseReceiptProduct)).toBe('cái')
+    expect(purchaseUnitForProduct({
+      inventory_shape: 'normal',
+      unit_name: 'm2',
+      unit_conversions: [
+        { source_code: 'B100', unit_name: 'Khổ 100', stock_qty_per_unit: 80, is_default_purchase_unit: true, is_default_sale_unit: false },
+      ],
+    } as PurchaseReceiptProduct)).toBe('Khổ 100')
   })
   it('summarizes receipt lists and posted supplier payments', () => {
     const receipt = {

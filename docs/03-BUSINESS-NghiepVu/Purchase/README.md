@@ -29,20 +29,20 @@
 
 ---
 
-## 2. Hiện trạng code (2026-07-20)
+## 2. Hiện trạng code (2026-07-21)
 
 | Slice / hạng mục | Runtime | Khớp SoT? |
 |---|---|---|
 | P1 Supplier list/detail/import/link | Có — dùng được trên dữ liệu đã import | Phần lớn |
 | List/detail phiếu nhập từ **import KV** (`purchase_receipt_snapshots`) | Có; PN posted import ghi `stock_movements.purchase_receipt` | Phần lớn (đọc lịch sử) |
-| P2 Live `POST/PATCH` tạo/sửa draft phiếu nhập | Handler **stub/fallback** trong `server/http.ts` — không thấy persist repository thật | **Không** |
-| P3 Live `POST .../post` hàng thường | **Stub** trả posted giả | **Không** |
+| P2 Live `POST/PATCH` tạo/sửa draft phiếu nhập | Có — lưu `purchase_receipt_snapshots` Postgres cho phiếu manual | Phần lớn |
+| P3 Live `POST .../post` hàng thường | Có — post phiếu manual, tăng `stock_movements`, cập nhật `latest_purchase_cost`, ghi công nợ/NCC total; nếu trả ngay thì ghi sổ quỹ | Phần lớn |
 | P4 Post object roll/sheet từ phiếu nhập | Chưa | **Không** (candidate) |
-| P5 Live trả NCC / `paySupplier` | **Stub/fallback** | **Không** |
+| P5 Live trả NCC / `paySupplier` | Có đường repository Postgres, nhưng cần nghiệm thu thêm UI trả NCC nhiều case | Một phần |
 | UI form draft / payload roll-sheet / form trả NCC | Có bề mặt UI | UI ahead of persist |
 | Import thêm file KV PN/NCC | **Đóng** theo Owner | — |
 
-**Đọc đúng:** vận hành hiện tại dựa trên **dữ liệu PN đã import**. Không coi “P2/P3/P5 đã merge” = live create/post/payment đã xong trên Postgres.
+**Đọc đúng:** vận hành hiện tại dùng cả PN import và PN manual. P2/P3 hàng thường đã test tạo thật trên `3202` với `PN000688` ngày 2026-07-21; P4 object cuộn/tấm và P5 trả NCC vẫn cần nghiệm thu sâu.
 
 ---
 
@@ -50,8 +50,8 @@
 
 > Owner 2026-07-21: **P4 đóng băng** — bản V1 dùng được tạm trên dữ liệu PN đã import; persist live + object cuộn/tấm = nâng cấp sau.
 
-- Persist thật P2 draft + P3 post hàng thường + P5 thanh toán NCC
 - P4 object cuộn/tấm khi post phiếu nhập
+- Nghiệm thu sâu P5 thanh toán NCC từ detail phiếu/NCC
 - Trả hàng nhập, đặt hàng nhập, báo cáo NCC nâng cao
 - Không mở lại queue “import KV PN”
 

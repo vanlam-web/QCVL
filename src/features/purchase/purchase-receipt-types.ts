@@ -17,6 +17,13 @@ export interface PurchaseReceiptProduct {
   latest_purchase_cost: number | null
   latest_purchase_cost_at: string | null
   inventory_shape: 'normal' | 'roll' | 'sheet'
+  unit_conversions?: Array<{
+    source_code: string | null
+    unit_name: string
+    stock_qty_per_unit: number
+    is_default_purchase_unit: boolean
+    is_default_sale_unit: boolean
+  }>
 }
 
 export interface RollPhysicalPayload {

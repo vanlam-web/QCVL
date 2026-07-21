@@ -1467,6 +1467,162 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows[0]?.data as PurchaseReceiptData | null ?? null
     },
 
+    async savePurchaseReceipt(input) {
+      await ensureImportedSnapshotTables(pool)
+      await pool.query(
+        `
+          insert into purchase_receipt_snapshots (id, organization_id, code, data, source_type, created_at, updated_at)
+          values ($1, $2, $3, $4::jsonb, $5, coalesce($6::timestamptz, now()), now())
+          on conflict (organization_id, code)
+          do update set data = excluded.data, source_type = excluded.source_type, updated_at = now()
+        `,
+        [
+          input.receipt.id,
+          input.organizationId,
+          input.receipt.code,
+          JSON.stringify(input.receipt),
+          input.sourceType,
+          input.receipt.created_at,
+        ],
+      )
+      await recomputeSupplierPurchaseTotals(pool, input.organizationId, input.receipt.supplier_id)
+      return input.receipt
+    },
+
+    async postPurchaseReceipt(input) {
+      await ensureImportedSnapshotTables(pool)
+      await ensureStockMovementsTable(pool)
+      await ensureProductCatalogSchema(pool)
+      await ensureSalesFinanceTables(pool)
+      const existing = await loadPurchaseReceiptSnapshot(pool, input.organizationId, input.id)
+      if (!existing) throw new Error('Purchase receipt not found')
+      if (existing.status !== 'draft') {
+        return {
+          purchase_receipt_id: existing.id,
+          status: 'posted' as const,
+          posted_at: existing.received_at,
+          cashbook_voucher_id: null,
+        }
+      }
+
+      const postedAt = new Date().toISOString()
+      const postedReceipt = {
+        ...existing,
+        status: 'posted' as const,
+        updated_at: postedAt,
+      } satisfies PurchaseReceiptData
+      const affectedProducts = await replacePurchaseReceiptStockMovements(pool, input.organizationId, postedReceipt)
+      await updateLatestPurchaseCostsFromReceipt(pool, input.organizationId, postedReceipt)
+
+      let cashbookVoucherId: string | null = null
+      if (postedReceipt.paid_amount > 0) {
+        const entry = await purchaseSupplierCashbookEntry(pool, {
+          organizationId: input.organizationId,
+          supplier: postedReceipt.supplier,
+          receipt: postedReceipt,
+          amount: postedReceipt.paid_amount,
+          paymentMethod: input.paymentMethod ?? 'cash',
+          financeAccountId: input.financeAccountId,
+          currentUser: input.currentUser,
+          note: `Thanh toán ${postedReceipt.code}`,
+          suffix: 'post',
+        })
+        await insertCashbookEntry(pool, input.organizationId, entry)
+        cashbookVoucherId = entry.id
+      }
+
+      await pool.query(
+        `
+          update purchase_receipt_snapshots
+          set data = $3::jsonb, updated_at = now()
+          where organization_id = $1 and id = $2
+        `,
+        [input.organizationId, existing.id, JSON.stringify(postedReceipt)],
+      )
+      await recomputeStockMovementBalances(pool, input.organizationId, affectedProducts)
+      await recomputeSupplierPurchaseTotals(pool, input.organizationId, postedReceipt.supplier_id)
+      return {
+        purchase_receipt_id: postedReceipt.id,
+        status: 'posted' as const,
+        posted_at: postedAt,
+        cashbook_voucher_id: cashbookVoucherId,
+      }
+    },
+
+    async paySupplier(input) {
+      await ensureImportedSnapshotTables(pool)
+      await ensureSalesFinanceTables(pool)
+      const validAllocations = input.allocations.filter((allocation) => allocation.amount > 0)
+      if (validAllocations.length === 0) throw new Error('No supplier payment allocations')
+
+      const receipts: PurchaseReceiptData[] = []
+      for (const allocation of validAllocations) {
+        const receipt = await loadPurchaseReceiptSnapshot(pool, input.organizationId, allocation.purchase_receipt_id)
+        if (!receipt) throw new Error('Purchase receipt not found')
+        receipts.push(receipt)
+      }
+      const firstReceipt = receipts[0]
+      const totalAmount = validAllocations.reduce((sum, allocation) => sum + allocation.amount, 0)
+      const entry = await purchaseSupplierCashbookEntry(pool, {
+        organizationId: input.organizationId,
+        supplier: firstReceipt.supplier,
+        receipt: firstReceipt,
+        amount: totalAmount,
+        paymentMethod: input.paymentMethod,
+        financeAccountId: input.financeAccountId,
+        currentUser: input.currentUser,
+        note: input.note ?? `Thanh toán NCC ${firstReceipt.supplier.name}`,
+        suffix: `pay-${Date.now()}`,
+      })
+
+      await pool.query('begin')
+      try {
+        await insertCashbookEntry(pool, input.organizationId, entry)
+        for (const [index, allocation] of validAllocations.entries()) {
+          const receipt = receipts[index]
+          const amount = Math.min(allocation.amount, Math.max(receipt.remaining_amount, 0))
+          const paidAmount = Math.min(receipt.payable_amount, receipt.paid_amount + amount)
+          const remainingAmount = Math.max(receipt.payable_amount - paidAmount, 0)
+          const payment = {
+            id: `${entry.id}-${index + 1}`,
+            code: entry.code,
+            paid_at: entry.created_at,
+            created_by: input.currentUser.user.display_name,
+            payment_method: input.paymentMethod,
+            status: 'posted' as const,
+            amount,
+          }
+          const updatedReceipt = {
+            ...receipt,
+            paid_amount: paidAmount,
+            remaining_amount: remainingAmount,
+            updated_at: entry.created_at,
+            supplier_payments: [...receipt.supplier_payments, payment] as unknown as PurchaseReceiptData['supplier_payments'],
+          } as PurchaseReceiptData
+          await pool.query(
+            `
+              update purchase_receipt_snapshots
+              set data = $3::jsonb, updated_at = now()
+              where organization_id = $1 and id = $2
+            `,
+            [input.organizationId, receipt.id, JSON.stringify(updatedReceipt)],
+          )
+        }
+        await pool.query('commit')
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+      await recomputeSupplierPurchaseTotals(pool, input.organizationId, input.supplierId)
+
+      return {
+        supplier_payment_id: entry.id,
+        code: entry.code,
+        amount: totalAmount,
+        cashbook_voucher_id: entry.id,
+      }
+    },
+
     async findPurchaseReceiptsByCodes(input) {
       await ensureImportedSnapshotTables(pool)
       const result = await pool.query(
@@ -5315,6 +5471,7 @@ type StockImportProduct = {
   track_inventory: boolean
   latest_purchase_cost: number | null
   factor: number
+  purchase_unit_name?: string | null
 }
 
 async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) {
@@ -5333,7 +5490,8 @@ async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) 
           jsonb_agg(
             jsonb_build_object(
               'source_code', puc.source_code,
-              'stock_qty_per_unit', puc.stock_qty_per_unit
+              'unit_name', sale_unit.name,
+              'stock_qty_per_unit', puc.stock_qty_per_sale_unit
             )
           ) filter (where puc.id is not null and puc.is_active = true),
           '[]'::jsonb
@@ -5343,6 +5501,10 @@ async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) 
         on puc.organization_id = p.organization_id
        and puc.product_id = p.id
        and puc.is_active = true
+      left join inventory_units sale_unit
+        on sale_unit.organization_id = p.organization_id
+       and sale_unit.id = puc.sale_unit_id
+       and sale_unit.is_active = true
       where p.organization_id = $1
       group by p.id
     `,
@@ -5364,15 +5526,258 @@ async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) 
       const sourceCode = baseKiotVietImportCode(String(conversion.source_code ?? ''))
       if (!sourceCode) continue
       const factor = Number(conversion.stock_qty_per_unit ?? 1)
-      products.set(sourceCode, { ...base, factor: factor > 0 ? factor : 1 })
+      products.set(sourceCode, {
+        ...base,
+        factor: factor > 0 ? factor : 1,
+        purchase_unit_name: String(conversion.unit_name ?? '').trim() || null,
+      })
     }
   }
   return products
 }
 
+function purchaseReceiptItemStockFactor(products: Map<string, StockImportProduct>, product: StockImportProduct, item: PurchaseReceiptData['items'][number]) {
+  const unitName = String(item.unit_name_snapshot ?? '').trim()
+  if (!unitName || unitName === product.unit_name) return 1
+  const conversion = [...products.values()].find((candidate) => (
+    candidate.id === product.id
+    && candidate.purchase_unit_name === unitName
+    && candidate.factor > 0
+  ))
+  return conversion?.factor ?? 1
+}
+
 function resolveStockProduct(products: Map<string, StockImportProduct>, productCode: string) {
   if (isDeletedKiotVietImportCode(productCode)) return null
   return products.get(baseKiotVietImportCode(productCode)) ?? null
+}
+
+function cashbookFinanceAccountFromPurchaseAccount(account: FinanceAccountData): CashbookEntryData['finance_account'] {
+  return {
+    id: account.id,
+    code: account.account_type === 'bank' ? account.account_number ?? account.code : account.code,
+    name: account.name,
+    account_type: account.account_type,
+    account_number: account.account_number,
+    account_holder: account.account_holder,
+  }
+}
+
+async function loadPurchaseReceiptSnapshot(pool: pg.Pool, organizationId: string, id: string) {
+  const result = await pool.query(
+    `
+      select data
+      from purchase_receipt_snapshots
+      where organization_id = $1
+        and (id = $2 or code = $2)
+      limit 1
+    `,
+    [organizationId, id],
+  )
+  return result.rows[0]?.data as PurchaseReceiptData | null ?? null
+}
+
+async function purchaseSupplierCashbookEntry(
+  pool: pg.Pool,
+  input: {
+    organizationId: string
+    supplier: PurchaseReceiptData['supplier']
+    receipt: PurchaseReceiptData
+    amount: number
+    paymentMethod: 'cash' | 'bank_transfer'
+    financeAccountId?: string
+    currentUser: CurrentUserData
+    note: string
+    suffix: string
+  },
+) {
+  const account = await resolveFinanceAccountForPurchasePayment(pool, input.organizationId, input.paymentMethod, input.financeAccountId)
+  const code = nextPurchaseSupplierPaymentCode(input.receipt.code, input.suffix)
+  return {
+    id: `cashbook-voucher-${randomUUID()}`,
+    code,
+    status: 'posted',
+    direction: 'out',
+    amount_delta: -Math.max(input.amount, 0),
+    finance_account: cashbookFinanceAccountFromPurchaseAccount(account),
+    is_business_accounted: true,
+    source_type: 'purchase_supplier_payment',
+    created_at: new Date().toISOString(),
+    note: input.note,
+    counterparty: {
+      type: 'supplier',
+      name: input.supplier.name,
+      phone: null,
+    },
+    created_by: { id: input.currentUser.user.id, name: input.currentUser.user.display_name },
+    source: {
+      type: 'purchase_supplier_payment',
+      id: code,
+      code,
+      order_code: input.receipt.code,
+      source_note: input.note,
+    },
+    allocations: [{
+      order_id: input.receipt.id,
+      order_code: input.receipt.code,
+      order_total_amount: input.receipt.payable_amount,
+      collected_before: Math.max(input.receipt.paid_amount, 0),
+      allocated_amount: Math.max(input.amount, 0),
+      remaining_after: Math.max(input.receipt.remaining_amount - input.amount, 0),
+    }],
+    payment_method: input.paymentMethod,
+  } satisfies CashbookEntryData
+}
+
+async function resolveFinanceAccountForPurchasePayment(
+  pool: pg.Pool,
+  organizationId: string,
+  paymentMethod: 'cash' | 'bank_transfer',
+  financeAccountId?: string,
+) {
+  await ensureFinanceAccountsTable(pool)
+  const accountId = financeAccountId?.trim()
+  if (accountId) {
+    const result = await pool.query(
+      `
+        select id, code, name, account_type, is_default_cash, is_active,
+               account_number, account_holder, opening_balance, note, notify_on_transaction
+        from finance_accounts
+        where organization_id = $1 and id = $2
+        limit 1
+      `,
+      [organizationId, accountId],
+    )
+    const row = result.rows[0]
+    if (!row) throw new Error('Finance account not found')
+    return mapFinanceAccountRow(row)
+  }
+  const fallbackType = paymentMethod === 'bank_transfer' ? 'bank' : 'cash'
+  const result = await pool.query(
+    `
+      select id, code, name, account_type, is_default_cash, is_active,
+             account_number, account_holder, opening_balance, note, notify_on_transaction
+      from finance_accounts
+      where organization_id = $1 and account_type = $2 and is_active = true
+      order by is_default_cash desc, name asc
+      limit 1
+    `,
+    [organizationId, fallbackType],
+  )
+  const row = result.rows[0]
+  if (!row) throw new Error('Finance account not found')
+  return mapFinanceAccountRow(row)
+}
+
+function nextPurchaseSupplierPaymentCode(receiptCode: string, suffix: string) {
+  const code = receiptCode.trim().toUpperCase()
+  const match = code.match(/^PN(\d{6}(?:\.\d+)?)$/)
+  if (match) return `PCPN${match[1]}${suffix ? `-${suffix}` : ''}`
+  return `PCPN${suffix ? `-${suffix}` : ''}`
+}
+
+async function recomputeSupplierPurchaseTotals(pool: pg.Pool, organizationId: string, supplierId?: string | null) {
+  await ensureImportedSnapshotTables(pool)
+  const supplierResult = await pool.query(
+    `
+      select id, data
+      from supplier_snapshots
+      where organization_id = $1
+        and ($2::text is null or id = $2::text)
+    `,
+    [organizationId, supplierId ?? null],
+  )
+  const receiptResult = await pool.query(
+    `
+      select data
+      from purchase_receipt_snapshots
+      where organization_id = $1
+        and ($2::text is null or data->'supplier'->>'id' = $2::text or data->>'supplier_id' = $2::text)
+    `,
+    [organizationId, supplierId ?? null],
+  )
+  const totals = new Map<string, { total_purchase_amount: number; current_payable_amount: number }>()
+  for (const row of receiptResult.rows) {
+    const receipt = row.data as PurchaseReceiptData
+    if (receipt.status !== 'posted') continue
+    const supplierKey = receipt.supplier?.id ?? receipt.supplier_id
+    if (!supplierKey) continue
+    const current = totals.get(supplierKey) ?? { total_purchase_amount: 0, current_payable_amount: 0 }
+    current.total_purchase_amount += Number(receipt.payable_amount || 0)
+    current.current_payable_amount += Number(receipt.remaining_amount || 0)
+    totals.set(supplierKey, current)
+  }
+  await pool.query('begin')
+  try {
+    for (const row of supplierResult.rows) {
+      const current = row.data as SupplierListData
+      const total = totals.get(current.id) ?? { total_purchase_amount: 0, current_payable_amount: 0 }
+      const next = {
+        ...current,
+        total_purchase_amount: total.total_purchase_amount,
+        current_payable_amount: total.current_payable_amount,
+      } satisfies SupplierListData
+      await pool.query(
+        `
+          update supplier_snapshots
+          set data = $3::jsonb, updated_at = now()
+          where organization_id = $1 and id = $2
+        `,
+        [organizationId, current.id, JSON.stringify(next)],
+      )
+    }
+    await pool.query('commit')
+  } catch (error) {
+    await pool.query('rollback')
+    throw error
+  }
+}
+
+async function replacePurchaseReceiptStockMovements(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData) {
+  await ensureStockMovementsTable(pool)
+  await deleteStockMovementsForDocument(pool, organizationId, 'purchase_receipt', receipt.code)
+  const products = await stockProductsByImportCode(pool, organizationId)
+  let endingQty = 0
+  const affectedProducts = new Set<string>()
+  for (const [index, item] of receipt.items.entries()) {
+    const product = [...products.values()].find((candidate) => candidate.id === item.product_id)
+    if (!product?.track_inventory) continue
+    const quantityDelta = Number(item.quantity || 0) * purchaseReceiptItemStockFactor(products, product, item)
+    if (quantityDelta <= 0) continue
+    endingQty += quantityDelta
+    affectedProducts.add(product.id)
+    await insertStockMovement(pool, organizationId, {
+      id: stableUuidFromText(`stock-movement-manual-purchase-${receipt.code}-${index + 1}`),
+      productId: product.id,
+      movementType: 'purchase_receipt',
+      quantityDelta,
+      endingQty,
+      documentType: 'purchase_receipt',
+      documentCode: receipt.code,
+      transactionPrice: item.unit_cost,
+      costPrice: item.unit_cost,
+      partnerName: receipt.supplier.name,
+      createdAt: receipt.received_at,
+    })
+  }
+  return affectedProducts
+}
+
+async function updateLatestPurchaseCostsFromReceipt(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData) {
+  await ensureProductCatalogSchema(pool)
+  for (const item of receipt.items) {
+    await pool.query(
+      `
+        update products
+        set latest_purchase_cost = $3,
+            latest_purchase_cost_at = now(),
+            updated_at = now()
+        where organization_id = $1
+          and id = $2
+      `,
+      [organizationId, item.product_id, item.unit_cost],
+    )
+  }
 }
 
 type DraftBomComponent = {

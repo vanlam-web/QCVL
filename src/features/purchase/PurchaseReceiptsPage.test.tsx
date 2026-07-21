@@ -72,6 +72,21 @@ const products = [
     latest_purchase_cost_at: null,
     inventory_shape: 'roll' as const,
   },
+  {
+    id: 'product-4',
+    code: 'BT',
+    name: 'Bạt 300g Ojet Tím',
+    status: 'active' as const,
+    unit_name: 'm2',
+    sell_method: 'area_m2' as const,
+    latest_purchase_cost: 9715,
+    latest_purchase_cost_at: null,
+    inventory_shape: 'normal' as const,
+    unit_conversions: [
+      { source_code: 'B100', unit_name: 'Khổ 100', stock_qty_per_unit: 80, is_default_purchase_unit: true, is_default_sale_unit: false },
+      { source_code: 'B260', unit_name: 'Khổ 260', stock_qty_per_unit: 208, is_default_purchase_unit: true, is_default_sale_unit: false },
+    ],
+  },
 ]
 
 const remoteCodeProduct = {
@@ -210,7 +225,22 @@ function makeService(overrides: Partial<PurchaseReceiptService> = {}): PurchaseR
     })),
     deleteImportedKiotVietPurchaseReceipts: vi.fn(async () => ({ deleted_rows: 1, blocked_rows: 0 })),
     listSuppliers: vi.fn(async () => ({ items: suppliers, page: 1, page_size: 20, total: 1 })),
-    listProducts: vi.fn(async () => ({ items: products, page: 1, page_size: 20, total: 2 })),
+    createSupplier: vi.fn(async (input: Parameters<PurchaseReceiptService['createSupplier']>[0]) => ({
+      id: 'supplier-created',
+      code: input.code || 'NCC000039',
+      name: input.name,
+      phone: input.phone || null,
+      email: input.email || null,
+      address: input.address || null,
+      tax_code: input.tax_code || null,
+      linked_customer_id: null,
+      linked_customer: null,
+      notes: input.notes || null,
+      status: 'active' as const,
+      current_payable_amount: 0,
+      total_purchase_amount: 0,
+    })),
+    listProducts: vi.fn(async () => ({ items: products, page: 1, page_size: 20, total: products.length })),
     createProduct: vi.fn(async () => products[0]),
     listFinanceAccounts: vi.fn(async () => ({
       items: [
@@ -507,17 +537,23 @@ it('opens purchase receipt create workspace from the plus action', async () => {
   await userEvent.keyboard('{Enter}')
   expect(within(workspace).queryByLabelText('Sản phẩm dòng 1')).not.toBeInTheDocument()
   expect(within(workspace).getByRole('list', { name: 'Dòng hàng phiếu nhập mới' })).toHaveClass('pos-cart-lines')
-  expect(within(workspace).getByLabelText('Cột dòng hàng nhập')).toHaveTextContent('STTMã hàngTên hàngĐVTSố lượngĐơn giáGiảm giáThành tiền')
+  expect(within(workspace).getByLabelText('Cột dòng hàng nhập')).toHaveTextContent('STTTên hàngSLĐVTĐơn giáGiảm giáThành tiền')
   expect(within(workspace).getByText('Decal sữa')).toBeInTheDocument()
   expect(within(workspace).getByText('SP0001')).toBeInTheDocument()
   expect(within(workspace).getByLabelText('Đơn vị dòng 1')).toHaveValue('m')
-  expect(within(workspace).getByLabelText('Số lượng dòng 1')).toHaveValue(1)
-  expect(within(workspace).getByLabelText('Đơn giá dòng 1')).toHaveValue(85000)
+  expect(within(workspace).getByLabelText('Số lượng dòng 1')).toHaveValue('1')
+  expect(within(workspace).getByLabelText('Đơn giá dòng 1')).toHaveValue('85 000')
   expect(screen.queryByRole('button', { name: 'Xóa tìm kiếm' })).not.toBeInTheDocument()
   expect(within(workspace).queryByRole('table', { name: 'Dòng hàng phiếu nhập mới' })).not.toBeInTheDocument()
 
   const form = within(workspace).getByRole('form', { name: 'Thông tin phiếu nhập' })
+  const selectedSupplier = within(form).getByRole('group', { name: 'Nhà cung cấp đã chọn' })
+  expect(selectedSupplier).toHaveTextContent('Nguyễn Phong')
+  expect(selectedSupplier).toHaveTextContent('NCC000031')
   expect(within(form).queryByLabelText('Nhà cung cấp')).not.toBeInTheDocument()
+  await userEvent.keyboard('{F4}')
+  expect(within(form).getByLabelText('Nhà cung cấp')).toHaveFocus()
+  await userEvent.keyboard('{Escape}')
   const receivedAtInput = within(form).getByLabelText('Thời gian nhập')
   const sideTopRow = receivedAtInput.closest('.purchase-receipt-workspace-side-top-row')
   expect(sideTopRow).not.toBeNull()
@@ -545,7 +581,73 @@ it('opens a blank purchase receipt create workspace from the create route', asyn
   expect(screen.getByRole('heading', { name: 'Nhập hàng' })).toBeInTheDocument()
   expect(screen.queryByRole('search', { name: 'Lọc phiếu nhập' })).not.toBeInTheDocument()
   expect(within(workspace).getByRole('form', { name: 'Thông tin phiếu nhập' })).toBeInTheDocument()
+  expect(within(workspace).getByRole('group', { name: 'Nhà cung cấp đã chọn' })).toHaveTextContent('Nguyễn Phong')
   expect(within(workspace).getByLabelText('Mã phiếu nhập')).toHaveValue('')
+})
+
+it('searches suppliers from the purchase receipt create workspace like POS customer search', async () => {
+  const standeeSupplier = {
+    ...suppliers[0],
+    id: 'supplier-2',
+    code: 'NCC000036',
+    name: 'Standee',
+  }
+  const service = makeService({
+    listSuppliers: vi.fn(async () => ({ items: [...suppliers, standeeSupplier], page: 1, page_size: 20, total: 2 })),
+  })
+
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  expect(within(form).getByRole('group', { name: 'Nhà cung cấp đã chọn' })).toHaveTextContent('Nguyễn Phong')
+  await userEvent.click(within(form).getByRole('button', { name: 'Bỏ nhà cung cấp Nguyễn Phong' }))
+  const supplierSearch = within(form).getByLabelText('Nhà cung cấp')
+  expect(supplierSearch).toHaveFocus()
+
+  await userEvent.type(supplierSearch, 'stan')
+
+  const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý nhà cung cấp' })
+  expect(suggestions).toHaveTextContent('Standee')
+  await userEvent.click(within(suggestions).getByRole('option', { name: 'Chọn nhà cung cấp NCC000036 Standee' }))
+  expect(within(form).getByRole('group', { name: 'Nhà cung cấp đã chọn' })).toHaveTextContent('Standee')
+
+  await addProductToCreateReceipt('SP0001')
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
+
+  expect(service.createReceipt).toHaveBeenCalledWith(expect.objectContaining({
+    supplier_id: 'supplier-2',
+  }))
+})
+
+it('quick creates a supplier from the purchase receipt create workspace and selects it', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage createMode currentUser={currentUser} service={service} onOpenDashboard={vi.fn()} />)
+
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  await userEvent.click(within(form).getByRole('button', { name: 'Bỏ nhà cung cấp Nguyễn Phong' }))
+  const supplierSearch = within(form).getByLabelText('Nhà cung cấp')
+  await userEvent.type(supplierSearch, 'Nhà cung cấp mới')
+  await userEvent.click(within(form).getByRole('button', { name: 'Thêm nhanh NCC' }))
+
+  const dialog = await screen.findByRole('dialog', { name: 'Thêm nhanh nhà cung cấp' })
+  expect(within(dialog).getByLabelText('Tên NCC')).toHaveValue('Nhà cung cấp mới')
+  await userEvent.type(within(dialog).getByLabelText('Điện thoại'), '0901234567')
+  await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu NCC' }))
+
+  await waitFor(() => expect(service.createSupplier).toHaveBeenCalledWith(expect.objectContaining({
+    code: '',
+    name: 'Nhà cung cấp mới',
+    phone: '0901234567',
+    status: 'active',
+  })))
+  expect(within(form).getByRole('group', { name: 'Nhà cung cấp đã chọn' })).toHaveTextContent('Nhà cung cấp mới')
+
+  await addProductToCreateReceipt('SP0001')
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
+  expect(service.createReceipt).toHaveBeenCalledWith(expect.objectContaining({
+    supplier_id: 'supplier-created',
+  }))
 })
 
 it('shows the purchase receipt create workspace immediately while lookups are loading', () => {
@@ -609,7 +711,7 @@ it('restores the in-progress purchase receipt create workspace after remounting'
   expect(within(restoredForm).getByLabelText('Số hóa đơn đầu vào')).toHaveValue('HD-DANG-NHAP')
   expect(within(restoredForm).getByText('SP0001')).toBeInTheDocument()
   expect(within(restoredForm).getByText('Decal sữa')).toBeInTheDocument()
-  expect(within(restoredForm).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+  expect(within(restoredForm).getByLabelText('Số lượng dòng 1')).toHaveValue('3')
 })
 
 it('keeps an in-progress purchase receipt draft when leaving the create page', async () => {
@@ -809,6 +911,53 @@ it('creates a draft receipt for normal items with computed totals shown locally'
   })
 })
 
+it('lets purchase receipts choose import units from product conversions', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  await addProductToCreateReceipt('BT')
+
+  const unitSelect = within(form).getByRole('combobox', { name: 'Đơn vị dòng 1' })
+  expect(unitSelect).toHaveValue('Khổ 100')
+  await userEvent.selectOptions(unitSelect, 'Khổ 260')
+
+  await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
+
+  expect(service.createReceipt).toHaveBeenCalledWith(expect.objectContaining({
+    items: [expect.objectContaining({
+      product_id: 'product-4',
+      unit_name: 'Khổ 260',
+    })],
+  }))
+})
+
+it('creates and posts a new purchase receipt from the create workspace complete action', async () => {
+  const service = makeService()
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu nhập' }))
+  const form = await screen.findByRole('form', { name: 'Thông tin phiếu nhập' })
+  await userEvent.clear(within(form).getByLabelText('Thời gian nhập'))
+  await userEvent.type(within(form).getByLabelText('Thời gian nhập'), '01/07/2026 10:00')
+  await userEvent.type(within(form).getByLabelText('Số hóa đơn đầu vào'), 'HD-NCC-POST')
+  await addProductToCreateReceipt('SP0001')
+  await userEvent.clear(within(form).getByLabelText('Số lượng dòng 1'))
+  await userEvent.type(within(form).getByLabelText('Số lượng dòng 1'), '2')
+  await userEvent.click(within(form).getByRole('button', { name: 'Hoàn thành' }))
+
+  expect(service.createReceipt).toHaveBeenCalledWith(expect.objectContaining({
+    supplier_document_no: 'HD-NCC-POST',
+    items: [expect.objectContaining({ product_id: 'product-1', quantity: 2 })],
+  }))
+  expect(service.postReceipt).toHaveBeenCalledWith('receipt-1', {})
+})
+
 it('creates a roll draft line from physical roll lengths without manual object codes', async () => {
   const service = makeService()
 
@@ -826,7 +975,7 @@ it('creates a roll draft line from physical roll lengths without manual object c
   await userEvent.type(within(form).getByLabelText('Khổ rộng cuộn dòng 1'), '3.2')
   await userEvent.clear(within(form).getByLabelText('Chiều dài từng cuộn dòng 1'))
   await userEvent.type(within(form).getByLabelText('Chiều dài từng cuộn dòng 1'), '50, 50, 45')
-  expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+  expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue('3')
   expect(within(form).getByText('3 cuộn, khổ 3.2m, tổng 464.000 m²')).toBeInTheDocument()
 
   await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
@@ -868,7 +1017,7 @@ it('creates a sheet draft line with multiple size groups', async () => {
   await userEvent.type(within(form).getByLabelText('Rộng nhóm 2 dòng 1'), '1')
   await userEvent.clear(within(form).getByLabelText('Dài nhóm 2 dòng 1'))
   await userEvent.type(within(form).getByLabelText('Dài nhóm 2 dòng 1'), '2')
-  expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue(3)
+  expect(within(form).getByLabelText('Số lượng dòng 1')).toHaveValue('3')
   expect(within(form).getByText('3 tấm, 2 nhóm kích thước, tổng 7.954 m²')).toBeInTheDocument()
 
   await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
@@ -1043,6 +1192,9 @@ it('warns on low purchase cost and posts with a selected bank account', async ()
   await userEvent.selectOptions(within(form).getByLabelText('Tài khoản chuyển khoản'), 'bank-1')
   await userEvent.click(within(detail).getByRole('button', { name: 'Hoàn thành nhập hàng' }))
 
+  expect(service.updateReceipt).toHaveBeenCalledWith('receipt-1', expect.objectContaining({
+    items: [expect.objectContaining({ unit_cost: 80000 })],
+  }))
   expect(service.postReceipt).toHaveBeenCalledWith('receipt-1', {
     payment_method: 'bank_transfer',
     finance_account_id: 'bank-1',

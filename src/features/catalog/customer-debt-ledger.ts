@@ -1,4 +1,5 @@
 import { managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { appRoutes } from '../../app/routes'
 import { parseDateTimeValue } from '../../lib/date-format'
 import type { CashbookEntry } from '../finance/types'
 import type { CustomerDebtDetail } from '../orders/order-service'
@@ -118,7 +119,7 @@ export function customerDebtHasLiveLedger(debt: CustomerDebtDetail) {
 }
 
 function customerDebtAdjustmentHref(code: string) {
-  if (/^PN/i.test(code)) return managementRecordOpenHref('/purchase/receipts', code)
+  if (/^PN/i.test(code)) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
   return null
 }
 

@@ -145,6 +145,61 @@ Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm
 - Khối thông tin phiếu nằm bên phải, dùng phong cách `ManagementFilterSidebar`: chọn nhà cung cấp, mã phiếu, thời gian nhập, số hóa đơn đầu vào, giảm giá phiếu, đã trả tạm, tổng tiền hàng, tổng nợ, ghi chú.
 - Kho mặc định trong MVP; chưa cần chọn nhiều kho.
 
+### 5.1. Chọn nhà cung cấp trong màn tạo phiếu
+
+Quyết định Owner 2026-07-21: control chọn NCC trong `/receipts/new` phải bám theo mô hình POS `Tìm khách hàng`, chỉ đổi vai trò từ **Khách hàng** sang **Nhà cung cấp**.
+
+Nguồn UX tham chiếu:
+
+- POS `K03-A`: khi chưa chọn khách thì hiện ô `Tìm khách hàng (F4)` và gợi ý; khi đã chọn khách thì ô tìm được thay bằng khối `Khách đã chọn`.
+- Purchase áp dụng cùng pattern: khi chưa chọn NCC thì hiện ô `Tìm NCC`; khi đã chọn NCC thì ô tìm được thay bằng khối `Nhà cung cấp đã chọn`.
+- KiotViet `Nhập hàng` hướng dẫn chọn NCC bằng ô `Tìm nhà cung cấp (F4)` hoặc nhấn biểu tượng `+` để thêm NCC mới ngay trong phiếu nhập.
+- KiotViet `Nhà cung cấp` cũng ghi nhận có thể thêm nhanh NCC trong quá trình tạo phiếu `Nhập hàng`/`Đặt hàng nhập`/`Trả hàng nhập`; QC-OMS chỉ làm trong `Nhập hàng` trước.
+
+Trạng thái bắt buộc:
+
+| Trạng thái | Hiển thị | Hành vi |
+|---|---|---|
+| Chưa chọn NCC | Ô tìm `Tìm NCC theo mã hoặc tên`, icon tìm kiếm, nút `+` thêm nhanh NCC, gợi ý NCC bên dưới khi gõ/focus | Gõ mã/tên/SĐT/MST để lọc; `F4` focus ô tìm; Enter chọn gợi ý đầu; click gợi ý để chọn |
+| Đã chọn NCC | Khối `Nhà cung cấp đã chọn` gồm chip tên NCC, mã NCC, có thể thêm SĐT/nợ cần trả nếu dữ liệu có; có nút bỏ chọn `×` | Không hiển thị input tìm; click chip sau này có thể mở chi tiết NCC; bấm `×` quay lại trạng thái tìm |
+
+Quy tắc gợi ý NCC:
+
+- Tìm không dấu theo mã NCC, tên NCC, số điện thoại và MST.
+- Mỗi gợi ý trong panel hẹp hiển thị theo bố cục dọc, không ép 3 cột:
+  - Dòng 1: tên NCC.
+  - Dòng 2: mã NCC.
+  - Dòng 3: số điện thoại nếu có.
+- Không cắt tên NCC sớm như cột ngang; nếu quá dài mới ellipsis ở cuối dòng.
+- Danh sách gợi ý đóng khi click ra ngoài, chọn NCC, hoặc bỏ focus hợp lý.
+- Nếu người dùng gõ chữ nhưng chưa chọn một NCC hợp lệ, không cho lưu/hoàn thành phiếu và báo rõ `Chọn nhà cung cấp trong danh sách gợi ý.`
+- Nếu không có NCC phù hợp, hiển thị empty state ngắn và cho dùng nút `+` để thêm nhanh.
+
+Quy tắc khối NCC đã chọn:
+
+- Dùng cùng nhịp thị giác với `.customer-selected` của POS: chip tên/mã ở dòng chính, thông tin phụ ở dòng dưới hoặc bên cạnh nếu đủ chỗ.
+- Phải có nút bỏ chọn rõ ràng để đổi NCC, giống POS bỏ khách.
+- Khi bỏ chọn NCC, form chưa bị xóa dòng hàng; chỉ quay về ô tìm NCC.
+- Nếu form đã có hàng và đổi NCC, giá nhập dòng hàng không tự đổi vì giá mua thuộc dòng phiếu; chỉ NCC/công nợ thay đổi.
+- Không dùng native `<select>` trong màn tạo phiếu mới.
+
+Quy tắc thêm nhanh NCC:
+
+- Nút `+` cạnh ô tìm NCC mở form thêm nhanh NCC.
+- Form thêm nhanh chỉ yêu cầu tối thiểu tên NCC; mã NCC tự sinh nếu bỏ trống theo quy tắc BR-PUR-01.
+- SĐT, email, địa chỉ, MST, ghi chú là tùy chọn.
+- Sau khi lưu NCC mới thành công, tự chọn NCC đó vào phiếu đang tạo và chuyển sang khối `Nhà cung cấp đã chọn`.
+- Nếu đang nhập dở dòng hàng, thêm nhanh NCC không làm mất dòng hàng.
+- QC-OMS không làm `Đặt hàng nhập`/`Trả hàng nhập` trong lát cắt này, nên nút thêm nhanh chỉ áp dụng cho `/receipts/new`.
+
+Trạng thái runtime 2026-07-21:
+
+- Runtime đã thay native select bằng ô search NCC.
+- Trạng thái đã chọn NCC hiển thị khối `Nhà cung cấp đã chọn` theo pattern POS.
+- `F4` focus ô tìm NCC khi chưa chọn NCC.
+- Nút `+` mở thêm nhanh NCC; lưu thành công tự chọn NCC mới.
+- Đã có test cho trạng thái chọn/bỏ chọn, validation khi gõ chưa chọn, `F4` focus và thêm nhanh NCC.
+
 ### Dòng hàng thường
 
 - Dòng hàng sau khi chọn từ search hiển thị dạng card/list giống dòng hàng POS, không dùng bảng/dropdown chọn sản phẩm trong màn tạo mới.
@@ -235,10 +290,10 @@ Không hiển thị menu/chức năng trong lát cắt đầu tiên:
 | Slice | UI bật | UI chưa bật |
 |---|---|---|
 | P1 Supplier foundation | Danh sách NCC, tạo/sửa NCC, liên kết khách hàng | Đã merge |
-| P2 Purchase draft/list/detail | Danh sách phiếu nhập, tạo/sửa draft hàng thường | **SoT đã chốt; runtime live create/post còn HTTP stub** — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md) |
-| P3 Post normal receipt | Nút Hoàn thành cho hàng thường, cập nhật giá nhập cuối | **SoT đã chốt; runtime live post còn stub** — Purchase README |
+| P2 Purchase draft/list/detail | Danh sách phiếu nhập, tạo/sửa draft hàng thường | Runtime live lưu `purchase_receipt_snapshots` Postgres cho phiếu manual — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md) |
+| P3 Post normal receipt | Nút Hoàn thành cho hàng thường, cập nhật giá nhập cuối | Runtime live post hàng thường; đã test tạo `PN000688` trên `3202` ngày 2026-07-21 |
 | P4 Roll/sheet purchase | Form tạo draft đã nhập được cuộn/tấm vật lý trong card dòng hàng | Post object vật lý/sửa posted nâng cao |
-| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | **SoT đã chốt; runtime live pay còn stub một phần** — Purchase README; trả nhiều tài khoản trong một lần để sau |
+| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | Runtime có đường repository Postgres, cần nghiệm thu thêm nhiều case UI — Purchase README; trả nhiều tài khoản trong một lần để sau |
 
 Lưu ý UI: tab NCC được giữ để đúng bố cục KiotViet/QCVL, nhưng khi backend chưa có lịch sử nhập/trả hàng hoặc danh sách công nợ chi tiết đầy đủ, frontend chỉ hiển thị empty note rõ và không dựng dữ liệu giả.
 
@@ -322,7 +377,7 @@ Current decision 2026-07-12:
 
 ### 9.2. Purchase draft P2
 
-P2 SoT đã chốt; **runtime create/post live vẫn stub** (xem Purchase README). Phạm vi:
+P2 SoT đã chốt; runtime 2026-07-21 đã tạo/sửa draft manual qua repository Postgres. Phạm vi:
 
 - form tạo phiếu nhập draft
 - chọn NCC
@@ -339,7 +394,7 @@ P2 dùng kho mặc định. Quy tắc có cho sửa mã `PN...` khi draft hay kh
 
 ### 9.3. Supplier payment P5
 
-P5 SoT đã chốt; **runtime live pay còn stub một phần**. KiotViet audit 2026-07-02 đã xác nhận mã thanh toán NCC dạng `PCPN...`, lịch sử thanh toán nằm trong chi tiết phiếu nhập, và action thanh toán nằm trong tab công nợ NCC.
+P5 SoT đã chốt; runtime live pay có đường repository Postgres nhưng cần nghiệm thu thêm nhiều case UI. KiotViet audit 2026-07-02 đã xác nhận mã thanh toán NCC dạng `PCPN...`, lịch sử thanh toán nằm trong chi tiết phiếu nhập, và action thanh toán nằm trong tab công nợ NCC.
 
 Quyết định Owner đã chốt:
 

@@ -1373,7 +1373,7 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
   const invoiceRow = within(debtHistoryTable).getByRole('row', { name: /HD000007\.03/ })
   expect(within(invoiceRow).getAllByRole('cell')[4]).toHaveTextContent('1 790 400')
   const receiptRow = within(debtHistoryTable).getByRole('row', { name: /PN000449/ })
-  expect(within(receiptRow).getByRole('link', { name: 'PN000449' })).toHaveAttribute('href', '/purchase/receipts?open=PN000449')
+  expect(within(receiptRow).getByRole('link', { name: 'PN000449' })).toHaveAttribute('href', '/receipts?open=PN000449')
   expect(within(receiptRow).getAllByRole('cell')[3]).toHaveTextContent('-280 320')
   expect(within(receiptRow).getAllByRole('cell')[4]).toHaveTextContent('1 510 080')
 })

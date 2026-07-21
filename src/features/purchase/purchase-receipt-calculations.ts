@@ -27,6 +27,8 @@ export function defaultPhysicalPayload(shape: PurchaseReceiptInputItem['inventor
 export function purchaseUnitForProduct(product?: PurchaseReceiptProduct) {
   if (product?.inventory_shape === 'roll') return 'cuộn'
   if (product?.inventory_shape === 'sheet') return 'tấm'
+  const defaultPurchaseUnit = product?.unit_conversions?.find((conversion) => conversion.is_default_purchase_unit)
+  if (defaultPurchaseUnit) return defaultPurchaseUnit.unit_name
   return product?.unit_name ?? ''
 }
 

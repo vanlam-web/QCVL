@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
@@ -1237,6 +1238,95 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     async getPurchaseReceipt(input) {
       return [...purchaseReceipts.values()].find((receipt) => receipt.id === input.id || receipt.code === input.id) ?? null
     },
+    async savePurchaseReceipt(input) {
+      purchaseReceipts.set(input.receipt.code, input.receipt)
+      recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return input.receipt
+    },
+    async postPurchaseReceipt(input) {
+      const receipt = [...purchaseReceipts.values()].find((item) => item.id === input.id || item.code === input.id)
+      if (!receipt) throw new Error('Purchase receipt not found')
+      const postedAt = new Date().toISOString()
+      const postedReceipt = { ...receipt, status: 'posted' as const, updated_at: postedAt } as PurchaseReceiptData
+      purchaseReceipts.set(postedReceipt.code, postedReceipt)
+      for (const item of postedReceipt.items) {
+        const product = [...products.values()].find((candidate) => candidate.id === item.product_id)
+        if (!product) continue
+        products.set(product.code, { ...product, latest_purchase_cost: item.unit_cost, latest_purchase_cost_at: postedAt, updated_at: postedAt })
+      }
+      let cashbookVoucherId: string | null = null
+      if (postedReceipt.paid_amount > 0) {
+        const account = resolvePurchasePaymentAccount(financeAccounts, input.paymentMethod ?? 'cash', input.financeAccountId)
+        const entry = purchaseSupplierCashbookEntryData({
+          account,
+          receipt: postedReceipt,
+          amount: postedReceipt.paid_amount,
+          paymentMethod: input.paymentMethod ?? 'cash',
+          currentUser: input.currentUser,
+          note: `Thanh toán ${postedReceipt.code}`,
+          suffix: 'post',
+        })
+        cashbookEntries.set(entry.id, entry)
+        cashbookVoucherId = entry.id
+      }
+      recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return {
+        purchase_receipt_id: postedReceipt.id,
+        status: 'posted' as const,
+        posted_at: postedAt,
+        cashbook_voucher_id: cashbookVoucherId,
+      }
+    },
+    async paySupplier(input) {
+      const validAllocations = input.allocations.filter((allocation) => allocation.amount > 0)
+      const firstReceipt = validAllocations
+        .map((allocation) => [...purchaseReceipts.values()].find((receipt) => receipt.id === allocation.purchase_receipt_id || receipt.code === allocation.purchase_receipt_id))
+        .find((receipt): receipt is PurchaseReceiptData => Boolean(receipt))
+      if (!firstReceipt) throw new Error('Purchase receipt not found')
+      const amount = validAllocations.reduce((sum, allocation) => sum + allocation.amount, 0)
+      const account = resolvePurchasePaymentAccount(financeAccounts, input.paymentMethod, input.financeAccountId)
+      const entry = purchaseSupplierCashbookEntryData({
+        account,
+        receipt: firstReceipt,
+        amount,
+        paymentMethod: input.paymentMethod,
+        currentUser: input.currentUser,
+        note: input.note ?? `Thanh toán NCC ${firstReceipt.supplier.name}`,
+        suffix: `pay-${Date.now()}`,
+      })
+      cashbookEntries.set(entry.id, entry)
+      for (const [index, allocation] of validAllocations.entries()) {
+        const receipt = [...purchaseReceipts.values()].find((item) => item.id === allocation.purchase_receipt_id || item.code === allocation.purchase_receipt_id)
+        if (!receipt) continue
+        const paidAmount = Math.min(receipt.payable_amount, receipt.paid_amount + allocation.amount)
+        const payment = {
+          id: `${entry.id}-${index + 1}`,
+          code: entry.code,
+          paid_at: entry.created_at,
+          created_by: input.currentUser.user.display_name,
+          payment_method: input.paymentMethod,
+          status: 'posted' as const,
+          amount: Math.min(allocation.amount, receipt.remaining_amount),
+        }
+        purchaseReceipts.set(receipt.code, {
+          ...receipt,
+          paid_amount: paidAmount,
+          remaining_amount: Math.max(receipt.payable_amount - paidAmount, 0),
+          updated_at: entry.created_at,
+          supplier_payments: [...receipt.supplier_payments, payment] as unknown as PurchaseReceiptData['supplier_payments'],
+        } as PurchaseReceiptData)
+      }
+      recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return {
+        supplier_payment_id: entry.id,
+        code: entry.code,
+        amount,
+        cashbook_voucher_id: entry.id,
+      }
+    },
     async findSalesDocumentsByCodes(input) {
       return new Set(input.codes.filter((code) => salesDocuments.has(code)))
     },
@@ -2304,13 +2394,79 @@ function recalculatePartnerDebtTotals(
     }
   }
 
-  for (const supplier of suppliers.values()) supplier.current_payable_amount = 0
+  for (const supplier of suppliers.values()) {
+    supplier.current_payable_amount = 0
+    supplier.total_purchase_amount = 0
+  }
 
   for (const receipt of purchaseReceipts.values()) {
-    if (receipt.status !== 'posted' || receipt.remaining_amount <= 0) continue
+    if (receipt.status !== 'posted') continue
     const supplier = resolveReceiptSupplier(receipt, suppliers)
     if (!supplier) continue
-    supplier.current_payable_amount += receipt.remaining_amount
+    supplier.total_purchase_amount += receipt.payable_amount
+    if (receipt.remaining_amount > 0) supplier.current_payable_amount += receipt.remaining_amount
+  }
+}
+
+function resolvePurchasePaymentAccount(
+  financeAccounts: Map<string, FinanceAccountData>,
+  paymentMethod: 'cash' | 'bank_transfer',
+  financeAccountId?: string,
+) {
+  if (financeAccountId && financeAccounts.has(financeAccountId)) return financeAccounts.get(financeAccountId)!
+  const fallbackType = paymentMethod === 'bank_transfer' ? 'bank' : 'cash'
+  const account = [...financeAccounts.values()].find((candidate) => candidate.account_type === fallbackType && candidate.is_active)
+  if (!account) throw new Error('Finance account not found')
+  return account
+}
+
+function purchaseSupplierCashbookEntryData(input: {
+  account: FinanceAccountData
+  receipt: PurchaseReceiptData
+  amount: number
+  paymentMethod: 'cash' | 'bank_transfer'
+  currentUser: CurrentUserData
+  note: string
+  suffix: string
+}): CashbookEntryData {
+  const codeBase = input.receipt.code.trim().toUpperCase()
+  const code = codeBase.startsWith('PN') ? `PCPN${codeBase.slice(2)}${input.suffix ? `-${input.suffix}` : ''}` : `PCPN-${input.suffix}`
+  return {
+    id: `cashbook-voucher-${randomUUID()}`,
+    code,
+    status: 'posted',
+    direction: 'out',
+    amount_delta: -Math.max(input.amount, 0),
+    finance_account: {
+      id: input.account.id,
+      code: input.account.account_type === 'bank' ? input.account.account_number ?? input.account.code : input.account.code,
+      name: input.account.name,
+      account_type: input.account.account_type,
+      account_number: input.account.account_number,
+      account_holder: input.account.account_holder,
+    },
+    is_business_accounted: true,
+    source_type: 'purchase_supplier_payment',
+    created_at: new Date().toISOString(),
+    note: input.note,
+    counterparty: { type: 'supplier', name: input.receipt.supplier.name, phone: null },
+    created_by: { id: input.currentUser.user.id, name: input.currentUser.user.display_name },
+    source: {
+      type: 'purchase_supplier_payment',
+      id: code,
+      code,
+      order_code: input.receipt.code,
+      source_note: input.note,
+    },
+    allocations: [{
+      order_id: input.receipt.id,
+      order_code: input.receipt.code,
+      order_total_amount: input.receipt.payable_amount,
+      collected_before: Math.max(input.receipt.paid_amount, 0),
+      allocated_amount: Math.max(input.amount, 0),
+      remaining_after: Math.max(input.receipt.remaining_amount - input.amount, 0),
+    }],
+    payment_method: input.paymentMethod,
   }
 }
 

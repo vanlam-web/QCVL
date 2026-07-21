@@ -586,6 +586,27 @@ export interface ServerRepository {
   listPurchaseReceipts?(input: { organizationId: string; url: URL }): Promise<PurchaseReceiptData[]>
   listPurchaseReceiptsPage?(input: { organizationId: string; url: URL }): Promise<PurchaseReceiptListPageData>
   getPurchaseReceipt?(input: { organizationId: string; id: string }): Promise<PurchaseReceiptData | null>
+  savePurchaseReceipt?(input: {
+    organizationId: string
+    receipt: PurchaseReceiptData
+    sourceType: 'manual' | 'kiotviet_import'
+  }): Promise<PurchaseReceiptData>
+  postPurchaseReceipt?(input: {
+    organizationId: string
+    id: string
+    paymentMethod?: 'cash' | 'bank_transfer'
+    financeAccountId?: string
+    currentUser: CurrentUserData
+  }): Promise<{ purchase_receipt_id: string; status: 'posted'; posted_at: string; cashbook_voucher_id: string | null }>
+  paySupplier?(input: {
+    organizationId: string
+    supplierId: string
+    paymentMethod: 'cash' | 'bank_transfer'
+    financeAccountId?: string
+    note?: string | null
+    allocations: Array<{ purchase_receipt_id: string; amount: number }>
+    currentUser: CurrentUserData
+  }): Promise<{ supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string }>
   findPurchaseReceiptsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   listStockMovements?(input: { organizationId: string; url: URL }): Promise<StockMovementData[]>
   upsertImportedKiotVietPurchaseReceipts?(input: {
@@ -1089,6 +1110,143 @@ function makePurchaseReceipt(number: number) {
     ],
     supplier_payments: [],
   }
+}
+
+type PurchaseReceiptInputBody = {
+  code?: unknown
+  supplier_id?: unknown
+  received_at?: unknown
+  supplier_document_no?: unknown
+  notes?: unknown
+  discount_amount?: unknown
+  paid_amount?: unknown
+  items?: unknown
+}
+
+function purchaseReceiptNumber(value: unknown, fallback = 0) {
+  const numeric = Number(value ?? fallback)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
+function purchaseReceiptText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function purchaseReceiptTimestamp(value: unknown) {
+  const text = purchaseReceiptText(value)
+  if (!text) return runtimeIso()
+  const parsed = new Date(text)
+  if (Number.isNaN(parsed.getTime())) throw new HttpError(400, 'VALIDATION_ERROR', 'received_at is invalid.', { received_at: ['received_at is invalid.'] })
+  return parsed.toISOString()
+}
+
+function manualPurchaseReceiptLineAmount(line: { quantity: number; unit_cost: number; discount_amount: number }) {
+  return Math.max(Math.round(line.quantity * line.unit_cost) - line.discount_amount, 0)
+}
+
+function nextPurchaseReceiptCode(existingReceipts: readonly PurchaseReceiptData[]) {
+  let maxSeq = 0
+  for (const receipt of existingReceipts) {
+    const match = receipt.code.trim().toUpperCase().match(/^PN(\d{6})(?:\.\d+)?$/)
+    if (!match) continue
+    maxSeq = Math.max(maxSeq, Number(match[1]))
+  }
+  return `PN${String(maxSeq + 1).padStart(6, '0')}`
+}
+
+function normalizeManualPurchaseShape(value: unknown): PurchaseReceiptData['items'][number]['inventory_shape'] {
+  return value === 'roll' || value === 'sheet' ? value : 'normal'
+}
+
+function manualPurchaseUnitName(product: ProductListData, rawUnitName: unknown) {
+  const requested = purchaseReceiptText(rawUnitName)
+  if (!requested) return product.unit_name
+  const allowedUnits = new Set<string>([
+    product.unit_name,
+    ...(Array.isArray(product.unit_conversions)
+      ? product.unit_conversions
+        .map((conversion) => (conversion && typeof conversion === 'object' && 'unit_name' in conversion ? String(conversion.unit_name ?? '').trim() : ''))
+        .filter(Boolean)
+      : []),
+  ])
+  return allowedUnits.has(requested) ? requested : product.unit_name
+}
+
+function makeManualPurchaseReceipt(input: {
+  body: PurchaseReceiptInputBody
+  currentUser: CurrentUserData
+  existing?: PurchaseReceiptData | null
+  existingReceipts: readonly PurchaseReceiptData[]
+  suppliers: readonly SupplierListData[]
+  products: readonly ProductListData[]
+}) {
+  const supplierId = purchaseReceiptText(input.body.supplier_id)
+  const supplier = input.suppliers.find((item) => item.id === supplierId)
+  if (!supplier) throw new HttpError(400, 'VALIDATION_ERROR', 'supplier_id is invalid.', { supplier_id: ['supplier_id is invalid.'] })
+
+  const rawItems = Array.isArray(input.body.items) ? input.body.items : []
+  if (rawItems.length === 0) throw new HttpError(400, 'VALIDATION_ERROR', 'items is required.', { items: ['items is required.'] })
+
+  const productById = new Map(input.products.map((product) => [product.id, product]))
+  const items = rawItems.map((raw, index) => {
+    const row = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {}
+    const productId = purchaseReceiptText(row.product_id)
+    const product = productById.get(productId)
+    if (!product) throw new HttpError(400, 'VALIDATION_ERROR', `items.${index}.product_id is invalid.`, { items: [`items.${index}.product_id is invalid.`] })
+    const quantity = purchaseReceiptNumber(row.quantity)
+    const unitCost = purchaseReceiptNumber(row.unit_cost)
+    const discountAmount = Math.max(purchaseReceiptNumber(row.discount_amount), 0)
+    if (quantity <= 0) throw new HttpError(400, 'VALIDATION_ERROR', `items.${index}.quantity must be greater than 0.`, { items: [`items.${index}.quantity must be greater than 0.`] })
+    if (unitCost < 0) throw new HttpError(400, 'VALIDATION_ERROR', `items.${index}.unit_cost is invalid.`, { items: [`items.${index}.unit_cost is invalid.`] })
+    const inventoryShape = normalizeManualPurchaseShape(row.inventory_shape ?? product.inventory_shape)
+    const line = {
+      quantity,
+      unit_cost: unitCost,
+      discount_amount: discountAmount,
+    }
+    return {
+      id: input.existing?.items[index]?.id ?? `purchase-receipt-item-${randomUUID()}`,
+      product_id: product.id,
+      product: { id: product.id, code: product.code, name: product.name },
+      line_no: index + 1,
+      inventory_shape: inventoryShape,
+      unit_name_snapshot: manualPurchaseUnitName(product, row.unit_name),
+      quantity,
+      unit_cost: unitCost,
+      discount_amount: discountAmount,
+      line_amount: manualPurchaseReceiptLineAmount(line),
+      physical_payload: row.physical_payload && typeof row.physical_payload === 'object'
+        ? (row.physical_payload as unknown as PurchaseReceiptData['items'][number]['physical_payload'])
+        : null,
+    } satisfies PurchaseReceiptData['items'][number]
+  })
+
+  const subtotalAmount = items.reduce((sum, item) => sum + item.line_amount, 0)
+  const discountAmount = Math.max(purchaseReceiptNumber(input.body.discount_amount), 0)
+  const payableAmount = Math.max(subtotalAmount - discountAmount, 0)
+  const paidAmount = Math.min(Math.max(purchaseReceiptNumber(input.body.paid_amount), 0), payableAmount)
+  const now = runtimeIso()
+  const receivedAt = purchaseReceiptTimestamp(input.body.received_at)
+  return {
+    id: input.existing?.id ?? `purchase-receipt-${randomUUID()}`,
+    code: purchaseReceiptText(input.body.code) || input.existing?.code || nextPurchaseReceiptCode(input.existingReceipts),
+    supplier_id: supplier.id,
+    supplier: { id: supplier.id, code: supplier.code, name: supplier.name },
+    received_at: receivedAt,
+    status: input.existing?.status ?? 'draft',
+    supplier_document_no: purchaseReceiptText(input.body.supplier_document_no) || null,
+    subtotal_amount: subtotalAmount,
+    discount_amount: discountAmount,
+    payable_amount: payableAmount,
+    paid_amount: paidAmount,
+    remaining_amount: Math.max(payableAmount - paidAmount, 0),
+    notes: purchaseReceiptText(input.body.notes) || null,
+    created_by: input.existing?.created_by ?? { id: input.currentUser.user.id, name: input.currentUser.user.display_name },
+    created_at: input.existing?.created_at ?? now,
+    updated_at: now,
+    items,
+    supplier_payments: input.existing?.supplier_payments ?? [],
+  } as PurchaseReceiptData
 }
 
 function syncSupplierTotalsFromPurchaseReceipts() {
@@ -3399,6 +3557,31 @@ async function getDevApiResponse(
       paySupplier: async () => {
         const body = await readJson(request)
         const allocations = Array.isArray(body.allocations) ? body.allocations : []
+        const paymentMethod = body.payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash'
+        const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id : undefined
+        const supplierId = getSupplierIdFromPath(path)
+        const normalizedAllocations = allocations
+          .map((allocation) => (
+            allocation != null && typeof allocation === 'object' && 'purchase_receipt_id' in allocation
+              ? {
+                  purchase_receipt_id: String((allocation as { purchase_receipt_id: unknown }).purchase_receipt_id),
+                  amount: Number((allocation as { amount?: unknown }).amount ?? 0),
+                }
+              : null
+          ))
+          .filter((allocation): allocation is { purchase_receipt_id: string; amount: number } => Boolean(allocation && allocation.purchase_receipt_id && allocation.amount > 0))
+        if (repository.paySupplier) {
+          const result = await repository.paySupplier({
+            organizationId: currentUser.organization.id,
+            supplierId,
+            paymentMethod,
+            financeAccountId,
+            note: typeof body.note === 'string' ? body.note : null,
+            allocations: normalizedAllocations,
+            currentUser,
+          })
+          return { found: true, data: result, status: 201 }
+        }
         const firstAllocation = allocations.find((allocation): allocation is { purchase_receipt_id: string; amount?: number } => (
           allocation != null
           && typeof allocation === 'object'
@@ -3414,7 +3597,7 @@ async function getDevApiResponse(
           : `PC${String(cashbookEntries.length + 1).padStart(6, '0')}`
         const amount = allocations.reduce((sum, allocation) => (
           allocation != null && typeof allocation === 'object' && 'amount' in allocation
-            ? sum + Number(allocation.amount ?? 0)
+          ? sum + Number(allocation.amount ?? 0)
             : sum
         ), 0)
         return { found: true, data: { supplier_payment_id: randomUUID(), code, amount, cashbook_voucher_id: randomUUID() }, status: 201 }
@@ -3464,9 +3647,81 @@ async function getDevApiResponse(
         })
         return { found: true, data: repositoryReceipt ?? purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
       },
-      createReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: randomUUID() }, status: 201 }),
-      updateReceipt: async () => ({ found: true, data: { ...purchaseReceipt, ...(await readJson(request)), id: getIdFromPath(path) } }),
-      postReceipt: async () => ({ found: true, data: { purchase_receipt_id: path.split('/')[4], status: 'posted', posted_at: nowIso, cashbook_voucher_id: randomUUID() } }),
+      createReceipt: async () => {
+        const body = await readJson(request) as PurchaseReceiptInputBody
+        const [existingReceipts, supplierRows, productRows] = await Promise.all([
+          repository.listPurchaseReceipts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/purchase/receipts?status=all&page=1&page_size=10000') }),
+          repository.listSuppliers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') }),
+          repository.listProducts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000') }),
+        ])
+        const receipt = makeManualPurchaseReceipt({
+          body,
+          currentUser,
+          existingReceipts: existingReceipts ?? purchaseReceipts,
+          suppliers: supplierRows ?? suppliers,
+          products: productRows ?? products,
+        })
+        if (repository.savePurchaseReceipt) {
+          return { found: true, data: await repository.savePurchaseReceipt({ organizationId: currentUser.organization.id, receipt, sourceType: 'manual' }), status: 201 }
+        }
+        purchaseReceipts.push(receipt)
+        syncSupplierTotalsFromPurchaseReceipts()
+        return { found: true, data: receipt, status: 201 }
+      },
+      updateReceipt: async () => {
+        const id = getIdFromPath(path) ?? ''
+        const body = await readJson(request) as PurchaseReceiptInputBody
+        const existing = await repository.getPurchaseReceipt?.({ organizationId: currentUser.organization.id, id })
+          ?? purchaseReceipts.find((receipt) => receipt.id === id || receipt.code === id)
+          ?? null
+        if (!existing) throw new HttpError(404, 'RESOURCE_NOT_FOUND', 'Purchase receipt not found.')
+        if (existing.status !== 'draft') throw new HttpError(400, 'VALIDATION_ERROR', 'Only draft purchase receipts can be edited.')
+        const [existingReceipts, supplierRows, productRows] = await Promise.all([
+          repository.listPurchaseReceipts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/purchase/receipts?status=all&page=1&page_size=10000') }),
+          repository.listSuppliers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') }),
+          repository.listProducts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000') }),
+        ])
+        const receipt = makeManualPurchaseReceipt({
+          body,
+          currentUser,
+          existing,
+          existingReceipts: existingReceipts ?? purchaseReceipts,
+          suppliers: supplierRows ?? suppliers,
+          products: productRows ?? products,
+        })
+        if (repository.savePurchaseReceipt) {
+          return { found: true, data: await repository.savePurchaseReceipt({ organizationId: currentUser.organization.id, receipt, sourceType: 'manual' }) }
+        }
+        const index = purchaseReceipts.findIndex((item) => item.id === existing.id || item.code === existing.code)
+        if (index >= 0) purchaseReceipts[index] = receipt
+        syncSupplierTotalsFromPurchaseReceipts()
+        return { found: true, data: receipt }
+      },
+      postReceipt: async () => {
+        const body = await readJson(request)
+        const id = getIdFromPath(path) ?? ''
+        const paymentMethod = body.payment_method === 'bank_transfer' ? 'bank_transfer' : body.payment_method === 'cash' ? 'cash' : undefined
+        const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id : undefined
+        if (repository.postPurchaseReceipt) {
+          return {
+            found: true,
+            data: await repository.postPurchaseReceipt({
+              organizationId: currentUser.organization.id,
+              id,
+              paymentMethod,
+              financeAccountId,
+              currentUser,
+            }),
+          }
+        }
+        const receipt = purchaseReceipts.find((item) => item.id === id || item.code === id)
+        if (receipt) {
+          receipt.status = 'posted'
+          receipt.updated_at = runtimeIso()
+          syncSupplierTotalsFromPurchaseReceipts()
+        }
+        return { found: true, data: { purchase_receipt_id: id, status: 'posted', posted_at: runtimeIso(), cashbook_voucher_id: randomUUID() } }
+      },
     },
   )
   if (purchaseRoute.found) return purchaseRoute

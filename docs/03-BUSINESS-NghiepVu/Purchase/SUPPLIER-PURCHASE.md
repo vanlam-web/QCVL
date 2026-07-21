@@ -94,6 +94,18 @@ Quyết định Owner 2026-07-02 cho P2/P3:
 - P2/P3 có thể ghi nhận `paid_amount` trên phiếu để tính còn phải trả; tác động sổ quỹ chỉ phát sinh khi post theo P3, không phát sinh side effect ở draft P2.
 - Giảm giá phiếu nhập được giữ theo SoT nếu có UI/API hỗ trợ, nhưng backend vẫn phải tự tính tổng, không tin tổng từ client.
 
+Quyết định Owner 2026-07-21 cho chọn NCC trong màn tạo phiếu:
+
+- Control NCC trong `/receipts/new` phải dùng mô hình POS `Tìm khách hàng`, thay vai trò thành `Nhà cung cấp`.
+- KiotViet tham chiếu: `Nhập hàng` chọn NCC bằng `Tìm nhà cung cấp (F4)` hoặc nút `+` thêm NCC mới ngay trong phiếu nhập.
+- Khi chưa chọn NCC: hiển thị ô tìm NCC, tìm không dấu theo mã, tên, SĐT và MST; `F4` focus ô tìm; Enter chọn gợi ý đầu.
+- Khi đã chọn NCC: không giữ NCC như text trong input; hiển thị khối `Nhà cung cấp đã chọn` giống POS `Khách đã chọn`, gồm tên/mã NCC, thông tin phụ nếu có và nút bỏ chọn.
+- Bỏ chọn NCC chỉ reset lựa chọn NCC, không xóa dòng hàng đang nhập.
+- Gõ chữ trong ô tìm nhưng chưa chọn NCC hợp lệ thì không được lưu/hoàn thành phiếu.
+- Màn tạo phiếu mới không dùng native select để chọn NCC.
+- Nút `+` cạnh ô tìm NCC mở thêm nhanh NCC; lưu thành công thì tự chọn NCC mới vào phiếu đang tạo.
+- Thêm nhanh NCC tuân theo BR-PUR-01: tên NCC bắt buộc, mã NCC tự sinh nếu bỏ trống, SĐT/email/địa chỉ/MST/ghi chú tùy chọn.
+
 ---
 
 ## 4. Nhập theo loại tồn kho
@@ -273,10 +285,11 @@ Quyết định QC-OMS cho P5:
 
 Purchase/Supplier chạm Inventory, Finance và PriceBook, nên được chia nhỏ để kiểm soát rủi ro.
 
-**Trạng thái thật:** xem [README.md](./README.md) mục 2. Tóm tắt 2026-07-20:
+**Trạng thái thật:** xem [README.md](./README.md) mục 2. Tóm tắt 2026-07-21:
 
 - P1 (NCC) + đọc PN **đã import** + stock-in từ PN import: dùng được.
-- P2/P3/P5 từng ghi “đã merge” ở mức UI/spec — **live create/post/pay vẫn stub** trên handler HTTP; không nghiệm thu như đã ship persist.
+- P2/P3 hàng thường đã live trên Postgres cho PN manual; test thật `PN000688` trên `3202` ngày 2026-07-21.
+- P5 có đường repository Postgres nhưng cần nghiệm thu thêm nhiều case UI trả NCC.
 - P4 object cuộn/tấm: vẫn candidate.
 - Không mở lại import KV PN.
 
@@ -306,7 +319,7 @@ Acceptance:
 
 ### Slice P2 — Purchase receipt draft/list/detail
 
-**Docs/UI từng ghi đã merge; runtime live create/update = stub** (README mục 2). List/detail trên dữ liệu import dùng được. Phạm vi mục tiêu:
+Runtime 2026-07-21 đã live create/update draft manual qua repository Postgres; list/detail dùng được cho cả dữ liệu import và manual. Phạm vi:
 
 - tạo phiếu nhập `draft`
 - sửa draft
@@ -320,8 +333,6 @@ Acceptance:
 
 Không gồm:
 
-- post tăng tồn
-- thanh toán thật
 - post roll/sheet object vật lý đầy đủ
 
 Acceptance:
@@ -333,7 +344,7 @@ Acceptance:
 
 ### Slice P3 — Post receipt cho hàng thường
 
-**Docs từng ghi đã merge; runtime live post = stub** (README mục 2). Stock-in từ PN **import** posted vẫn có. Phạm vi mục tiêu:
+Runtime 2026-07-21 đã live post hàng thường từ PN manual; stock-in từ PN **import** posted vẫn có. Phạm vi:
 
 - `POST /purchase/receipts/{id}/post`
 - transaction tăng tồn hàng `normal`
@@ -405,7 +416,7 @@ P4 acceptance khi làm:
 
 ### Slice P5 — Supplier payments
 
-**Docs từng ghi đã merge; runtime live pay = stub/fallback** (README mục 2). Đối soát trả trên PN import có thể hiện row đọc-only. Phạm vi mục tiêu:
+Runtime có đường repository Postgres cho `paySupplier`, nhưng cần nghiệm thu thêm UI trả NCC theo nhiều case. Đối soát trả trên PN import có thể hiện row đọc-only. Phạm vi mục tiêu:
 
 - trả tiền NCC sau phiếu nhập
 - người dùng chọn phiếu nhập cụ thể để trả

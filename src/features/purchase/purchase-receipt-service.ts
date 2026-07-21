@@ -19,6 +19,8 @@ import type {
   PurchaseReceiptProduct,
 } from './purchase-receipt-types'
 import type { Product, ProductStatus, SellMethod } from '../catalog/types'
+import type { Supplier } from './types'
+import type { SupplierInput } from './supplier-service'
 
 export interface PurchaseReceiptApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
@@ -90,6 +92,11 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         method: 'DELETE',
       }),
     listSuppliers: () => api.request<PurchaseReceiptSupplierListResponse>('/api/v1/suppliers?status=active'),
+    createSupplier: (input: SupplierInput) =>
+      api.request<Supplier>('/api/v1/suppliers', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
     listProducts: (input: {
       search?: string
       status?: 'active' | 'inactive' | 'all' | 'deleted'
