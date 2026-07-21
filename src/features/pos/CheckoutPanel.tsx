@@ -46,7 +46,7 @@ export function CheckoutPanel({
   orderCreatedAt?: string
   autoFocusCustomerPayment?: boolean
   revisionSource?: { id: string; code: string }
-  onCheckoutSuccess?: () => void
+  onCheckoutSuccess?: (payload: { kind: 'invoice' | 'quote'; documentId: string }) => void
 }) {
   const [cashAmountOverride, setCashAmountOverride] = useState<number | null>(null)
   const [checkoutDiscountAmount, setCheckoutDiscountAmount] = useState(0)
@@ -255,7 +255,7 @@ export function CheckoutPanel({
         },
       })
       setResult(checkout)
-      onCheckoutSuccess?.()
+      onCheckoutSuccess?.({ kind: 'invoice', documentId: checkout.order.id })
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được hóa đơn.'))
     } finally {
@@ -304,7 +304,7 @@ export function CheckoutPanel({
         },
       })
       setResult(revised)
-      onCheckoutSuccess?.()
+      onCheckoutSuccess?.({ kind: 'invoice', documentId: revised.order.id })
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được hóa đơn sửa.'))
     } finally {
@@ -341,8 +341,9 @@ export function CheckoutPanel({
           change_returned_amount: surplusMode === 'return' ? surplus : 0,
         },
       }
-      setQuoteResult(await orderService.saveQuote(payload))
-      onCheckoutSuccess?.()
+      const quote = await orderService.saveQuote(payload)
+      setQuoteResult(quote)
+      onCheckoutSuccess?.({ kind: 'quote', documentId: quote.id })
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được báo giá.'))
     } finally {

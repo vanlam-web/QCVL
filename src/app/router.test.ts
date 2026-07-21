@@ -13,6 +13,7 @@ const routePageModules = [
   '../features/purchase/PurchaseReceiptsPage',
   '../features/sales-documents/SalesDocumentsPage',
   '../features/sales-documents/QuotePrintPage',
+  '../features/sales-documents/InvoicePrintPage',
   '../features/inventory/InventoryPage',
   '../features/finance/FinancePage',
   '../features/reports/ReportsPage',

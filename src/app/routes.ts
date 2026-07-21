@@ -15,9 +15,16 @@ export const appRoutes = {
   reports: '/reports',
   salesDocuments: '/sales-documents',
   quotePrint: '/sales-documents/:id/quote-print',
+  invoicePrint: '/sales-documents/:id/invoice-print',
   forbidden: '/forbidden',
 } as const
 
 export function quotePrintPath(documentId: string) {
   return `${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/quote-print`
+}
+
+export function invoicePrintPath(documentId: string, options?: { returnTo?: 'pos' | 'sales-documents' }) {
+  const path = `${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/invoice-print`
+  if (options?.returnTo === 'pos') return `${path}?returnTo=pos`
+  return path
 }
