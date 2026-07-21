@@ -154,6 +154,36 @@ describe('finance-service', () => {
     ])
   })
 
+  it('posts quick create customer and supplier for voucher counterparties', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      if (path === '/api/v1/customers') {
+        return { id: 'customer-1', code: 'KH000010', name: 'Khách mới', phone: '0901111222' } as T
+      }
+      return { id: 'supplier-1', code: 'NCC000010', name: 'NCC mới', phone: null } as T
+    }
+    const service = createFinanceService({ request })
+
+    await expect(service.createVoucherCustomer({ name: 'Khách mới', phone: '0901111222' })).resolves.toEqual({
+      id: 'customer-1',
+      code: 'KH000010',
+      name: 'Khách mới',
+      phone: '0901111222',
+    })
+    await expect(service.createVoucherSupplier({ name: 'NCC mới' })).resolves.toEqual({
+      id: 'supplier-1',
+      code: 'NCC000010',
+      name: 'NCC mới',
+      phone: null,
+    })
+
+    expect(calls[0]?.[0]).toBe('/api/v1/customers')
+    expect(calls[0]?.[1]).toMatchObject({ method: 'POST' })
+    expect(calls[1]?.[0]).toBe('/api/v1/suppliers')
+    expect(calls[1]?.[1]).toMatchObject({ method: 'POST' })
+  })
+
   it('posts manual cashbook voucher cancel', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {

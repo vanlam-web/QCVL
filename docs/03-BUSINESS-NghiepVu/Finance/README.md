@@ -39,6 +39,7 @@
 | Phân bổ / gắn chứng từ từ dòng KV | Có một phần (allocator) | Phần lớn |
 | Công nợ khách canonical (`customer-debt` module) | Có; Customers/Finance đọc tổng từ đây | Phần lớn — rà doc cũ “không âm/không ứng trước” nếu lệch số đối soát |
 | Live tạo phiếu thu/chi thủ công sâu / chuyển quỹ / đối soát cuối ngày đầy đủ | Một phần / hướng dài | Xem CASHBOOK |
+| `Tạo mới` đối tác trên phiếu thu/chi (KH/NCC) | Có — tạo nhanh qua `POST /customers` / `POST /suppliers`, điền lại tên | Một phần — chưa bắt buộc `counterparty_id` / delivery partner |
 | Import thêm file So quỹ KV | **Đóng** | — |
 
 ---

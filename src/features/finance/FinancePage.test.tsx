@@ -285,6 +285,18 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
     listVoucherCounterparties: vi.fn(async () => [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]),
+    createVoucherCustomer: vi.fn(async (input) => ({
+      id: 'customer-created',
+      code: 'KH000099',
+      name: input.name,
+      phone: input.phone ?? null,
+    })),
+    createVoucherSupplier: vi.fn(async (input) => ({
+      id: 'supplier-created',
+      code: 'NCC000099',
+      name: input.name,
+      phone: input.phone ?? null,
+    })),
     listCashbookEntries: vi.fn(async () => ({
       summary: { opening_balance: 100000, total_in: 500000, total_out: 100000, ending_balance: 400000 },
       items: [entry],
@@ -1075,6 +1087,55 @@ describe('FinancePage', () => {
     const accountSelect = await within(form).findByLabelText('Tài khoản nhận')
     expect(accountSelect).toBeInTheDocument()
     expect(within(accountSelect).queryByRole('option', { name: 'Tiền mặt' })).not.toBeInTheDocument()
+  })
+
+  it('creates a customer from Tạo mới and fills the voucher counterparty fields', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    const form = await screen.findByRole('form', { name: 'Tạo phiếu thu' })
+    expect(within(form).queryByRole('button', { name: 'Tạo mới khách hàng' })).not.toBeInTheDocument()
+    expect(within(form).queryByRole('button', { name: 'Tạo mới nhà cung cấp' })).not.toBeInTheDocument()
+
+    await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nộp'), 'customer')
+    await userEvent.click(within(form).getByRole('button', { name: 'Tạo mới khách hàng' }))
+
+    const createDialog = await screen.findByRole('dialog', { name: 'Tạo nhanh khách hàng' })
+    await userEvent.type(within(createDialog).getByLabelText('Tên khách hàng'), 'Khách tạo từ sổ quỹ')
+    await userEvent.type(within(createDialog).getByLabelText('Điện thoại'), '0912345678')
+    await userEvent.click(within(createDialog).getByRole('button', { name: 'Lưu' }))
+
+    await waitFor(() => expect(service.createVoucherCustomer).toHaveBeenCalledWith({
+      name: 'Khách tạo từ sổ quỹ',
+      phone: '0912345678',
+      code: undefined,
+    }))
+    expect(within(form).getByLabelText('Tên người nộp')).toHaveValue('Khách tạo từ sổ quỹ')
+    expect(screen.queryByRole('dialog', { name: 'Tạo nhanh khách hàng' })).not.toBeInTheDocument()
+  })
+
+  it('creates a supplier from Tạo mới on expense vouchers', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
+
+    await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nhận'), 'supplier')
+    await userEvent.click(within(form).getByRole('button', { name: 'Tạo mới nhà cung cấp' }))
+
+    const createDialog = await screen.findByRole('dialog', { name: 'Tạo nhanh nhà cung cấp' })
+    await userEvent.type(within(createDialog).getByLabelText('Tên NCC'), 'NCC tạo từ sổ quỹ')
+    await userEvent.click(within(createDialog).getByRole('button', { name: 'Lưu' }))
+
+    await waitFor(() => expect(service.createVoucherSupplier).toHaveBeenCalledWith({
+      name: 'NCC tạo từ sổ quỹ',
+      phone: null,
+      code: undefined,
+    }))
+    expect(within(form).getByLabelText('Tên người nhận')).toHaveValue('NCC tạo từ sổ quỹ')
   })
 
   it('opens cashbook entry detail with allocation rows', async () => {
