@@ -1407,6 +1407,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async listSuppliers(input) {
       await ensureImportedSnapshotTables(pool)
+      await recomputeSupplierPurchaseTotals(pool, input.organizationId)
       const result = await pool.query(
         `
           select data
@@ -6267,6 +6268,84 @@ async function recomputeSupplierPurchaseTotals(pool: pg.Pool, organizationId: st
     `,
     [organizationId],
   )
+  const suppliers = supplierResult.rows.map((row) => row.data as SupplierListData)
+  const supplierById = new Map(suppliers.map((supplier) => [supplier.id, supplier]))
+  const linkedSupplierByCustomerId = new Map<string, string>()
+  for (const supplier of suppliers) {
+    const linkedCustomerId = supplier.linked_customer_id?.trim()
+    if (linkedCustomerId) linkedSupplierByCustomerId.set(linkedCustomerId, supplier.id)
+  }
+  const linkedCustomerIds = [...linkedSupplierByCustomerId.keys()]
+  const [linkedInvoiceResult, linkedCashbookResult, linkedAdjustmentResult] = linkedCustomerIds.length > 0
+    ? await Promise.all([
+        pool.query(
+          `
+            select id, code, created_at, customer_id, total_amount
+            from orders
+            where organization_id = $1
+              and customer_id = any($2::text[])
+              and order_type = 'invoice'
+              and status <> 'cancelled'
+            order by created_at asc, code asc
+          `,
+          [organizationId, linkedCustomerIds],
+        ),
+        pool.query(
+          `
+            select
+              cbe.id,
+              cbe.code,
+              cbe.status,
+              cbe.amount_delta,
+              cbe.created_at,
+              coalesce(cbe.source->>'customer_id', o.customer_id, cs.id) as customer_id
+            from cashbook_entries cbe
+            left join orders o
+              on o.organization_id = cbe.organization_id
+             and o.code = cbe.source->>'order_code'
+            left join customer_snapshots cs
+              on cs.organization_id = cbe.organization_id
+             and (
+               lower(cs.code) = lower(cbe.source->>'counterparty_code')
+               or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+             )
+            where cbe.organization_id = $1
+              and cbe.status = 'posted'
+              and (
+                (
+                  cbe.source_type = 'payment_receipt_method'
+                  and (
+                    cbe.source->>'customer_id' = any($2::text[])
+                    or (o.customer_id = any($2::text[]) and o.status <> 'cancelled')
+                  )
+                )
+                or (
+                  cbe.source_type = 'kiotviet_cashbook'
+                  and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+                  and (
+                    cbe.source->>'customer_id' = any($2::text[])
+                    or cs.id = any($2::text[])
+                    or (o.customer_id = any($2::text[]) and o.status <> 'cancelled')
+                  )
+                )
+              )
+            order by cbe.created_at asc, cbe.code asc
+          `,
+          [organizationId, linkedCustomerIds],
+        ),
+        pool.query(
+          `
+            select id, source_code, created_at, customer_id, amount_delta
+            from customer_debt_adjustments
+            where organization_id = $1
+              and customer_id = any($2::text[])
+              and source_system = 'kiotviet'
+            order by created_at asc, source_row asc nulls last, updated_at asc
+          `,
+          [organizationId, linkedCustomerIds],
+        ),
+      ])
+    : [{ rows: [] }, { rows: [] }, { rows: [] }]
   const totals = new Map<string, {
     total_purchase_amount: number
     current_payable_amount: number
@@ -6334,8 +6413,55 @@ async function recomputeSupplierPurchaseTotals(pool: pg.Pool, organizationId: st
     })
     documentsBySupplier.set(supplierKey, documents)
   }
+  for (const row of linkedInvoiceResult.rows) {
+    const supplierKey = linkedSupplierByCustomerId.get(String(row.customer_id))
+    if (!supplierKey) continue
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: String(row.id),
+      code: String(row.code),
+      time: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      amount: Number(row.total_amount || 0),
+      status: 'posted',
+      sourceType: 'linked_customer_invoice',
+      sourceId: String(row.id),
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
+  for (const row of linkedCashbookResult.rows) {
+    const supplierKey = linkedSupplierByCustomerId.get(String(row.customer_id))
+    if (!supplierKey) continue
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: String(row.id),
+      code: String(row.code),
+      time: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      amount: Math.abs(Number(row.amount_delta || 0)),
+      status: String(row.status || 'posted'),
+      sourceType: 'linked_customer_payment',
+      sourceId: String(row.id),
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
+  for (const row of linkedAdjustmentResult.rows) {
+    const supplierKey = linkedSupplierByCustomerId.get(String(row.customer_id))
+    if (!supplierKey) continue
+    const amountDelta = Number(row.amount_delta || 0)
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: String(row.id),
+      code: String(row.source_code),
+      time: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      amount: Math.abs(amountDelta),
+      normalizedAmountDelta: amountDelta,
+      status: 'posted',
+      sourceType: 'linked_customer_adjustment',
+      sourceId: String(row.id),
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
   for (const [supplierKey, documents] of documentsBySupplier) {
-    const ledger = buildPartnerDebtLedger({ view: 'supplier', linked: false, documents })
+    const ledger = buildPartnerDebtLedger({ view: 'supplier', linked: Boolean(supplierById.get(supplierKey)?.linked_customer_id), documents })
     totals.set(supplierKey, {
       total_purchase_amount: documents
         .filter((document) => /^PN\d/i.test(document.code))

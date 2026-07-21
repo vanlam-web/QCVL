@@ -1674,6 +1674,127 @@ describe('createPgRepository product units', () => {
     expect(updatedSupplier?.debt_ledger_rows?.map((row) => row.code)).toEqual(['PN000566', 'PCPN000566'])
   })
 
+  test('recomputes linked supplier payable from the inverted customer relationship ledger', async () => {
+    const { createPgRepository } = await import('./db')
+    let updatedSupplier: { current_payable_amount: number; total_purchase_amount: number; debt_ledger_rows?: Array<{ code: string; amount_delta: number }> } | null = null
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      const normalizedSql = sql.trim().toLowerCase()
+      if (normalizedSql === 'begin' || normalizedSql === 'commit' || normalizedSql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [], rowCount: 1 }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('id = $2')) return { rows: [], rowCount: 0 }
+      if (sql.includes('insert into purchase_receipt_snapshots')) return { rows: [], rowCount: 1 }
+      if (sql.includes('select id, data') && sql.includes('from supplier_snapshots')) {
+        return {
+          rows: [{
+            id: 'supplier-linked',
+            data: {
+              id: 'supplier-linked',
+              code: 'NCC000035',
+              name: 'Út Tèo',
+              phone: null,
+              email: null,
+              address: null,
+              tax_code: null,
+              linked_customer_id: 'customer-ut',
+              linked_customer: { id: 'customer-ut', code: 'UT', name: 'Út Tèo' },
+              notes: null,
+              status: 'active',
+              current_payable_amount: 0,
+              total_purchase_amount: 0,
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select data') && sql.includes('from purchase_receipt_snapshots')) {
+        return {
+          rows: [{
+            data: {
+              id: 'receipt-pn000566',
+              code: 'PN000566',
+              supplier_id: 'supplier-linked',
+              supplier: { id: 'supplier-linked', code: 'NCC000035', name: 'Út Tèo' },
+              received_at: '2026-07-03T00:00:00.000Z',
+              status: 'posted',
+              payable_amount: 4200000,
+              paid_amount: 0,
+              remaining_amount: 4200000,
+              supplier_payments: [],
+              items: [],
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from cashbook_entries') && sql.includes('purchase_supplier_payment')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from orders') && sql.includes('customer_id = any')) {
+        return {
+          rows: [{
+            id: 'order-hd011293',
+            code: 'HD011293',
+            created_at: new Date('2026-07-01T00:00:00.000Z'),
+            customer_id: 'customer-ut',
+            total_amount: '10000000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from cashbook_entries') && sql.includes('kiotviet_cashbook')) {
+        return {
+          rows: [{
+            id: 'cashbook-tthd011293',
+            code: 'TTHD011293',
+            created_at: new Date('2026-07-02T00:00:00.000Z'),
+            customer_id: 'customer-ut',
+            amount_delta: '3000000',
+            status: 'posted',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from customer_debt_adjustments') && sql.includes('customer_id = any')) return { rows: [], rowCount: 0 }
+      if (sql.includes('update supplier_snapshots')) {
+        updatedSupplier = JSON.parse(String(values?.[2]))
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.savePurchaseReceipt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      sourceType: 'kiotviet_import',
+      receipt: {
+        id: 'receipt-pn000566',
+        code: 'PN000566',
+        supplier_id: 'supplier-linked',
+        supplier: { id: 'supplier-linked', code: 'NCC000035', name: 'Út Tèo' },
+        received_at: '2026-07-03T00:00:00.000Z',
+        status: 'posted',
+        supplier_document_no: null,
+        subtotal_amount: 4200000,
+        discount_amount: 0,
+        payable_amount: 4200000,
+        paid_amount: 0,
+        remaining_amount: 4200000,
+        notes: null,
+        created_by: { id: 'user-1', name: 'Admin' },
+        created_at: '2026-07-03T00:00:00.000Z',
+        updated_at: '2026-07-03T00:00:00.000Z',
+        items: [],
+        supplier_payments: [],
+      },
+    })
+
+    expect(updatedSupplier?.total_purchase_amount).toBe(4200000)
+    expect(updatedSupplier?.current_payable_amount).toBe(-2800000)
+    expect(updatedSupplier?.debt_ledger_rows?.map((row) => [row.code, row.amount_delta])).toEqual([
+      ['HD011293', -10000000],
+      ['TTHD011293', 3000000],
+      ['PN000566', 4200000],
+    ])
+  })
+
   test('writes PostgreSQL stock movements from imported KiotViet invoices', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
