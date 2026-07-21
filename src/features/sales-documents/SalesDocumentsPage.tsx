@@ -1333,9 +1333,6 @@ function SalesDocumentDetailView({
           {
             label: 'In',
             icon: <Printer aria-hidden="true" size={15} />,
-            disabled:
-              (document.order_type === 'invoice' && (!document.code.startsWith('HD') || !onOpenInvoicePrint))
-              || (document.order_type === 'quote' && (!document.code.startsWith('BG') || !onOpenQuotePrint)),
             title:
               document.order_type === 'invoice'
                 ? 'Xem/In hóa đơn'

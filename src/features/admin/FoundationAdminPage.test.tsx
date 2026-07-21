@@ -549,3 +549,34 @@ it('creates a temporary role from the role modal with grouped permissions', asyn
   await userEvent.click(screen.getByRole('button', { name: 'Mở quyền vai trò Thu ngân ca tối' }))
   expect(screen.getByRole('checkbox', { name: 'Tạo đơn bán hàng' })).toBeChecked()
 })
+
+it('saves shop info and default bill template from Thiết lập panels', async () => {
+  window.localStorage.clear()
+  render(<FoundationAdminPage service={makeService()} onOpenDashboard={vi.fn()} />)
+
+  const sidebar = await screen.findByRole('navigation', { name: 'Menu thiết lập' })
+  await userEvent.click(within(sidebar).getByRole('button', { name: 'Thông tin cửa hàng' }))
+
+  const shopPanel = screen.getByRole('region', { name: 'Thông tin cửa hàng' })
+  expect(within(sidebar).getByRole('button', { name: 'Thông tin cửa hàng' })).toHaveAttribute('aria-current', 'page')
+  await userEvent.clear(within(shopPanel).getByRole('textbox', { name: /Tên cửa hàng/ }))
+  await userEvent.type(within(shopPanel).getByRole('textbox', { name: /Tên cửa hàng/ }), 'In ảnh Văn Lâm')
+  await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Địa chỉ' }))
+  await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Địa chỉ' }), '12 Nguyễn Trãi')
+  await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }))
+  await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }), '0909111222')
+  await userEvent.click(within(shopPanel).getByRole('button', { name: 'Lưu' }))
+  expect(within(shopPanel).getByRole('status')).toHaveTextContent('Đã lưu cấu hình bill trên máy này.')
+
+  await userEvent.click(within(sidebar).getByRole('button', { name: 'Mẫu in' }))
+  const templatePanel = screen.getByRole('region', { name: 'Mẫu in' })
+  await userEvent.selectOptions(within(templatePanel).getByRole('combobox', { name: 'Mẫu mặc định' }), 'k80')
+  await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu' }))
+
+  expect(JSON.parse(window.localStorage.getItem('qcvl.organizationBillSettings')!)).toMatchObject({
+    shop_name: 'In ảnh Văn Lâm',
+    shop_address: '12 Nguyễn Trãi',
+    shop_phone: '0909111222',
+    default_bill_template: 'k80',
+  })
+})

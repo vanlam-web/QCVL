@@ -28,6 +28,12 @@ import {
   userRoleLabel,
   userStatusLabel,
 } from './admin-presenter'
+import {
+  billTemplateLabel,
+  readOrganizationBillSettings,
+  writeOrganizationBillSettings,
+  type OrganizationBillSettings,
+} from '../sales-documents/bill-settings'
 
 interface AdminState {
   users: UserListItem[]
@@ -48,6 +54,7 @@ type UserFormErrors = Partial<Record<'displayName' | 'phone' | 'email' | 'userna
 type UserDialogMode = 'create' | 'edit'
 type AdminUserSortKey = 'display_name' | 'username' | 'phone' | 'role' | 'status'
 type AdminRoleSortKey = 'name' | 'description' | 'userCount' | 'status'
+type AdminSettingsPanel = 'users' | 'roles' | 'shop' | 'bill-templates'
 
 const internalStaffDefaultPermissions = [
   permissions.createOrder,
@@ -192,13 +199,29 @@ export function FoundationAdminPage({
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [roleForm, setRoleForm] = useState({ name: '', description: '', permissions: [] as Permission['code'][] })
-  const [activeTab, setActiveTab] = useState<'users' | 'roles'>('users')
+  const [activeTab, setActiveTab] = useState<AdminSettingsPanel>('users')
   const [savingUser, setSavingUser] = useState(false)
+  const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettings())
+  const [billSettingsNotice, setBillSettingsNotice] = useState<string | null>(null)
   const [userSearch, setUserSearch] = useState('')
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
   const [lastUserSearch, setLastUserSearch] = useState('')
   const [lastUserStatus, setLastUserStatus] = useState<UserStatusFilter>('all')
   const createUserDisplayNameRef = useRef<HTMLInputElement | null>(null)
+
+  function openSettingsPanel(panel: AdminSettingsPanel) {
+    setActiveTab(panel)
+    setBillSettingsNotice(null)
+    if (panel === 'shop' || panel === 'bill-templates') {
+      setBillSettings(readOrganizationBillSettings())
+    }
+  }
+
+  function saveBillSettings(next: Partial<OrganizationBillSettings>) {
+    const saved = writeOrganizationBillSettings(next)
+    setBillSettings(saved)
+    setBillSettingsNotice('Đã lưu cấu hình bill trên máy này.')
+  }
 
   async function load(input: { search?: string; status?: UserStatusFilter } = {}) {
     const search = input.search ?? lastUserSearch
@@ -489,7 +512,7 @@ export function FoundationAdminPage({
               aria-selected={activeTab === 'users'}
               role="tab"
               type="button"
-              onClick={() => setActiveTab('users')}
+              onClick={() => openSettingsPanel('users')}
             >
               Tài khoản người dùng
             </button>
@@ -497,7 +520,7 @@ export function FoundationAdminPage({
               aria-selected={activeTab === 'roles'}
               role="tab"
               type="button"
-              onClick={() => setActiveTab('roles')}
+              onClick={() => openSettingsPanel('roles')}
             >
               Quản lý vai trò
             </button>
@@ -505,13 +528,93 @@ export function FoundationAdminPage({
         </div>
       }
       filter={
-        <AdminSettingsMenu />
+        <AdminSettingsMenu
+          activeItem={
+            activeTab === 'shop'
+              ? 'Thông tin cửa hàng'
+              : activeTab === 'bill-templates'
+                ? 'Mẫu in'
+                : 'Quản lý người dùng'
+          }
+          onSelect={(item) => {
+            if (item === 'Thông tin cửa hàng') openSettingsPanel('shop')
+            else if (item === 'Mẫu in') openSettingsPanel('bill-templates')
+            else if (item === 'Quản lý người dùng') openSettingsPanel('users')
+          }}
+        />
       }
     >
       {error && !userDialogOpen ? <p role="alert">{error}</p> : null}
-      {state === null && error === null ? <p>Đang tải dữ liệu quản trị...</p> : null}
+      {state === null && error === null && (activeTab === 'users' || activeTab === 'roles') ? (
+        <p>Đang tải dữ liệu quản trị...</p>
+      ) : null}
 
-      {state ? (
+      {activeTab === 'shop' ? (
+        <section aria-label="Thông tin cửa hàng" className="admin-settings-panel">
+          <h2>Thông tin cửa hàng</h2>
+          <p>Dùng làm đầu bill in. Lưu trên máy/trình duyệt này (Tầng B1).</p>
+          {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
+          <form
+            className="admin-settings-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              saveBillSettings({
+                shop_name: String(form.get('shop_name') ?? ''),
+                shop_address: String(form.get('shop_address') ?? ''),
+                shop_phone: String(form.get('shop_phone') ?? ''),
+              })
+            }}
+          >
+            <label>
+              Tên cửa hàng / xưởng
+              <input name="shop_name" defaultValue={billSettings.shop_name} required />
+            </label>
+            <label>
+              Địa chỉ
+              <input name="shop_address" defaultValue={billSettings.shop_address} />
+            </label>
+            <label>
+              Điện thoại
+              <input name="shop_phone" defaultValue={billSettings.shop_phone} />
+            </label>
+            <button className="button button-primary" type="submit">
+              Lưu
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      {activeTab === 'bill-templates' ? (
+        <section aria-label="Mẫu in" className="admin-settings-panel">
+          <h2>Mẫu in / bill</h2>
+          <p>Chọn mẫu mặc định khi mở bill. Có thể đổi lại trên màn in.</p>
+          {billSettingsNotice ? <p role="status">{billSettingsNotice}</p> : null}
+          <form
+            className="admin-settings-form"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const form = new FormData(event.currentTarget)
+              saveBillSettings({
+                default_bill_template: String(form.get('default_bill_template')) === 'k80' ? 'k80' : 'a4',
+              })
+            }}
+          >
+            <label>
+              Mẫu mặc định
+              <select name="default_bill_template" defaultValue={billSettings.default_bill_template}>
+                <option value="a4">{billTemplateLabel('a4')}</option>
+                <option value="k80">{billTemplateLabel('k80')}</option>
+              </select>
+            </label>
+            <button className="button button-primary" type="submit">
+              Lưu
+            </button>
+          </form>
+        </section>
+      ) : null}
+
+      {state && (activeTab === 'users' || activeTab === 'roles') ? (
         <div className="admin-settings-workspace">
           {activeTab === 'users' ? (
           <ManagementListSurface ariaLabel="Tài khoản người dùng">
@@ -975,7 +1078,13 @@ export function FoundationAdminPage({
   )
 }
 
-function AdminSettingsMenu() {
+function AdminSettingsMenu({
+  activeItem,
+  onSelect,
+}: {
+  activeItem: string
+  onSelect: (item: string) => void
+}) {
   return (
     <nav aria-label="Menu thiết lập" className="admin-settings-menu">
       <label className="admin-settings-search">
@@ -986,8 +1095,9 @@ function AdminSettingsMenu() {
       <AdminSettingsGroup title="Tiện ích" items={['Giao hàng', 'Thanh toán', 'Gửi SMS', 'Zalo']} />
       <AdminSettingsGroup
         title="Cửa hàng"
-        activeItem="Quản lý người dùng"
-        items={['Thông tin cửa hàng', 'Quản lý tiền tệ', 'Quản lý người dùng', 'Quản lý chi nhánh', 'Bảo mật']}
+        activeItem={activeItem}
+        items={['Thông tin cửa hàng', 'Mẫu in', 'Quản lý tiền tệ', 'Quản lý người dùng', 'Quản lý chi nhánh', 'Bảo mật']}
+        onSelect={onSelect}
       />
       <AdminSettingsGroup title="Dữ liệu" items={['Khóa sổ', 'Lịch sử thao tác', 'Xóa dữ liệu gian hàng']} />
       <AdminSettingsGroup title="Thiết bị" items={['Cân điện tử']} />
@@ -999,10 +1109,12 @@ function AdminSettingsGroup({
   title,
   items,
   activeItem,
+  onSelect,
 }: {
   title: string
   items: string[]
   activeItem?: string
+  onSelect?: (item: string) => void
 }) {
   return (
     <section aria-label={title} className="admin-settings-group">
@@ -1013,6 +1125,7 @@ function AdminSettingsGroup({
             key={item}
             aria-current={item === activeItem ? 'page' : undefined}
             type="button"
+            onClick={onSelect ? () => onSelect(item) : undefined}
           >
             <Settings aria-hidden="true" size={15} />
             <span>{item}</span>
