@@ -9,6 +9,8 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      TZ: Asia/Ho_Chi_Minh
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -27,7 +29,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nE '(service_role|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD|DATABASE_URL)=.+' -- ':!package-lock.json'; then
+          # Skip hardening-plan meta scan examples; doc placeholders use "KEY = '<…>'" (spaced).
+          if git grep -nE '(service_role|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD|DATABASE_URL)=.+' \
+            -- ':!package-lock.json' ':!docs/superpowers/plans/**'; then
             echo "Potential committed secret assignment found."
             exit 1
           fi

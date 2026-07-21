@@ -159,8 +159,8 @@ npm run build:all
 6. Neu co schema change, chay migrate truoc restart moi truong dich:
 
 ```powershell
-$env:DATABASE_URL='<postgres-url>'
-$env:ADMIN_PASSWORD='<admin-password>'
+$env:DATABASE_URL = '<postgres-url>'
+$env:ADMIN_PASSWORD = '<admin-password>'
 npm run db:migrate
 Remove-Item Env:\DATABASE_URL
 Remove-Item Env:\ADMIN_PASSWORD

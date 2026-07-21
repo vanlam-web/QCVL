@@ -27,9 +27,11 @@ export function buildCustomerDebtLedgerRows(
   invoiceHistory: Array<{ id: string; code: string; created_at: string; total_amount: number; status?: SalesDocumentListItem['status'] }>,
   cashbookHistory: CashbookEntry[],
   adjustments: NonNullable<CustomerDebtDetail['adjustments']>,
-  _linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
-  _options: { currentTotal?: number } = {},
+  linkedSupplierReceipts: NonNullable<CustomerDebtDetail['linked_supplier_receipts']> = [],
+  options: { currentTotal?: number } = {},
 ): CustomerDebtLedgerRow[] {
+  void linkedSupplierReceipts
+  void options
   const rows: CustomerDebtLedgerSortableRow[] = [
     ...invoiceHistory
       .filter((invoice) => salesDocumentAffectsCustomerDebt(invoice))

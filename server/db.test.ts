@@ -1671,7 +1671,7 @@ describe('createPgRepository product units', () => {
 
   test('loads and upserts PostgreSQL product BOM as active version', async () => {
     const { createPgRepository } = await import('./db')
-    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+    pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('from products') && sql.includes('id::text = $2') && !sql.includes('product_bom')) {
         return { rows: [{ id: 'product-hh' }], rowCount: 1 }
       }
