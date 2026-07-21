@@ -238,6 +238,58 @@ describe('createPgRepository product units', () => {
     })).rejects.toThrow('PRODUCT_ALREADY_EXISTS')
   })
 
+  test('creates manual suppliers in supplier_snapshots with zero payable', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.includes('select max(') && sql.includes('from supplier_snapshots')) return { rows: [{ max_number: 38 }], rowCount: 1 }
+      if (sql.includes('from supplier_snapshots') && sql.includes('lower(code)')) return { rows: [], rowCount: 0 }
+      if (sql.includes('insert into supplier_snapshots')) {
+        expect(values?.[2]).toBe('NCC000039')
+        expect(String(sql)).toContain("'manual'")
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const created = await repository.createSupplier?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      name: 'NCC tạo tay',
+      phone: '0909111222',
+      email: 'ncc@example.com',
+      address: '12 Nguyễn Trãi',
+      tax_code: '0312222222',
+      notes: 'NCC mới sau import',
+    })
+
+    expect(created).toEqual(expect.objectContaining({
+      code: 'NCC000039',
+      name: 'NCC tạo tay',
+      current_payable_amount: 0,
+      total_purchase_amount: 0,
+      status: 'active',
+      linked_customer_id: null,
+    }))
+    expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into supplier_snapshots'))).toBe(true)
+  })
+
+  test('rejects duplicate supplier codes when creating manual suppliers', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from supplier_snapshots') && sql.includes('lower(code)')) {
+        return { rows: [{ id: 'existing-supplier' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await expect(repository.createSupplier?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      code: 'THN',
+      name: 'Trùng mã',
+    })).rejects.toThrow('SUPPLIER_ALREADY_EXISTS')
+  })
+
   test('moves same-sale cashbook timestamps when sales document time changes', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {

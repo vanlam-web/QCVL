@@ -1293,6 +1293,73 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows.map((row) => row.data as SupplierListData).filter((supplier) => supplierSnapshotMatches(input.url, supplier))
     },
 
+    async createSupplier(input) {
+      await ensureImportedSnapshotTables(pool)
+      const code = input.code?.trim() || await nextManualSupplierCode(pool, input.organizationId)
+      const existing = await pool.query(
+        `
+          select id
+          from supplier_snapshots
+          where organization_id = $1
+            and lower(code) = lower($2)
+          limit 1
+        `,
+        [input.organizationId, code],
+      )
+      if (existing.rows[0]) throw new Error('SUPPLIER_ALREADY_EXISTS')
+
+      const linkedCustomerId = input.linked_customer_id?.trim() || null
+      let linkedCustomer: { id: string; code: string; name: string } | null = null
+      if (linkedCustomerId) {
+        const customerResult = await pool.query(
+          `
+            select data
+            from customer_snapshots
+            where organization_id = $1 and id = $2
+            limit 1
+          `,
+          [input.organizationId, linkedCustomerId],
+        )
+        const customer = customerResult.rows[0]?.data as CustomerListData | undefined
+        if (!customer) throw new Error('LINKED_CUSTOMER_NOT_FOUND')
+        linkedCustomer = { id: customer.id, code: customer.code, name: customer.name }
+      }
+
+      const createdAt = new Date().toISOString()
+      const data: SupplierListData = {
+        id: randomUUID(),
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        address: input.address?.trim() || null,
+        tax_code: input.tax_code?.trim() || null,
+        linked_customer_id: linkedCustomerId,
+        linked_customer: linkedCustomer,
+        notes: input.notes?.trim() || null,
+        status: input.status?.trim() || 'active',
+        current_payable_amount: 0,
+        total_purchase_amount: 0,
+        created_at: createdAt,
+        source_creator_name: null,
+        source_created_at: null,
+        company_name: null,
+      }
+      try {
+        await pool.query(
+          `
+            insert into supplier_snapshots (id, organization_id, code, data, source_type, created_at, updated_at)
+            values ($1, $2, $3, $4::jsonb, 'manual', $5::timestamptz, now())
+          `,
+          [data.id, input.organizationId, data.code, JSON.stringify(data), data.created_at],
+        )
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new Error('SUPPLIER_ALREADY_EXISTS')
+        throw error
+      }
+      return data
+    },
+
     async findSuppliersByCodes(input) {
       await ensureImportedSnapshotTables(pool)
       const result = await pool.query(
@@ -8001,6 +8068,24 @@ async function nextManualCustomerCode(pool: pg.Pool, organizationId: string) {
   )
   const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
   return `KH${String(nextNumber).padStart(6, '0')}`
+}
+
+async function nextManualSupplierCode(pool: pg.Pool, organizationId: string) {
+  const result = await pool.query(
+    `
+      select max(
+        case
+          when code ~* '^ncc[0-9]+$' then substring(code from '[0-9]+')::int
+          else null
+        end
+      ) as max_number
+      from supplier_snapshots
+      where organization_id = $1
+    `,
+    [organizationId],
+  )
+  const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
+  return `NCC${String(nextNumber).padStart(6, '0')}`
 }
 
 function customerSnapshotMatches(url: URL, customer: CustomerListData) {

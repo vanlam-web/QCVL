@@ -27,7 +27,7 @@
 | `POST` | `/v1/purchase/receipts/{id}/cancel` | Hủy phiếu |
 | `POST` | `/v1/suppliers/{id}/payments` | Trả tiền NCC |
 
-Không cần implement tất cả endpoint trong một slice. P1 nền có; **P2/P3/P5 live create/post/pay vẫn HTTP stub** dù SoT/UI từng ghi “đã merge” — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md). P4 cuộn/tấm là candidate riêng theo [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md#9-lát-cắt-purchase).
+Không cần implement tất cả endpoint trong một slice. P1 nền có; **P2/P3 hàng thường + `POST /suppliers` tạo NCC tay đã persist** — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md). P5 trả NCC cần nghiệm thu sâu; P4 cuộn/tấm đóng băng theo [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md#9-lát-cắt-purchase).
 
 Search contract:
 
@@ -105,6 +105,9 @@ Rules:
 - `code` bỏ trống thì backend tự sinh `NCC000001...`.
 - `phone` được phép trống, không unique cứng.
 - `linked_customer_id` nếu có phải cùng organization.
+- Trùng `code` (không phân biệt hoa thường) → `409 RESOURCE_CONFLICT`.
+
+**Runtime:** Persist Postgres / dev-memory (`supplier_snapshots`, `source_type=manual`). Không còn stub HTTP.
 
 ### `PATCH /v1/suppliers/{id}`
 

@@ -64,7 +64,8 @@
 - [x] Hướng tiếp: vận hành đơn mới sau import + đối soát trùng KV · Sales README
 - [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
 - [x] `POST /products` persist (Postgres + dev-memory); combo/service ép `track_inventory=false` theo KV · 2026-07-21
-- [ ] Owner chỉ loại đơn cần UI trước (sau tạo SP/PN hàng thường) rồi mở gap còn lại nếu có
+- [x] `POST /suppliers` tạo NCC tay persist (không stub) · 2026-07-21
+- [ ] Owner chỉ loại đơn cần UI trước (sau PN/NCC/tạo SP) rồi mở gap còn lại nếu có
 
 ---
 
@@ -98,6 +99,7 @@
 | 2026-07-21 | Purchase P2/P3/P5 “đã merge” vs HTTP stub | Purchase README | [x] PR #5 |
 | 2026-07-21 | POS Postgres trừ mã combo + thiếu test combo | Biên bản → đã sửa code | [x] #7 + sync docs |
 | 2026-07-21 | `POST /products` stub chặn tạo SP mới sau import | Persist + docs SoT | [x] create-product-persist |
+| 2026-07-21 | `POST /suppliers` stub chặn tạo NCC mới sau import | Persist + docs SoT | [x] create-supplier-persist |
 
 ---
 

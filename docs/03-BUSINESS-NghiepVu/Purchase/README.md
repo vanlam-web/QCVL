@@ -34,6 +34,7 @@
 | Slice / hạng mục | Runtime | Khớp SoT? |
 |---|---|---|
 | P1 Supplier list/detail/import/link | Có — dùng được trên dữ liệu đã import | Phần lớn |
+| **`POST /suppliers` tạo NCC tay** | Có — persist `supplier_snapshots` (`source_type=manual`); mã trống → `NCC000001…`; trùng mã → 409 | Có |
 | List/detail phiếu nhập từ **import KV** (`purchase_receipt_snapshots`) | Có; PN posted import ghi `stock_movements.purchase_receipt` | Phần lớn (đọc lịch sử) |
 | P2 Live `POST/PATCH` tạo/sửa draft phiếu nhập | Có — lưu `purchase_receipt_snapshots` Postgres cho phiếu manual | Phần lớn |
 | P3 Live `POST .../post` hàng thường | Có — post phiếu manual, tăng `stock_movements`, cập nhật `latest_purchase_cost`, ghi công nợ/NCC total; nếu trả ngay thì ghi sổ quỹ | Phần lớn |
