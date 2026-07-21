@@ -6478,16 +6478,30 @@ async function draftBomComponentsByProductId(pool: pg.Pool, organizationId: stri
 }
 
 async function snapshotByCode<T>(pool: pg.Pool, tableName: 'customer_snapshots' | 'supplier_snapshots', organizationId: string, code: string) {
+  const importCode = baseKiotVietImportCode(code)
   const result = await pool.query(
     `
       select data
       from ${tableName}
-      where organization_id = $1 and lower(code) = lower($2)
+      where organization_id = $1
+        and (
+          lower(code) = lower($2)
+          or id = any($3::text[])
+        )
       limit 1
     `,
-    [organizationId, baseKiotVietImportCode(code)],
+    [organizationId, importCode, snapshotImportIds(tableName, importCode)],
   )
   return result.rows[0]?.data as T | null ?? null
+}
+
+function snapshotImportIds(tableName: 'customer_snapshots' | 'supplier_snapshots', code: string) {
+  const prefix = tableName === 'customer_snapshots' ? 'customer-kv' : 'supplier-kv'
+  const normalizedCode = baseKiotVietImportCode(code)
+  return [
+    `${prefix}-${normalizedCode.toLowerCase()}`,
+    `${prefix}-${hashText(normalizedCode)}`,
+  ]
 }
 
 async function loadCustomerPreferredBillTemplate(

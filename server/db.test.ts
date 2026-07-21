@@ -856,6 +856,50 @@ describe('createPgRepository product units', () => {
     expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into finance_accounts'))).toBe(true)
   })
 
+  test('upserts customer debt adjustments by KiotViet customer id when current customer code changed', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.includes('from customer_snapshots')) {
+        if (!sql.includes('id = any($3::text[])')) return { rows: [], rowCount: 0 }
+        expect(values?.[1]).toBe('KH000129')
+        expect(values?.[2]).toContain('customer-kv-kh000129')
+        return {
+          rows: [{
+            data: {
+              id: 'customer-kv-kh000129',
+              code: 'HLo',
+              name: 'Hoàng Lợi',
+              phone: null,
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from customer_debt_adjustments')) return { rows: [], rowCount: 0 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.upsertImportedKiotVietCustomerDebtAdjustments?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      rows: [{
+        rowNumber: 10932,
+        customer_code: 'KH000129',
+        customer_name: 'Hoàng Lợi',
+        source_code: 'CKKH000021',
+        transaction_time: '2025-05-13T10:57:00.000Z',
+        transaction_type: 'Chiết khấu thanh toán cho khách',
+        amount_delta: -135878,
+        balance_after: 0,
+        source_file: 'BaoCaoCongNoTheoKhachHang_KV13072026-150538-065.xlsx',
+      }],
+    })
+
+    expect(result).toEqual({ created: 1, updated: 0, skipped: 0 })
+    const insertCall = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into customer_debt_adjustments'))
+    expect(insertCall?.[1]).toContain('customer-kv-kh000129')
+  })
+
   test('collects legacy KiotViet-anchored debt when no open debt entries exist', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
