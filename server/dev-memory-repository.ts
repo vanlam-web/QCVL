@@ -64,11 +64,16 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const userOrder: string[] = []
   const groupIds = new Map<string, string>()
   const groupNamesById = new Map<string, string>()
-  let organizationBillSettings = {
+  let organizationBillSettings: {
+    shop_name: string
+    shop_address: string
+    shop_phone: string
+    default_bill_template: 'a4' | 'k80'
+  } = {
     shop_name: organization.name,
     shop_address: 'Xưởng in và thi công quảng cáo',
     shop_phone: '',
-    default_bill_template: 'a4' as const,
+    default_bill_template: 'a4',
   }
   const adminAuthUser: AuthUserRow = {
     ...adminUser,
@@ -933,6 +938,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         })),
         linked_supplier_receipts: linkedSupplierReceiptOffsets(input.customerId),
         cashbook_entries: [],
+        ledger_rows: [],
       }
     },
     async upsertImportedKiotVietCustomerDebtAdjustments(input) {
