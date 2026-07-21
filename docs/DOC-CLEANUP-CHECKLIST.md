@@ -61,10 +61,14 @@
 
 ### P4 — Ngoài phạm vi đợt docs (chờ Owner bảo làm code)
 
-- [ ] Runtime BOM slice (import `active`, POS không trừ mã combo, UI, stub `/bom`)
+- [ ] Runtime BOM slice (import `active`, POS không trừ mã combo, UI, stub `/bom`) — **rà POS xong:** [Sales/POS-STOCK-AUDIT-2026-07-21.md](./03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md)
 - [ ] Runtime mốc mở tồn QCVL
 - [ ] Persist Purchase P2/P3/P5 (bỏ stub create/post/pay)
 - [ ] Deep-scan BOM / POS Lưu Combo / object cuộn-tấm đầy đủ
+
+### Đã rà (docs + code, chưa sửa runtime)
+
+- [x] **POS trừ kho Postgres** — 2026-07-21: xác nhận bug parent combo; thiếu test Postgres combo; dev-memory OK · [POS-STOCK-AUDIT-2026-07-21.md](./03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md)
 
 ---
 
@@ -77,6 +81,7 @@
 | 2026-07-20 | Postgres POS live trừ mã combo | Sales README path | [x] PR #5 |
 | 2026-07-20 | Doc “BOM nháp / draft chờ duyệt” | SoT+runtime vệ tinh | [x] PR #5 |
 | 2026-07-21 | Purchase P2/P3/P5 “đã merge” vs HTTP stub | Purchase README | [x] PR #5 |
+| 2026-07-21 | POS Postgres trừ mã combo + thiếu test combo | Biên bản POS-STOCK-AUDIT | [x] rà xong; chờ code |
 | | | | [ ] |
 
 ---

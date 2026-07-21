@@ -21,6 +21,8 @@
 
 SoT BOM đầy đủ: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md) · Tồn kho: [../Inventory/README.md](../Inventory/README.md)
 
+**Biên bản rà POS trừ kho (2026-07-21):** [POS-STOCK-AUDIT-2026-07-21.md](./POS-STOCK-AUDIT-2026-07-21.md)
+
 ---
 
 ## Trừ kho khi bán — trạng thái (2026-07-20)
@@ -40,7 +42,7 @@ SoT BOM đầy đủ: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md) · Tồn kho: [
 
 | Path | Runtime | Khớp SoT? |
 |---|---|---|
-| **Postgres POS live** (`saveSalesDocument` → `saveSalesDocumentStockMovements`) | Hóa đơn `completed`: **luôn** `sale_deduction` cho **parent** dòng (không check `track_inventory` / `product_kind`); sau đó trừ component nếu có BOM `draft` **hoặc** `active` | **Không** — combo có thể bị trừ **cả mã combo lẫn thành phần** |
+| **Postgres POS live** (`saveSalesDocument` → `saveSalesDocumentStockMovements`) | Hóa đơn `completed`: **luôn** `sale_deduction` cho **parent** dòng (không check `track_inventory` / `product_kind`); sau đó trừ component nếu có BOM `draft` **hoặc** `active` | **Không** — combo có thể bị trừ **cả mã combo lẫn thành phần**. Chi tiết: [POS-STOCK-AUDIT-2026-07-21.md](./POS-STOCK-AUDIT-2026-07-21.md) |
 | **Postgres import HD KV** (`upsertImportedKiotVietInvoices`) | Parent chỉ khi `track_inventory = true` (combo import thường `false` → không trừ parent); vẫn trừ component từ BOM `draft`/`active` | **Một phần** |
 | **Dev-memory** POS / import HD | Parent chỉ khi `track_inventory = true`; component từ `draftBoms` in-memory (không phân active) | **Một phần** |
 
