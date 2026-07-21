@@ -14,6 +14,7 @@ This file is navigation only. Start with the short current-state worker guide.
 | Runtime data source | [CURRENT-DATA-SOURCE.md](./CURRENT-DATA-SOURCE.md) |
 | Document rules | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 | Current phase/checklist | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |
+| Doc cleanup checklist (temporary) | [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) |
 | Performance log | [PERFORMANCE-FIX-LOG.md](./PERFORMANCE-FIX-LOG.md) |
 
 ## Source Of Truth By Layer

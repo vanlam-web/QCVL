@@ -1548,7 +1548,7 @@ describe('createDevMemoryRepository persistence', () => {
         product_code: 'IB',
         source_text: 'BT:1.2',
         components: [{ component_code: 'BT', quantity: 1.2 }],
-        note: 'Imported from KiotViet product BOM. Review before activating.',
+        note: 'Imported from KiotViet product BOM. Trusted for stock deduction.',
       }],
     })
     await repository.upsertCustomersByCode?.({
@@ -1961,7 +1961,7 @@ describe('createDevMemoryRepository persistence', () => {
         product_code: 'IB',
         source_text: 'BT:1.2',
         components: [{ component_code: 'BT', quantity: 1.2 }],
-        note: 'Imported from KiotViet product BOM. Review before activating.',
+        note: 'Imported from KiotViet product BOM. Trusted for stock deduction.',
       }],
     })
     await repository.upsertCustomersByCode?.({

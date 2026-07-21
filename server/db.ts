@@ -627,9 +627,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             left join product_bom_items pbi on pbi.organization_id = pb.organization_id and pbi.bom_id = pb.id
             where pb.organization_id = p.organization_id
               and pb.product_id = p.id
-              and pb.status = 'draft'
+              and pb.status in ('active', 'draft')
             group by pb.id, pb.version, pb.status, pb.notes, pb.created_at
-            order by pb.version desc, pb.created_at desc
+            order by case when pb.status = 'active' then 0 else 1 end, pb.version desc, pb.created_at desc
             limit 1
           ) draft_bom_data on true
           where ${clauses.join(' and ')}
@@ -700,7 +700,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           ? {
               id: String(row.draft_bom.id),
               version: Number(row.draft_bom.version),
-              status: 'draft',
+              status: String(row.draft_bom.status) as 'draft' | 'active' | 'archived',
               item_count: Number(row.draft_bom.item_count),
               notes: row.draft_bom.notes === null ? null : String(row.draft_bom.notes),
             }
@@ -1924,13 +1924,13 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             continue
           }
 
-          const hadDraft = await pool.query(
+          const hadExisting = await pool.query(
             `
               select id
               from product_boms
               where organization_id = $1
                 and product_id = $2
-                and status = 'draft'
+                and status in ('draft', 'active')
                 and notes like 'Imported from KiotViet%'
               limit 1
             `,
@@ -1942,7 +1942,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               set status = 'archived'
               where organization_id = $1
                 and product_id = $2
-                and status = 'draft'
+                and status in ('draft', 'active')
                 and notes like 'Imported from KiotViet%'
             `,
             [input.organizationId, productId],
@@ -1959,7 +1959,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           const bom = await pool.query(
             `
               insert into product_boms (id, organization_id, product_id, version, status, notes, created_at)
-              values ($1, $2, $3, $4, 'draft', $5, now())
+              values ($1, $2, $3, $4, 'active', $5, now())
               returning id::text, (xmax = 0) as inserted
             `,
             [
@@ -1983,7 +1983,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               [randomUUID(), input.organizationId, bomId, component.id, component.quantity, component.sortOrder, `KiotViet component ${component.code}`],
             )
           }
-          if (hadDraft.rows.length > 0) updated += 1
+          if (hadExisting.rows.length > 0) updated += 1
           else created += 1
         }
         await pool.query('commit')
@@ -1992,6 +1992,96 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         await pool.query('rollback')
         throw error
       }
+    },
+
+    async getProductBom(input) {
+      return loadProductBomDetail(pool, input.organizationId, input.productId)
+    },
+
+    async upsertProductBom(input) {
+      await ensureProductBomTables(pool)
+      const product = await pool.query(
+        `
+          select id::text
+          from products
+          where organization_id = $1 and id::text = $2
+          limit 1
+        `,
+        [input.organizationId, input.productId],
+      )
+      if (!product.rows[0]) return null
+
+      const items = input.items ?? []
+      for (const item of items) {
+        const quantity = Number(item.quantity)
+        if (!item.component_product_id || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('BOM item requires component_product_id and quantity > 0')
+        }
+      }
+
+      await pool.query('begin')
+      try {
+        await pool.query(
+          `
+            update product_boms
+            set status = 'archived'
+            where organization_id = $1
+              and product_id = $2
+              and status in ('draft', 'active')
+          `,
+          [input.organizationId, input.productId],
+        )
+        const version = await pool.query(
+          `
+            select coalesce(max(version), 0) + 1 as next_version
+            from product_boms
+            where organization_id = $1
+              and product_id = $2
+          `,
+          [input.organizationId, input.productId],
+        )
+        const bomId = randomUUID()
+        const createdAt = new Date().toISOString()
+        await pool.query(
+          `
+            insert into product_boms (id, organization_id, product_id, version, status, notes, created_at)
+            values ($1, $2, $3, $4, 'active', $5, $6::timestamptz)
+          `,
+          [
+            bomId,
+            input.organizationId,
+            input.productId,
+            Number(version.rows[0]?.next_version ?? 1),
+            input.notes ?? null,
+            createdAt,
+          ],
+        )
+        for (const [index, item] of items.entries()) {
+          await pool.query(
+            `
+              insert into product_bom_items (
+                id, organization_id, bom_id, component_product_id, quantity,
+                calculation_payload, sort_order, notes
+              )
+              values ($1, $2, $3, $4, $5, '{}'::jsonb, $6, $7)
+            `,
+            [
+              randomUUID(),
+              input.organizationId,
+              bomId,
+              item.component_product_id,
+              Number(item.quantity),
+              index + 1,
+              item.notes ?? null,
+            ],
+          )
+        }
+        await pool.query('commit')
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+      return loadProductBomDetail(pool, input.organizationId, input.productId)
     },
 
     async upsertImportedKiotVietStocktakes(input) {
@@ -5479,11 +5569,48 @@ async function insertStockMovement(
   )
 }
 
+function shouldDeductSaleParentStock(product: { track_inventory: boolean; product_kind?: string | null } | null | undefined) {
+  // KV Combo–Đóng gói / dịch vụ: không trừ tồn mã cha; chỉ trừ thành phần (BOM) khi có.
+  if (!product?.track_inventory) return false
+  const kind = String(product.product_kind ?? '').trim().toLowerCase()
+  if (kind === 'combo' || kind === 'service') return false
+  return true
+}
+
+async function saleParentProductsById(pool: pg.Pool, organizationId: string, productIds: Iterable<string>) {
+  const ids = [...new Set([...productIds].map((id) => String(id ?? '').trim()).filter(Boolean))]
+  const byId = new Map<string, { id: string; track_inventory: boolean; product_kind: string }>()
+  if (ids.length === 0) return byId
+  await ensureProductCatalogSchema(pool)
+  const result = await pool.query(
+    `
+      select id::text, track_inventory, product_kind
+      from products
+      where organization_id = $1
+        and id::text = any($2::text[])
+    `,
+    [organizationId, ids],
+  )
+  for (const row of result.rows) {
+    byId.set(String(row.id), {
+      id: String(row.id),
+      track_inventory: Boolean(row.track_inventory),
+      product_kind: String(row.product_kind ?? 'goods'),
+    })
+  }
+  return byId
+}
+
 async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: string, document: SalesDocumentData) {
   const affectedProducts = await deleteStockMovementsForDocument(pool, organizationId, 'sale_invoice', document.code)
   if (document.order_type === 'invoice' && document.status === 'completed') {
     await ensureProductBomTables(pool)
     const bomComponentsByProductId = await draftBomComponentsByProductId(pool, organizationId)
+    const parentProductsById = await saleParentProductsById(
+      pool,
+      organizationId,
+      document.items.map((item) => String((item as { product_id?: string }).product_id ?? '')),
+    )
     let runningEndingQty = 0
     for (const [index, rawItem] of document.items.entries()) {
       const item = rawItem as {
@@ -5497,7 +5624,8 @@ async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: st
       const factor = Number.isFinite(stockQtyPerSaleUnit) && stockQtyPerSaleUnit > 0 ? stockQtyPerSaleUnit : 1
       const soldQuantity = quantity * factor
       const quantityDelta = -soldQuantity
-      if (quantityDelta !== 0) {
+      const parentProduct = parentProductsById.get(item.product_id)
+      if (shouldDeductSaleParentStock(parentProduct) && quantityDelta !== 0) {
         runningEndingQty += quantityDelta
         affectedProducts.add(item.product_id)
         await insertStockMovement(pool, organizationId, {
@@ -5777,6 +5905,71 @@ async function ensureProductBomTables(pool: pg.Pool) {
   await pool.query('alter table product_bom_items add column if not exists notes text')
   await pool.query('create index if not exists idx_product_bom_items_bom on product_bom_items (organization_id, bom_id, sort_order)')
   await pool.query('create index if not exists idx_product_bom_items_component on product_bom_items (organization_id, component_product_id)')
+}
+
+async function loadProductBomDetail(pool: pg.Pool, organizationId: string, productId: string) {
+  await ensureProductBomTables(pool)
+  const bom = await pool.query(
+    `
+      select id::text, product_id::text, version, status, notes, created_at
+      from product_boms
+      where organization_id = $1
+        and product_id::text = $2
+        and status in ('active', 'draft')
+      order by case when status = 'active' then 0 else 1 end, version desc, created_at desc
+      limit 1
+    `,
+    [organizationId, productId],
+  )
+  const row = bom.rows[0]
+  if (!row) return null
+  const items = await pool.query(
+    `
+      select
+        pbi.id::text,
+        pbi.component_product_id::text,
+        pbi.quantity,
+        pbi.sort_order,
+        pbi.notes,
+        p.id::text as component_id,
+        p.code as component_code,
+        p.name as component_name,
+        p.unit_name as component_unit_name,
+        p.product_kind as component_product_kind,
+        p.latest_purchase_cost as component_latest_purchase_cost
+      from product_bom_items pbi
+      join products p
+        on p.organization_id = pbi.organization_id
+       and p.id = pbi.component_product_id
+      where pbi.organization_id = $1
+        and pbi.bom_id = $2
+      order by pbi.sort_order, pbi.id
+    `,
+    [organizationId, row.id],
+  )
+  return {
+    id: String(row.id),
+    product_id: String(row.product_id),
+    version: Number(row.version),
+    status: String(row.status) as 'draft' | 'active' | 'archived',
+    notes: row.notes === null ? null : String(row.notes),
+    created_at: row.created_at?.toISOString?.() ?? String(row.created_at),
+    items: items.rows.map((item) => ({
+      id: String(item.id),
+      component_product_id: String(item.component_product_id),
+      component_product: {
+        id: String(item.component_id),
+        code: String(item.component_code),
+        name: String(item.component_name),
+        unit_name: String(item.component_unit_name),
+        product_kind: String(item.component_product_kind),
+        latest_purchase_cost: item.component_latest_purchase_cost === null ? null : Number(item.component_latest_purchase_cost),
+      },
+      quantity: Number(item.quantity),
+      sort_order: Number(item.sort_order),
+      notes: item.notes === null ? null : String(item.notes),
+    })),
+  }
 }
 
 async function findProductIdByCode(pool: pg.Pool, organizationId: string, productCode: string) {

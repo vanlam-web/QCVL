@@ -448,7 +448,7 @@ function bomImportRows(rows: KiotVietImportProductRow[]) {
       product_code: row.code,
       source_text: row.bom_text as string,
       components,
-      note: 'Imported from KiotViet product BOM. Review before activating.',
+      note: 'Imported from KiotViet product BOM. Trusted for stock deduction.',
     }))
 }
 

@@ -255,7 +255,7 @@ Lưu danh sách sản phẩm/dịch vụ phục vụ POS và trang Hàng hóa.
 - `latest_purchase_cost_at` chỉ đổi khi `latest_purchase_cost` đổi.
 - `Giá bán` ghi vào `price_list_items` của bảng giá mặc định, không ghi vào `products`.
 - `Tồn kho` ghi vào `inventory_provisional_balances` với `source_type = kiotviet_import`; không tự tạo cuộn/tấm vật lý và không ghi `stock_movements` từ số tổng này.
-- `Hàng thành phần` ghi thành BOM nháp (`product_boms.status = draft`) để rà soát; không tự active nên POS chưa dùng để trừ kho.
+- `Hàng thành phần` ghi thành BOM `active`; POS trừ thành phần theo BOM khi bán combo, không trừ mã combo.
 - Chưa ghi `Dự kiến hết hàng` trong phase này.
 - Nếu file thiếu `ĐVT`, import ghi `unit_name = 'Cần cập nhật'` thay vì `NULL`. `unit_name` vẫn là trường bắt buộc để POS và danh sách hàng hóa không lỗi hiển thị.
 - Không tự xóa sản phẩm không còn xuất hiện trong file KiotViet mới.

@@ -2,6 +2,7 @@
 
 > **Mốc chốt:** V1 đủ test theo chốt Owner ngày `2026-07-03`; chức năng nâng cao nằm ngoài phạm vi hiện tại.
 > **Tham khảo:** KiotViet `Khách hàng > Khách hàng`
+> **Owner 2026-07-20:** đã import hết khách KV cần dùng — không mở import mới. Công nợ: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · checklist docs [DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
 
 ---
 

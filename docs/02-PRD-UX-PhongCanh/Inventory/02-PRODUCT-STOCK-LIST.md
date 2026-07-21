@@ -221,11 +221,11 @@ Nếu dòng thiếu `ĐVT`, import không chặn dòng đó. Hệ thống gán t
 
 Phase hiện tại chưa ghi: `Dự kiến hết hàng`. Phần này phải làm bằng luồng riêng có truy vết: dự báo theo lịch sử dùng hàng.
 
-`Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức` được parse thành BOM nháp trong `product_boms`/`product_bom_items`. BOM import từ KiotViet luôn để `status = draft` và ghi chú `Review before activating`; không tự kích hoạt để tránh POS trừ kho theo định mức cũ chưa rà soát.
+`Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức` được parse thành BOM trong `product_boms`/`product_bom_items`. BOM import từ KiotViet ghi `status = active` (dùng ngay khi bán) với ghi chú `Trusted for stock deduction`. Field API `draft_bom` giữ tên tương thích nhưng trả BOM đang dùng (`active`, fallback `draft`).
 
 `Tồn kho` từ file KiotViet được lưu vào `inventory_provisional_balances` với `source_type = kiotviet_import`. UI gọi rõ là `Tồn KV tạm nhập`. Đây là dữ liệu đối chiếu, không phải mốc khởi tạo tồn, không tự dựng cuộn/tấm vật lý và không thay thế `stock_movements`. Import lại cùng mã cập nhật số đối chiếu của mã đó theo file mới nhất.
 
-Danh sách hàng hóa phải trả kèm metadata rà soát import. Bảng chính dùng cột `Tồn QCVL`: nếu `operating_stock` có dữ liệu thì hiển thị tồn vận hành QCVL; nếu chưa có `operating_stock` nhưng có `kiotviet_provisional_stock` thì fallback hiển thị số tồn KV tạm nhập để nhân viên thấy dữ liệu đã import. Tab `Tồn kho` vẫn phải tách nhãn rõ `Tồn QCVL` và `Tồn KV tạm nhập`, số lượng và đơn vị từ `inventory_provisional_balances`, kèm trạng thái `Dữ liệu đối chiếu`. Tab `BOM/Vật tư cấu thành` hiển thị `BOM nháp KiotViet`, số vật tư và trạng thái `Cần rà soát trước khi kích hoạt`. Hai phần này chỉ là dữ liệu thật để kiểm tra sau import, không được dùng thay cho tồn kho/BOM active trong POS.
+Danh sách hàng hóa phải trả kèm metadata rà soát import. Bảng chính dùng cột `Tồn QCVL`: nếu `operating_stock` có dữ liệu thì hiển thị tồn vận hành QCVL; nếu chưa có `operating_stock` nhưng có `kiotviet_provisional_stock` thì fallback hiển thị số tồn KV tạm nhập để nhân viên thấy dữ liệu đã import. Tab `Tồn kho` vẫn phải tách nhãn rõ `Tồn QCVL` và `Tồn KV tạm nhập`, số lượng và đơn vị từ `inventory_provisional_balances`, kèm trạng thái `Dữ liệu đối chiếu`. Tab `BOM/Vật tư cấu thành` hiển thị `BOM KiotViet`, số vật tư và trạng thái `Đang dùng khi bán` khi BOM import đã `active`. Tồn KV tạm nhập vẫn chỉ là dữ liệu đối chiếu, không thay tồn QCVL.
 
 Tồn vận hành đúng phải tính từ một mốc mở đã xác nhận cộng/trừ lịch sử sau mốc. Mốc mở có thể là một phiếu kiểm kho ban đầu từ KiotViet nếu Owner chọn rõ mã phiếu/ngày chốt. Sau mốc đó, phiếu nhập làm tăng tồn, hóa đơn bán làm giảm tồn, trả hàng đảo chiều tồn, kiểm kho/cân bằng kho điều chỉnh chênh lệch, và thao tác cuộn/tấm/object ghi movement riêng. Cân bằng kho thuộc màn `Phiếu kiểm kho`, không nằm trong danh sách Hàng hóa. Khi chưa đủ mốc mở và luồng chứng từ sau mốc, `/products` không được gọi `inventory_provisional_balances` là tồn kho chính thức hoặc mốc ban đầu.
 
@@ -242,32 +242,36 @@ Thứ tự phụ thuộc để hoàn thiện tồn vận hành:
 
 ### Lộ trình tồn vận hành hiện tại 2026-07-12
 
+> **Bảng trạng thái SoT / runtime / hướng dài:** [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) (cập nhật 2026-07-20).
+
 Mục tiêu hoàn thiện `Hàng hóa` là hiển thị tồn vận hành đúng. Không lấy `Tồn kho` từ export Hàng hóa KiotViet làm mốc. Riêng phiếu kiểm kho KV ban đầu có thể được dùng làm mốc mở nếu Owner chọn rõ và xác nhận bỏ qua chứng từ trước mốc khi tính tồn hiện tại.
 
-Công thức nguồn:
+Công thức nguồn (**SoT mục tiêu**):
 
 `Tồn QCVL = tồn mở từ phiếu kiểm kho KV đã chọn + nhập hàng sau mốc - hóa đơn/POS sau mốc +/- trả hàng, kiểm kho và thao tác vật lý sau mốc`
+
+**Runtime 2026-07-20:** Postgres `operating_stock` = cộng `stock_movements` từ 0 (không có chọn mốc mở / lọc sau mốc). Chưa nghiệm thu công thức trên.
 
 Quy tắc hiển thị:
 
 - Bảng và chi tiết hàng hóa được phép hiển thị `Tồn KV tạm nhập`, nhưng phải gọi là dữ liệu đối chiếu.
-- V1 cho phép cột `Tồn QCVL` fallback hiển thị `Tồn KV tạm nhập` khi chưa có `stock_movements`, để 3200/3202 không hiện trống sau import. Đây chỉ là hiển thị tạm; logic POS/kho vẫn không được dùng số này làm tồn vận hành.
-- Khi chưa đủ movement, không đổi nhãn `Tồn KV tạm nhập` thành `Tồn kho`, `Tồn hiện tại`, hoặc tồn chính thức.
-- Nếu chưa chọn mốc mở, tồn QCVL phải thể hiện là chưa chốt thay vì lấy `Tồn KV tạm nhập` lấp vào.
-- Khi đã chọn mốc mở, chỉ chứng từ sau ngày mốc được cộng/trừ vào tồn hiện tại. Chứng từ trước mốc chỉ lưu lịch sử/đối chiếu để tránh tính hai lần.
+- V1 cho phép cột list (nhãn cột có thể là `Tồn kho`) **fallback số** từ `Tồn KV tạm nhập` khi chưa có `operating_stock`, để 3200/3202 không hiện trống sau import. Đây chỉ là hiển thị tạm; logic POS/kho không dùng số này làm tồn vận hành.
+- Khi chưa đủ movement, không đổi nhãn `Tồn KV tạm nhập` thành `Tồn kho`, `Tồn hiện tại`, hoặc tồn chính thức ở tab chi tiết.
+- Tab chi tiết: tách `Tồn QCVL` và `Tồn KV tạm nhập`. Khi chưa có `operating_stock`, nguồn QCVL hiện “Chưa chốt mốc tồn đầu kỳ” (hoặc tương đương) — **không** đồng nghĩa đã chọn mốc mở.
+- Khi đã chọn mốc mở (**chưa có runtime**), chỉ chứng từ sau ngày mốc được cộng/trừ vào tồn hiện tại. Chứng từ trước mốc chỉ lưu lịch sử/đối chiếu.
 - `Nhà cung cấp` của hàng lấy từ lịch sử phiếu nhập, không lấy từ file hàng hóa KiotViet.
 - `Dự kiến hết hàng` chỉ làm sau khi có lịch sử nhập/bán/stock movement đáng tin.
 
+> **Chốt mâu thuẫn cũ:** câu “chưa chọn mốc mở thì không lấy KV lấp vào QCVL” và “V1 fallback KV vào cột Tồn QCVL/Tồn kho” từng viết đối nhau. Đọc theo [Inventory README mục 1](../../03-BUSINESS-NghiepVu/Inventory/README.md): fallback = cột list tạm; chi tiết tách nhãn; công thức mốc mở vẫn là mục tiêu.
+
 Thứ tự làm tiếp:
 
-1. Rà `Khách hàng` đủ dùng cho hóa đơn/POS và `Khách lẻ`: mã khách, tên, SĐT, loại khách, người tạo, import/cleanup và chọn khách. Không làm sâu `Lịch sử bán/trả hàng` hoặc `Nợ cần thu` ở bước này.
-2. Rà `Nhà cung cấp` đủ dùng cho phiếu nhập và công nợ NCC.
-3. Chọn/ghi nhận phiếu kiểm kho KV ban đầu làm mốc mở khi bắt đầu xây công thức tồn.
-4. Phiếu nhập posted sau mốc ghi `stock_movements` tăng tồn. Dev-memory import KiotViet posted đã đọc được movement tăng tồn; cần nối tiếp DB thật khi làm migration/persistence.
-5. Cho hóa đơn/POS posted sau mốc ghi `stock_movements` giảm tồn. Đây là bước tiếp theo để tồn không chỉ có chiều cộng.
-6. Cho trả hàng sau mốc ghi movement đảo chiều.
-7. Cho kiểm kho/cân bằng kho sau mốc ghi adjustment rõ ràng.
-8. Quay lại `/products` để hiển thị tồn QCVL tính được và cột so sánh KV.
+**Owner 2026-07-20:** không import thêm file KiotViet. Các bước dưới đây là vận hành/đối soát trên dữ liệu đã nạp.
+
+1. Rà `Khách hàng` / `Nhà cung cấp` đủ dùng trên dữ liệu đã import (không mở đợt import mới).
+2. Chọn/ghi nhận phiếu kiểm kho KV **đã có** làm mốc mở khi Owner muốn chốt công thức tồn (chưa có runtime chọn mốc).
+3. Đảm bảo phiếu nhập / hóa đơn / POS đã có ghi `stock_movements` đúng trên dữ liệu hiện có; bổ sung trả hàng / kiểm-cân bằng sau mốc khi làm.
+4. Quay lại `/products` để hiển thị tồn QCVL theo công thức đã chốt và cột so sánh KV tạm (đối chiếu).
 
 Tab `Tồn kho` cũng hiển thị `Kiểm kho KiotViet gần nhất` nếu đã import file kiểm kho. Trường API là `latest_kiotviet_stocktake`, hydrate từ `stocktakes`/`stocktake_items` có `source_type = kiotviet_import` và `source_system = kiotviet`. Phần này chỉ là bằng chứng đối soát: hiển thị mã phiếu, ngày, số lượng thực tế, số lệch. Tuyệt đối không lấy `actual_qty` của phiếu kiểm kho để ghi đè `inventory_provisional_balances` hoặc tồn vận hành.
 
@@ -277,13 +281,13 @@ Các cột đã thống nhất bỏ qua: `Thương hiệu`, `Vị trí`, `Tồn 
 
 `Nhà cung cấp` không lấy từ file hàng hóa KiotViet. Sau này lấy từ phiếu nhập, vì một hàng có thể có nhiều nhà cung cấp.
 
-`Xóa dữ liệu cũ` thay thế checkbox xóa dữ liệu mẫu. Trên Hàng hóa, backend xóa dữ liệu phụ KiotViet (`inventory_provisional_balances.source_type = kiotviet_import`, BOM nháp KiotViet, giá import) và chỉ xóa sản phẩm nếu không còn tham chiếu nghiệp vụ thật. Nếu sản phẩm đang được hóa đơn/phiếu nhập/sổ kho/BOM thật dùng, backend phải trả `blocked_rows` để người dùng biết còn dữ liệu chưa thể xóa.
+`Xóa dữ liệu cũ` thay thế checkbox xóa dữ liệu mẫu. Trên Hàng hóa, backend xóa dữ liệu phụ KiotViet (`inventory_provisional_balances.source_type = kiotviet_import`, BOM import KiotViet, giá import) và chỉ xóa sản phẩm nếu không còn tham chiếu nghiệp vụ thật. Nếu sản phẩm đang được hóa đơn/phiếu nhập/sổ kho/BOM thật dùng, backend phải trả `blocked_rows` để người dùng biết còn dữ liệu chưa thể xóa.
 
 ---
 
 ## Ghi chú triển khai 2026-07-10
 
-- Import KiotViet không chỉ hiển thị quy đổi ở UI. Backend phải ghi đơn vị tồn chính vào `inventory_units`, cấu hình tồn vào `product_inventory_settings`, đơn vị phụ vào `product_unit_conversions`, tồn tạm vào `inventory_provisional_balances`, và BOM nháp vào `product_boms`/`product_bom_items`.
+- Import KiotViet không chỉ hiển thị quy đổi ở UI. Backend phải ghi đơn vị tồn chính vào `inventory_units`, cấu hình tồn vào `product_inventory_settings`, đơn vị phụ vào `product_unit_conversions`, tồn tạm vào `inventory_provisional_balances`, và BOM (`active`) vào `product_boms`/`product_bom_items`.
 - `GET /api/v1/products` phải đọc `unit_conversions` từ `product_unit_conversions`; không được trả `[]` giả khi DB đã có dữ liệu.
 - `GET /api/v1/products` phải trả `kiotviet_provisional_stock`, `latest_kiotviet_stocktake` và `draft_bom` nếu có dữ liệu import cần rà soát. UI chỉ hiển thị ở tab chi tiết, không kích hoạt nghiệp vụ kho/POS.
 - Bộ lọc `Thời gian tạo` của Hàng hóa đã làm thật trên dev ngày `2026-07-10`: vỏ dùng class chung `management-filter-time-options`, `management-filter-quick-time-menu`, `management-filter-date-range`; ruột đi qua `CatalogPage.load` -> `catalog-service.ts` -> API `GET /products?created_from=&created_to=` -> repository lọc `products.created_at`.

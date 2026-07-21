@@ -2595,7 +2595,7 @@ describe('createHttpHandler', () => {
     ])
   })
 
-  test('lists KiotViet provisional stock and draft BOM metadata for imported products', async () => {
+  test('lists KiotViet provisional stock and active BOM metadata for imported products', async () => {
     const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
     const authorization = 'Bearer dev-token'
 
@@ -2632,7 +2632,7 @@ describe('createHttpHandler', () => {
           source_type: 'kiotviet_import',
         }),
         draft_bom: expect.objectContaining({
-          status: 'draft',
+          status: 'active',
           item_count: 2,
         }),
       }),

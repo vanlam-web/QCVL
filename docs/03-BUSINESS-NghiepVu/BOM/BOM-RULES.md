@@ -170,14 +170,14 @@ Export KiotViet có cột `Hàng thành phần` dạng text, ví dụ:
 DCS:0.6|F5:0.3
 ```
 
-QC-OMS có thể dùng dữ liệu này để tạo draft BOM khi import, nhưng không dùng text này làm schema chính.
+QC-OMS parse cột này thành BOM chuẩn (`active`) khi import; không dùng text này làm schema chính.
 
-Quy tắc import:
+Quy tắc import (Owner 2026-07-20):
 
-- parse cột thành danh sách thành phần nháp
-- giữ trạng thái cần rà soát nếu mã thành phần không rõ
-- không tự coi mọi BOM import là chính xác tuyệt đối
-- sau khi quản lý xác nhận, BOM mới trở thành BOM chuẩn
+- parse cột thành danh sách thành phần; thiếu mã thì bỏ qua BOM đó (`bom_skipped_rows`)
+- ghi `status = active`, dùng ngay khi bán — **không** luồng nháp → duyệt cho BOM KV
+- không tự coi mọi BOM import là chính xác tuyệt đối; có thể sửa bằng version mới sau
+- không sản xuất sẵn / không trừ tồn theo mã combo
 
 ---
 

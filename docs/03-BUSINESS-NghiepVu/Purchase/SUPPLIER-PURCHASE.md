@@ -1,8 +1,10 @@
 # SUPPLIER-PURCHASE — Nhà cung cấp, nhập hàng và công nợ NCC
 
 > **Vai trò:** Source of Truth nghiệp vụ.
+> **Trạng thái docs ↔ code (slice P1–P5):** [README.md](./README.md) mục 2 — **đọc trước** khi tin “đã merge”.
 > **Tham khảo:** KiotViet `Nhà cung cấp`, `Nhập hàng`
 > **Quyết định Owner:** Có NCC, có nhập hàng mua thật, có công nợ NCC; mua cuộn/tấm theo vật lý, không mua `m2`
+> **Owner 2026-07-20:** đã import hết PN/NCC KV — không mở import mới.
 
 ---
 
@@ -269,11 +271,18 @@ Quyết định QC-OMS cho P5:
 
 ## 9. Lát cắt Purchase
 
-Purchase/Supplier chạm Inventory, Finance và PriceBook, nên được chia nhỏ để kiểm soát rủi ro. P1/P2/P3/P5 đã merge; P4 còn là candidate khi cần nhập cuộn/tấm vật lý.
+Purchase/Supplier chạm Inventory, Finance và PriceBook, nên được chia nhỏ để kiểm soát rủi ro.
+
+**Trạng thái thật:** xem [README.md](./README.md) mục 2. Tóm tắt 2026-07-20:
+
+- P1 (NCC) + đọc PN **đã import** + stock-in từ PN import: dùng được.
+- P2/P3/P5 từng ghi “đã merge” ở mức UI/spec — **live create/post/pay vẫn stub** trên handler HTTP; không nghiệm thu như đã ship persist.
+- P4 object cuộn/tấm: vẫn candidate.
+- Không mở lại import KV PN.
 
 ### Slice P1 — Supplier foundation
 
-Đã merge. Phạm vi:
+Đã usable trên dữ liệu import (list/detail/link). Phạm vi:
 
 - bảng `suppliers`
 - CRUD NCC tối thiểu
@@ -297,7 +306,7 @@ Acceptance:
 
 ### Slice P2 — Purchase receipt draft/list/detail
 
-Đã merge. Phạm vi hiện tại:
+**Docs/UI từng ghi đã merge; runtime live create/update = stub** (README mục 2). List/detail trên dữ liệu import dùng được. Phạm vi mục tiêu:
 
 - tạo phiếu nhập `draft`
 - sửa draft
@@ -324,7 +333,7 @@ Acceptance:
 
 ### Slice P3 — Post receipt cho hàng thường
 
-Đã merge. Phạm vi:
+**Docs từng ghi đã merge; runtime live post = stub** (README mục 2). Stock-in từ PN **import** posted vẫn có. Phạm vi mục tiêu:
 
 - `POST /purchase/receipts/{id}/post`
 - transaction tăng tồn hàng `normal`
@@ -396,7 +405,7 @@ P4 acceptance khi làm:
 
 ### Slice P5 — Supplier payments
 
-Đã merge. Phạm vi:
+**Docs từng ghi đã merge; runtime live pay = stub/fallback** (README mục 2). Đối soát trả trên PN import có thể hiện row đọc-only. Phạm vi mục tiêu:
 
 - trả tiền NCC sau phiếu nhập
 - người dùng chọn phiếu nhập cụ thể để trả

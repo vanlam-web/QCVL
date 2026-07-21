@@ -1,6 +1,7 @@
 ﻿# POS-ORDER-LIFECYCLE — Vòng đời đơn hàng POS
 
 > **Vai trò:** Source of Truth nghiệp vụ cho trạng thái đơn hàng POS.
+> **Runtime vs SoT:** [README.md](./README.md) mục “Vòng đời POS / chứng từ” — mở lại BG / hủy / revision có thể hẹp hơn SoT đầy đủ.
 
 ---
 

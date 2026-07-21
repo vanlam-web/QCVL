@@ -48,7 +48,7 @@ export function handleCatalogRoute(context: CatalogRouteContext, handlers: Catal
   if (method === 'GET' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(pathname)) return handlers.getProductBom()
   if (method === 'POST' && pathname === '/api/v1/products') return handlers.createProduct()
   if (method === 'PATCH' && /^\/api\/v1\/products\/[^/]+$/.test(pathname)) return handlers.updateProduct()
-  if (method === 'PUT' && /^\/api\/v1\/products\/[^/]+\/bom$/.test(pathname)) return handlers.upsertProductBom()
+  if ((method === 'POST' || method === 'PUT') && /^\/api\/v1\/products\/[^/]+\/bom$/.test(pathname)) return handlers.upsertProductBom()
   if (method === 'GET' && pathname === '/api/v1/customer-groups') return handlers.customerGroups()
   if (method === 'GET' && pathname === '/api/v1/customers') return handlers.listCustomers()
   if (method === 'POST' && pathname === '/api/v1/customers') return handlers.createCustomer()

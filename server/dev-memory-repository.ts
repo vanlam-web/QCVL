@@ -672,6 +672,59 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       await persist()
       return { created, updated, skipped }
     },
+    async getProductBom(input) {
+      const product = [...products.values()].find((item) => item.id === input.productId)
+      if (!product) return null
+      const bom = draftBoms.get(product.code)
+      if (!bom) return null
+      return {
+        id: `bom-${slug(product.code)}`,
+        product_id: product.id,
+        version: 1,
+        status: 'active' as const,
+        notes: bom.note,
+        created_at: product.updated_at ?? product.created_at,
+        items: bom.components.flatMap((component, index) => {
+          const componentProduct = products.get(component.component_code)
+          if (!componentProduct) return []
+          return [{
+            id: `bom-item-${slug(product.code)}-${slug(component.component_code)}`,
+            component_product_id: componentProduct.id,
+            component_product: {
+              id: componentProduct.id,
+              code: componentProduct.code,
+              name: componentProduct.name,
+              unit_name: componentProduct.unit_name,
+              product_kind: componentProduct.product_kind,
+              latest_purchase_cost: componentProduct.latest_purchase_cost,
+            },
+            quantity: component.quantity,
+            sort_order: index + 1,
+            notes: null,
+          }]
+        }),
+      }
+    },
+    async upsertProductBom(input) {
+      const product = [...products.values()].find((item) => item.id === input.productId)
+      if (!product) return null
+      const components: Array<{ component_code: string; quantity: number }> = []
+      for (const item of input.items) {
+        const componentProduct = [...products.values()].find((candidate) => candidate.id === item.component_product_id)
+        if (!componentProduct) continue
+        const quantity = Number(item.quantity)
+        if (!Number.isFinite(quantity) || quantity <= 0) continue
+        components.push({ component_code: componentProduct.code, quantity })
+      }
+      draftBoms.set(product.code, {
+        product_code: product.code,
+        source_text: components.map((component) => `${component.component_code}:${component.quantity}`).join('|'),
+        components,
+        note: input.notes ?? 'Manual product BOM. Trusted for stock deduction.',
+      })
+      await persist()
+      return this.getProductBom?.(input) ?? null
+    },
     async listCustomers(input) {
       const search = normalize(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
       const customerGroupId = input.url.searchParams.get('customer_group_id')
@@ -1788,7 +1841,7 @@ function withImportReviewMetadata(
       ? {
           id: `draft-bom-${slug(product.code)}`,
           version: 1,
-          status: 'draft',
+          status: 'active',
           item_count: draftBom.components.length,
           notes: draftBom.note,
         }

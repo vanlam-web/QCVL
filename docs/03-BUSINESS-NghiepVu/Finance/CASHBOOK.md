@@ -1,6 +1,8 @@
 # CASHBOOK — Nghiệp vụ sổ quỹ, phiếu thu và phiếu chi
 
-> **Nguồn:** Chốt từ trao đổi Owner 2026-06-30
+> **Nguồn:** Chốt từ trao đổi Owner 2026-06-30  
+> **Trạng thái docs ↔ code:** [README.md](./README.md) mục 2.  
+> **Owner 2026-07-20:** đã import hết So quỹ KV cần dùng — không mở import mới.
 
 ---
 

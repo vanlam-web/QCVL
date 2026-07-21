@@ -36,7 +36,7 @@ export function ProductImportDialog({
     { label: 'Đơn vị', value: `${preview.summary.unit_review_rows} cần sửa` },
     { label: 'Giá bán', value: `${preview.summary.price_rows ?? 0} dòng giá bán` },
     { label: 'Tồn tạm', value: `${preview.summary.provisional_stock_rows ?? 0} dòng tồn tạm` },
-    { label: 'BOM nháp', value: `${preview.summary.bom_rows ?? 0} dòng BOM nháp` },
+    { label: 'BOM', value: `${preview.summary.bom_rows ?? 0} dòng BOM` },
     { label: 'Bảng giá', value: preview.summary.price_list_name ? displayPriceListName({ name: preview.summary.price_list_name }) : 'Chưa có bảng giá mặc định' },
   ] : []
 

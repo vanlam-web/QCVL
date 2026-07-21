@@ -4,6 +4,9 @@
 
 **Goal:** Add a reusable KiotViet Excel import flow for the Hàng hóa page that can preview and safely import the same KV product export many times without creating duplicates or silently deleting real data.
 
+
+> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**. BOM KV runtime slice đã xong (#7): `active` + POS skip parent — không làm theo các dòng “draft / never auto-active” bên dưới.
+
 **Architecture:** Extract the existing CLI mapper into a shared parser so CLI, server tests, and UI import use one mapping contract. Add a server preview/import endpoint that validates rows, optionally clears only demo products, and upserts product groups/products by organization + product code. Add a shared top-right import action to the Catalog toolbar and a modal that uploads `.xlsx`, shows a preview summary, and only writes after confirmation.
 
 **Tech Stack:** React 19, TypeScript, Vite, Node HTTP server, PostgreSQL repository, Vitest, existing QCVL API envelope/error handling, existing `ManagementCompactToolbar` and shared CSS.
@@ -239,7 +242,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 | `Đang kinh doanh` | `status = active` when `1`, otherwise `inactive` |
 | `Giá bán` | `price_list_items` of default active price list; not written to `products` |
 | `Tồn kho` | `inventory_provisional_balances` with `source_type = kiotviet_import`; not written to `stock_movements` |
-| `Hàng thành phần` | draft BOM in `product_boms`/`product_bom_items`; never auto-active |
+| `Hàng thành phần` | BOM in `product_boms`/`product_bom_items` — **SoT+runtime 2026-07-21:** `active` (migrate `0008` cho data đã import; không re-import) |
 | `Thời gian tạo` | `products.created_at`; accepts KiotViet Excel serial date or `dd/MM/yyyy HH:mm`; repeated import updates old wrong import-time timestamps to the KiotViet source time |
 
 **Columns deferred by decision:**
@@ -263,7 +266,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 1. `Dự kiến hết hàng`: chưa làm. Phải có lịch sử bán/tiêu thụ thật và tồn kho chuẩn hóa trước, sau đó mới tính tốc độ dùng hàng. Không copy chuỗi dự kiến từ KiotViet.
 2. `Nhà cung cấp`: chưa làm ở import Hàng hóa. Nguồn đúng là phiếu nhập, vì một mã hàng có thể có nhiều nhà cung cấp.
 3. `Tồn KV tạm nhập`: đã lưu vào `inventory_provisional_balances`, nhưng chỉ dùng để đối chiếu. Không chuyển trực tiếp thành tồn kho thật/stock movements. Bước sau cần dữ liệu vận hành thật: phiếu nhập, bán hàng, kiểm kho/cân bằng kho và quy trình cuộn/tấm.
-4. BOM nháp: đã lưu draft BOM, nhưng chưa có quy trình duyệt/kích hoạt. POS chỉ được dùng BOM sau khi người dùng rà định mức và active.
+4. BOM từ KiotViet: **SoT** Owner 2026-07-20 — import `active`, bán chỉ trừ thành phần. **Runtime chưa khớp** (`draft` + UI nháp; POS live có thể trừ mã combo). Xem `docs/03-BUSINESS-NghiepVu/Sales/README.md` và `docs/DOC-CLEANUP-CHECKLIST.md`. Quyết định draft→duyệt cũ đã superseded.
 5. Import nhiều file KV mới: upsert theo `Mã hàng` đã sẵn sàng. Khi KV đổi dữ liệu, import lại file mới để cập nhật; hệ thống không tự xóa mã vắng trong file mới.
 
 ## Reality Update 2026-07-10: Product Source Created Time
@@ -1385,7 +1388,7 @@ Import Hàng hóa dùng file Excel export từ KiotViet. Luồng chuẩn:
 
 Import dùng `Mã hàng` làm khóa upsert trong cùng organization. Lần import sau cập nhật lại tên, nhóm, loại, đơn vị, trạng thái và giá vốn. Không tự xóa hàng không còn trong file.
 
-Phase hiện tại đã ghi `Giá bán`, `Tồn kho` tạm và `Hàng thành phần` BOM nháp. Chỉ còn `Dự kiến hết hàng` làm sau bằng luồng có truy vết riêng.
+Phase hiện tại đã ghi `Giá bán`, `Tồn kho` tạm và `Hàng thành phần` (parse BOM vào DB). **SoT** BOM `active` (Owner 2026-07-20); **runtime còn `draft`**. Chỉ còn `Dự kiến hết hàng` làm sau bằng luồng có truy vết riêng.
 ```
 
 - [ ] **Step 2: Full verification**

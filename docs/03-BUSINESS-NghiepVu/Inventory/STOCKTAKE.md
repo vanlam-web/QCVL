@@ -1,6 +1,7 @@
 # STOCKTAKE — Nghiệp vụ kiểm kho
 
 > **Phạm vi:** Phiếu kiểm kho, cân bằng kho, phiếu tự động khi sửa tồn trong Hàng hóa
+> **Trạng thái docs ↔ code:** [README.md](./README.md) mục 2.
 
 ---
 
@@ -19,6 +20,8 @@ Kết luận nghiệp vụ cho QC-OMS:
 - Kiểm kho là nghiệp vụ lõi, không xếp vào nhóm bỏ/lược như các màn trả hàng/xuất nội bộ ít dữ liệu.
 - Luồng sửa tồn trực tiếp trong Hàng hóa phải tạo phiếu kiểm kho tự động để truy vết.
 - Màn danh sách cần hỗ trợ tìm lại lịch sử dài hạn, không chỉ tháng hiện tại.
+- Import phiếu kiểm kho KiotViet = lịch sử/bằng chứng; **không** tự thành mốc mở hay `stock_movements` trừ khi Owner chọn rõ làm mốc (README mục 1 D).
+- **Runtime:** sửa tồn thường ghi movement type `stocktake_balance` (một số doc cũ viết `stocktake_adjustment` — ưu tiên tên code khi đối chiếu API).
 
 ---
 

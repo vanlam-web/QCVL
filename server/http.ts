@@ -234,7 +234,7 @@ export interface ProductListData {
   draft_bom?: {
     id: string
     version: number
-    status: 'draft'
+    status: 'draft' | 'active' | 'archived'
     item_count: number
     notes: string | null
   } | null
@@ -253,6 +253,30 @@ export interface ProductGroupListData {
   name: string
   is_default: boolean
   is_active: boolean
+}
+
+export interface ProductBomData {
+  id: string
+  product_id: string
+  version: number
+  status: 'draft' | 'active' | 'archived'
+  notes: string | null
+  created_at: string
+  items: Array<{
+    id: string
+    component_product_id: string
+    component_product: {
+      id: string
+      code: string
+      name: string
+      unit_name: string
+      product_kind?: string
+      latest_purchase_cost?: number | null
+    }
+    quantity: number
+    sort_order: number
+    notes: string | null
+  }>
 }
 
 export interface CustomerListData {
@@ -614,6 +638,13 @@ export interface ServerRepository {
       note: string
     }>
   }): Promise<{ created: number; updated: number; skipped: number }>
+  getProductBom?(input: { organizationId: string; productId: string }): Promise<ProductBomData | null>
+  upsertProductBom?(input: {
+    organizationId: string
+    productId: string
+    notes?: string | null
+    items: Array<{ component_product_id: string; quantity: number; notes?: string | null }>
+  }): Promise<ProductBomData | null>
   upsertImportedKiotVietStocktakes?(input: {
     organizationId: string
     createdBy: { id: string; name: string } | null
@@ -2860,10 +2891,45 @@ async function getDevApiResponse(
         const result = await repository.deleteImportedKiotVietProducts?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
         return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
       },
-      getProductBom: async () => ({ found: true, data: null }),
+      getProductBom: async () => {
+        const productId = path.split('/')[4]
+        const data = await repository.getProductBom?.({
+          organizationId: currentUser.organization.id,
+          productId,
+        }) ?? null
+        return { found: true, data }
+      },
       createProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
       updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
-      upsertProductBom: async () => ({ found: true, data: { id: randomUUID(), product_id: path.split('/')[4], version: 1, status: 'active', notes: null, created_at: nowIso, items: [] } }),
+      upsertProductBom: async () => {
+        const productId = path.split('/')[4]
+        const body = await readJson(request) as {
+          notes?: string | null
+          items?: Array<{ component_product_id: string; quantity: number; notes?: string | null }>
+        }
+        if (!repository.upsertProductBom) {
+          return {
+            found: true,
+            data: {
+              id: randomUUID(),
+              product_id: productId,
+              version: 1,
+              status: 'active' as const,
+              notes: body.notes ?? null,
+              created_at: nowIso,
+              items: [],
+            },
+          }
+        }
+        const data = await repository.upsertProductBom({
+          organizationId: currentUser.organization.id,
+          productId,
+          notes: body.notes ?? null,
+          items: Array.isArray(body.items) ? body.items : [],
+        })
+        if (!data) throw new HttpError(404, 'NOT_FOUND', 'Product not found')
+        return { found: true, data }
+      },
       customerGroups: async () => {
         const repositoryCustomers = await repository.listCustomers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/customers?page_size=1000') })
         const groupsById = new Map(customerGroups.map((group) => [group.id, group]))
