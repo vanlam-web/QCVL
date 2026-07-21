@@ -236,6 +236,11 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [voucherCounterpartyName, setVoucherCounterpartyName] = useState('')
   const [voucherCounterpartyOptions, setVoucherCounterpartyOptions] = useState<CashbookVoucherCounterpartyOption[]>([])
   const [voucherCounterpartyPhone, setVoucherCounterpartyPhone] = useState('')
+  const [voucherCounterpartyCreateOpen, setVoucherCounterpartyCreateOpen] = useState(false)
+  const [voucherCounterpartyCreateName, setVoucherCounterpartyCreateName] = useState('')
+  const [voucherCounterpartyCreatePhone, setVoucherCounterpartyCreatePhone] = useState('')
+  const [voucherCounterpartyCreateCode, setVoucherCounterpartyCreateCode] = useState('')
+  const [creatingVoucherCounterparty, setCreatingVoucherCounterparty] = useState(false)
   const [voucherReason, setVoucherReason] = useState('')
   const [savingVoucher, setSavingVoucher] = useState(false)
   const [collectAmount, setCollectAmount] = useState('')
@@ -347,6 +352,10 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherCounterpartyName('')
     setVoucherCounterpartyOptions([])
     setVoucherCounterpartyPhone('')
+    setVoucherCounterpartyCreateOpen(false)
+    setVoucherCounterpartyCreateName('')
+    setVoucherCounterpartyCreatePhone('')
+    setVoucherCounterpartyCreateCode('')
     setVoucherReason('')
     setError(null)
     setMessage(null)
@@ -387,6 +396,10 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   function closeVoucherForm() {
     setVoucherMode(null)
     setEditingVoucher(null)
+    setVoucherCounterpartyCreateOpen(false)
+    setVoucherCounterpartyCreateName('')
+    setVoucherCounterpartyCreatePhone('')
+    setVoucherCounterpartyCreateCode('')
   }
 
   function chooseVoucherAccount(accountId: string) {
@@ -409,12 +422,68 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherCounterpartyName('')
     setVoucherCounterpartyPhone('')
     setVoucherCounterpartyOptions([])
+    setVoucherCounterpartyCreateOpen(false)
+    setVoucherCounterpartyCreateName('')
+    setVoucherCounterpartyCreatePhone('')
+    setVoucherCounterpartyCreateCode('')
   }
 
   function chooseVoucherCounterpartyName(name: string) {
     setVoucherCounterpartyName(name)
     const selected = voucherCounterpartyOptions.find((option) => option.name === name || `${option.code} - ${option.name}` === name)
     setVoucherCounterpartyPhone(selected?.phone ?? '')
+  }
+
+  function openVoucherCounterpartyCreate() {
+    if (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier') return
+    setVoucherCounterpartyCreateName(voucherCounterpartyName.trim())
+    setVoucherCounterpartyCreatePhone(voucherCounterpartyPhone.trim())
+    setVoucherCounterpartyCreateCode('')
+    setVoucherCounterpartyCreateOpen(true)
+    setError(null)
+  }
+
+  function closeVoucherCounterpartyCreate() {
+    setVoucherCounterpartyCreateOpen(false)
+    setVoucherCounterpartyCreateName('')
+    setVoucherCounterpartyCreatePhone('')
+    setVoucherCounterpartyCreateCode('')
+  }
+
+  async function createVoucherCounterparty(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    if (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier') return
+    const name = voucherCounterpartyCreateName.trim()
+    if (!name) {
+      setError(voucherCounterpartyType === 'customer' ? 'Nhập tên khách hàng.' : 'Nhập tên nhà cung cấp.')
+      return
+    }
+    setCreatingVoucherCounterparty(true)
+    setError(null)
+    try {
+      const created = voucherCounterpartyType === 'customer'
+        ? await service.createVoucherCustomer({
+            name,
+            phone: voucherCounterpartyCreatePhone.trim() || null,
+            code: voucherCounterpartyCreateCode.trim() || undefined,
+          })
+        : await service.createVoucherSupplier({
+            name,
+            phone: voucherCounterpartyCreatePhone.trim() || null,
+            code: voucherCounterpartyCreateCode.trim() || undefined,
+          })
+      setVoucherCounterpartyOptions((current) => {
+        if (current.some((item) => item.id === created.id)) return current
+        return [created, ...current]
+      })
+      setVoucherCounterpartyName(created.name)
+      setVoucherCounterpartyPhone(created.phone ?? '')
+      closeVoucherCounterpartyCreate()
+    } catch (cause) {
+      setError(formatApiError(cause, voucherCounterpartyType === 'customer' ? 'Không tạo được khách hàng.' : 'Không tạo được nhà cung cấp.'))
+    } finally {
+      setCreatingVoucherCounterparty(false)
+    }
   }
 
   function changeDebtBankAmount(value: string) {
@@ -1536,12 +1605,22 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                     <option value="other">Khác</option>
                   </select>
                 </label>
-                <label>
+                <div>
                   <span className="management-field-heading">
-                    {voucherCounterpartyNameLabel}
-                    <span className="management-field-link-action">Tạo mới</span>
+                    <label htmlFor="finance-voucher-counterparty-name">{voucherCounterpartyNameLabel}</label>
+                    {voucherCounterpartyType === 'customer' || voucherCounterpartyType === 'supplier' ? (
+                      <button
+                        aria-label={voucherCounterpartyType === 'customer' ? 'Tạo mới khách hàng' : 'Tạo mới nhà cung cấp'}
+                        className="management-field-link-action"
+                        type="button"
+                        onClick={openVoucherCounterpartyCreate}
+                      >
+                        Tạo mới
+                      </button>
+                    ) : null}
                   </span>
                   <input
+                    id="finance-voucher-counterparty-name"
                     aria-label={voucherCounterpartyNameLabel}
                     list="finance-voucher-counterparty-options"
                     placeholder={`Tìm người ${voucherCounterpartyRole}`}
@@ -1553,7 +1632,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                       <option key={option.id} value={option.name}>{option.code} - {option.name}</option>
                     ))}
                   </datalist>
-                </label>
+                </div>
                 <label>
                   Phương thức TT
                   <select
@@ -1602,6 +1681,69 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                 <button className="button button-secondary" type="button" onClick={closeVoucherForm}>Bỏ qua</button>
                 <button className="button button-secondary" disabled={savingVoucher} type="submit">Lưu & In</button>
                 <button className="button button-primary" disabled={savingVoucher} type="submit">Lưu</button>
+              </footer>
+            </form>
+          </section>
+        </div>
+      ) : null}
+
+      {voucherCounterpartyCreateOpen && (voucherCounterpartyType === 'customer' || voucherCounterpartyType === 'supplier') ? (
+        <div className="management-modal-backdrop">
+          <section
+            aria-label={voucherCounterpartyType === 'customer' ? 'Tạo nhanh khách hàng' : 'Tạo nhanh nhà cung cấp'}
+            aria-modal="true"
+            className="management-modal-dialog management-modal-dialog-compact"
+            role="dialog"
+          >
+            <header className="management-modal-header">
+              <div>
+                <h2>{voucherCounterpartyType === 'customer' ? 'Tạo nhanh khách hàng' : 'Tạo nhanh nhà cung cấp'}</h2>
+              </div>
+              <button
+                aria-label={voucherCounterpartyType === 'customer' ? 'Đóng tạo nhanh khách hàng' : 'Đóng tạo nhanh nhà cung cấp'}
+                className="management-modal-close"
+                type="button"
+                onClick={closeVoucherCounterpartyCreate}
+              >
+                ×
+              </button>
+            </header>
+            <form
+              aria-label={voucherCounterpartyType === 'customer' ? 'Thông tin tạo nhanh khách hàng' : 'Thông tin tạo nhanh nhà cung cấp'}
+              className="management-modal-form"
+              onSubmit={createVoucherCounterparty}
+            >
+              <div className="management-modal-form-grid">
+                <label>
+                  {voucherCounterpartyType === 'customer' ? 'Tên khách hàng' : 'Tên NCC'}
+                  <input
+                    autoFocus
+                    required
+                    value={voucherCounterpartyCreateName}
+                    onChange={(event) => setVoucherCounterpartyCreateName(event.target.value)}
+                  />
+                </label>
+                <label>
+                  {voucherCounterpartyType === 'customer' ? 'Mã khách hàng' : 'Mã NCC'}
+                  <input
+                    placeholder="Bỏ trống để tự sinh"
+                    value={voucherCounterpartyCreateCode}
+                    onChange={(event) => setVoucherCounterpartyCreateCode(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Điện thoại
+                  <input
+                    value={voucherCounterpartyCreatePhone}
+                    onChange={(event) => setVoucherCounterpartyCreatePhone(event.target.value)}
+                  />
+                </label>
+              </div>
+              <footer className="management-modal-footer">
+                <button className="button button-secondary" type="button" onClick={closeVoucherCounterpartyCreate}>Bỏ qua</button>
+                <button className="button button-primary" disabled={creatingVoucherCounterparty} type="submit">
+                  Lưu
+                </button>
               </footer>
             </form>
           </section>

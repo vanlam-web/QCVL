@@ -133,6 +133,44 @@ export function createFinanceService(api: FinanceApiRequester) {
         phone: item.phone ?? null,
       }))
     },
+    createVoucherCustomer: async (input: { name: string; phone?: string | null; code?: string }) => {
+      const created = await api.request<CashbookVoucherCounterpartyOption>('/api/v1/customers', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          ...(input.code?.trim() ? { code: input.code.trim() } : {}),
+          ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+        }),
+      })
+      return {
+        id: created.id,
+        code: created.code,
+        name: created.name,
+        phone: created.phone ?? null,
+      }
+    },
+    createVoucherSupplier: async (input: { name: string; phone?: string | null; code?: string }) => {
+      const created = await api.request<CashbookVoucherCounterpartyOption>('/api/v1/suppliers', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          status: 'active',
+          ...(input.code?.trim() ? { code: input.code.trim() } : {}),
+          ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+          email: '',
+          address: '',
+          tax_code: '',
+          linked_customer_id: null,
+          notes: '',
+        }),
+      })
+      return {
+        id: created.id,
+        code: created.code,
+        name: created.name,
+        phone: created.phone ?? null,
+      }
+    },
     listCashbookVouchers: () => api.request<CashbookVoucherListResponse>('/api/v1/finance/cashbook/vouchers'),
     createCashbookVoucher: (input: CreateCashbookVoucherInput) =>
       api.request<CashbookVoucher>('/api/v1/finance/cashbook-vouchers', {
