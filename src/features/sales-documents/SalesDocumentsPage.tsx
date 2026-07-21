@@ -64,6 +64,7 @@ import {
   salesDocumentDateTimeText,
   salesDocumentCreatedDateTimeText,
   salesDocumentLineSellPrice,
+  salesDocumentLineSubtexts,
   salesDocumentListSummary,
   salesDocumentStatusLabel,
   salesDocumentStatusTone,
@@ -1224,7 +1225,9 @@ function SalesDocumentDetailView({
                   </td>
                   <td>
                     <span>{item.product.name}</span>
-                    {item.note ? <small>{item.note}</small> : null}
+                    {salesDocumentLineSubtexts(item).map((subtext) => (
+                      <small className="sales-document-line-subtext" key={subtext}>{subtext}</small>
+                    ))}
                   </td>
                   <td>{item.quantity}</td>
                   <td>{salesDocumentUnitNameText(item.product.unit_name)}</td>

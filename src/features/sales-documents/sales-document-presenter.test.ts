@@ -9,6 +9,8 @@ import {
   salesDocumentDateTimeText,
   salesDocumentDateTimeInputText,
   salesDocumentCreatedDateTimeText,
+  salesDocumentLineDimensionText,
+  salesDocumentLineSubtexts,
   salesDocumentLineSellPrice,
   salesDocumentListSummary,
   salesDocumentMeasureText,
@@ -137,5 +139,30 @@ describe('sales document presenter', () => {
       linear_m: 3,
       product: { id: 'product-2', code: 'SP002', name: 'San pham 2', sell_method: 'linear_m', unit_name: 'm' },
     })).toBe('3 m tá»›i')
+  })
+
+  it('formats sales document detail line subtexts from note and dimensions', () => {
+    expect(salesDocumentLineDimensionText({
+      quantity: 8.25,
+      width_m: 2.5,
+      height_m: 3.3,
+      linear_m: null,
+      product: { id: 'product-1', code: 'SP001', name: 'San pham', sell_method: 'area_m2', unit_name: 'm2' },
+    })).toBe('2.5m x 3.3m x 1')
+    expect(salesDocumentLineSubtexts({
+      id: 'item-1',
+      line_no: 1,
+      product: { id: 'product-1', code: 'SP001', name: 'San pham', sell_method: 'area_m2', unit_name: 'm2' },
+      quantity: 8.25,
+      width_m: 2.5,
+      height_m: 3.3,
+      linear_m: null,
+      unit_price: 1,
+      line_subtotal_amount: 1,
+      discount_amount: 0,
+      line_total: 1,
+      price_source: 'manual',
+      note: 've sinh + dan bang',
+    })).toEqual(['ve sinh + dan bang', '2.5m x 3.3m x 1'])
   })
 })

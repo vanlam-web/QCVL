@@ -846,13 +846,15 @@
   padding-right: 1.55rem;
 }
 
-.pos-cart-line-note input {
+.pos-cart-line-note textarea {
   min-height: 1.625rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
-  padding: 0 var(--space-2);
+  padding: 0.25rem var(--space-2);
+  resize: vertical;
+  line-height: 1.2;
 }
 
 .pos-cart-line-total {

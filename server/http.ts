@@ -2368,8 +2368,9 @@ function isSameSalePaymentReceiptCode(code: string, orderCode: string) {
 function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFromCheckout>, payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null } = {}, createdBy = order.seller) {
   const entries: CashbookEntryData[] = []
   const createdAt = order.created_at
-  const cashAmount = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
-  const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
+  const split = splitCheckoutPaymentForCurrentOrderAndOldDebt(payment)
+  const cashAmount = split.currentCashAmount
+  const bankAmount = split.currentBankAmount
   let collectedBefore = 0
   const methods = [
     { amount: cashAmount, account: financeAccounts[0] },
@@ -2409,6 +2410,22 @@ function previewCashbookEntriesFromCheckout(order: ReturnType<typeof makeOrderFr
   }
 
   return entries
+}
+
+function splitCheckoutPaymentForCurrentOrderAndOldDebt(payment: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number } = {}) {
+  const cashAfterChange = Math.max(Number(payment.cash_amount ?? 0) - Number(payment.change_returned_amount ?? 0), 0)
+  const bankAmount = Math.max(Number(payment.bank_amount ?? 0), 0)
+  const requestedOldDebtPayment = Math.max(Number(payment.old_debt_payment_amount ?? 0), 0)
+  const oldDebtCashAmount = Math.min(cashAfterChange, requestedOldDebtPayment)
+  const oldDebtBankAmount = Math.min(bankAmount, Math.max(requestedOldDebtPayment - oldDebtCashAmount, 0))
+
+  return {
+    currentCashAmount: Math.max(cashAfterChange - oldDebtCashAmount, 0),
+    currentBankAmount: Math.max(bankAmount - oldDebtBankAmount, 0),
+    oldDebtCashAmount,
+    oldDebtBankAmount,
+    oldDebtPaymentAmount: oldDebtCashAmount + oldDebtBankAmount,
+  }
 }
 
 async function collectCustomerDebt(request: Request) {
@@ -3882,6 +3899,19 @@ async function getDevApiResponse(
           salesDocuments.unshift(order)
           addCustomerSalesFromCheckout(order)
           addCustomerDebtFromCheckout(order)
+        }
+        const oldDebtPayment = splitCheckoutPaymentForCurrentOrderAndOldDebt(body.payment)
+        if (body.customer_id && oldDebtPayment.oldDebtPaymentAmount > 0) {
+          await repository.collectCustomerDebt?.({
+            organizationId: currentUser.organization.id,
+            customerId: body.customer_id,
+            amount: oldDebtPayment.oldDebtPaymentAmount,
+            createdAt: order.created_at,
+            cashAmount: oldDebtPayment.oldDebtCashAmount,
+            bankAmount: oldDebtPayment.oldDebtBankAmount,
+            bankAccountId: body.payment?.bank_account_id ?? null,
+            note: `Thu no POS ${order.code}`,
+          })
         }
         return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', created_at: order.created_at, total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
       },

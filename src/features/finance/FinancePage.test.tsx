@@ -1034,7 +1034,7 @@ describe('FinancePage', () => {
     await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
     expect(await screen.findByRole('dialog', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Phiếu chi' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('heading', { name: 'Tạo phiếu chi tiền mặt' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
     expect(within(form).getByLabelText('Mã phiếu')).toHaveAttribute('placeholder', 'Tự động')
@@ -1136,6 +1136,24 @@ describe('FinancePage', () => {
       code: undefined,
     }))
     expect(within(form).getByLabelText('Tên người nhận')).toHaveValue('NCC tạo từ sổ quỹ')
+  })
+
+  it('limits voucher counterparties by selected voucher type', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
+
+    await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'shipping_expense')
+
+    const counterpartyType = within(form).getByLabelText('Đối tượng nhận')
+    expect(counterpartyType).toHaveValue('delivery_partner')
+    expect(within(counterpartyType).getByRole('option', { name: 'Đối tác giao hàng' })).toBeInTheDocument()
+    expect(within(counterpartyType).getByRole('option', { name: 'Khác' })).toBeInTheDocument()
+    expect(within(counterpartyType).queryByRole('option', { name: 'Nhân viên' })).not.toBeInTheDocument()
+    expect(within(counterpartyType).queryByRole('option', { name: 'Nhà cung cấp' })).not.toBeInTheDocument()
   })
 
   it('opens cashbook entry detail with allocation rows', async () => {
@@ -1377,11 +1395,11 @@ describe('FinancePage', () => {
       })),
       getCashbookEntry: vi.fn(async () => manualVoucherDetail),
       reviseCashbookVoucher: vi.fn(async () => ({
-        id: manualVoucherDetail.source.id,
-        code: manualVoucherDetail.source.code,
+        id: 'voucher-manual-1',
+        code: 'PCTM000004',
         source_type: 'manual_voucher' as const,
         status: 'posted' as const,
-        amount: Math.abs(manualVoucherDetail.amount_delta),
+        amount: 110000,
       })),
     })
     render(<FinancePage service={service} currentUserName="Văn Lâm" />)

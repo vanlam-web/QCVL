@@ -118,6 +118,27 @@ export function salesDocumentMeasureText(value: number) {
   return formatMeasure(value)
 }
 
+export function salesDocumentLineDimensionText(
+  item: Pick<SalesDocumentDetail['items'][number], 'quantity' | 'width_m' | 'height_m' | 'linear_m' | 'product'>,
+) {
+  const width = item.width_m ?? null
+  const height = item.height_m ?? null
+  if (item.product.sell_method === 'area_m2' && width !== null && height !== null && width > 0 && height > 0) {
+    const pieceCount = item.quantity / (width * height)
+    const countText = Number.isFinite(pieceCount) && pieceCount > 0 ? salesDocumentMeasureText(pieceCount) : '1'
+    return `${salesDocumentMeasureText(width)}m x ${salesDocumentMeasureText(height)}m x ${countText}`
+  }
+  if (item.linear_m !== null && item.linear_m !== undefined && item.linear_m > 0) {
+    return `${salesDocumentMeasureText(item.linear_m)}m tới`
+  }
+  return null
+}
+
+export function salesDocumentLineSubtexts(item: SalesDocumentDetail['items'][number]) {
+  const subtexts = [item.note?.trim() || null, salesDocumentLineDimensionText(item)].filter((value): value is string => Boolean(value))
+  return Array.from(new Set(subtexts))
+}
+
 export function salesDocumentUnitNameText(value: string | null | undefined) {
   const normalized = (value ?? '').trim()
   if (normalized === '') return ''

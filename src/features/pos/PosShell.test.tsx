@@ -1784,7 +1784,10 @@ it('shows cart row headers, line note, and add-row action while editing a line',
   await userEvent.type(screen.getByLabelText('Số lượng Mica 3mm'), '3')
   await userEvent.clear(screen.getByLabelText('Đơn giá Mica 3mm'))
   await userEvent.type(screen.getByLabelText('Đơn giá Mica 3mm'), '100000')
-  await userEvent.type(screen.getByLabelText('Chú thích Mica 3mm'), 'Cắt gấp')
+  const noteInput = screen.getByLabelText('Chú thích Mica 3mm')
+  expect(noteInput.tagName).toBe('TEXTAREA')
+  await userEvent.type(noteInput, 'Cắt{Shift>}{Enter}{/Shift}gấp')
+  expect(noteInput).toHaveValue('Cắt\ngấp')
   await userEvent.click(screen.getByRole('button', { name: 'Thêm dòng Mica 3mm' }))
 
   expect(screen.getAllByLabelText('Số lượng Mica 3mm').map((input) => (input as HTMLInputElement).value)).toEqual(['3', '1'])

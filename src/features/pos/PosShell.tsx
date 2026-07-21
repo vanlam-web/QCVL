@@ -1484,9 +1484,10 @@ export function PosShell({
                 {activeCartLineId === line.id && (selectedCartLineId === line.id || hoveredCartLineId === line.id) ? (
                   <div className="pos-cart-line-note-row">
                     <label className="pos-cart-line-note">
-                      <input
+                      <textarea
                         aria-label={`Chú thích ${line.product.name}`}
                         placeholder="Ghi chú"
+                        rows={1}
                         value={line.note ?? ''}
                         onChange={(event) => updateLineNote(line.id, event.target.value)}
                       />

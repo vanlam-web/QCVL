@@ -39,12 +39,14 @@ const detail: SalesDocumentDetail = {
         sell_method: 'area_m2',
       },
       quantity: 8.25,
+      width_m: 2.5,
+      height_m: 3.3,
       unit_price: 20000,
       line_subtotal_amount: 165000,
       discount_amount: 15000,
       line_total: 150000,
       price_source: 'manual',
-      note: '2.5m x 3.3m x 1 = 8.25m2',
+      note: 'vệ sinh + dán băng',
     },
   ],
   payment_receipts: [],
@@ -1032,7 +1034,9 @@ it('opens invoice detail with item, price list, debt and stock snapshots', async
   expect(within(lineTable).getByText('20 000')).toBeInTheDocument()
   expect(within(lineTable).getByText('15 000')).toBeInTheDocument()
   expect(within(lineTable).getByText('18 182')).toBeInTheDocument()
-  expect(within(detailRegion).getByText('2.5m x 3.3m x 1 = 8.25m2')).toBeInTheDocument()
+  const itemNote = within(itemRow).getByText('vệ sinh + dán băng')
+  expect(itemNote.closest('small')).toHaveClass('sales-document-line-subtext')
+  expect(within(itemRow).getByText('2.5m x 3.3m x 1')).toHaveClass('sales-document-line-subtext')
   expect(within(detailRegion).getByText('Tổng tiền hàng (1)')).toBeInTheDocument()
   expect(within(detailRegion).getByText('Giảm giá hóa đơn')).toBeInTheDocument()
   expect(within(detailRegion).getByText('Khách cần trả')).toBeInTheDocument()

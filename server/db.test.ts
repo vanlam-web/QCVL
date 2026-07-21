@@ -1426,6 +1426,10 @@ describe('createPgRepository product units', () => {
       0,
       600000,
       1,
+      null,
+      null,
+      null,
+      '3m x 2.5m x 2',
     ])
   })
 
@@ -2514,7 +2518,18 @@ describe('createPgRepository sales document paging', () => {
             debt_amount: '200000',
             payment_status: 'partial',
             note: '',
-            items: [],
+            items: [{
+              product_id: 'product-1',
+              product_snapshot: { code: 'IPP', name: 'In PP', unit_name: 'm2', sell_method: 'area_m2' },
+              quantity: 3.72,
+              unit_price: 63000,
+              discount_amount: 0,
+              line_total: 234360,
+              width_m: 1.2,
+              height_m: 3.1,
+              linear_m: null,
+              note: 've sinh + dan bang',
+            }],
             base_code: null,
             revision_no: '0',
             revised_from_order_id: null,
@@ -2578,7 +2593,18 @@ describe('createPgRepository sales document paging', () => {
             debt_amount: '200000',
             payment_status: 'partial',
             note: '',
-            items: [],
+            items: [{
+              product_id: 'product-1',
+              product_snapshot: { code: 'IPP', name: 'In PP', unit_name: 'm2', sell_method: 'area_m2' },
+              quantity: 3.72,
+              unit_price: 63000,
+              discount_amount: 0,
+              line_total: 234360,
+              width_m: 1.2,
+              height_m: 3.1,
+              linear_m: null,
+              note: 've sinh + dan bang',
+            }],
             base_code: null,
             revision_no: '0',
             revised_from_order_id: null,
@@ -2609,5 +2635,11 @@ describe('createPgRepository sales document paging', () => {
     expect(detailSql).toContain('(o.id = $2 or o.code = $2)')
     expect(byCode?.code).toBe('HD010985')
     expect(byCode?.payment_receipts).toEqual([])
+    expect(byCode?.items[0]).toEqual(expect.objectContaining({
+      note: 've sinh + dan bang',
+      width_m: 1.2,
+      height_m: 3.1,
+      linear_m: null,
+    }))
   })
 })

@@ -3909,7 +3909,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                     'quantity', oi.quantity,
                     'unit_price', oi.unit_price,
                     'discount_amount', oi.discount_amount,
-                    'line_total', oi.line_total
+                    'line_total', oi.line_total,
+                    'width_m', oi.width_m,
+                    'height_m', oi.height_m,
+                    'linear_m', oi.linear_m,
+                    'note', oi.note
                   ) order by oi.sort_order
                 ) filter (where oi.id is not null),
                 '[]'::jsonb
@@ -3989,7 +3993,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                   'quantity', oi.quantity,
                   'unit_price', oi.unit_price,
                   'discount_amount', oi.discount_amount,
-                  'line_total', oi.line_total
+                  'line_total', oi.line_total,
+                  'width_m', oi.width_m,
+                  'height_m', oi.height_m,
+                  'linear_m', oi.linear_m,
+                  'note', oi.note
                 ) order by oi.sort_order
               )
                 filter (where oi.id is not null),
@@ -4034,7 +4042,11 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                   'quantity', oi.quantity,
                   'unit_price', oi.unit_price,
                   'discount_amount', oi.discount_amount,
-                  'line_total', oi.line_total
+                  'line_total', oi.line_total,
+                  'width_m', oi.width_m,
+                  'height_m', oi.height_m,
+                  'linear_m', oi.linear_m,
+                  'note', oi.note
                 ) order by oi.sort_order
               )
                 filter (where oi.id is not null),
@@ -6119,6 +6131,7 @@ function salesDocumentDataFromImportRows(
       unit_price: row.unit_price,
       discount_amount: row.line_discount_amount,
       line_total: row.line_amount,
+      note: row.product_note,
     })),
   }
 }
@@ -6818,6 +6831,10 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
       sort_order integer not null default 0
     )
   `)
+  await pool.query('alter table order_items add column if not exists width_m numeric(12,3)')
+  await pool.query('alter table order_items add column if not exists height_m numeric(12,3)')
+  await pool.query('alter table order_items add column if not exists linear_m numeric(12,3)')
+  await pool.query('alter table order_items add column if not exists note text')
   await pool.query('create index if not exists order_items_order_idx on order_items (order_id, sort_order)')
   await pool.query(`
     create table if not exists payment_receipts (
@@ -7180,6 +7197,10 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
       unit_price?: number
       discount_amount?: number
       line_total?: number
+      width_m?: number | null
+      height_m?: number | null
+      linear_m?: number | null
+      note?: string | null
     }
     const quantity = Number(detailItem.quantity ?? 1)
     const unitPrice = Number(detailItem.unit_price ?? 0)
@@ -7187,14 +7208,19 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
     const lineTotal = Number.isFinite(detailItem.line_total ?? Number.NaN)
       ? Number(detailItem.line_total)
       : Math.max(quantity * unitPrice - discountAmount, 0)
+    const widthM = typeof detailItem.width_m === 'number' && Number.isFinite(detailItem.width_m) ? detailItem.width_m : null
+    const heightM = typeof detailItem.height_m === 'number' && Number.isFinite(detailItem.height_m) ? detailItem.height_m : null
+    const linearM = typeof detailItem.linear_m === 'number' && Number.isFinite(detailItem.linear_m) ? detailItem.linear_m : null
+    const note = typeof detailItem.note === 'string' && detailItem.note.trim() !== '' ? detailItem.note : null
     await pool.query(
       `
         insert into order_items (
-          organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order
+          organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order,
+          width_m, height_m, linear_m, note
         )
-        values ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7, $8)
+        values ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `,
-      [organizationId, orderId, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1],
+      [organizationId, orderId, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1, widthM, heightM, linearM, note],
     )
   }
 

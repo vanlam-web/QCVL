@@ -3664,6 +3664,80 @@ describe('createHttpHandler', () => {
     expect(customerBody.data.items[0].total_sales_amount).toBe(4000000)
   })
 
+  test('allocates POS old debt payment to oldest customer invoices before newer debt', async () => {
+    const sharedRepository = persistentRepository(await hashPassword('ChangeMe123!'))
+    const handler = createHttpHandler({ repository: sharedRepository })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const checkout = (body: Record<string, unknown>) => handler(
+      new Request('http://api.local/api/v1/orders/checkout', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify(body),
+      }),
+    )
+
+    await checkout({
+      customer_id: 'customer-002',
+      created_at: '2026-07-01T08:00:00.000Z',
+      items: [{ product_id: 'product-001', quantity: 1, unit_price: 100000, discount_amount: 0, price_source: 'manual' }],
+      payment: { cash_amount: 0, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+    })
+    await checkout({
+      customer_id: 'customer-002',
+      created_at: '2026-07-02T08:00:00.000Z',
+      items: [{ product_id: 'product-001', quantity: 1, unit_price: 200000, discount_amount: 0, price_source: 'manual' }],
+      payment: { cash_amount: 0, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 0, change_returned_amount: 0 },
+    })
+    const currentCheckout = await checkout({
+      customer_id: 'customer-002',
+      created_at: '2026-07-03T08:00:00.000Z',
+      items: [{ product_id: 'product-001', quantity: 1, unit_price: 50000, discount_amount: 0, price_source: 'manual' }],
+      payment: { cash_amount: 200000, bank_amount: 0, bank_account_id: null, old_debt_payment_amount: 150000, change_returned_amount: 0 },
+    })
+    const currentCheckoutBody = await currentCheckout.json()
+    const debt = await handler(
+      new Request('http://api.local/api/v1/finance/customers/customer-002/debt', { headers: { authorization } }),
+    )
+    const cashbook = await handler(
+      new Request('http://api.local/api/v1/finance/cashbook?page=1&page_size=20', { headers: { authorization } }),
+    )
+    const debtBody = await debt.json()
+    const cashbookBody = await cashbook.json()
+
+    expect(currentCheckout.status).toBe(201)
+    expect(currentCheckoutBody.data.order).toEqual(expect.objectContaining({
+      paid_amount: 50000,
+      debt_amount: 0,
+      payment_status: 'paid',
+    }))
+    expect(debtBody.data.total_debt).toBe(150000)
+    expect(debtBody.data.invoices).toEqual([
+      expect.objectContaining({
+        created_at: '2026-07-02T08:00:00.000Z',
+        paid_amount: 50000,
+        remaining_debt: 150000,
+      }),
+    ])
+    expect(cashbookBody.data.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        amount_delta: 50000,
+        note: expect.stringContaining(currentCheckoutBody.data.order.code),
+      }),
+      expect.objectContaining({
+        amount_delta: 150000,
+        note: expect.stringContaining('Thu no'),
+      }),
+    ]))
+  })
+
   test('uses repository cashbook page response instead of loading the full list', async () => {
     const listCashbookEntriesPage = vi.fn(async () => ({
       items: [],
