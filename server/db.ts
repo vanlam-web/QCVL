@@ -5479,11 +5479,48 @@ async function insertStockMovement(
   )
 }
 
+function shouldDeductSaleParentStock(product: { track_inventory: boolean; product_kind?: string | null } | null | undefined) {
+  // KV Combo–Đóng gói / dịch vụ: không trừ tồn mã cha; chỉ trừ thành phần (BOM) khi có.
+  if (!product?.track_inventory) return false
+  const kind = String(product.product_kind ?? '').trim().toLowerCase()
+  if (kind === 'combo' || kind === 'service') return false
+  return true
+}
+
+async function saleParentProductsById(pool: pg.Pool, organizationId: string, productIds: Iterable<string>) {
+  const ids = [...new Set([...productIds].map((id) => String(id ?? '').trim()).filter(Boolean))]
+  const byId = new Map<string, { id: string; track_inventory: boolean; product_kind: string }>()
+  if (ids.length === 0) return byId
+  await ensureProductCatalogSchema(pool)
+  const result = await pool.query(
+    `
+      select id::text, track_inventory, product_kind
+      from products
+      where organization_id = $1
+        and id::text = any($2::text[])
+    `,
+    [organizationId, ids],
+  )
+  for (const row of result.rows) {
+    byId.set(String(row.id), {
+      id: String(row.id),
+      track_inventory: Boolean(row.track_inventory),
+      product_kind: String(row.product_kind ?? 'goods'),
+    })
+  }
+  return byId
+}
+
 async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: string, document: SalesDocumentData) {
   const affectedProducts = await deleteStockMovementsForDocument(pool, organizationId, 'sale_invoice', document.code)
   if (document.order_type === 'invoice' && document.status === 'completed') {
     await ensureProductBomTables(pool)
     const bomComponentsByProductId = await draftBomComponentsByProductId(pool, organizationId)
+    const parentProductsById = await saleParentProductsById(
+      pool,
+      organizationId,
+      document.items.map((item) => String((item as { product_id?: string }).product_id ?? '')),
+    )
     let runningEndingQty = 0
     for (const [index, rawItem] of document.items.entries()) {
       const item = rawItem as {
@@ -5497,7 +5534,8 @@ async function saveSalesDocumentStockMovements(pool: pg.Pool, organizationId: st
       const factor = Number.isFinite(stockQtyPerSaleUnit) && stockQtyPerSaleUnit > 0 ? stockQtyPerSaleUnit : 1
       const soldQuantity = quantity * factor
       const quantityDelta = -soldQuantity
-      if (quantityDelta !== 0) {
+      const parentProduct = parentProductsById.get(item.product_id)
+      if (shouldDeductSaleParentStock(parentProduct) && quantityDelta !== 0) {
         runningEndingQty += quantityDelta
         affectedProducts.add(item.product_id)
         await insertStockMovement(pool, organizationId, {

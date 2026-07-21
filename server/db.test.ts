@@ -1387,6 +1387,12 @@ describe('createPgRepository product units', () => {
       if (sql.includes('insert into orders')) return { rows: [], rowCount: 1 }
       if (sql.includes('insert into order_items')) return { rows: [], rowCount: 1 }
       if (sql.includes('delete from stock_movements')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from products') && sql.includes('track_inventory') && sql.includes('product_kind') && sql.includes('any(')) {
+        return {
+          rows: [{ id: 'product-pos-stock', track_inventory: true, product_kind: 'goods' }],
+          rowCount: 1,
+        }
+      }
       if (sql.includes('insert into stock_movements')) return { rows: [{ inserted: true }], rowCount: 1 }
       return { rows: [], rowCount: 0 }
     })
@@ -1433,6 +1439,80 @@ describe('createPgRepository product units', () => {
       'Khach le',
       '2026-07-14T09:00:00.000Z',
     ]))
+  })
+
+  test('POS combo invoices deduct BOM components only, never the combo parent SKU', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('insert into orders')) return { rows: [], rowCount: 1 }
+      if (sql.includes('insert into order_items')) return { rows: [], rowCount: 1 }
+      if (sql.includes('delete from stock_movements')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from products') && sql.includes('track_inventory') && sql.includes('product_kind') && sql.includes('any(')) {
+        return {
+          rows: [{ id: 'product-ib', track_inventory: false, product_kind: 'combo' }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from product_boms') && sql.includes("status in ('draft', 'active')")) {
+        return {
+          rows: [{
+            parent_product_id: 'product-ib',
+            component_product_id: 'product-bt',
+            quantity: 1.2,
+            track_inventory: true,
+            latest_purchase_cost: 9844.39,
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('insert into stock_movements')) return { rows: [{ inserted: true }], rowCount: 1 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.saveSalesDocument?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      document: {
+        id: 'order-pos-combo',
+        code: 'HD-POS-COMBO',
+        order_type: 'invoice',
+        status: 'completed',
+        created_at: '2026-07-21T09:00:00.000Z',
+        customer: { id: 'customer-retail', code: 'khachle', name: 'Khach le', phone: null },
+        seller: { id: 'admin', name: 'Admin' },
+        subtotal_amount: 650000,
+        discount_amount: 0,
+        total_amount: 650000,
+        paid_amount: 650000,
+        debt_amount: 0,
+        payment_status: 'paid',
+        note: null,
+        items: [{
+          product_id: 'product-ib',
+          quantity: 10,
+          unit_price: 65000,
+          stock_qty_per_sale_unit: 1,
+          discount_amount: 0,
+        }],
+      },
+      cashbookEntries: [],
+    })
+
+    const stockInsertCalls = pgMock.query.mock.calls.filter(([sql]) => String(sql).includes('insert into stock_movements'))
+    expect(stockInsertCalls).toHaveLength(1)
+    expect(stockInsertCalls[0]?.[1]).toEqual(expect.arrayContaining([
+      'product-bt',
+      'sale_deduction',
+      -12,
+      null,
+      'sale_invoice',
+      'HD-POS-COMBO',
+      null,
+      9844.39,
+      'Khach le',
+      '2026-07-21T09:00:00.000Z',
+    ]))
+    expect(stockInsertCalls.some(([, values]) => Array.isArray(values) && values.includes('product-ib'))).toBe(false)
   })
 
   test('writes PostgreSQL stocktake movements from manual stock adjustments', async () => {
