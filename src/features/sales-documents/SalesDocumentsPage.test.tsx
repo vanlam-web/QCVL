@@ -1013,6 +1013,27 @@ it('opens invoice print only from invoice detail', async () => {
   expect(onOpenInvoicePrint).toHaveBeenCalledWith('order-1')
 })
 
+it('opens invoice bill from the footer In action', async () => {
+  const onOpenInvoicePrint = vi.fn()
+  const service = makeService({
+    listSalesDocuments: vi.fn(async () => ({
+      items: [listItem],
+      page: 1,
+      page_size: 15,
+      total: 1,
+    })),
+    getSalesDocument: vi.fn(async () => detail),
+  })
+  render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} onOpenInvoicePrint={onOpenInvoicePrint} />)
+
+  await clickDocumentRow('HD010985')
+
+  const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ HD010985' })
+  await userEvent.click(within(detailRegion).getByRole('button', { name: 'In' }))
+
+  expect(onOpenInvoicePrint).toHaveBeenCalledWith('order-1')
+})
+
 it('opens invoice detail with item, price list, debt and stock snapshots', async () => {
   const service = makeService()
   render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
