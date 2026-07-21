@@ -386,15 +386,18 @@ Tạo sản phẩm/dịch vụ.
 **Validation:**
 
 - `code`, `name`, `unit_name` trim xong không rỗng.
-- `code` không trùng trong organization.
+- `code` không trùng trong organization (so khớp không phân biệt hoa thường) → `409 RESOURCE_CONFLICT`.
 - `status` thuộc `active | inactive`.
 - `sell_method` thuộc `quantity | area_m2 | linear_m | sheet | combo`.
 - `inventory_shape` thuộc `normal | roll | sheet`; nếu bỏ trống mặc định là `normal`.
 - `product_kind` thuộc `goods | service | auxiliary_material | roll | sheet | combo`; nếu bỏ trống Backend tự suy ra từ `sell_method`, `inventory_shape` và `track_inventory`.
-- `track_inventory` là boolean; nếu bỏ trống Backend tự suy ra theo loại tồn/cách tính bán.
+- `track_inventory` là boolean; nếu bỏ trống Backend tự suy ra theo loại (khớp KiotViet: `service`/`combo` = `false`, còn lại = `true` trừ khi client gửi rõ).
+- Với `product_kind = combo|service`, Backend **ép** `track_inventory = false` (và combo ép `sell_method = combo`, `inventory_shape = normal`) dù client gửi khác.
 - `latest_purchase_cost` là số lớn hơn hoặc bằng `0`; nếu bỏ trống thì chưa ghi giá vốn gần nhất.
 - `product_group_id` nếu bỏ trống thì Backend gán nhóm mặc định `Giá chung`.
 - `unit_conversions` là danh sách đơn vị phụ kiểu KiotViet; mỗi dòng có `unit_name`, `stock_qty_per_unit > 0`, và cờ mặc định mua/bán. Ví dụ `Ram = 100 tờ`, `m tới = 0.5 m`, `Tấc = 0.042 đơn vị cơ bản`.
+
+**Runtime:** Persist Postgres (`products` + `product_inventory_settings` + optional unit conversions) và dev-memory. Không còn stub HTTP.
 
 ### `GET /product-groups`
 
@@ -455,7 +458,7 @@ Tạo nhóm hàng.
 - Form `+ Tạo hàng hóa` dùng một modal chung, chọn loại hàng ở đầu form: hàng thường, dịch vụ, vật tư phụ, hàng cuộn, hàng tấm, combo - đóng gói.
 - Dịch vụ là phân loại riêng trong UI/filter, nhưng Backend nhận diện bằng cấu hình tồn hiện có: `inventory_shape = normal`, `sell_method = quantity`, `track_inventory = false`; UI ẩn phần tồn kho khi tạo.
 - Hàng cuộn lưu `inventory_shape = roll`, hàng tấm lưu `inventory_shape = sheet`.
-- Combo lưu `sell_method = combo`, `track_inventory = false`; UI ẩn phần tồn kho và hiện khu vực vật tư cấu thành. **Mục tiêu tạo combo tay:** `POST /products` rồi `POST /products/{product_id}/bom` → `active`. **Runtime 2026-07-21:** `POST /products` vẫn stub HTTP; `GET/POST/PUT …/bom` đã nối thật khi đã có `product_id`. Combo import KV dùng BOM `active` (migrate `0008`). Khi bán combo: trừ thành phần, không trừ mã combo. Dòng BOM không gửi `component_type`.
+- Combo lưu `sell_method = combo`, `track_inventory = false`; UI ẩn phần tồn kho và hiện khu vực vật tư cấu thành. **Tạo combo tay:** `POST /products` (`product_kind=combo`, `track_inventory=false` — Backend ép theo rule KiotViet dù client gửi `track_inventory=true`) rồi `POST /products/{product_id}/bom` → `active`. Runtime: create product + BOM đã persist (Postgres / dev-memory). Combo import KV dùng BOM `active` (migrate `0008`). Khi bán combo: trừ thành phần, không trừ mã combo. Dòng BOM không gửi `component_type`.
 - Thành phần combo vẫn có thể sửa sau ở chi tiết hàng hóa; mỗi lần lưu tạo BOM/version hiện hành theo contract BOM.
 - `Lưu & tạo thêm` dùng cùng endpoint `POST /products`, tạo xong reset form ở frontend và giữ modal mở.
 - Modal tạo hàng không có vùng ảnh hàng hóa, không có tab mô tả disabled và không có checkbox `Bán trực tiếp`; sản phẩm/dịch vụ đang hoạt động mặc định được bán trực tiếp. Module này không dùng nút `In tem mã`.

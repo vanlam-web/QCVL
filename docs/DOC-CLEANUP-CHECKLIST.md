@@ -63,7 +63,8 @@
 - [x] Chốt SoT debt: hiện âm đối soát + thu live không trả thừa (Owner 2026-07-21) · Finance README F/G · BR-DEBT-06
 - [x] Hướng tiếp: vận hành đơn mới sau import + đối soát trùng KV · Sales README
 - [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
-- [ ] Owner chỉ loại đơn cần UI trước (HD đã có / PN / tạo SP / …) rồi mới mở slice code
+- [x] `POST /products` persist (Postgres + dev-memory); combo/service ép `track_inventory=false` theo KV · 2026-07-21
+- [ ] Owner chỉ loại đơn cần UI trước (sau tạo SP/PN hàng thường) rồi mở gap còn lại nếu có
 
 ---
 
@@ -72,13 +73,14 @@
 - [x] Runtime BOM slice KV: migrate `0008` → `active`, POS skip parent, UI, `GET/POST/PUT /bom` · [#7](https://github.com/vanlam-web/QCVL/pull/7)
 - [x] Đồng bộ Sales README / POS-CHECKOUT / audit / checklist sau #7 · nhánh sync → main
 - [x] **Không** re-import Excel — chỉ migrate BOM đã có
+- [x] `POST /products` tạo hàng/combo tay persist (không stub)
 
 ## P4 — Hướng dài (đóng băng — nâng cấp sau)
 
 > Owner 2026-07-21: **không làm ngay.** Giữ trong checklist để không mất hướng.
 
 - [ ] Runtime mốc mở tồn QCVL
-- [ ] Persist Purchase P2/P3/P5 (bỏ stub create/post/pay)
+- [ ] Purchase P5 nghiệm thu sâu + P4 object cuộn/tấm khi post phiếu nhập
 - [ ] Deep-scan BOM / POS Lưu Combo / object cuộn-tấm đầy đủ
 
 **Không** xếp các mục trên vào queue code hiện tại cho đến khi Owner mở lại.
@@ -95,6 +97,7 @@
 | 2026-07-20 | Doc “BOM nháp / draft chờ duyệt” | SoT+runtime vệ tinh | [x] PR #5 → runtime #7 |
 | 2026-07-21 | Purchase P2/P3/P5 “đã merge” vs HTTP stub | Purchase README | [x] PR #5 |
 | 2026-07-21 | POS Postgres trừ mã combo + thiếu test combo | Biên bản → đã sửa code | [x] #7 + sync docs |
+| 2026-07-21 | `POST /products` stub chặn tạo SP mới sau import | Persist + docs SoT | [x] create-product-persist |
 
 ---
 

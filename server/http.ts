@@ -511,6 +511,26 @@ export interface ServerRepository {
   listProductsPage?(input: { organizationId: string; url: URL }): Promise<ProductListPageData>
   listProductGroups?(input: { organizationId: string }): Promise<ProductGroupListData[]>
   updateProductGroup?(input: { organizationId: string; id: string; name: string }): Promise<ProductGroupListData | null>
+  createProduct?(input: {
+    organizationId: string
+    code: string
+    name: string
+    status: 'active' | 'inactive'
+    unit_name: string
+    sell_method: string
+    product_kind: string
+    inventory_shape: string
+    track_inventory: boolean
+    product_group_id?: string | null
+    latest_purchase_cost?: number | null
+    unit_conversions?: Array<{
+      unit_name: string
+      stock_qty_per_unit: number
+      is_default_purchase_unit?: boolean
+      is_default_sale_unit?: boolean
+      source_code?: string | null
+    }>
+  }): Promise<ProductListData>
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
   listPriceLists?(input: { organizationId: string }): Promise<Array<{ id: string; code: string; name: string; is_default: boolean; is_active: boolean }>>
@@ -3057,7 +3077,55 @@ async function getDevApiResponse(
         }) ?? null
         return { found: true, data }
       },
-      createProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: randomUUID() }, status: 201 }),
+      createProduct: async () => {
+        const body = await readJson(request)
+        const normalized = normalizeCreateProductInput(body)
+        try {
+          const created = repository.createProduct
+            ? await repository.createProduct({
+                organizationId: currentUser.organization.id,
+                ...normalized,
+              })
+            : (() => {
+                const resolvedGroup =
+                  (normalized.product_group_id
+                    ? productGroups.find((group) => group.id === normalized.product_group_id)
+                    : productGroups.find((group) => group.is_default))
+                  ?? products[0].product_group
+                const fallback = {
+                  ...products[0],
+                  id: randomUUID(),
+                  code: normalized.code,
+                  name: normalized.name,
+                  status: normalized.status,
+                  product_kind: normalized.product_kind,
+                  unit_name: normalized.unit_name,
+                  sell_method: normalized.sell_method,
+                  inventory_shape: normalized.inventory_shape,
+                  track_inventory: normalized.track_inventory,
+                  product_group_id: resolvedGroup.id,
+                  product_group: { id: resolvedGroup.id, code: resolvedGroup.code, name: resolvedGroup.name },
+                  latest_purchase_cost: normalized.latest_purchase_cost,
+                  latest_purchase_cost_at: normalized.latest_purchase_cost === null ? null : nowIso,
+                  default_sale_price: null as number | null,
+                  unit_conversions: normalized.unit_conversions as typeof products[number]['unit_conversions'],
+                  created_at: nowIso,
+                  updated_at: nowIso,
+                }
+                products.push(fallback)
+                return fallback
+              })()
+          return { found: true, data: created, status: 201 }
+        } catch (error) {
+          if (error instanceof Error && error.message === 'PRODUCT_ALREADY_EXISTS') {
+            throw new HttpError(409, 'RESOURCE_CONFLICT', 'Product code already exists.', { code: ['Product code already exists.'] })
+          }
+          if (error instanceof Error && error.message === 'PRODUCT_GROUP_NOT_FOUND') {
+            throw new HttpError(400, 'VALIDATION_ERROR', 'product_group_id is invalid.', { product_group_id: ['product_group_id is invalid.'] })
+          }
+          throw error
+        }
+      },
       updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
       upsertProductBom: async () => {
         const productId = path.split('/')[4]
@@ -4689,6 +4757,132 @@ function requiredString(value: unknown, field: string) {
 function nullableString(value: unknown) {
   const result = String(value ?? '').trim()
   return result ? result : null
+}
+
+const PRODUCT_CREATE_KINDS = ['goods', 'service', 'auxiliary_material', 'roll', 'sheet', 'combo'] as const
+const PRODUCT_CREATE_SELL_METHODS = ['quantity', 'area_m2', 'linear_m', 'sheet', 'combo'] as const
+const PRODUCT_CREATE_SHAPES = ['normal', 'roll', 'sheet'] as const
+
+function shapeAndMethodForProductKind(productKind: (typeof PRODUCT_CREATE_KINDS)[number]): {
+  inventory_shape: (typeof PRODUCT_CREATE_SHAPES)[number]
+  sell_method: (typeof PRODUCT_CREATE_SELL_METHODS)[number]
+  track_inventory: boolean
+} {
+  if (productKind === 'service') return { inventory_shape: 'normal', sell_method: 'quantity', track_inventory: false }
+  if (productKind === 'roll') return { inventory_shape: 'roll', sell_method: 'linear_m', track_inventory: true }
+  if (productKind === 'sheet') return { inventory_shape: 'sheet', sell_method: 'sheet', track_inventory: true }
+  if (productKind === 'combo') return { inventory_shape: 'normal', sell_method: 'combo', track_inventory: false }
+  return { inventory_shape: 'normal', sell_method: 'quantity', track_inventory: true }
+}
+
+function inferProductKindFromCreateFields(input: {
+  sell_method: string | null
+  inventory_shape: string | null
+  track_inventory: boolean | null
+}): (typeof PRODUCT_CREATE_KINDS)[number] {
+  if (input.sell_method === 'combo') return 'combo'
+  if (input.inventory_shape === 'roll') return 'roll'
+  if (input.inventory_shape === 'sheet') return 'sheet'
+  if (input.track_inventory === false) return 'service'
+  return 'goods'
+}
+
+function normalizeCreateProductInput(body: Record<string, unknown>) {
+  const code = requiredString(body.code, 'code')
+  const name = requiredString(body.name, 'name')
+  const unit_name = requiredString(body.unit_name, 'unit_name')
+  const statusRaw = body.status === undefined || body.status === null || body.status === '' ? 'active' : String(body.status).trim()
+  if (statusRaw !== 'active' && statusRaw !== 'inactive') {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'status is invalid.', { status: ['status must be active or inactive.'] })
+  }
+
+  const sellMethodRaw = body.sell_method === undefined || body.sell_method === null || body.sell_method === ''
+    ? null
+    : String(body.sell_method).trim()
+  const inventoryShapeRaw = body.inventory_shape === undefined || body.inventory_shape === null || body.inventory_shape === ''
+    ? null
+    : String(body.inventory_shape).trim()
+  const trackInventoryRaw = typeof body.track_inventory === 'boolean' ? body.track_inventory : null
+  const productKindRaw = body.product_kind === undefined || body.product_kind === null || body.product_kind === ''
+    ? null
+    : String(body.product_kind).trim()
+
+  if (productKindRaw && !(PRODUCT_CREATE_KINDS as readonly string[]).includes(productKindRaw)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'product_kind is invalid.', { product_kind: ['product_kind is invalid.'] })
+  }
+  if (sellMethodRaw && !(PRODUCT_CREATE_SELL_METHODS as readonly string[]).includes(sellMethodRaw)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'sell_method is invalid.', { sell_method: ['sell_method is invalid.'] })
+  }
+  if (inventoryShapeRaw && !(PRODUCT_CREATE_SHAPES as readonly string[]).includes(inventoryShapeRaw)) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'inventory_shape is invalid.', { inventory_shape: ['inventory_shape is invalid.'] })
+  }
+
+  const product_kind = (productKindRaw as (typeof PRODUCT_CREATE_KINDS)[number] | null)
+    ?? inferProductKindFromCreateFields({
+      sell_method: sellMethodRaw,
+      inventory_shape: inventoryShapeRaw,
+      track_inventory: trackInventoryRaw,
+    })
+  const defaults = shapeAndMethodForProductKind(product_kind)
+  let sell_method = (sellMethodRaw as (typeof PRODUCT_CREATE_SELL_METHODS)[number] | null) ?? defaults.sell_method
+  let inventory_shape = (inventoryShapeRaw as (typeof PRODUCT_CREATE_SHAPES)[number] | null) ?? defaults.inventory_shape
+  let track_inventory = trackInventoryRaw ?? defaults.track_inventory
+
+  // KiotViet-aligned: combo/service never track own stock; combo always sells as combo.
+  if (product_kind === 'combo') {
+    sell_method = 'combo'
+    inventory_shape = 'normal'
+    track_inventory = false
+  } else if (product_kind === 'service') {
+    inventory_shape = 'normal'
+    track_inventory = false
+  } else if (product_kind === 'roll') {
+    inventory_shape = 'roll'
+  } else if (product_kind === 'sheet') {
+    inventory_shape = 'sheet'
+  }
+
+  let latest_purchase_cost: number | null = null
+  if (body.latest_purchase_cost !== undefined && body.latest_purchase_cost !== null && body.latest_purchase_cost !== '') {
+    const parsed = Number(body.latest_purchase_cost)
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'latest_purchase_cost is invalid.', {
+        latest_purchase_cost: ['latest_purchase_cost must be greater than or equal to 0.'],
+      })
+    }
+    latest_purchase_cost = parsed
+  }
+
+  const unit_conversions = Array.isArray(body.unit_conversions)
+    ? body.unit_conversions.flatMap((item) => {
+        if (!item || typeof item !== 'object') return []
+        const row = item as Record<string, unknown>
+        const conversionUnitName = String(row.unit_name ?? '').trim()
+        const stockQty = Number(row.stock_qty_per_unit)
+        if (!conversionUnitName || !Number.isFinite(stockQty) || stockQty <= 0) return []
+        return [{
+          unit_name: conversionUnitName,
+          stock_qty_per_unit: stockQty,
+          is_default_purchase_unit: Boolean(row.is_default_purchase_unit),
+          is_default_sale_unit: Boolean(row.is_default_sale_unit),
+          source_code: nullableString(row.source_code),
+        }]
+      })
+    : []
+
+  return {
+    code,
+    name,
+    status: statusRaw as 'active' | 'inactive',
+    unit_name,
+    sell_method,
+    product_kind,
+    inventory_shape,
+    track_inventory,
+    product_group_id: nullableString(body.product_group_id),
+    latest_purchase_cost,
+    unit_conversions,
+  }
 }
 
 function makeInternalUserEmail(username: string) {

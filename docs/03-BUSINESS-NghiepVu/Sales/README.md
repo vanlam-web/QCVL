@@ -56,7 +56,6 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 - POS `Không lưu` / `Lưu Combo mới` đầy đủ
 - Trừ kho object cuộn/tấm khi bán thành phần roll/sheet
 - Dọn movement lịch sử từng trừ nhầm mã combo (chỉ nếu Owner yêu cầu)
-- `POST /products` tạo combo tay (vẫn stub HTTP)
 
 ---
 
@@ -80,8 +79,8 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 | Hóa đơn bán POS → `HD…` | **Có** (Postgres) | Mã = `max(HD)+1` trên tập đã có (gồm HD import) |
 | Báo giá → `BG…` | **Có** | Qua POS |
 | Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
-| Phiếu nhập → `PN…` | **Chưa** — HTTP stub | Form UI có; chưa persist — [Purchase README](../Purchase/README.md) |
-| Tạo hàng hóa mới | **Chưa** — `POST /products` stub | Chặn nếu đơn mới cần mã hàng chưa có trong catalog |
+| Phiếu nhập → `PN…` | **Có** (hàng thường) | Draft/post Postgres; P4 object cuộn/tấm vẫn đóng băng — [Purchase README](../Purchase/README.md) |
+| Tạo hàng hóa mới | **Có** | `POST /products` persist Postgres/dev-memory; trùng mã → 409; combo/service ép `track_inventory=false` theo KV |
 
 ### 3. Đối soát trùng KV (SoT tối thiểu)
 

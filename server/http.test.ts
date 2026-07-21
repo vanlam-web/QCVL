@@ -2727,6 +2727,177 @@ describe('createHttpHandler', () => {
     expect(body.data.total_all).toBe(2)
   })
 
+  test('persists manual product create and lists it afterwards', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const createResponse = await handler(
+      new Request('http://api.local/api/v1/products', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'SP-NEW-01',
+          name: 'Hàng tạo tay',
+          status: 'active',
+          unit_name: 'Cái',
+          sell_method: 'quantity',
+          product_kind: 'goods',
+          inventory_shape: 'normal',
+          track_inventory: true,
+          latest_purchase_cost: 15000,
+        }),
+      }),
+    )
+    const created = await createResponse.json()
+
+    expect(createResponse.status).toBe(201)
+    expect(created.data).toEqual(expect.objectContaining({
+      code: 'SP-NEW-01',
+      name: 'Hàng tạo tay',
+      product_kind: 'goods',
+      track_inventory: true,
+      latest_purchase_cost: 15000,
+    }))
+
+    const listResponse = await handler(
+      new Request('http://api.local/api/v1/products?search=SP-NEW-01&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const listBody = await listResponse.json()
+    expect(listResponse.status).toBe(200)
+    expect(listBody.data.items).toEqual([
+      expect.objectContaining({ code: 'SP-NEW-01', name: 'Hàng tạo tay' }),
+    ])
+  })
+
+  test('creates combo with KV stock rules then saves active BOM', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    await handler(
+      new Request('http://api.local/api/v1/products/import/kiotviet', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          cleanup_demo: false,
+          rows: [
+            { rowNumber: 2, 'Mã hàng': 'DCS', 'Tên hàng': 'Decal sua', ĐVT: 'm2', 'Đang kinh doanh': 1 },
+            { rowNumber: 3, 'Mã hàng': 'F5', 'Tên hàng': 'Fomex 5mm', ĐVT: 'tam', 'Đang kinh doanh': 1 },
+          ],
+        }),
+      }),
+    )
+
+    const componentList = await handler(
+      new Request('http://api.local/api/v1/products?search=DCS&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const components = await componentList.json()
+    const decalId = components.data.items.find((item: { code: string }) => item.code === 'DCS')?.id
+    const fomexList = await handler(
+      new Request('http://api.local/api/v1/products?search=F5&page=1&page_size=15', {
+        headers: { authorization },
+      }),
+    )
+    const fomexBody = await fomexList.json()
+    const fomexId = fomexBody.data.items.find((item: { code: string }) => item.code === 'F5')?.id
+    expect(decalId).toBeTruthy()
+    expect(fomexId).toBeTruthy()
+
+    const createResponse = await handler(
+      new Request('http://api.local/api/v1/products', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'COMBO-NEW',
+          name: 'Combo tạo tay',
+          status: 'active',
+          unit_name: 'combo',
+          sell_method: 'combo',
+          product_kind: 'combo',
+          inventory_shape: 'normal',
+          track_inventory: true,
+        }),
+      }),
+    )
+    const created = await createResponse.json()
+    expect(createResponse.status).toBe(201)
+    expect(created.data).toEqual(expect.objectContaining({
+      code: 'COMBO-NEW',
+      product_kind: 'combo',
+      sell_method: 'combo',
+      track_inventory: false,
+    }))
+
+    const bomResponse = await handler(
+      new Request(`http://api.local/api/v1/products/${created.data.id}/bom`, {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          items: [
+            { component_product_id: decalId, quantity: 0.6 },
+            { component_product_id: fomexId, quantity: 0.3 },
+          ],
+        }),
+      }),
+    )
+    const bom = await bomResponse.json()
+    expect(bomResponse.status).toBe(200)
+    expect(bom.data).toEqual(expect.objectContaining({
+      product_id: created.data.id,
+      status: 'active',
+      items: expect.arrayContaining([
+        expect.objectContaining({ component_product_id: decalId, quantity: 0.6 }),
+        expect.objectContaining({ component_product_id: fomexId, quantity: 0.3 }),
+      ]),
+    }))
+  })
+
+  test('returns 409 when creating a product with an existing code', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const first = await handler(
+      new Request('http://api.local/api/v1/products', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'DUP-01',
+          name: 'Lần 1',
+          status: 'active',
+          unit_name: 'Cái',
+          sell_method: 'quantity',
+          product_kind: 'goods',
+          inventory_shape: 'normal',
+          track_inventory: true,
+        }),
+      }),
+    )
+    expect(first.status).toBe(201)
+
+    const duplicate = await handler(
+      new Request('http://api.local/api/v1/products', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          code: 'dup-01',
+          name: 'Lần 2',
+          status: 'active',
+          unit_name: 'Cái',
+          sell_method: 'quantity',
+          product_kind: 'goods',
+          inventory_shape: 'normal',
+          track_inventory: true,
+        }),
+      }),
+    )
+    const conflictBody = await duplicate.json()
+    expect(duplicate.status).toBe(409)
+    expect(conflictBody.error?.code ?? conflictBody.code).toMatch(/CONFLICT|RESOURCE_CONFLICT/)
+  })
+
   test('resolves POS prices from imported KiotViet price lists with fallback to default price', async () => {
     const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
     const authorization = 'Bearer dev-token'
