@@ -704,6 +704,7 @@ export function FoundationAdminPage({
           ) : null}
           {billSettingsLoading ? <p className="admin-settings-loading">Đang tải cấu hình bill...</p> : null}
           <BillTemplateManager
+            key={`bill-templates-${billSettings.templates.map((item) => item.id).join('-')}-${billSettings.logo_data_url ?? 'nologo'}-${billSettings.invoice_title}`}
             settings={billSettings}
             loading={billSettingsLoading}
             onLogoError={(text) => setBillSettingsNotice({ tone: 'warning', text })}

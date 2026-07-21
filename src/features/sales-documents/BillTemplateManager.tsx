@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { BillTemplateLivePreview } from './BillTemplateLivePreview'
 import { BillTemplatePicker } from './BillTemplatePicker'
 import {
@@ -25,19 +25,14 @@ export function BillTemplateManager({
   onLogoError?: (message: string) => void
 }) {
   const [documentType, setDocumentType] = useState<BillDocumentType>('invoice')
-  const [templates, setTemplates] = useState<BillPrintTemplate[]>(settings.templates)
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(settings.logo_data_url)
-  const [selectedId, setSelectedId] = useState<string>(
-    () => settings.templates.find((item) => item.document_type === 'invoice' && item.is_default)?.id
+  const [templates, setTemplates] = useState<BillPrintTemplate[]>(() => settings.templates)
+  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(() => settings.logo_data_url)
+  const [selectedId, setSelectedId] = useState<string>(() =>
+    settings.templates.find((item) => item.document_type === 'invoice' && item.is_default)?.id
       ?? settings.templates.find((item) => item.document_type === 'invoice')?.id
       ?? settings.templates[0]?.id
       ?? '',
   )
-
-  useEffect(() => {
-    setTemplates(settings.templates)
-    setLogoDataUrl(settings.logo_data_url)
-  }, [settings])
 
   const visibleTemplates = useMemo(
     () => templates.filter((item) => item.document_type === documentType),
@@ -45,11 +40,6 @@ export function BillTemplateManager({
   )
 
   const selected = visibleTemplates.find((item) => item.id === selectedId) ?? visibleTemplates[0] ?? null
-
-  useEffect(() => {
-    if (!selected) return
-    if (selected.id !== selectedId) setSelectedId(selected.id)
-  }, [selected, selectedId])
 
   function updateSelected(patch: Partial<BillPrintTemplate>) {
     if (!selected) return
