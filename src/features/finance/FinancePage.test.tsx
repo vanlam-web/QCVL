@@ -70,7 +70,7 @@ const cashbookDetail: CashbookEntryDetail = {
   created_by: { id: 'user-1', name: 'Văn Viết Phương Lâm' },
   counterparty: { type: 'customer', name: 'Anh Nam', phone: '0900000000' },
   payment_method: 'cash',
-  source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001' },
+  source: { type: 'payment_receipt', id: 'receipt-1', code: 'PT0001', order_code: 'HD0001', counterparty_code: 'KH001' },
   allocations: [
     {
       order_id: 'order-1',
@@ -102,7 +102,7 @@ const expenseCashbookDetail: CashbookEntryDetail = {
   created_by: { id: 'user-1', name: 'Văn Viết Phương Lâm' },
   counterparty: { type: 'supplier', name: 'Thu Nghĩa', phone: '000100' },
   payment_method: 'bank_transfer',
-  source: { type: 'manual_voucher', id: 'voucher-out-1', code: 'PCPN000679', order_code: 'PN000679' },
+  source: { type: 'manual_voucher', id: 'voucher-out-1', code: 'PCPN000679', order_code: 'PN000679', counterparty_code: 'NCC000011' },
   allocations: [
     {
       order_id: 'receipt-1',
@@ -1207,7 +1207,7 @@ describe('FinancePage', () => {
     expect(within(detail).getByText('Loại thu')).toBeInTheDocument()
     expect(within(detail).getByText('Phương thức TT')).toBeInTheDocument()
     expect(within(detail).getByText('Người nộp')).toBeInTheDocument()
-    expect(within(detail).getByText('Anh Nam, 0900000000')).toBeInTheDocument()
+    expect(within(detail).getByRole('link', { name: 'Anh Nam, 0900000000' })).toHaveAttribute('href', '/customers?open=KH001')
     expect(within(detail).queryByText('Đối tượng nộp')).not.toBeInTheDocument()
     expect(within(detail).queryByRole('button', { name: 'Người nộp Anh Nam, 0900000000' })).not.toBeInTheDocument()
     expect(within(detail).queryByText('Đến quỹ')).not.toBeInTheDocument()
@@ -1485,6 +1485,7 @@ describe('FinancePage', () => {
     const linkedReceipt = within(linkedDocumentsTable).getByRole('link', { name: 'PN000679' })
     expect(linkedReceipt).toHaveClass('finance-cashbook-linked-document-link')
     expect(linkedReceipt).toHaveAttribute('href', '/receipts?open=PN000679')
+    expect(within(detail).getByRole('link', { name: 'Thu Nghĩa, 000100' })).toHaveAttribute('href', '/suppliers?open=NCC000011')
     expect(within(detail).getByText('Đã trả trước')).toBeInTheDocument()
     expect(within(detail).getByText('Giá trị chi')).toBeInTheDocument()
   })
@@ -1666,7 +1667,7 @@ describe('FinancePage', () => {
     const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT000020' })
     expect(within(detail).queryByRole('button', { name: 'Người nộp Xuân Đức, 0909000000' })).not.toBeInTheDocument()
     expect(within(detail).getByText('Người nộp')).toBeInTheDocument()
-    expect(within(detail).getByText('Xuân Đức, 0909000000')).toBeInTheDocument()
+    expect(within(detail).getByRole('link', { name: 'Xuân Đức, 0909000000' })).toHaveAttribute('href', '/customers?search=Xu%C3%A2n+%C4%90%E1%BB%A9c')
     expect(service.getSalesDocumentByCode).toHaveBeenCalledWith('HD000020')
   })
 

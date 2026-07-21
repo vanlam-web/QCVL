@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, Copy, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
+import { Banknote, ChevronLeft, ChevronRight, Copy, ExternalLink, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateTimeLocalInputValue, formatKvDateTime } from '../../lib/date-format'
 import { parseMoneyInput } from '../../lib/number-format'
@@ -36,6 +36,7 @@ import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
+  ManagementConfirmDialog,
   ManagementDataTable,
   ManagementDateRangeInputs,
   ManagementDetailActionFooter,
@@ -49,6 +50,7 @@ import {
   ManagementInlineDetailTabs,
   ManagementFilterGroup,
   ManagementFilterSidebar,
+  ManagementDropdownField,
   ManagementImportButton,
   ManagementListSurface,
   ManagementPage,
@@ -65,6 +67,7 @@ import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
+import { financeAccountChoiceLabel } from '../finance/finance-presenter'
 
 const blankLine = {
   product_id: '',
@@ -117,7 +120,13 @@ function parseReceiptDateTimeInput(value: string) {
   return `${year}-${month}-${day}T${hour}:${minute}`
 }
 
+function supplierDocumentNoText(value: string | null | undefined) {
+  const text = value?.trim() ?? ''
+  return text.toUpperCase().startsWith('CODEX-') ? '' : text
+}
+
 const receiptProductSearchPageSize = 20
+const receiptSupplierSearchPageSize = 20
 const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
 const receiptCreateDraftWindowNamePrefix = 'qc-oms.purchase-receipt-create-draft='
 const receiptCreateDraftHistoryStateKey = 'qc_oms_purchase_receipt_create_draft_v1'
@@ -157,21 +166,82 @@ function blankSupplierForm(): SupplierInput {
   }
 }
 
-function purchaseReceiptUnitOptions(product?: PurchaseReceiptProduct) {
+interface PurchaseReceiptUnitChoice {
+  unitName: string
+  product?: PurchaseReceiptProduct
+}
+
+function unitSortValue(unitName: string) {
+  const match = unitName.match(/(\d+(?:[.,]\d+)?)/)
+  return match ? Number(match[1].replace(',', '.')) : null
+}
+
+function compareReceiptUnitChoices(left: PurchaseReceiptUnitChoice, right: PurchaseReceiptUnitChoice) {
+  const leftNumber = unitSortValue(left.unitName)
+  const rightNumber = unitSortValue(right.unitName)
+  if (leftNumber !== null && rightNumber !== null && leftNumber !== rightNumber) {
+    return leftNumber - rightNumber
+  }
+  return left.unitName.localeCompare(right.unitName, 'vi')
+}
+
+function purchaseReceiptLineUnitChoices(product: PurchaseReceiptProduct | undefined, products: PurchaseReceiptProduct[]) {
   if (!product) return []
-  if (product.inventory_shape === 'roll') return ['cuộn']
-  if (product.inventory_shape === 'sheet') return ['tấm']
-  const units = [
-    ...(product.unit_conversions ?? [])
-      .filter((conversion) => conversion.unit_name.trim() !== '')
-      .map((conversion) => conversion.unit_name.trim()),
-    product.unit_name,
-  ]
-  return [...new Set(units.filter(Boolean))]
+  if (product.inventory_shape === 'roll') return [{ unitName: 'cuộn' }]
+  if (product.inventory_shape === 'sheet') return [{ unitName: 'tấm' }]
+
+  const choices = new Map<string, PurchaseReceiptUnitChoice>()
+  function addChoice(unitName: string | null | undefined, linkedProduct?: PurchaseReceiptProduct) {
+    const normalizedUnitName = unitName?.trim()
+    if (!normalizedUnitName) return
+    const current = choices.get(normalizedUnitName)
+    if (current?.product && !linkedProduct) return
+    choices.set(normalizedUnitName, { unitName: normalizedUnitName, product: linkedProduct ?? current?.product })
+  }
+
+  for (const conversion of product.unit_conversions ?? []) {
+    addChoice(conversion.unit_name)
+  }
+  addChoice(product.unit_name, product)
+
+  const productFamilyName = normalizeManagementSearchText(product.name)
+  for (const candidate of products) {
+    if (
+      candidate.status !== 'active'
+      || candidate.sell_method === 'combo'
+      || candidate.inventory_shape !== product.inventory_shape
+      || normalizeManagementSearchText(candidate.name) !== productFamilyName
+    ) {
+      continue
+    }
+    addChoice(candidate.unit_name, candidate)
+    for (const conversion of candidate.unit_conversions ?? []) addChoice(conversion.unit_name)
+  }
+
+  return [...choices.values()].sort(compareReceiptUnitChoices)
+}
+
+function matchingReceiptUnitProduct(
+  lineProduct: PurchaseReceiptProduct | undefined,
+  unitName: string,
+  products: PurchaseReceiptProduct[],
+) {
+  if (!lineProduct) return undefined
+  const productFamilyName = normalizeManagementSearchText(lineProduct.name)
+  return products.find((candidate) => (
+    candidate.status === 'active'
+    && candidate.sell_method !== 'combo'
+    && candidate.inventory_shape === lineProduct.inventory_shape
+    && normalizeManagementSearchText(candidate.name) === productFamilyName
+    && candidate.unit_name.trim() === unitName.trim()
+  ))
 }
 
 function receiptProductMatchesSearch(product: PurchaseReceiptProduct, query: string) {
-  const normalizedText = normalizeManagementSearchText(`${product.code} ${product.name}`)
+  const conversionText = (product.unit_conversions ?? [])
+    .map((conversion) => `${conversion.source_code ?? ''} ${conversion.unit_name}`)
+    .join(' ')
+  const normalizedText = normalizeManagementSearchText(`${product.code} ${product.name} ${conversionText}`)
   if (normalizedText.includes(query)) return true
   return normalizedText.split(/\s+/).some((part) => part.includes(query))
 }
@@ -179,8 +249,10 @@ function receiptProductMatchesSearch(product: PurchaseReceiptProduct, query: str
 function receiptProductSearchRank(product: PurchaseReceiptProduct, query: string) {
   const code = normalizeManagementSearchText(product.code)
   const name = normalizeManagementSearchText(product.name)
-  const combined = normalizeManagementSearchText(`${product.code} ${product.name}`)
+  const conversionCodes = (product.unit_conversions ?? []).map((conversion) => normalizeManagementSearchText(conversion.source_code ?? ''))
+  const combined = normalizeManagementSearchText(`${product.code} ${product.name} ${(product.unit_conversions ?? []).map((conversion) => `${conversion.source_code ?? ''} ${conversion.unit_name}`).join(' ')}`)
   if (code === query || name === query) return 0
+  if (conversionCodes.some((conversionCode) => conversionCode === query)) return 1
   if (code.startsWith(query) || name.startsWith(query)) return 1
   if (name.split(/\s+/).some((part) => part.startsWith(query))) return 2
   if (combined.split(/\s+/).some((part) => part.startsWith(query))) return 3
@@ -198,6 +270,15 @@ function uniqueReceiptProductsById(products: PurchaseReceiptProduct[]) {
   return products.filter((product) => {
     if (seen.has(product.id)) return false
     seen.add(product.id)
+    return true
+  })
+}
+
+function uniqueReceiptSuppliersById(suppliers: Supplier[]) {
+  const seen = new Set<string>()
+  return suppliers.filter((supplier) => {
+    if (seen.has(supplier.id)) return false
+    seen.add(supplier.id)
     return true
   })
 }
@@ -429,6 +510,8 @@ export function PurchaseReceiptsPage({
   const [supplierPaymentAmount, setSupplierPaymentAmount] = useState(0)
   const [supplierPaymentMethod, setSupplierPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [supplierPaymentFinanceAccountId, setSupplierPaymentFinanceAccountId] = useState('')
+  const [cancelReceiptOpen, setCancelReceiptOpen] = useState(false)
+  const [cancelingReceipt, setCancelingReceipt] = useState(false)
   const [rollLengthTexts, setRollLengthTexts] = useState<Record<number, string>>({})
   const [importOpen, setImportOpen] = useState(false)
   const [productCreateOpen, setProductCreateOpen] = useState(false)
@@ -447,11 +530,19 @@ export function PurchaseReceiptsPage({
     search: '',
     products: [],
   })
+  const [receiptSupplierCatalogSearchResult, setReceiptSupplierCatalogSearchResult] = useState<{
+    search: string
+    suppliers: Supplier[]
+  }>({
+    search: '',
+    suppliers: [],
+  })
   const [error, setError] = useState<string | null>(null)
   const receiptProductSearchRef = useRef<HTMLInputElement | null>(null)
   const receiptProductSearchToolbarRef = useRef<HTMLDivElement | null>(null)
   const receiptSupplierSearchRef = useRef<HTMLDivElement | null>(null)
   const receiptSupplierSearchInputRef = useRef<HTMLInputElement | null>(null)
+  const receiptPaidAmountInputRef = useRef<HTMLInputElement | null>(null)
   const receiptCreateDraftRestoredRef = useRef(false)
   const skipReceiptCreateDraftPersistRef = useRef(false)
   const receiptSortInitialRender = useRef(true)
@@ -483,11 +574,17 @@ export function PurchaseReceiptsPage({
     return suppliers.find((supplier) => supplier.id === form.supplier_id) ?? null
   }, [form.supplier_id, suppliers])
   const receiptSupplierSearchQuery = normalizeManagementSearchText(receiptSupplierSearch)
-  const receiptSupplierSuggestions = useMemo(() => {
-    if (!isCreatingReceipt || !receiptSupplierSearchActive || !receiptSupplierSuggestionsOpen) return undefined
-    return suppliers
+  const receiptSupplierSearchResults = useMemo(() => {
+    const search = receiptSupplierSearch.trim()
+    const remoteSuppliers = receiptSupplierCatalogSearchResult.search === search ? receiptSupplierCatalogSearchResult.suppliers : []
+    return uniqueReceiptSuppliersById([...remoteSuppliers, ...suppliers])
+      .filter((supplier) => supplier.status === 'active')
       .filter((supplier) => supplierMatchesReceiptSearch(supplier, receiptSupplierSearchQuery))
       .sort((left, right) => left.name.localeCompare(right.name, 'vi'))
+  }, [receiptSupplierCatalogSearchResult, receiptSupplierSearch, receiptSupplierSearchQuery, suppliers])
+  const receiptSupplierSuggestions = useMemo(() => {
+    if (!isCreatingReceipt || !receiptSupplierSearchActive || !receiptSupplierSuggestionsOpen) return undefined
+    return receiptSupplierSearchResults
       .slice(0, 8)
       .map((supplier) => ({
         id: supplier.id,
@@ -496,7 +593,7 @@ export function PurchaseReceiptsPage({
         meta: supplier.phone ? `ĐT: ${supplier.phone}` : undefined,
         ariaLabel: `Chọn nhà cung cấp ${supplier.code} ${supplier.name}`,
       }))
-  }, [isCreatingReceipt, receiptSupplierSearchActive, receiptSupplierSearchQuery, receiptSupplierSuggestionsOpen, suppliers])
+  }, [isCreatingReceipt, receiptSupplierSearchActive, receiptSupplierSearchResults, receiptSupplierSuggestionsOpen])
   const receiptProductSearchResults = useMemo(() => {
     const search = receiptProductSearch.trim()
     const query = normalizeManagementSearchText(receiptProductSearch)
@@ -545,6 +642,7 @@ export function PurchaseReceiptsPage({
     return sortedReceipts.filter((receipt) => favoriteReceiptIds.includes(receipt.id))
   }, [favoriteReceiptIds, showFavoriteReceiptsOnly, sortedReceipts])
   const receiptWorkspaceLookupLoading = isCreatingReceipt && (!suppliersLoaded || !productsLoaded)
+  const receiptDebtEffect = Number(form.paid_amount || 0) - totals.payable
 
   function updateReceiptReceivedAtText(value: string) {
     setReceiptReceivedAtText(value)
@@ -568,7 +666,13 @@ export function PurchaseReceiptsPage({
         })
         return
       }
-      if (event.key !== 'F8' && event.key !== 'F3') return
+      if (event.key === 'F8') {
+        event.preventDefault()
+        receiptPaidAmountInputRef.current?.focus()
+        receiptPaidAmountInputRef.current?.select()
+        return
+      }
+      if (event.key !== 'F3') return
       event.preventDefault()
       receiptProductSearchRef.current?.focus()
       receiptProductSearchRef.current?.select()
@@ -630,6 +734,44 @@ export function PurchaseReceiptsPage({
       active = false
     }
   }, [isCreatingReceipt, receiptProductSearch, service])
+
+  useEffect(() => {
+    if (!isCreatingReceipt || !receiptSupplierSearchActive) return undefined
+
+    const search = receiptSupplierSearch.trim()
+    if (search.length === 0) {
+      setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
+      return undefined
+    }
+
+    let active = true
+
+    async function searchSuppliers() {
+      try {
+        const supplierResult = await service.listSuppliers({
+          status: 'active',
+          search,
+          page: 1,
+          page_size: receiptSupplierSearchPageSize,
+        })
+        if (!active) return
+        const activeSuppliers = supplierResult.items.filter((supplier) => supplier.status === 'active')
+        setReceiptSupplierCatalogSearchResult({ search, suppliers: activeSuppliers })
+        setSuppliers((current) => uniqueReceiptSuppliersById([...activeSuppliers, ...current]))
+        setSuppliersLoaded(true)
+      } catch (cause) {
+        if (!active) return
+        setReceiptSupplierCatalogSearchResult({ search, suppliers: [] })
+        setError(formatApiError(cause, 'Không tìm được nhà cung cấp.'))
+      }
+    }
+
+    void searchSuppliers()
+
+    return () => {
+      active = false
+    }
+  }, [isCreatingReceipt, receiptSupplierSearch, receiptSupplierSearchActive, service])
 
   async function loadReceipts(
     input: {
@@ -711,6 +853,39 @@ export function PurchaseReceiptsPage({
     }
   }
 
+  function exportSelectedReceipt(receipt: PurchaseReceipt) {
+    downloadManagementCsv({
+      filename: `${receipt.code}.csv`,
+      rows: [
+        ['Mã phiếu', receipt.code],
+        ['Ngày nhập', formatKvDateTime(receipt.received_at)],
+        ['Nhà cung cấp', receipt.supplier.name],
+        ['Số chứng từ NCC', supplierDocumentNoText(receipt.supplier_document_no)],
+        ['Người tạo', receipt.created_by.name],
+        [''],
+        ['Mã hàng', 'Tên hàng', 'Số lượng', 'Đơn vị', 'Đơn giá', 'Giảm giá', 'Giá nhập', 'Thành tiền'],
+        ...receipt.items.map((item) => [
+          item.product.code,
+          item.product.name,
+          item.quantity,
+          item.unit_name_snapshot,
+          item.unit_cost,
+          item.discount_amount,
+          item.unit_cost,
+          item.line_amount,
+        ]),
+        [''],
+        ['Số lượng mặt hàng', receipt.items.length],
+        ['Tổng tiền hàng', receipt.subtotal_amount],
+        ['Giảm giá phiếu', receipt.discount_amount],
+        ['Cần trả NCC', receipt.payable_amount],
+        ['Đã trả NCC', receipt.paid_amount],
+        ['Còn phải trả', receiptOutstandingAfterPost(receipt)],
+        ['Ghi chú', receipt.notes?.trim() ?? ''],
+      ],
+    })
+  }
+
   useEffect(() => {
     if (receiptSortInitialRender.current) {
       receiptSortInitialRender.current = false
@@ -753,7 +928,7 @@ export function PurchaseReceiptsPage({
               code: detail.code,
               supplier_id: detail.supplier_id,
               received_at: detail.received_at.slice(0, 16),
-              supplier_document_no: detail.supplier_document_no ?? '',
+              supplier_document_no: supplierDocumentNoText(detail.supplier_document_no),
               notes: detail.notes ?? '',
               discount_amount: detail.discount_amount,
               paid_amount: detail.paid_amount,
@@ -791,7 +966,7 @@ export function PurchaseReceiptsPage({
     let nextSuppliers = suppliers
     let nextProducts = products
     if (!suppliersLoaded) {
-      requests.push(service.listSuppliers().then((result) => {
+      requests.push(service.listSuppliers({ status: 'active', page: 1, page_size: 100 }).then((result) => {
         nextSuppliers = result.items
         setSuppliers(result.items)
         setSuppliersLoaded(true)
@@ -1020,6 +1195,7 @@ export function PurchaseReceiptsPage({
       setReceiptDetailTab('info')
       setDetailOpen(false)
       setSupplierPaymentOpen(false)
+      setCancelReceiptOpen(false)
       setLoadingReceiptId(null)
       return
     }
@@ -1031,6 +1207,7 @@ export function PurchaseReceiptsPage({
     setSelectedReceipt(null)
     setReceiptDetailTab('info')
     setSupplierPaymentOpen(false)
+    setCancelReceiptOpen(false)
     try {
       const [detail] = await Promise.all([service.getReceipt(receipt.id), ensureReceiptLookupsLoaded()])
       setDetailOpen(true)
@@ -1042,7 +1219,7 @@ export function PurchaseReceiptsPage({
         code: detail.code,
         supplier_id: detail.supplier_id,
         received_at: detail.received_at.slice(0, 16),
-        supplier_document_no: detail.supplier_document_no ?? '',
+        supplier_document_no: supplierDocumentNoText(detail.supplier_document_no),
         notes: detail.notes ?? '',
         discount_amount: detail.discount_amount,
         paid_amount: detail.paid_amount,
@@ -1060,6 +1237,7 @@ export function PurchaseReceiptsPage({
       setPaymentMethod('cash')
       setFinanceAccountId('')
       setSupplierPaymentOpen(false)
+      setCancelReceiptOpen(false)
       setSupplierPaymentAmount(0)
       setSupplierPaymentMethod('cash')
       setSupplierPaymentFinanceAccountId('')
@@ -1171,7 +1349,11 @@ export function PurchaseReceiptsPage({
       setError('Nhập ngày giờ dạng DD/MM/YYYY HH:mm.')
       return null
     }
-    return { ...form, received_at: normalizedReceivedAt || form.received_at }
+    return {
+      ...form,
+      received_at: normalizedReceivedAt || form.received_at,
+      supplier_document_no: supplierDocumentNoText(form.supplier_document_no),
+    }
   }
 
   function moneyInputValue(value: number) {
@@ -1253,7 +1435,13 @@ export function PurchaseReceiptsPage({
     const product = receiptProductSearchResults.find((candidate) => candidate.id === productId)
     if (!product) return
 
-    setProducts((current) => uniqueReceiptProductsById([product, ...current]))
+    const relatedProducts = receiptProductCatalogSearchResult.products.filter((candidate) => (
+      candidate.status === 'active'
+      && isReceiptPurchaseSearchableProduct(candidate)
+      && normalizeManagementSearchText(candidate.name) === normalizeManagementSearchText(product.name)
+      && candidate.inventory_shape === product.inventory_shape
+    ))
+    setProducts((current) => uniqueReceiptProductsById([product, ...relatedProducts, ...receiptProductSearchResults, ...current]))
     const nextLine = createPurchaseReceiptLine(product)
     const lineIndex = form.items.length
     setForm((current) => {
@@ -1267,6 +1455,63 @@ export function PurchaseReceiptsPage({
     })
     setReceiptProductSearch('')
     setReceiptProductCatalogSearchResult({ search: '', products: [] })
+    void loadReceiptProductFamily(product)
+  }
+
+  async function loadReceiptProductFamily(product: PurchaseReceiptProduct) {
+    try {
+      const result = await service.listProducts({
+        status: 'active',
+        search: product.name,
+        page: 1,
+        page_size: 50,
+      })
+      const productFamilyName = normalizeManagementSearchText(product.name)
+      const relatedProducts = result.items.filter((candidate) => (
+        candidate.status === 'active'
+        && isReceiptPurchaseSearchableProduct(candidate)
+        && normalizeManagementSearchText(candidate.name) === productFamilyName
+        && candidate.inventory_shape === product.inventory_shape
+      ))
+      if (relatedProducts.length > 0) {
+        setProducts((current) => uniqueReceiptProductsById([product, ...relatedProducts, ...current]))
+      }
+    } catch {
+      // Unit switching still works for products already present in cache.
+    }
+  }
+
+  function updateLineUnit(index: number, unitName: string, unitChoices: PurchaseReceiptUnitChoice[]) {
+    const choiceProduct = unitChoices.find((choice) => choice.unitName === unitName)?.product
+    const currentLine = form.items[index]
+    const selectedProduct = currentLine ? products.find((candidate) => candidate.id === currentLine.product_id) : undefined
+    const linkedProduct = choiceProduct ?? matchingReceiptUnitProduct(selectedProduct, unitName, products)
+    setForm((current) => {
+      const line = current.items[index]
+      if (!line) return current
+      const items = [...current.items]
+      if (linkedProduct && linkedProduct.id !== line.product_id) {
+        const inventoryShape = linkedProduct.inventory_shape ?? 'normal'
+        items[index] = {
+          ...line,
+          product_id: linkedProduct.id,
+          inventory_shape: inventoryShape,
+          unit_name: unitName,
+          unit_cost: linkedProduct.latest_purchase_cost ?? line.unit_cost,
+          physical_payload: defaultPhysicalPayload(inventoryShape),
+        }
+      } else {
+        items[index] = { ...line, unit_name: unitName }
+      }
+      return { ...current, items }
+    })
+    setRollLengthTexts((current) => {
+      const next = { ...current }
+      const nextShape = linkedProduct?.inventory_shape
+      if (nextShape === 'roll') next[index] = next[index] ?? '1'
+      if (nextShape !== 'roll') delete next[index]
+      return next
+    })
   }
 
   function submitReceiptProductSearch(event: FormEvent<HTMLFormElement>) {
@@ -1382,6 +1627,7 @@ export function PurchaseReceiptsPage({
     setReceiptSupplierCreateSaving(false)
     setReceiptSupplierCreateForm(blankSupplierForm())
     setReceiptProductCatalogSearchResult({ search: '', products: [] })
+    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
   }
 
   async function openCreateReceipt() {
@@ -1428,6 +1674,7 @@ export function PurchaseReceiptsPage({
     setReceiptSupplierCreateSaving(false)
     setReceiptSupplierCreateForm(blankSupplierForm())
     setReceiptProductCatalogSearchResult({ search: '', products: [] })
+    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
   }
 
   function openSupplierPaymentForReceipt() {
@@ -1440,7 +1687,10 @@ export function PurchaseReceiptsPage({
 
   async function changeImmediatePaymentMethod(nextMethod: 'cash' | 'bank_transfer') {
     setPaymentMethod(nextMethod)
-    if (nextMethod !== 'bank_transfer') return
+    if (nextMethod !== 'bank_transfer') {
+      setFinanceAccountId('')
+      return
+    }
     try {
       await ensureFinanceAccountsLoaded()
     } catch (cause) {
@@ -1477,6 +1727,7 @@ export function PurchaseReceiptsPage({
   function clearReceiptSupplier() {
     setForm((current) => ({ ...current, supplier_id: '' }))
     setReceiptSupplierSearch('')
+    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
     setReceiptSupplierSearchActive(true)
     setReceiptSupplierSuggestionsOpen(false)
     queueMicrotask(() => receiptSupplierSearchInputRef.current?.focus())
@@ -1514,6 +1765,10 @@ export function PurchaseReceiptsPage({
         status: 'active',
       })
       setSuppliers((current) => [...current.filter((supplier) => supplier.id !== created.id), created])
+      setReceiptSupplierCatalogSearchResult((current) => ({
+        ...current,
+        suppliers: uniqueReceiptSuppliersById([created, ...current.suppliers]),
+      }))
       setSuppliersLoaded(true)
       chooseReceiptSupplier(created)
       setReceiptSupplierCreateOpen(false)
@@ -1626,6 +1881,35 @@ export function PurchaseReceiptsPage({
     }
   }
 
+  async function cancelSelectedReceipt() {
+    if (!selectedReceipt || selectedReceipt.status === 'cancelled') return
+    const hasSupplierPayments = selectedReceipt.paid_amount > 0 || selectedReceipt.supplier_payments.some((payment) => payment.status === 'posted')
+    if (hasSupplierPayments) {
+      setError('Phiếu đã có thanh toán NCC, không thể hủy trực tiếp.')
+      setCancelReceiptOpen(false)
+      return
+    }
+
+    setCancelingReceipt(true)
+    setError(null)
+    try {
+      const cancelled = await service.cancelReceipt(selectedReceipt.id)
+      setSelectedReceipt(cancelled)
+      setEditingStatus(cancelled.status)
+      setForm((current) => ({
+        ...current,
+        paid_amount: cancelled.paid_amount,
+      }))
+      setCancelReceiptOpen(false)
+      setSupplierPaymentOpen(false)
+      await loadReceipts()
+    } catch (cause) {
+      setError(formatApiError(cause, 'Không hủy được phiếu nhập.'))
+    } finally {
+      setCancelingReceipt(false)
+    }
+  }
+
   const receiptKpis = (
     <MetricGrid ariaLabel="Tổng quan phiếu nhập">
       <MetricCard hint="Theo bộ lọc hiện tại" label="Tổng tiền hàng" tone="warning" value={<MoneyText value={receiptSummary.payable} />} />
@@ -1649,6 +1933,10 @@ export function PurchaseReceiptsPage({
     const hasPaymentHistory = selectedReceiptPayments.length > 0
     const activeReceiptDetailTab = hasPaymentHistory ? receiptDetailTab : 'info'
     const showInfoTab = activeReceiptDetailTab === 'info'
+    const selectedReceiptHasSupplierPayments = selectedReceipt
+      ? selectedReceipt.paid_amount > 0 || selectedReceipt.supplier_payments.some((payment) => payment.status === 'posted')
+      : false
+    const selectedReceiptCanCancel = Boolean(selectedReceipt && selectedReceipt.status !== 'cancelled' && !selectedReceiptHasSupplierPayments)
 
     if (isReadOnly && selectedReceipt) {
       return (
@@ -1669,30 +1957,32 @@ export function PurchaseReceiptsPage({
             <>
               <ManagementDetailSummary
                 ariaLabel="Tóm tắt phiếu nhập"
-                code={selectedReceipt.code}
                 metaAriaLabel="Thông tin tạo phiếu nhập"
                 metaItems={[
                   { label: 'Người tạo:', value: selectedReceipt.created_by.name },
                   { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
-                  { label: 'Trạng thái:', value: detailStatus },
                 ]}
                 title={(
-                  <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
-                    {selectedReceipt.supplier.name}
-                  </ManagementRecordLink>
+                  <>
+                    {selectedReceipt.code}
+                    {' '}
+                    <StatusChip tone={selectedReceipt.status === 'posted' ? 'success' : selectedReceipt.status === 'cancelled' ? 'danger' : 'neutral'}>
+                      {detailStatus}
+                    </StatusChip>
+                  </>
                 )}
               />
               <ManagementDetailSection ariaLabel="Thông tin nhanh phiếu nhập">
                 <ManagementDetailInfoList
                   columns="three"
                   items={[
-                    { label: 'Nhà cung cấp', value: (
+                    { label: 'Tên NCC', value: (
                       <ManagementRecordLink href={managementRecordOpenHref('/suppliers', selectedReceipt.supplier.code ?? selectedReceipt.supplier.name)}>
                         {selectedReceipt.supplier.name}
                       </ManagementRecordLink>
                     ) },
-                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? '' },
-                    { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
+                    { label: 'Số chứng từ NCC', value: supplierDocumentNoText(selectedReceipt.supplier_document_no) },
+                    { label: 'Còn phải trả', value: money(selectedReceiptOutstanding) },
                   ]}
                 />
               </ManagementDetailSection>
@@ -1740,7 +2030,11 @@ export function PurchaseReceiptsPage({
                   />
                   <dl className="management-detail-summary-box management-detail-summary-box-right">
                     <div>
-                      <dt>{`Tổng tiền hàng (${selectedReceipt.items.length})`}</dt>
+                      <dt>Số lượng mặt hàng</dt>
+                      <dd>{selectedReceipt.items.length}</dd>
+                    </div>
+                    <div>
+                      <dt>Tổng tiền hàng</dt>
                       <dd><MoneyText value={selectedReceipt.subtotal_amount} /></dd>
                     </div>
                     <div>
@@ -1755,18 +2049,30 @@ export function PurchaseReceiptsPage({
                       <dt>Đã trả NCC</dt>
                       <dd><MoneyText value={selectedReceipt.paid_amount} /></dd>
                     </div>
-                    {selectedReceipt.remaining_amount > 0 ? (
-                      <div>
-                        <dt>Còn phải trả</dt>
-                        <dd><MoneyText value={selectedReceipt.remaining_amount} /></dd>
-                      </div>
-                    ) : null}
+                    <div>
+                      <dt>Còn phải trả</dt>
+                      <dd><MoneyText value={selectedReceiptOutstanding} /></dd>
+                    </div>
                   </dl>
                 </div>
               </ManagementDetailSection>
               <ManagementDetailActionFooter
                 leftActions={[
-                  ...(selectedReceiptOutstanding > 0
+                  {
+                    label: 'Hủy',
+                    disabled: !selectedReceiptCanCancel || cancelingReceipt,
+                    title: selectedReceipt?.status === 'cancelled'
+                      ? 'Phiếu đã hủy'
+                      : selectedReceiptHasSupplierPayments
+                        ? 'Phiếu đã có thanh toán NCC, không thể hủy trực tiếp'
+                        : 'Hủy phiếu nhập',
+                    danger: true,
+                    icon: <Trash2 aria-hidden="true" size={15} />,
+                    onClick: () => setCancelReceiptOpen(true),
+                  },
+                  { label: 'Sao chép', disabled: true, title: 'Chưa hỗ trợ sao chép phiếu nhập', icon: <Copy aria-hidden="true" size={15} /> },
+                  { label: 'Xuất file', icon: <FileOutput aria-hidden="true" size={15} />, onClick: () => exportSelectedReceipt(selectedReceipt) },
+                  ...(selectedReceipt.status !== 'cancelled' && selectedReceiptOutstanding > 0
                     ? [{
                         label: 'Thanh toán NCC',
                         icon: <WalletCards aria-hidden="true" size={15} />,
@@ -1776,8 +2082,8 @@ export function PurchaseReceiptsPage({
                     : []),
                 ]}
                 rightActions={[
-                  { label: 'Sao chép', disabled: true, title: 'Chưa hỗ trợ sao chép phiếu nhập', icon: <Copy aria-hidden="true" size={15} /> },
-                  { label: 'Xuất file', disabled: true, title: 'Chưa hỗ trợ xuất file phiếu nhập', icon: <FileOutput aria-hidden="true" size={15} /> },
+                  { label: 'Mở phiếu', disabled: true, title: 'Phiếu đang mở trong dòng chi tiết', variant: 'primary' as const, icon: <ExternalLink aria-hidden="true" size={15} /> },
+                  { label: 'Lưu', disabled: true, title: 'Phiếu đã ghi không chỉnh sửa trực tiếp', icon: <Save aria-hidden="true" size={15} /> },
                   { label: 'In', icon: <Printer aria-hidden="true" size={15} />, onClick: () => window.print() },
                 ]}
               />
@@ -1866,7 +2172,7 @@ export function PurchaseReceiptsPage({
                       <option value="">Chọn tài khoản</option>
                       {bankAccounts.map((account) => (
                         <option key={account.id} value={account.id}>
-                          {account.code} - {account.name}
+                          {financeAccountChoiceLabel(account)}
                         </option>
                       ))}
                     </select>
@@ -1947,7 +2253,7 @@ export function PurchaseReceiptsPage({
                         {selectedReceipt.supplier.name}
                       </ManagementRecordLink>
                     ) },
-                    { label: 'Số chứng từ NCC', value: selectedReceipt.supplier_document_no ?? '' },
+                    { label: 'Số chứng từ NCC', value: supplierDocumentNoText(selectedReceipt.supplier_document_no) },
                     { label: 'Cần trả NCC', value: money(selectedReceipt.payable_amount) },
                     { label: 'Còn phải trả', value: money(selectedReceipt.remaining_amount) },
                   ]}
@@ -2251,7 +2557,7 @@ export function PurchaseReceiptsPage({
                     <option value="">Chọn tài khoản</option>
                     {bankAccounts.map((account) => (
                       <option key={account.id} value={account.id}>
-                        {account.code} - {account.name}
+                        {financeAccountChoiceLabel(account)}
                       </option>
                     ))}
                   </select>
@@ -2402,7 +2708,7 @@ export function PurchaseReceiptsPage({
                   </li>
                   {form.items.map((line, index) => {
                     const selectedProduct = products.find((product) => product.id === line.product_id)
-                    const unitOptions = purchaseReceiptUnitOptions(selectedProduct)
+                    const unitOptions = purchaseReceiptLineUnitChoices(selectedProduct, products)
                     return (
                       <li
                         key={`${line.product_id || 'line'}-${index}`}
@@ -2431,10 +2737,10 @@ export function PurchaseReceiptsPage({
                               aria-label={`Đơn vị dòng ${index + 1}`}
                               className="pos-cart-line-unit-select"
                               value={line.unit_name}
-                              onChange={(event) => updateLine(index, { unit_name: event.target.value })}
+                              onChange={(event) => updateLineUnit(index, event.target.value, unitOptions)}
                             >
-                              {unitOptions.map((unitName) => (
-                                <option key={unitName} value={unitName}>{unitName}</option>
+                              {unitOptions.map((choice) => (
+                                <option key={`${choice.unitName}-${choice.product?.id ?? 'unit'}`} value={choice.unitName}>{choice.unitName}</option>
                               ))}
                             </select>
                           ) : (
@@ -2625,7 +2931,6 @@ export function PurchaseReceiptsPage({
                   </div>
                 </div>
                 <div className="purchase-receipt-supplier-field" ref={receiptSupplierSearchRef}>
-                  <span>Nhà cung cấp</span>
                   {selectedFormSupplier && !receiptSupplierSearchActive ? (
                     <div aria-label="Nhà cung cấp đã chọn" className="customer-selected purchase-receipt-supplier-selected" role="group">
                       <span className="customer-selected-row">
@@ -2691,19 +2996,29 @@ export function PurchaseReceiptsPage({
                       }}
                       onChange={changeReceiptSupplierSearch}
                       onSuggestionSelect={(suggestion) => {
-                        const supplier = suppliers.find((item) => item.id === suggestion.id)
+                        const supplier = receiptSupplierSearchResults.find((item) => item.id === suggestion.id)
                         if (supplier) chooseReceiptSupplier(supplier)
                       }}
                     />
                   )}
                 </div>
+                <div className="management-modal-form-grid">
+                  <label>
+                    Mã phiếu nhập
+                    <input
+                      placeholder="Mã phiếu tự động"
+                      value={form.code}
+                      onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
+                    />
+                  </label>
+                  <label>
+                    Mã đặt hàng nhập
+                    <input aria-label="Mã đặt hàng nhập" readOnly value="" />
+                  </label>
+                </div>
                 <label>
-                  Mã phiếu nhập
-                  <input
-                    placeholder="Mã phiếu tự động"
-                    value={form.code}
-                    onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))}
-                  />
+                  Trạng thái
+                  <input aria-label="Trạng thái phiếu nhập" readOnly value="Phiếu tạm" />
                 </label>
                 <label>
                   Số hóa đơn đầu vào
@@ -2712,36 +3027,86 @@ export function PurchaseReceiptsPage({
                     onChange={(event) => setForm((current) => ({ ...current, supplier_document_no: event.target.value }))}
                   />
                 </label>
-                <label>
-                  Giảm giá phiếu
-                  <input
-                    inputMode="numeric"
-                    type="text"
-                    value={moneyInputValue(form.discount_amount)}
-                    onChange={(event) => setForm((current) => ({ ...current, discount_amount: parseMoneyInput(event.target.value) }))}
-                  />
-                </label>
-                <label>
-                  Đã trả tạm
-                  <input
-                    inputMode="numeric"
-                    type="text"
-                    value={moneyInputValue(form.paid_amount)}
-                    onChange={(event) => setForm((current) => ({ ...current, paid_amount: parseMoneyInput(event.target.value) }))}
-                  />
-                </label>
-                <dl className="purchase-receipt-workspace-totals">
-                  <div>
+                <dl className="management-money-summary management-money-summary-compact">
+                  <div className="management-money-summary-row-stacked management-money-summary-emphasis">
                     <dt>Tổng tiền hàng</dt>
                     <dd>{money(totals.subtotal)}</dd>
                   </div>
-                  <div>
-                    <dt>Giảm giá</dt>
-                    <dd>{money(form.discount_amount)}</dd>
+                  <div className="management-money-summary-row-stacked">
+                    <dt>
+                      <label htmlFor="purchase-receipt-discount-amount">Giảm giá</label>
+                    </dt>
+                    <dd>
+                      <input
+                        className="management-inline-money-input"
+                        id="purchase-receipt-discount-amount"
+                        inputMode="numeric"
+                        type="text"
+                        value={moneyInputValue(form.discount_amount)}
+                        onChange={(event) => setForm((current) => ({ ...current, discount_amount: parseMoneyInput(event.target.value) }))}
+                      />
+                    </dd>
                   </div>
-                  <div>
-                    <dt>Tổng nợ</dt>
-                    <dd>{money(totals.remaining)}</dd>
+                  <div className="management-money-summary-row-stacked management-money-summary-emphasis">
+                    <dt>Cần trả nhà cung cấp</dt>
+                    <dd>{money(totals.payable)}</dd>
+                  </div>
+                  <div className="management-money-summary-row-stacked">
+                    <dt>
+                      <label htmlFor="purchase-receipt-paid-amount">Tiền trả nhà cung cấp (F8)</label>
+                    </dt>
+                    <dd>
+                      <input
+                        className="management-inline-money-input"
+                        id="purchase-receipt-paid-amount"
+                        ref={receiptPaidAmountInputRef}
+                        inputMode="numeric"
+                        type="text"
+                        value={moneyInputValue(form.paid_amount)}
+                        onChange={(event) => setForm((current) => ({ ...current, paid_amount: parseMoneyInput(event.target.value) }))}
+                      />
+                    </dd>
+                  </div>
+                  <div className="management-money-summary-control-stacked">
+                    <dt>Phương thức</dt>
+                    <dd>
+                      <ManagementDropdownField
+                        className="management-dropdown-field-inline"
+                        label="Phương thức"
+                        menuLabel="Chọn phương thức"
+                        options={[
+                          { value: 'cash', label: 'Tiền mặt' },
+                          { value: 'bank_transfer', label: 'Chuyển khoản' },
+                        ]}
+                        value={paymentMethod}
+                        onChange={(value) => void changeImmediatePaymentMethod(value as 'cash' | 'bank_transfer')}
+                      />
+                    </dd>
+                  </div>
+                  {paymentMethod === 'bank_transfer' ? (
+                    <div className="management-money-summary-control-stacked">
+                      <dt>Tài khoản</dt>
+                      <dd>
+                        <ManagementDropdownField
+                          className="management-dropdown-field-inline"
+                          label="Tài khoản"
+                          menuLabel="Chọn tài khoản chuyển khoản"
+                          options={[
+                            { value: '', label: 'Chọn tài khoản' },
+                            ...bankAccounts.map((account) => ({
+                              value: account.id,
+                              label: financeAccountChoiceLabel(account),
+                            })),
+                          ]}
+                          value={financeAccountId}
+                          onChange={setFinanceAccountId}
+                        />
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div className="management-money-summary-final management-money-summary-emphasis management-money-summary-stacked">
+                    <dt>Tính vào công nợ</dt>
+                    <dd>{money(receiptDebtEffect)}</dd>
                   </div>
                 </dl>
                 <label>
@@ -3230,6 +3595,19 @@ export function PurchaseReceiptsPage({
         onClose={() => setImportOpen(false)}
         onImported={() => void loadReceipts({ page: 1, page_size: pageSize })}
         onOldDataDeleted={() => void loadReceipts({ page: 1, page_size: pageSize })}
+      />
+      <ManagementConfirmDialog
+        open={cancelReceiptOpen && Boolean(selectedReceipt)}
+        title="Hủy phiếu nhập"
+        confirmLabel="Hủy phiếu"
+        message={(
+          <>
+            Hủy phiếu nhập <strong>{selectedReceipt?.code}</strong>? Phiếu sẽ chuyển sang trạng thái Đã hủy và không còn tính tồn kho/công nợ NCC.
+          </>
+        )}
+        loading={cancelingReceipt}
+        onCancel={() => setCancelReceiptOpen(false)}
+        onConfirm={() => void cancelSelectedReceipt()}
       />
       {productCreateOpen ? (
         <aside aria-label="Tạo hàng hóa" className="pos-product-create-popover">

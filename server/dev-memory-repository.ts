@@ -915,6 +915,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         })),
         linked_supplier_receipts: linkedSupplierReceiptOffsets(input.customerId),
         cashbook_entries: [],
+        ledger_rows: [],
       }
     },
     async upsertImportedKiotVietCustomerDebtAdjustments(input) {
@@ -1382,6 +1383,25 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         posted_at: postedAt,
         cashbook_voucher_id: cashbookVoucherId,
       }
+    },
+    async cancelPurchaseReceipt(input) {
+      const receipt = [...purchaseReceipts.values()].find((item) => item.id === input.id || item.code === input.id)
+      if (!receipt) return null
+      if (receipt.status === 'cancelled') return receipt
+      if (receipt.paid_amount > 0 || (receipt.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
+        throw new Error('PURCHASE_RECEIPT_HAS_PAYMENTS')
+      }
+      const cancelledReceipt = {
+        ...receipt,
+        status: 'cancelled' as const,
+        paid_amount: 0,
+        remaining_amount: 0,
+        updated_at: new Date().toISOString(),
+      } as PurchaseReceiptData
+      purchaseReceipts.set(cancelledReceipt.code, cancelledReceipt)
+      recalculatePartnerDebtTotals(salesDocuments, purchaseReceipts, customers, suppliers)
+      await persist()
+      return cancelledReceipt
     },
     async paySupplier(input) {
       const validAllocations = input.allocations.filter((allocation) => allocation.amount > 0)

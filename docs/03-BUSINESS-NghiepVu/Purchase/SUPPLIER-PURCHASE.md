@@ -99,12 +99,29 @@ Quyết định Owner 2026-07-21 cho chọn NCC trong màn tạo phiếu:
 - Control NCC trong `/receipts/new` phải dùng mô hình POS `Tìm khách hàng`, thay vai trò thành `Nhà cung cấp`.
 - KiotViet tham chiếu: `Nhập hàng` chọn NCC bằng `Tìm nhà cung cấp (F4)` hoặc nút `+` thêm NCC mới ngay trong phiếu nhập.
 - Khi chưa chọn NCC: hiển thị ô tìm NCC, tìm không dấu theo mã, tên, SĐT và MST; `F4` focus ô tìm; Enter chọn gợi ý đầu.
+- Tìm NCC trong `/receipts/new` phải gọi cùng nguồn API/dữ liệu với trang `Nhà cung cấp`; không chỉ lọc cache lookup ít dòng đã nạp sẵn.
 - Khi đã chọn NCC: không giữ NCC như text trong input; hiển thị khối `Nhà cung cấp đã chọn` giống POS `Khách đã chọn`, gồm tên/mã NCC, thông tin phụ nếu có và nút bỏ chọn.
 - Bỏ chọn NCC chỉ reset lựa chọn NCC, không xóa dòng hàng đang nhập.
 - Gõ chữ trong ô tìm nhưng chưa chọn NCC hợp lệ thì không được lưu/hoàn thành phiếu.
 - Màn tạo phiếu mới không dùng native select để chọn NCC.
 - Nút `+` cạnh ô tìm NCC mở thêm nhanh NCC; lưu thành công thì tự chọn NCC mới vào phiếu đang tạo.
 - Thêm nhanh NCC tuân theo BR-PUR-01: tên NCC bắt buộc, mã NCC tự sinh nếu bỏ trống, SĐT/email/địa chỉ/MST/ghi chú tùy chọn.
+
+Quyết định Owner 2026-07-21 cho chọn ĐVT/khổ trong màn tạo phiếu:
+
+- Khi chọn hàng bằng mã đơn vị/quy đổi như `B260`, màn `/receipts/new` phải tự tải các hàng cùng tên/cùng loại tồn để người dùng đổi sang khổ khác trong cùng family.
+- Dropdown `ĐVT` không chỉ đổi text đơn vị. Nếu khổ được chọn là một sản phẩm/mã hàng riêng như `B100`, dòng nhập phải đổi `product_id`, mã hiển thị và giá nhập cuối sang sản phẩm đó.
+- Nếu không tìm được sản phẩm cùng family cho khổ đã chọn, chỉ được giữ `unit_name` đã chọn và không tự đổi mã hàng.
+- Cột `ĐVT` trong workspace nhập hàng phải đủ rộng để hiển thị nhãn khổ như `Khổ 260`, không xô vào cột số lượng hoặc đơn giá.
+
+Quyết định Owner 2026-07-21 cho khối thanh toán trong màn tạo phiếu:
+
+- Sidebar `/receipts/new` bám theo KiotViet `Nhập hàng`: `Tổng tiền hàng`, `Giảm giá`, `Cần trả nhà cung cấp`, `Tiền trả nhà cung cấp (F8)`, phương thức thanh toán, `Tính vào công nợ`.
+- `Giảm giá` là giảm giá toàn phiếu và nằm trong khối thanh toán, không đứng như trường form rời.
+- `Tiền trả nhà cung cấp (F8)` ghi vào `paid_amount`; nếu lớn hơn 0 khi hoàn thành phiếu thì dùng phương thức thanh toán đã chọn để ghi sổ quỹ.
+- `Tính vào công nợ = Tiền trả nhà cung cấp - Cần trả nhà cung cấp`; chưa trả đủ thì hiển thị số âm, trả đủ là 0, trả dư là số dương.
+- `F8` focus ô `Tiền trả nhà cung cấp`; `F4` focus tìm NCC; `F3` focus tìm hàng.
+- Màn tạo phiếu hiển thị `Trạng thái: Phiếu tạm`; `Mã đặt hàng nhập` chỉ là tham chiếu rỗng trong MVP vì chưa có luồng đặt hàng nhập.
 
 ---
 

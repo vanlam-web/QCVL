@@ -2675,6 +2675,98 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   gap: var(--space-3);
 }
 
+.management-money-summary {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.management-money-summary div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) minmax(5.5rem, auto);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.management-money-summary dt {
+  color: var(--color-text);
+  font-size: 0.875rem;
+  font-weight: 400;
+}
+
+.management-money-summary dd {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 400;
+  text-align: right;
+}
+
+.management-money-summary-emphasis dd {
+  font-weight: 800;
+}
+
+.management-money-summary-row-stacked {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.management-money-summary-row-stacked dd {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.management-money-summary-final {
+  border-top: 1px solid var(--color-border-muted);
+  padding-top: var(--space-2);
+}
+
+.management-money-summary-stacked {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.management-money-summary-stacked dd {
+  justify-self: end;
+  font-size: 1.05rem;
+}
+
+.management-money-summary-control-stacked {
+  grid-template-columns: minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.management-money-summary-control-stacked dd {
+  width: 100%;
+}
+
+.management-money-summary label {
+  display: inline;
+  color: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.management-inline-money-input {
+  width: 100%;
+  min-height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  padding: 0.25rem 0.5rem;
+  text-align: right;
+}
+
+.management-inline-money-input {
+  appearance: textfield;
+}
+
+.management-inline-money-input::-webkit-inner-spin-button,
+.management-inline-money-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
 .finance-cashbook-edit-form {
   gap: var(--space-2);
 }
@@ -2695,7 +2787,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   min-height: 2rem;
 }
 
-.finance-cashbook-edit-form .management-dropdown-field {
+.management-dropdown-field {
   display: grid;
   grid-template-columns: 6.25rem minmax(0, 1fr);
   align-items: center;
@@ -2706,16 +2798,16 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   min-height: 2rem;
 }
 
-.finance-cashbook-edit-form .management-dropdown-label {
+.management-dropdown-label {
   min-width: 0;
 }
 
-.finance-cashbook-edit-form .management-dropdown-control {
+.management-dropdown-control {
   position: relative;
   min-width: 0;
 }
 
-.finance-cashbook-edit-form .management-dropdown-trigger {
+.management-dropdown-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2733,26 +2825,27 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   text-align: left;
 }
 
-.finance-cashbook-edit-form .management-dropdown-trigger:hover,
-.finance-cashbook-edit-form .management-dropdown-trigger:focus-visible,
-.finance-cashbook-edit-form .management-dropdown-trigger[aria-expanded='true'] {
+.management-dropdown-trigger:hover,
+.management-dropdown-trigger:focus-visible,
+.management-dropdown-trigger[aria-expanded='true'] {
   outline: none;
   border-bottom-color: var(--color-primary);
 }
 
-.finance-cashbook-edit-form .management-dropdown-trigger span {
+.management-dropdown-trigger span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.finance-cashbook-edit-form .management-dropdown-menu {
+.management-dropdown-menu {
   position: absolute;
   top: calc(100% + var(--space-1));
   left: 0;
   z-index: 8;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);
   min-width: 100%;
   max-height: 16rem;
@@ -2764,7 +2857,11 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   padding: var(--space-1);
 }
 
-.finance-cashbook-edit-form .management-dropdown-option {
+.management-dropdown-control .management-dropdown-menu {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.management-dropdown-option {
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
@@ -2773,11 +2870,47 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   text-align: left;
 }
 
-.finance-cashbook-edit-form .management-dropdown-option:hover,
-.finance-cashbook-edit-form .management-dropdown-option:focus-visible,
-.finance-cashbook-edit-form .management-dropdown-option[aria-selected='true'] {
+.management-dropdown-option:hover,
+.management-dropdown-option:focus-visible,
+.management-dropdown-option[aria-selected='true'] {
   background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
   outline: none;
+}
+
+.management-dropdown-field.management-dropdown-field-inline {
+  display: block;
+  grid-template-columns: none;
+  width: 100%;
+  min-height: 0;
+}
+
+.management-dropdown-field-inline .management-dropdown-label {
+  display: none;
+}
+
+.management-dropdown-field-inline .management-dropdown-control {
+  display: block;
+  grid-template-columns: none;
+  width: 100%;
+}
+
+.management-dropdown-field-inline .management-dropdown-trigger {
+  min-height: 2rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  padding: 0.25rem 0.5rem;
+  text-align: right;
+}
+
+.management-dropdown-field-inline .management-dropdown-trigger span {
+  text-align: right;
+}
+
+.management-dropdown-field-inline .management-dropdown-menu {
+  right: 0;
+  left: auto;
+  min-width: max(100%, 10rem);
 }
 
 .management-modal-form-stack {

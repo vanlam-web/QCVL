@@ -118,6 +118,7 @@ export interface PurchaseReceiptFinanceAccount {
   code: string
   name: string
   account_type: 'cash' | 'bank'
+  account_number?: string | null
   is_default_cash: boolean
   is_active: boolean
 }

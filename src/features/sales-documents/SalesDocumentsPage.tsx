@@ -72,6 +72,7 @@ import {
 } from './sales-document-presenter'
 import { SalesDocumentImportDialog } from './SalesDocumentImportDialog'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { invoicePrintPath, quotePrintPath } from '../../app/routes'
 
 function initialSalesDocumentRouteFilters() {
   const params = new URLSearchParams(window.location.search)
@@ -1346,6 +1347,14 @@ function SalesDocumentDetailView({
               }
               if (document.order_type === 'quote' && document.code.startsWith('BG') && onOpenQuotePrint) {
                 onOpenQuotePrint(document.id)
+                return
+              }
+              if (document.order_type === 'invoice' && document.code.startsWith('HD')) {
+                window.location.assign(invoicePrintPath(document.id))
+                return
+              }
+              if (document.order_type === 'quote' && document.code.startsWith('BG')) {
+                window.location.assign(quotePrintPath(document.id))
               }
             },
           },

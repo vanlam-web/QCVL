@@ -8,7 +8,7 @@ import {
   ManagementInlineDetailTabs,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { ManagementRecordLink, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
+import { ManagementRecordLink, MoneyText, StatusChip, managementRecordOpenHref, managementRecordSearchHref } from '../../components/ui-shell/primitives'
 import { appRoutes } from '../../app/routes'
 import {
   cashbookDetailAmountLabel,
@@ -41,10 +41,27 @@ function linkedDocumentHref(code: string) {
   return null
 }
 
+function counterpartyHref(detail: CashbookEntryDetail) {
+  if (detail.counterparty.type !== 'customer' && detail.counterparty.type !== 'supplier') return null
+  const path = detail.counterparty.type === 'customer' ? '/customers' : '/suppliers'
+  const code = detail.source.counterparty_code?.trim()
+  if (code) return managementRecordOpenHref(path, code)
+  const name = detail.counterparty.name?.trim()
+  return name ? managementRecordSearchHref(path, name) : null
+}
+
 export function FinanceDetailPanel({ detail, currentUserName = '', onDeleteRequest, onEditRequest, showActionFooter = true }: FinanceDetailPanelProps) {
   if (detail === null) return <p>Đang tải chi tiết...</p>
   const counterpartyLabel = cashbookDetailCounterpartyLabel(detail)
   const counterpartyText = cashbookDetailCounterpartyText(detail)
+  const counterpartyLink = counterpartyHref(detail)
+  const counterpartyValue = counterpartyLink && counterpartyText
+    ? (
+        <ManagementRecordLink href={counterpartyLink}>
+          {counterpartyText}
+        </ManagementRecordLink>
+      )
+    : counterpartyText
 
   return (
     <ManagementDetailPanel>
@@ -67,7 +84,7 @@ export function FinanceDetailPanel({ detail, currentUserName = '', onDeleteReque
           { label: 'Số tiền', value: <MoneyText value={detail.amount_delta} /> },
           { label: cashbookDetailAmountLabel(detail), value: cashbookDetailCategoryText(detail) },
           { label: 'Phương thức TT', value: cashbookDetailPaymentMethodText(detail) },
-          { label: counterpartyLabel, value: counterpartyText },
+          { label: counterpartyLabel, value: counterpartyValue },
         ]}
       />
       <CashbookLinkedDocuments entry={detail} />

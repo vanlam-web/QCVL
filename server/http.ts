@@ -648,6 +648,10 @@ export interface ServerRepository {
     financeAccountId?: string
     currentUser: CurrentUserData
   }): Promise<{ purchase_receipt_id: string; status: 'posted'; posted_at: string; cashbook_voucher_id: string | null }>
+  cancelPurchaseReceipt?(input: {
+    organizationId: string
+    id: string
+  }): Promise<PurchaseReceiptData | null>
   paySupplier?(input: {
     organizationId: string
     supplierId: string
@@ -1182,6 +1186,11 @@ function purchaseReceiptText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function purchaseReceiptSupplierDocumentNo(value: unknown) {
+  const text = purchaseReceiptText(value)
+  return text.toUpperCase().startsWith('CODEX-') ? '' : text
+}
+
 function purchaseReceiptTimestamp(value: unknown) {
   const text = purchaseReceiptText(value)
   if (!text) return runtimeIso()
@@ -1284,7 +1293,7 @@ function makeManualPurchaseReceipt(input: {
     supplier: { id: supplier.id, code: supplier.code, name: supplier.name },
     received_at: receivedAt,
     status: input.existing?.status ?? 'draft',
-    supplier_document_no: purchaseReceiptText(input.body.supplier_document_no) || null,
+    supplier_document_no: purchaseReceiptSupplierDocumentNo(input.body.supplier_document_no) || null,
     subtotal_amount: subtotalAmount,
     discount_amount: discountAmount,
     payable_amount: payableAmount,
@@ -3893,6 +3902,37 @@ async function getDevApiResponse(
         }
         return { found: true, data: { purchase_receipt_id: id, status: 'posted', posted_at: runtimeIso(), cashbook_voucher_id: randomUUID() } }
       },
+      cancelReceipt: async () => {
+        const id = getIdFromPath(path) ?? ''
+        if (repository.cancelPurchaseReceipt) {
+          let receipt: PurchaseReceiptData | null
+          try {
+            receipt = await repository.cancelPurchaseReceipt({
+              organizationId: currentUser.organization.id,
+              id,
+            })
+          } catch (error) {
+            if (error instanceof Error && error.message === 'PURCHASE_RECEIPT_HAS_PAYMENTS') {
+              throw new HttpError(400, 'VALIDATION_ERROR', 'Cannot cancel a purchase receipt with supplier payments.')
+            }
+            throw error
+          }
+          return receipt
+            ? { found: true, data: receipt }
+            : { found: true, data: { message: 'Purchase receipt not found' }, status: 404 }
+        }
+        const receipt = purchaseReceipts.find((item) => item.id === id || item.code === id)
+        if (!receipt) return { found: true, data: { message: 'Purchase receipt not found' }, status: 404 }
+        if (receipt.paid_amount > 0 || (receipt.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'Cannot cancel a purchase receipt with supplier payments.')
+        }
+        receipt.status = 'cancelled'
+        receipt.paid_amount = 0
+        receipt.remaining_amount = 0
+        receipt.updated_at = runtimeIso()
+        syncSupplierTotalsFromPurchaseReceipts()
+        return { found: true, data: receipt }
+      },
     },
   )
   if (purchaseRoute.found) return purchaseRoute
@@ -4798,7 +4838,7 @@ function stocktakeCreatorOptions(items: readonly StocktakeListData[]) {
 
 function getIdFromPath(path: string) {
   const parts = path.split('/').filter(Boolean)
-  return parts.at(-1) === 'post' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' || parts.at(-1) === 'revise'
+  return parts.at(-1) === 'post' || parts.at(-1) === 'cancel' || parts.at(-1) === 'bom' || parts.at(-1) === 'permissions' || parts.at(-1) === 'revise'
     ? parts.at(-2)
     : parts.at(-1)
 }

@@ -41,6 +41,21 @@ it('builds purchase product search requests with search params', async () => {
   ])
 })
 
+it('builds purchase supplier search requests with supplier page params', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+
+  await service.listSuppliers({ search: 'cpds', page: 1, page_size: 20 })
+
+  expect(calls).toEqual([
+    ['/api/v1/suppliers?status=active&q=cpds&page=1&page_size=20', undefined],
+  ])
+})
+
 it('calls KiotViet purchase receipt import endpoints', async () => {
   const calls: Array<[string, RequestInit | undefined]> = []
   const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -58,5 +73,20 @@ it('calls KiotViet purchase receipt import endpoints', async () => {
     ['/api/v1/purchase/receipts/import/kiotviet/preview', 'POST'],
     ['/api/v1/purchase/receipts/import/kiotviet', 'POST'],
     ['/api/v1/purchase/receipts/import/kiotviet', 'DELETE'],
+  ])
+})
+
+it('cancels a purchase receipt through the purchase receipt endpoint', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+
+  await service.cancelReceipt('receipt-1')
+
+  expect(calls).toEqual([
+    ['/api/v1/purchase/receipts/receipt-1/cancel', { method: 'POST' }],
   ])
 })

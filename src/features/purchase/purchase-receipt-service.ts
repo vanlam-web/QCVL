@@ -72,6 +72,10 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
+    cancelReceipt: (id: string) =>
+      api.request<PurchaseReceipt>(`/api/v1/purchase/receipts/${id}/cancel`, {
+        method: 'POST',
+      }),
     paySupplier: (supplierId: string, input: PurchaseReceiptSupplierPaymentInput) =>
       api.request<PurchaseReceiptSupplierPaymentResult>(`/api/v1/suppliers/${supplierId}/payments`, {
         method: 'POST',
@@ -91,7 +95,20 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       api.request<KiotVietImportDeleteResult>('/api/v1/purchase/receipts/import/kiotviet', {
         method: 'DELETE',
       }),
-    listSuppliers: () => api.request<PurchaseReceiptSupplierListResponse>('/api/v1/suppliers?status=active'),
+    listSuppliers: (input: {
+      search?: string
+      status?: 'active' | 'inactive' | 'all'
+      page?: number
+      page_size?: number
+    } = {}) => {
+      const params = new URLSearchParams()
+      params.set('status', input.status ?? 'active')
+      if (input.search) params.set('q', input.search)
+      if (input.page) params.set('page', String(input.page))
+      if (input.page_size) params.set('page_size', String(input.page_size))
+      const query = params.toString()
+      return api.request<PurchaseReceiptSupplierListResponse>(`/api/v1/suppliers${query ? `?${query}` : ''}`)
+    },
     createSupplier: (input: SupplierInput) =>
       api.request<Supplier>('/api/v1/suppliers', {
         method: 'POST',

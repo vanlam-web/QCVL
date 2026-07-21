@@ -1787,6 +1787,46 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
     },
 
+    async cancelPurchaseReceipt(input) {
+      await ensureImportedSnapshotTables(pool)
+      await ensureStockMovementsTable(pool)
+      const existing = await loadPurchaseReceiptSnapshot(pool, input.organizationId, input.id)
+      if (!existing) return null
+      if (existing.status === 'cancelled') return existing
+      if (existing.paid_amount > 0 || (existing.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
+        throw new Error('PURCHASE_RECEIPT_HAS_PAYMENTS')
+      }
+
+      const cancelledAt = new Date().toISOString()
+      const cancelledReceipt = {
+        ...existing,
+        status: 'cancelled' as const,
+        paid_amount: 0,
+        remaining_amount: 0,
+        updated_at: cancelledAt,
+      } satisfies PurchaseReceiptData
+
+      await pool.query('begin')
+      try {
+        const affectedProducts = await deleteStockMovementsForDocument(pool, input.organizationId, 'purchase_receipt', existing.code)
+        await pool.query(
+          `
+            update purchase_receipt_snapshots
+            set data = $3::jsonb, updated_at = now()
+            where organization_id = $1 and id = $2
+          `,
+          [input.organizationId, existing.id, JSON.stringify(cancelledReceipt)],
+        )
+        await recomputeStockMovementBalances(pool, input.organizationId, affectedProducts)
+        await pool.query('commit')
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
+      await recomputeSupplierPurchaseTotals(pool, input.organizationId, existing.supplier_id)
+      return cancelledReceipt
+    },
+
     async paySupplier(input) {
       await ensureImportedSnapshotTables(pool)
       await ensureSalesFinanceTables(pool)
