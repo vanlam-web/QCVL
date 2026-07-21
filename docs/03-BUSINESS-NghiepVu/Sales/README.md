@@ -52,8 +52,10 @@ Chi tiết BOM import/UI stub: checklist + PR BOM docs (#4) nếu đã merge; So
 
 ### 3. Hướng dài / chưa làm (docs ghi; code chờ Owner)
 
-- Sửa Postgres POS: không trừ parent khi combo / `track_inventory = false`
-- Import BOM → `active`; migrate draft KV; UI bỏ “BOM nháp”
+Chốt KV (2026-07-21) — chi tiết: [POS-STOCK-AUDIT §5](./POS-STOCK-AUDIT-2026-07-21.md):
+
+- **Slice POS hẹp (chờ Owner bảo code):** Postgres skip parent khi `!track_inventory` hoặc `product_kind` ∈ (`combo`,`service`); vẫn trừ BOM `draft`\|`active`; test combo Postgres; **không** dọn movement lịch sử trừ khi Owner yêu cầu
+- Import BOM → `active`; migrate draft KV; UI bỏ “BOM nháp” (PR riêng)
 - Snapshot BOM trên chứng từ; deep-scan nhiều cấp
 - POS `Không lưu` / `Lưu Combo mới` đầy đủ
 - Trừ kho object cuộn/tấm khi bán thành phần roll/sheet

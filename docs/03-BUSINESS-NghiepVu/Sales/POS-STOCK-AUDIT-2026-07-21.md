@@ -81,12 +81,33 @@ Test có: `deducts trusted KiotViet BOM components from POS invoices` — chỉ 
 
 ---
 
-## 5. Việc nên làm khi Owner bảo code (không làm trong biên bản này)
+## 5. Chốt theo KiotViet (Owner: tham khảo KV — 2026-07-21)
 
-1. **Postgres POS:** trước khi insert parent movement, load product; skip nếu `!track_inventory` hoặc `product_kind === 'combo'` (và ideally `service`).  
-2. Thêm regression test Postgres: bán combo `track_inventory=false` + BOM → chỉ movement thành phần.  
-3. Align import BOM → `active` + UI (slice BOM riêng hoặc cùng PR).  
-4. Cân nhắc chỉ trừ BOM `active` khi SoT đã promote (hiện draft cũng trừ — intentional tạm hay bug? Doc: SoT muốn active).
+Tham khảo chính thức KV + thẻ kho xưởng:
+
+- [Hàng Combo – Đóng gói (Retail)](https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/retail-hang-hoa/hang-combo-dong-goi/)
+- [Hàng Combo – Đóng gói (FnB)](https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/fnb-hang-hoa/hang-combo-dong-goi/)
+- Thẻ kho KV: dòng `Ban hang [Combo - Dong goi]` gắn **thành phần** (vd. `BT`), không trừ tồn mã combo
+
+**KV nói gì (tóm tắt):**
+
+1. Combo/đóng gói **không quản lý tồn riêng** — không có tồn/giá vốn độc lập trên mã combo.  
+2. Khi bán combo: **không trừ tồn mã combo**; **tự động trừ tồn từng thành phần**.  
+3. Giá vốn combo = tổng giá vốn thành phần.  
+4. Không hỗ trợ đặt hàng nhập / nhập hàng trực tiếp cho loại Combo – Đóng gói.
+
+| # | Câu hỏi trước đó | Chốt theo KV → QC-OMS |
+|---|---|---|
+| 1 | Skip parent theo gì? | **Không trừ tồn mã combo.** Gate: `track_inventory === false` **hoặc** `product_kind` ∈ (`combo`, `service`). Khớp KV: combo/đóng gói **không quản lý tồn riêng**; dịch vụ cũng không tồn. |
+| 2 | Cùng lúc BOM `active`? | KV dùng thành phần **ngay khi bán**, không nháp duyệt. **Slice POS:** sửa skip parent trước; **vẫn trừ BOM `draft`\|`active`** cho đến khi migrate import → `active` (PR BOM riêng). Không chuyển “chỉ active” trước migrate — sẽ mất trừ thành phần. |
+| 3 | Movement cũ đã trừ nhầm mã combo? | KV **không bao giờ** sinh tồn-out cho mã combo. QCVL lệch lịch sử: **mặc định để nguyên** (ghi nhận lệch); chỉ dọn/đảo nếu Owner yêu cầu riêng sau khi rule POS đúng. |
+
+### Slice code đề xuất (KV-aligned, hẹp)
+
+1. Postgres (+ đồng bộ rule với dev-memory): load product trước khi trừ parent; skip parent theo gate mục 1.  
+2. Vẫn trừ thành phần từ BOM `draft`\|`active` (như hiện tại / như import HD).  
+3. Test Postgres: bán combo → không movement mã combo; có movement thành phần.  
+4. **Không** gộp migrate BOM `active` + UI nháp vào slice này trừ khi Owner bảo cùng PR.
 
 ---
 
