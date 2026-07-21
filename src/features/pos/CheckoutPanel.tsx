@@ -788,9 +788,10 @@ function MoneyInput({
         onChange(readMoney(event.target.value))
       }}
       onFocus={(event) => {
-        const input = event.currentTarget
         setDraft(formatMoney(value))
-        window.requestAnimationFrame(() => input.select())
+        // Select synchronously. Deferred select (rAF) races with the next keystrokes
+        // and can wipe typed digits in tests and when typing starts immediately.
+        event.currentTarget.select()
       }}
     />
   )
