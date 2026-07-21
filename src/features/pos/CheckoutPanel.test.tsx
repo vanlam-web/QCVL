@@ -841,3 +841,22 @@ it('hides old debt collection when no customer is selected', async () => {
   expect(screen.queryByText('Tổng nợ cũ')).not.toBeInTheDocument()
   await waitFor(() => expect(service.listFinanceAccounts).toHaveBeenCalled())
 })
+
+it('notifies parent to open invoice bill preview after successful checkout', async () => {
+  const service = makeOrderService()
+  const onCheckoutSuccess = vi.fn()
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={service}
+      onCheckoutSuccess={onCheckoutSuccess}
+    />,
+  )
+
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  await waitFor(() =>
+    expect(onCheckoutSuccess).toHaveBeenCalledWith({ kind: 'invoice', documentId: 'order-1' }),
+  )
+})

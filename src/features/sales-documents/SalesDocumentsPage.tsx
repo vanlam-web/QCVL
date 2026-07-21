@@ -121,6 +121,7 @@ export function SalesDocumentsPage({
   onOpenQuoteInPos,
   onOpenInvoiceRevisionInPos,
   onOpenQuotePrint,
+  onOpenInvoicePrint,
 }: {
   service: SalesDocumentService
   orderService?: Pick<OrderService, 'getQuoteReopenPayload'>
@@ -131,6 +132,7 @@ export function SalesDocumentsPage({
   onOpenQuoteInPos?: (payload: QuoteReopenPayload) => void
   onOpenInvoiceRevisionInPos?: (payload: InvoiceRevisionHandoffPayload) => void
   onOpenQuotePrint?: (documentId: string) => void
+  onOpenInvoicePrint?: (documentId: string) => void
 }) {
   const [state, setState] = useState<SalesDocumentsState | null>(null)
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
@@ -1001,6 +1003,7 @@ export function SalesDocumentsPage({
                       }
                       onCancel={() => setCancelOpen(true)}
                       onOpenQuotePrint={onOpenQuotePrint}
+                      onOpenInvoicePrint={onOpenInvoicePrint}
                       onSaveNote={saveSelectedDocumentChanges}
                     />
                   )}
@@ -1068,6 +1071,7 @@ function SalesDocumentDetailView({
   onCancel,
   onEdit,
   onOpenQuotePrint,
+  onOpenInvoicePrint,
   onSaveNote,
 }: {
   document: SalesDocumentDetail | null
@@ -1077,6 +1081,7 @@ function SalesDocumentDetailView({
   onCancel?: () => void
   onEdit?: () => void
   onOpenQuotePrint?: (documentId: string) => void
+  onOpenInvoicePrint?: (documentId: string) => void
   onSaveNote?: (input: { note: string; createdAt: string }) => Promise<void>
 }) {
   const [activeTab, setActiveTab] = useState<'info' | 'payment-history'>('info')
@@ -1159,6 +1164,11 @@ function SalesDocumentDetailView({
             {document.order_type === 'quote' && document.code.startsWith('BG') && onOpenQuotePrint ? (
               <button type="button" onClick={() => onOpenQuotePrint(document.id)}>
                 Xem/In báo giá
+              </button>
+            ) : null}
+            {document.order_type === 'invoice' && document.code.startsWith('HD') && onOpenInvoicePrint ? (
+              <button type="button" onClick={() => onOpenInvoicePrint(document.id)}>
+                Xem/In hóa đơn
               </button>
             ) : null}
           </header>

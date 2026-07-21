@@ -158,6 +158,8 @@ export function PosShell({
   onSignOut,
   onOpenAdmin,
   onOpenDashboard,
+  onOpenInvoicePrint,
+  onOpenQuotePrint,
 }: {
   catalogService: CatalogService
   inventoryService: InventoryService
@@ -169,6 +171,8 @@ export function PosShell({
   onSignOut: () => void
   onOpenAdmin: () => void
   onOpenDashboard: () => void
+  onOpenInvoicePrint?: (documentId: string) => void
+  onOpenQuotePrint?: (documentId: string) => void
 }) {
   const customerSalesDocumentService =
     salesDocumentService ??
@@ -1551,13 +1555,15 @@ export function PosShell({
             orderCreatedAt={activeTab.createdAt}
             revisionSource={activeTab.sourceRevision}
             quoteBlockedReason={quoteBlockedReason(cartLines)}
-            onCheckoutSuccess={() => {
+            onCheckoutSuccess={(payload) => {
               setCheckoutOpen(false)
               setTabs((current) => {
                 const result = removeCompletedInvoiceTab(current, activeTabId)
                 setActiveTabId(result.activeTabId)
                 return result.tabs
               })
+              if (payload.kind === 'invoice') onOpenInvoicePrint?.(payload.documentId)
+              else onOpenQuotePrint?.(payload.documentId)
             }}
           />
         }

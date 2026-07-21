@@ -16,7 +16,7 @@ import { createBrowserDashboardService } from '../features/dashboard/dashboard-s
 import { saveInvoiceRevisionHandoffPayload } from '../features/pos/invoice-revision-handoff'
 import { saveQuoteReopenPayload } from '../features/pos/quote-draft-handoff'
 import { AppShell } from '../components/ui-shell/AppShell'
-import { appRoutes, quotePrintPath } from './routes'
+import { appRoutes, invoicePrintPath, quotePrintPath } from './routes'
 import { permissions } from '../features/users/permissions'
 
 const LoginPage = lazy(() => import('../features/auth/LoginPage').then(({ LoginPage }) => ({ default: LoginPage })))
@@ -54,6 +54,9 @@ const SalesDocumentsPage = lazy(() =>
 const QuotePrintPage = lazy(() =>
   import('../features/sales-documents/QuotePrintPage').then(({ QuotePrintPage }) => ({ default: QuotePrintPage })),
 )
+const InvoicePrintPage = lazy(() =>
+  import('../features/sales-documents/InvoicePrintPage').then(({ InvoicePrintPage }) => ({ default: InvoicePrintPage })),
+)
 const InventoryPage = lazy(() =>
   import('../features/inventory/InventoryPage').then(({ InventoryPage }) => ({ default: InventoryPage })),
 )
@@ -88,6 +91,7 @@ export function AppRoutes() {
           <Route path={appRoutes.reports} element={<ReportsRoute />} />
           <Route path={appRoutes.salesDocuments} element={<SalesDocumentsRoute />} />
           <Route path={appRoutes.quotePrint} element={<QuotePrintRoute />} />
+          <Route path={appRoutes.invoicePrint} element={<InvoicePrintRoute />} />
           <Route path={appRoutes.forbidden} element={<ForbiddenRoute />} />
           <Route path="*" element={<RootRedirect />} />
         </Routes>
@@ -186,6 +190,8 @@ function PosRoute() {
       onSignOut={() => void signOut()}
       onOpenAdmin={() => navigate(appRoutes.admin)}
       onOpenDashboard={() => navigate(appRoutes.dashboard)}
+      onOpenInvoicePrint={(documentId) => navigate(invoicePrintPath(documentId, { returnTo: 'pos' }))}
+      onOpenQuotePrint={(documentId) => navigate(`${quotePrintPath(documentId)}?returnTo=pos`)}
     />
   )
 }
@@ -405,14 +411,21 @@ function SalesDocumentsRoute() {
           navigate(appRoutes.pos)
         }}
         onOpenQuotePrint={(documentId) => navigate(quotePrintPath(documentId))}
+        onOpenInvoicePrint={(documentId) => navigate(invoicePrintPath(documentId))}
       />
     </AppShell>
   )
 }
 
+function printReturnPath(search: string) {
+  const returnTo = new URLSearchParams(search).get('returnTo')
+  return returnTo === 'pos' ? appRoutes.pos : appRoutes.salesDocuments
+}
+
 function QuotePrintRoute() {
   const { currentUser, initialized, getAccessToken } = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
 
@@ -426,7 +439,39 @@ function QuotePrintRoute() {
   }
   if (!id) return <Navigate to={appRoutes.salesDocuments} replace />
 
-  return <QuotePrintPage documentId={id} service={service} onClose={() => navigate(appRoutes.salesDocuments)} />
+  return (
+    <QuotePrintPage
+      documentId={id}
+      service={service}
+      onClose={() => navigate(printReturnPath(location.search))}
+    />
+  )
+}
+
+function InvoicePrintRoute() {
+  const { currentUser, initialized, getAccessToken } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const { id } = useParams()
+  const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+
+  if (!initialized) return <BootstrapScreen />
+  if (!currentUser) return <Navigate to={appRoutes.login} replace />
+  if (
+    !currentUser.permissions.includes(permissions.createOrder) &&
+    !currentUser.permissions.includes(permissions.manageFinance)
+  ) {
+    return <Navigate to={appRoutes.forbidden} replace />
+  }
+  if (!id) return <Navigate to={appRoutes.salesDocuments} replace />
+
+  return (
+    <InvoicePrintPage
+      documentId={id}
+      service={service}
+      onClose={() => navigate(printReturnPath(location.search))}
+    />
+  )
 }
 
 function ForbiddenRoute() {

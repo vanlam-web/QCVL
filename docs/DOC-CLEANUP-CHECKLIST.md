@@ -65,6 +65,7 @@
 - [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
 - [x] `POST /products` persist (Postgres + dev-memory); combo/service ép `track_inventory=false` theo KV · 2026-07-21
 - [x] `POST /suppliers` tạo NCC tay persist (không stub) · 2026-07-21
+- [x] Bill Preview HD mẫu mặc định A4 (sau POS + in lại Sales Documents); chưa quản lý mẫu/K80/Zalo · 2026-07-21
 - [ ] Owner chỉ loại đơn cần UI trước (sau PN/NCC/tạo SP) rồi mở gap còn lại nếu có
 
 ---
