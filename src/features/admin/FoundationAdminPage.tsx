@@ -737,11 +737,13 @@ export function FoundationAdminPage({
               }}
             >
               <BillTemplatePicker
-                legend="Khổ in mặc định"
+                legend="Mẫu in gợi ý (khổ mặc định)"
                 value={templateDraft.default_bill_template}
                 onChange={(value) => setTemplateDraft((current) => ({ ...current, default_bill_template: value }))}
               />
-              <div className="admin-settings-form-grid">
+              <p className="admin-settings-field-hint admin-settings-hint-block">
+                Giống KiotViet: A4 cho laser/PDF, K80 cho máy in nhiệt quầy. Nhiều mẫu đặt tên + editor HTML làm sau.
+              </p>              <div className="admin-settings-form-grid">
                 <label>
                   Tiêu đề hóa đơn
                   <input

@@ -2029,6 +2029,11 @@
   color: var(--color-text-muted);
 }
 
+.admin-settings-hint-block {
+  margin: -0.35rem 0 0;
+  line-height: 1.4;
+}
+
 .admin-settings-form input,
 .admin-settings-form select,
 .admin-settings-form textarea {
