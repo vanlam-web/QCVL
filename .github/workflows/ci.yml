@@ -29,7 +29,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if git grep -nE '(service_role|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD|DATABASE_URL)=.+' -- ':!package-lock.json'; then
+          # Ignore hardening plan meta-examples and doc placeholders like DATABASE_URL='<...>'.
+          matches="$(git grep -nE '(service_role|SERVICE_ROLE_KEY|E2E_ADMIN_PASSWORD|DATABASE_URL)=.+' \
+            -- ':!package-lock.json' ':!docs/superpowers/plans/**' || true)"
+          filtered="$(printf '%s\n' "$matches" | grep -vE "DATABASE_URL=['\"]?<" || true)"
+          if [ -n "$filtered" ]; then
+            printf '%s\n' "$filtered"
             echo "Potential committed secret assignment found."
             exit 1
           fi
