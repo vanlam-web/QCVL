@@ -2927,7 +2927,7 @@ async function getDevApiResponse(
           notes: body.notes ?? null,
           items: Array.isArray(body.items) ? body.items : [],
         })
-        if (!data) throw new HttpError(404, 'NOT_FOUND', 'Product not found')
+        if (!data) throw new HttpError(404, 'RESOURCE_NOT_FOUND', 'Product not found')
         return { found: true, data }
       },
       customerGroups: async () => {

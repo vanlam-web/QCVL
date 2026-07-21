@@ -723,7 +723,33 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         note: input.notes ?? 'Manual product BOM. Trusted for stock deduction.',
       })
       await persist()
-      return this.getProductBom?.(input) ?? null
+      return {
+        id: `bom-${slug(product.code)}`,
+        product_id: product.id,
+        version: 1,
+        status: 'active' as const,
+        notes: input.notes ?? 'Manual product BOM. Trusted for stock deduction.',
+        created_at: product.updated_at ?? product.created_at,
+        items: components.flatMap((component, index) => {
+          const componentProduct = products.get(component.component_code)
+          if (!componentProduct) return []
+          return [{
+            id: `bom-item-${slug(product.code)}-${slug(component.component_code)}`,
+            component_product_id: componentProduct.id,
+            component_product: {
+              id: componentProduct.id,
+              code: componentProduct.code,
+              name: componentProduct.name,
+              unit_name: componentProduct.unit_name,
+              product_kind: componentProduct.product_kind,
+              latest_purchase_cost: componentProduct.latest_purchase_cost,
+            },
+            quantity: component.quantity,
+            sort_order: index + 1,
+            notes: null,
+          }]
+        }),
+      }
     },
     async listCustomers(input) {
       const search = normalize(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
