@@ -472,7 +472,7 @@ describe('createPgRepository product units', () => {
 
     expect(debt?.total_debt).toBe(100000 - 40000 - 10000 + 5000)
     expect(debt?.adjustments.map((row) => row.source_code)).toContain('CKKH000001')
-    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual([
+    expect(debt?.ledger_rows.map((row) => row.code)).toEqual([
       'HD000001',
       'TT000001',
       'CKKH000001',
@@ -549,7 +549,7 @@ describe('createPgRepository product units', () => {
 
     expect(debt?.invoices).toEqual([])
     expect(debt?.total_debt).toBe(0)
-    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual(['HD000099', 'TT000099'])
+    expect(debt?.ledger_rows.map((row) => row.code)).toEqual(['HD000099', 'TT000099'])
   })
 
   test('subtracts linked supplier receipts from linked customer debt view', async () => {
