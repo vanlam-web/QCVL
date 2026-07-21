@@ -6,6 +6,18 @@
 
 ---
 
+## Cập nhật hiện tại
+
+Updated: 2026-07-21
+
+- Thiết kế planned cho đối tượng nộp/nhận khi tạo phiếu thu/chi thủ công: `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
+- Quy tắc chốt: `Phiếu thu`/`Phiếu chi` là hướng phiếu; `Tiền mặt`/`Chuyển khoản` là `Phương thức TT`; loại thu/chi quyết định người nộp/nhận có thể là khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng hoặc khác.
+- `Người thu`, `Người chi`, `Người tạo`, `Người bán` là tài khoản đăng nhập.
+- Chỉ nhóm `Khác` được nhập tự do; khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng phải chọn hoặc tạo nhanh bản ghi master data trước khi lưu phiếu.
+- Chức năng phiếu thu/chi cần đủ: tạo, lưu, lưu & in, xem, sửa bằng bản mới, hủy mềm, in, tìm/lọc/sắp xếp/xuất file. `Xóa` không xóa vật lý.
+
+---
+
 ## 0. Căn cứ KiotViet
 
 Quan sát bổ sung ngày `05/07/2026`:
@@ -15,7 +27,7 @@ Quan sát bổ sung ngày `05/07/2026`:
 - Sổ quỹ cần lọc được theo `Công nợ đối tác`: tính vào công nợ, không tính vào công nợ, không có công nợ.
 - Phiếu thu/chi có cờ `Hạch toán kết quả kinh doanh`; dòng không hạch toán vẫn vào sổ quỹ nhưng không tính vào báo cáo kinh doanh.
 - Phiếu thu tự động từ hóa đơn có bảng gắn hóa đơn/phân bổ.
-- Phiếu chi thủ công có đối tượng nhận là khách hàng, nhà cung cấp, nhân viên hoặc khác.
+- Phiếu chi thủ công có đối tượng nhận là khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng hoặc khác.
 - File xuất tháng 06/2026 có các loại thực tế: tiền khách trả, lương nhân viên, vận chuyển, vật tư, tiền trả nhà cung cấp, chuyển/rút, chi phí khác, điện/nước/nhà/rác/thuế/hoa hồng/VAT cho khách.
 
 Quan sát ngày `01/07/2026`:
@@ -133,6 +145,7 @@ Phiếu phải lưu tối thiểu:
 - mã phiếu
 - loại thu/chi
 - quỹ/tài khoản
+- phương thức thanh toán
 - số tiền
 - có tính vào báo cáo kinh doanh hay không
 - người tạo
@@ -141,9 +154,57 @@ Phiếu phải lưu tối thiểu:
 - đối tượng nộp/nhận nếu có
 - ghi chú/lý do nếu có
 - chứng từ liên quan nếu có
-- đối tượng nộp/nhận loại gì: khách hàng, nhà cung cấp, nhân viên, khác hoặc không có
-- mã/tên/số điện thoại người nộp/nhận nếu có
+- đối tượng nộp/nhận loại gì: khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác hoặc không có
+- mã/tên/số điện thoại người nộp/nhận nếu có; text tự do chỉ hợp lệ với nhóm `Khác`
 - cờ có tính vào công nợ đối tác hay không nếu dòng liên quan đối tác
+
+### BR-FIN-04A: Loại thu/chi quyết định đối tượng nộp/nhận
+
+Khi tạo phiếu thủ công, người dùng chọn `Phiếu thu` hoặc `Phiếu chi`, sau đó chọn `Loại thu/chi`. Hệ thống dùng loại thu/chi để giới hạn nhóm đối tượng nộp/nhận hợp lệ.
+
+Mapping nghiệp vụ planned:
+
+| Loại thu/chi | Nhóm đối tượng hợp lệ |
+|---|---|
+| Thu tiền khách | Khách hàng, khác |
+| Thu khác | Khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác |
+| Góp vốn | Nhân viên, khác |
+| Tiền trả NCC | Nhà cung cấp, khác |
+| Vật tư | Nhà cung cấp, khác |
+| Lương NV | Nhân viên |
+| Vận chuyển | Đối tác giao hàng, khác |
+| Hoàn tiền khách | Khách hàng, khác |
+| Chi phí vận hành | Nhân viên, nhà cung cấp, khác |
+| Thuế/VAT | Khác |
+| Hoa hồng | Nhân viên, khác |
+| Chuyển/Rút | Khác |
+| Thu khác/Chi khác | Khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác |
+
+Nguồn danh sách:
+
+| Nhóm đối tượng | Nguồn |
+|---|---|
+| Khách hàng | Danh sách khách hàng hiện có |
+| Nhà cung cấp | Danh sách nhà cung cấp hiện có |
+| Nhân viên | Danh sách tài khoản/nhân viên |
+| Đối tác giao hàng | Danh sách đối tác giao hàng đã lưu; nếu chưa có thì tạo nhanh trước khi lưu phiếu |
+| Khác | Nhập tự do |
+
+Trường tên người nộp/nhận chỉ nhập tự do với nhóm `Khác`. Với khách hàng, nhà cung cấp, nhân viên và đối tác giao hàng, voucher phải lưu được id tham chiếu; nếu người dùng chỉ gõ text mà chưa chọn/tạo bản ghi thì không được lưu phiếu.
+
+### BR-FIN-04B: Thêm, lưu và quản lý đối tượng nộp/nhận
+
+Không dùng một bảng đối tượng chung cho tất cả nhóm. Mỗi nhóm có nơi lưu riêng:
+
+| Nhóm đối tượng | Quy tắc lưu | Quản lý |
+|---|---|---|
+| Khách hàng | Chọn khách cũ thì lưu `customer_id`; tạo mới thì lưu vào master khách hàng; không lưu text tạm. | Màn khách hàng. |
+| Nhà cung cấp | Chọn NCC cũ thì lưu `supplier_id`; tạo mới thì lưu vào master NCC; không lưu text tạm. | Màn nhà cung cấp. |
+| Nhân viên | Chỉ chọn từ danh sách nhân viên/tài khoản đã có. | Màn nhân viên/tài khoản. |
+| Đối tác giao hàng | Chọn bản ghi cũ hoặc tạo nhanh bản ghi mới; lưu/gộp theo quy tắc chống trùng. | Giai đoạn đầu quản lý nhẹ qua combobox/tạo nhanh; màn quản lý riêng là slice sau. |
+| Khác | Chỉ lưu text trên phiếu, không tạo master data. | Không có màn quản lý. |
+
+Mọi phiếu phải snapshot tên/số điện thoại người nộp/nhận tại thời điểm ghi phiếu. Snapshot này là dữ liệu lịch sử; không bị đổi theo master data sau này.
 
 ---
 
@@ -177,6 +238,36 @@ PC000045.02   sửa lần 2
 ```
 
 Phiếu đã bị hủy do sửa vẫn được giữ để kiểm tra, không xóa vật lý.
+
+### BR-FIN-05A: Lưu, in và hủy phiếu thủ công
+
+Tạo phiếu thủ công phải chạy trong một transaction nghiệp vụ:
+
+1. Validate quyền, workstation và dữ liệu đầu vào.
+2. Tạo `cashbook_vouchers.status = posted`.
+3. Tạo đúng một dòng `cashbook_entries.status = posted`.
+4. Trả phiếu và dòng sổ quỹ để UI cập nhật ngay.
+
+`Lưu & In` không phải nghiệp vụ riêng. Hệ thống lưu phiếu trước; nếu lưu thành công mới mở/in phiếu. Nếu in lỗi, không rollback phiếu đã lưu.
+
+`Xóa` trong UI là hủy mềm:
+
+- Chỉ áp dụng cho phiếu thủ công còn hiệu lực.
+- Chuyển `cashbook_vouchers.status = cancelled`.
+- Chuyển `cashbook_entries.status = cancelled`.
+- Không xóa vật lý.
+- Phải lưu lý do/người hủy/thời gian hủy khi schema/API triển khai đủ audit.
+
+Với phiếu chuyển/rút nội bộ khi đã có luồng tạo cặp phiếu đầy đủ, hủy một phiếu phải hủy luôn phiếu đối ứng trong cùng transaction để tổng quỹ không lệch.
+
+### BR-FIN-05B: Quyền sửa theo nguồn phiếu
+
+| Nguồn phiếu | Quy tắc |
+|---|---|
+| Phiếu thủ công thường | Được sửa bằng bản mới; trường sửa gồm thời gian, loại thu/chi, phương thức TT/tài khoản, đối tượng, số tiền, ghi chú, hạch toán. |
+| Phiếu chuyển/rút | Sửa hạn chế; nếu đổi tài khoản nguồn/đích phải dùng luồng chuyển quỹ, không sửa rời một phiếu. |
+| Phiếu tự động từ POS/thu nợ/hóa đơn/nhập hàng | Không sửa rời giá trị hoặc đối tượng trong sổ quỹ; muốn đổi phải qua nghiệp vụ gốc. |
+| Phiếu import KiotViet | Không sửa như phiếu QCVL; chỉ xem/đối soát hoặc xóa bằng luồng import có scope rõ. |
 
 ### BR-FIN-06: Phiếu sinh từ nghiệp vụ gốc không được sửa lệch nghiệp vụ gốc
 
@@ -300,6 +391,9 @@ Phiếu thu sinh từ checkout hoặc thu nợ phải hiển thị được:
 12. Có thể lọc theo công nợ đối tác.
 13. Phiếu thu/chi thủ công lưu được đối tượng nộp/nhận và số điện thoại nếu có.
 14. Chuyển/rút giữa quỹ không làm thay đổi tổng quỹ toàn hệ thống khi làm theo luồng điều chuyển.
+15. `Lưu & In` lưu phiếu trước, in sau; lỗi in không rollback phiếu.
+16. Hủy/xóa phiếu là hủy mềm, không xóa vật lý.
+17. Hủy chuyển/rút phải hủy cả cặp đối ứng khi luồng chuyển quỹ đã tạo cặp.
 
 ---
 

@@ -4,6 +4,19 @@
 
 ---
 
+## Cập nhật hiện tại
+
+Updated: 2026-07-21
+
+- Quyết định thiết kế kế tiếp cho form phiếu thu/chi thủ công nằm ở `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
+- Trạng thái: planned, chưa xem là đã triển khai đủ trong code.
+- Tóm tắt: form chỉ chọn `Phiếu thu` hoặc `Phiếu chi`; `Phương thức TT` quyết định tiền mặt/chuyển khoản; `Loại thu/chi` quyết định nhóm đối tượng nộp/nhận; chỉ `Khác` được nhập tự do, các nhóm còn lại phải chọn hoặc tạo nhanh bản ghi master data.
+- Nhóm đối tượng planned: `Khách hàng`, `Nhà cung cấp`, `Nhân viên`, `Đối tác giao hàng`, `Khác`.
+- Thêm/lưu đối tượng planned: khách hàng/NCC tạo nhanh vào master data riêng; nhân viên chỉ chọn từ danh sách có sẵn; đối tác giao hàng lưu ở `delivery_partners`; `Khác` là nhóm duy nhất lưu text tự do trên phiếu.
+- Thao tác phiếu thu/chi planned theo KiotViet: tạo phiếu, lưu, lưu & in, xem, cập nhật/sửa, hủy mềm, in, tìm kiếm/lọc/sắp xếp/xuất file. `Xóa` trong QCVL là hủy mềm, không xóa vật lý.
+
+---
+
 ## 0. Ghi nhận từ KiotViet
 
 Quan sát bổ sung ngày `05/07/2026` từ KiotViet đang mở và file xuất `SoQuy_KV05072026-185646-888.xlsx`:
@@ -111,6 +124,14 @@ Quan sát trước đó ngày `01/07/2026`:
 - Phiếu chi thủ công cần lưu cờ có tính vào báo cáo kinh doanh hay không.
 - Người nộp/nhận có thể là khách hàng, nhà cung cấp, nhân viên hoặc đối tượng tự do.
 - `Ví điện tử` có trong KiotViet nhưng QC-OMS MVP vẫn chưa đưa vào nếu Owner chưa chốt nghiệp vụ riêng; cần thiết kế mở để thêm sau.
+
+Tham khảo tài liệu KiotViet online rà lại ngày `21/07/2026`:
+
+- Retail Sổ quỹ: `https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/retail-so-quy/so-quy/` có các nhóm thao tác: tạo phiếu thu/chi, quản lý phiếu gồm xem/cập nhật/hủy/chia sẻ/in, tìm kiếm/lọc/sắp xếp/xuất file.
+- FNB mobile Sổ quỹ: `https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/fnb-so-quy/so-quy/` tạo phiếu từ nút `+`, chọn lập phiếu thu/chi, nhập thông tin và bấm `Lưu`; detail có hủy/in.
+- Salon Sổ quỹ: `https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/salon-so-quy/so-quy/` cho sửa phiếu thủ công trên sổ quỹ, giới hạn trường sửa theo loại phiếu; với chuyển/rút nội bộ, hủy một phiếu thì phiếu đối ứng cũng bị hủy theo.
+- FNB web Sổ quỹ cũ: `https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/so-quy-web-fnb/so-quy/` ghi rõ tạo phiếu thu/chi, lưu, cập nhật và hủy bỏ phiếu.
+- QCVL áp dụng cùng nhóm chức năng nhưng khác điểm cốt lõi: sửa phiếu không ghi đè, mà tạo bản sửa mới `MaCu.01`; xóa trong UI là hủy mềm.
 
 Hiện trạng detail inline sau ngày `06/07/2026`:
 
@@ -255,13 +276,13 @@ Hiện trạng UI: nút `Xuất file` nằm ở cụm tác vụ sổ quỹ bên 
 
 ## 6. Phiếu thu/chi thủ công
 
-Hiện trạng UI sau ngày `06/07/2026`:
+Hiện trạng UI sau ngày `06/07/2026`, cộng quyết định chuẩn hóa planned ngày `21/07/2026`:
 
 - Nút `+` trong ô `Tìm sổ quỹ` mở popup modal ở giữa màn hình, có backdrop mờ, không chuyển trang và không đẩy layout sổ quỹ. Popup mở mặc định tab `Phiếu thu`; người dùng chuyển tab `Phiếu chi` ngay trong popup để đổi loại phiếu.
 - Modal dùng CSS chung `management-modal-*`, không tạo layout riêng cho từng trang. Kích thước khoảng 800-900px, thân form dùng grid 2 cột.
-- Header hiển thị `Tạo phiếu thu tiền mặt/ngân hàng` hoặc `Tạo phiếu chi tiền mặt/ngân hàng` theo tab và tài khoản đang chọn; bên dưới header có tab `Phiếu thu`/`Phiếu chi`; bên phải có nút đóng `X`. Tab dùng CSS chung `inline-detail-tabbar`/`inline-detail-tabs` cho trạng thái chọn và không chọn, không tạo style riêng cho finance.
+- Header planned chỉ hiển thị `Tạo phiếu thu` hoặc `Tạo phiếu chi`; không đưa `tiền mặt`/`ngân hàng` vào tiêu đề. `Tiền mặt`/`Chuyển khoản` nằm ở trường `Phương thức TT`; chọn `Chuyển khoản` mới hiện tài khoản ngân hàng. Bên dưới header có tab `Phiếu thu`/`Phiếu chi`; bên phải có nút đóng `X`. Tab dùng CSS chung `inline-detail-tabbar`/`inline-detail-tabs` cho trạng thái chọn và không chọn, không tạo style riêng cho finance.
 - Footer modal có 3 nút cùng hàng, canh phải: `Bỏ qua`, `Lưu & In`, `Lưu`. Hiện `Lưu & In` dùng chung luồng lưu; in thật là slice sau.
-- Các field mã phiếu, thời gian, người thu/chi, phương thức thanh toán hiện mới phục vụ UI/đối soát nhanh; backend tạo mã và thời gian ghi thật khi lưu.
+- Các field mã phiếu, thời gian, người thu/chi, phương thức thanh toán hiện mới phục vụ UI/đối soát nhanh; backend tạo mã và thời gian ghi thật khi lưu. Planned: `Người thu`/`Người chi` lấy từ tài khoản đăng nhập, không nhập tay.
 
 ### Tạo phiếu thu
 
@@ -270,11 +291,12 @@ Form tối thiểu:
 - mã phiếu tự động từ backend
 - thời gian hiển thị theo giờ hiện tại
 - loại thu
-- người thu là actor hiện tại nếu chưa có field riêng
-- đối tượng nộp: khách hàng, nhà cung cấp, nhân viên, khác, không có
-- tên/mã người nộp nếu có, kèm nút `Tạo mới` tạm thời
-- phương thức thanh toán
-- tài khoản nhận tiền
+- người thu là tài khoản đăng nhập
+- phương thức TT: tiền mặt hoặc chuyển khoản
+- tài khoản nhận tiền: chỉ hiện/bắt buộc khi chọn chuyển khoản
+- đối tượng nộp: khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác; danh sách khả dụng phụ thuộc loại thu
+- tên/mã người nộp: với `Khác` là ô nhập tự do; với nhóm còn lại là combobox chọn/tạo nhanh bản ghi
+- số điện thoại nếu có
 - số tiền
 - lý do/ghi chú
 - hạch toán kết quả kinh doanh
@@ -287,15 +309,39 @@ Form tối thiểu:
 - mã phiếu tự động từ backend
 - thời gian hiển thị theo giờ hiện tại
 - loại chi
-- người chi là actor hiện tại nếu chưa có field riêng
-- đối tượng nhận: khách hàng, nhà cung cấp, nhân viên, khác, không có
-- tên/mã người nhận nếu có, kèm nút `Tạo mới` tạm thời
-- phương thức thanh toán
-- tài khoản chi tiền
+- người chi là tài khoản đăng nhập
+- phương thức TT: tiền mặt hoặc chuyển khoản
+- tài khoản chi tiền: chỉ hiện/bắt buộc khi chọn chuyển khoản
+- đối tượng nhận: khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác; danh sách khả dụng phụ thuộc loại chi
+- tên/mã người nhận: với `Khác` là ô nhập tự do; với nhóm còn lại là combobox chọn/tạo nhanh bản ghi
+- số điện thoại nếu có
 - số tiền
 - lý do/ghi chú
 - hạch toán kết quả kinh doanh
 - công nợ đối tác tạm dùng default backend hiện tại, chưa đưa ra UI modal
+
+### Mapping đối tượng planned
+
+Theo tham chiếu KiotViet, QCVL chọn loại thu/chi trước, rồi mới chọn nhóm người nộp/nhận phù hợp. Chi tiết mapping nằm trong `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
+
+| Loại thu/chi | Nhóm đối tượng chính |
+|---|---|
+| Thu tiền khách, hoàn tiền khách | Khách hàng, khác |
+| Tiền trả NCC, vật tư | Nhà cung cấp, khác |
+| Lương NV, hoa hồng | Nhân viên, khác |
+| Vận chuyển | Đối tác giao hàng, khác |
+| Thu khác, chi khác | Khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng, khác |
+| Chuyển/Rút, thuế/VAT | Khác |
+
+### Thêm và quản lý đối tượng planned
+
+- `Khách hàng`: chọn từ danh sách khách hàng; nếu cần thêm mới thì mở tạo nhanh khách hàng và lưu về master khách hàng.
+- `Nhà cung cấp`: chọn từ danh sách NCC; nếu cần thêm mới thì mở tạo nhanh NCC và lưu về master NCC.
+- `Nhân viên`: chỉ chọn từ danh sách nhân viên/tài khoản đã có, không tạo mới trong phiếu thu/chi.
+- `Đối tác giao hàng`: chọn từ gợi ý đã lưu hoặc bấm `Tạo mới`; tên mới được lưu vào `delivery_partners` trước khi lưu phiếu.
+- `Khác`: nhập text trực tiếp, không hiện nút tạo mới và không đưa vào danh sách gợi ý.
+
+Phiếu luôn snapshot tên/số điện thoại người nộp/nhận để lịch sử phiếu không đổi khi master data đổi sau này.
 
 ### Sửa phiếu
 
@@ -303,6 +349,30 @@ Form tối thiểu:
 - Sửa phiếu tạo phiên bản mới `MaCu.01`.
 - Phiếu cũ chuyển trạng thái đã hủy nhưng vẫn xem được.
 - Hiện trạng UI chính không hiển thị bảng phiếu thu/chi phụ; sửa/hủy phiếu thủ công giữ ở luồng voucher và detail/future surface, không nằm trên bảng phụ trong thân trang.
+
+### Thao tác phiếu planned
+
+| Thao tác | QCVL planned | Ghi chú theo KiotViet |
+|---|---|---|
+| Tạo phiếu thu/chi | Từ nút `+` hoặc action `Phiếu thu`/`Phiếu chi`; mở modal tạo phiếu. | KiotViet có tạo phiếu thu/chi từ Sổ quỹ và mobile. |
+| Bỏ qua | Đóng modal nếu chưa có thay đổi; nếu có thay đổi thì hỏi xác nhận. | Tránh mất dữ liệu đang nhập. |
+| Lưu | Validate, tạo phiếu `posted`, tạo dòng sổ quỹ, đóng modal, cập nhật list/detail. | Dùng toast nhỏ góc phải. |
+| Lưu & In | Lưu thành công rồi mở/in phiếu vừa tạo. | Nếu in lỗi, phiếu vẫn đã lưu; báo lỗi in riêng. |
+| Xem | Click dòng mở inline detail. | Detail dùng shell chung. |
+| Sửa/Cập nhật | Chỉ phiếu thủ công còn hiệu lực; mở form prefill dữ liệu cũ; lưu tạo bản mới `MaCu.01`. | QCVL không sửa đè như KV để giữ audit. |
+| Xóa/Hủy | Nút UI ghi `Xóa` hoặc `Hủy`; thực chất gọi hủy mềm, chuyển `cancelled`, không xóa vật lý. | Với chuyển/rút đủ luồng, hủy một bên phải hủy cả cặp đối ứng. |
+| In | In phiếu từ detail hoặc sau `Lưu & In`. | Dùng dữ liệu detail/voucher hiện hành. |
+| Chia sẻ | Chưa làm MVP; để slice sau nếu Owner cần gửi phiếu qua Zalo/email/file. | KiotViet có chia sẻ trên mobile. |
+| Tìm/lọc/sắp xếp/xuất file | Áp dụng trên toàn bộ kết quả theo filter, không chỉ page hiện tại. | KiotViet hỗ trợ tìm/lọc/sắp xếp/xuất file. |
+
+### Quyền sửa theo nguồn phiếu planned
+
+| Nguồn phiếu | Được sửa | Được hủy/xóa |
+|---|---|---|
+| Phiếu thủ công thường | Thời gian, loại thu/chi, phương thức TT/tài khoản, đối tượng, số tiền, ghi chú, hạch toán. | Có, hủy mềm nếu còn `posted`. |
+| Phiếu chuyển/rút | Thời gian, số tiền, ghi chú, hạch toán; nếu đổi tài khoản nguồn/đích phải dùng luồng chuyển quỹ riêng. | Có, hủy cả cặp đối ứng trong cùng transaction khi đã có luồng chuyển quỹ đủ. |
+| Phiếu tự động từ POS/thu nợ/hóa đơn/nhập hàng | Không sửa rời giá trị hoặc đối tượng để tránh lệch chứng từ gốc; chỉ xem ở sổ quỹ. | Không hủy rời; xử lý qua nghiệp vụ gốc. |
+| Phiếu import KiotViet | Chỉ xem/đối soát; không sửa như phiếu QCVL. | Chỉ xóa qua luồng delete import có scope rõ, không dùng nút xóa phiếu thường. |
 
 ---
 
@@ -327,6 +397,9 @@ Các phiếu sinh từ checkout POS hoặc thu nợ khách:
 5. Phiếu từ POS/thu nợ không có nút sửa rời.
 6. `Tồn quỹ` trong summary phải đổi theo filter sổ quỹ, không cố định theo tổng số dư tài khoản hiện tại.
 7. Bộ lọc đang có phải tự áp dụng khi đổi giá trị, không cần nút áp dụng/reset.
+8. `Lưu` tạo phiếu và cập nhật bảng/detail ngay; `Lưu & In` lưu trước rồi in.
+9. `Xóa` phiếu thủ công là hủy mềm, không xóa vật lý.
+10. Sắp xếp/xuất file dùng toàn bộ kết quả theo filter, không chỉ page hiện tại.
 
 ---
 

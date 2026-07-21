@@ -59,9 +59,10 @@ Phiếu sinh từ POS/thu nợ dùng `payment_receipts` làm chứng từ gốc,
 | `finance_account_id` | `uuid` | ❌ | FK → `public.finance_accounts.id` |
 | `amount` | `numeric(12,0)` | ❌ | Số tiền phiếu |
 | `is_business_accounted` | `boolean` | ❌ | Có tính vào báo cáo kết quả kinh doanh không |
-| `counterparty_type` | `text` | ❌ | `customer`, `supplier`, `employee`, `other`, `none` |
-| `counterparty_name` | `text` | ✅ | Tên người nộp/nhận tự do hoặc cache tên đối tác |
-| `counterparty_phone` | `text` | ✅ | Số điện thoại người nộp/nhận nếu có |
+| `counterparty_type` | `text` | ❌ | `customer`, `supplier`, `employee`, `delivery_partner`, `other`, `none` |
+| `counterparty_id` | `uuid` | ✅ | Id bản ghi master data tương ứng với `counterparty_type`; bắt buộc nếu không phải `other`/`none` |
+| `counterparty_name` | `text` | ✅ | Snapshot tên người nộp/nhận tại thời điểm ghi phiếu; với `other` là text tự do |
+| `counterparty_phone` | `text` | ✅ | Snapshot số điện thoại người nộp/nhận nếu có |
 | `partner_debt_mode` | `text` | ❌ | `affects_partner_debt`, `not_affect_partner_debt`, `no_partner_debt` |
 | `transfer_group_id` | `uuid` | ✅ | Nhóm liên kết cặp chuyển/rút nếu có |
 | `transfer_counterpart_voucher_id` | `uuid` | ✅ | Phiếu đối ứng của chuyển/rút nếu có |
@@ -70,6 +71,9 @@ Phiếu sinh từ POS/thu nợ dùng `payment_receipts` làm chứng từ gốc,
 | `revised_from_voucher_id` | `uuid` | ✅ | FK → `public.cashbook_vouchers.id`; phiếu cũ gần nhất nếu là bản sửa |
 | `replaced_by_voucher_id` | `uuid` | ✅ | FK → `public.cashbook_vouchers.id`; phiếu mới thay thế nếu bị hủy do sửa |
 | `reason` | `text` | ✅ | Lý do thu/chi |
+| `cancel_reason` | `text` | ✅ | Lý do hủy nếu người dùng hủy phiếu |
+| `cancelled_by` | `uuid` | ✅ | FK → `public.profiles.id`; người hủy |
+| `cancelled_at` | `timestamptz` | ✅ | Thời điểm hủy |
 | `created_by` | `uuid` | ❌ | FK → `public.profiles.id` |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
 | `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật gần nhất |
@@ -98,7 +102,7 @@ Thu bán hàng và thu nợ khách không dùng `cashbook_vouchers`; nguồn chu
 - `UNIQUE (organization_id, code)`
 - `voucher_direction IN ('in', 'out')`
 - `voucher_type IN ('other_income', 'capital_contribution', 'transfer', 'material_purchase', 'supplier_payment', 'staff_salary', 'shipping_expense', 'customer_refund', 'operating_expense', 'tax_or_vat', 'commission', 'other_expense')`
-- `counterparty_type IN ('customer', 'supplier', 'employee', 'other', 'none')`
+- `counterparty_type IN ('customer', 'supplier', 'employee', 'delivery_partner', 'other', 'none')`
 - `partner_debt_mode IN ('affects_partner_debt', 'not_affect_partner_debt', 'no_partner_debt')`
 - `status IN ('posted', 'cancelled')`
 - `amount > 0`
@@ -112,16 +116,64 @@ Thu bán hàng và thu nợ khách không dùng `cashbook_vouchers`; nguồn chu
 - Với bản gốc, `revision_no = 0`, `code = base_code`, `revised_from_voucher_id` null.
 - Với bản sửa, `revision_no > 0`, `code = base_code || '.' || LPAD(revision_no, 2, '0')`, `revised_from_voucher_id` bắt buộc.
 - Phiếu `cancelled` không được tính vào số dư hiệu lực.
+- Nếu `status = 'cancelled'` do người dùng hủy, `cancel_reason`, `cancelled_by`, `cancelled_at` bắt buộc.
+- Nếu `status = 'cancelled'` do sửa phiếu, `replaced_by_voucher_id` bắt buộc.
+- Nếu `counterparty_type IN ('customer', 'supplier', 'employee', 'delivery_partner')`, `counterparty_id` bắt buộc.
+- Nếu `counterparty_type = 'other'`, `counterparty_id` phải null và `counterparty_name` bắt buộc.
+- Nếu `counterparty_type = 'none'`, `counterparty_id`, `counterparty_name`, `counterparty_phone` phải null trừ khi dữ liệu legacy/import cần preserve text nguồn.
+- Với `customer`, `counterparty_id` tham chiếu `public.customers.id`.
+- Với `supplier`, `counterparty_id` tham chiếu `public.suppliers.id`.
+- Với `employee`, `counterparty_id` tham chiếu `public.profiles.id`.
+- Với `delivery_partner`, `counterparty_id` tham chiếu `public.delivery_partners.id`.
+- `counterparty_name` và `counterparty_phone` luôn là snapshot lịch sử, không tự đổi khi master data đổi sau này.
 
 ### Index
 
 - `idx_cashbook_vouchers_org_status_created` trên `(organization_id, status, created_at DESC)`
 - `idx_cashbook_vouchers_account` trên `(organization_id, finance_account_id, created_at DESC)`
 - `idx_cashbook_vouchers_base_revision` trên `(organization_id, base_code, revision_no)`
+- `idx_cashbook_vouchers_counterparty` trên `(organization_id, counterparty_type, counterparty_id)` với điều kiện `counterparty_id IS NOT NULL`
 
 ---
 
-## 4. Bảng `public.cashbook_entries` — Dòng sổ quỹ chính thức
+## 4. Bảng `public.delivery_partners` — Đối tác giao hàng
+
+### Mục đích
+
+Lưu danh sách đối tác giao hàng dùng cho phiếu chi vận chuyển và các phiếu thu/chi có liên quan. Đây là master data nhẹ để gợi ý/chọn nhanh, không phải màn logistics đầy đủ.
+
+### Các cột
+
+| Tên cột | Kiểu dữ liệu | Nullable | Mô tả |
+|---|---|---|---|
+| `id` | `uuid` | ❌ | Khóa chính |
+| `organization_id` | `uuid` | ❌ | FK → `public.organizations.id` |
+| `name` | `text` | ❌ | Tên đối tác giao hàng |
+| `normalized_name` | `text` | ❌ | Tên đã chuẩn hóa để tìm/chống trùng |
+| `phone` | `text` | ✅ | Số điện thoại nếu có |
+| `normalized_phone` | `text` | ✅ | Số điện thoại đã chuẩn hóa |
+| `note` | `text` | ✅ | Ghi chú |
+| `is_active` | `boolean` | ❌ | Còn dùng để gợi ý hay không |
+| `created_by` | `uuid` | ❌ | FK → `public.profiles.id` |
+| `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
+| `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật |
+
+### Ràng buộc
+
+- `name` không rỗng sau trim.
+- Nếu có `normalized_phone`, chống trùng trong cùng organization theo `(organization_id, normalized_phone)`.
+- Nếu không có phone, chống trùng active theo `(organization_id, normalized_name)`.
+- Tạo nhanh từ phiếu thu/chi phải upsert/gộp theo `normalized_phone` nếu có; nếu không có phone thì theo `normalized_name`.
+- Không xóa vật lý đối tác đã từng được voucher tham chiếu; chỉ chuyển `is_active = false`.
+
+### Index
+
+- `idx_delivery_partners_org_active_name` trên `(organization_id, is_active, normalized_name)`
+- `idx_delivery_partners_org_phone` trên `(organization_id, normalized_phone)` với điều kiện `normalized_phone IS NOT NULL`
+
+---
+
+## 5. Bảng `public.cashbook_entries` — Dòng sổ quỹ chính thức
 
 ### Mục đích
 
@@ -172,7 +224,7 @@ Ghi từng dòng tăng/giảm tiền theo từng quỹ/tài khoản.
 
 ---
 
-## 5. Bảng `public.cash_reconciliations` — Phiên đối soát
+## 6. Bảng `public.cash_reconciliations` — Phiên đối soát
 
 ### Mục đích
 
@@ -211,7 +263,7 @@ Lưu một phiên đối soát cuối ngày hoặc theo ca.
 
 ---
 
-## 6. Bảng `public.cash_reconciliation_items` — Dòng đối soát
+## 7. Bảng `public.cash_reconciliation_items` — Dòng đối soát
 
 ### Mục đích
 
@@ -247,7 +299,7 @@ Lưu số hệ thống, số thực tế và chênh lệch theo từng quỹ/tà
 
 ---
 
-## 7. Luồng dữ liệu MVP
+## 8. Luồng dữ liệu MVP
 
 ### Thu từ POS/thu nợ
 
@@ -271,7 +323,7 @@ Lưu số hệ thống, số thực tế và chênh lệch theo từng quỹ/tà
 
 ---
 
-## 7A. KiotViet So Quy Import - current direction 2026-07-13
+## 8A. KiotViet So Quy Import - current direction 2026-07-13
 
 Source file checked in Downloads:
 
@@ -315,12 +367,13 @@ Implementation order:
 
 ---
 
-## 8. ERD tóm tắt
+## 9. ERD tóm tắt
 
 ```mermaid
 erDiagram
     FINANCE_ACCOUNTS ||--o{ CASHBOOK_VOUCHERS : account
     FINANCE_ACCOUNTS ||--o{ CASHBOOK_ENTRIES : ledger
+    DELIVERY_PARTNERS ||--o{ CASHBOOK_VOUCHERS : counterparty
     PAYMENT_RECEIPT_METHODS ||--o| CASHBOOK_ENTRIES : posts
     CASHBOOK_VOUCHERS ||--o| CASHBOOK_ENTRIES : posts
     CASH_RECONCILIATIONS ||--o{ CASH_RECONCILIATION_ITEMS : contains
