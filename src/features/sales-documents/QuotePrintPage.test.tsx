@@ -149,7 +149,7 @@ it('saves quote customer preference when template changes', async () => {
     />,
   )
 
-  await userEvent.click(await screen.findByRole('radio', { name: /K80 \(nhiệt\)/ }))
+  await userEvent.click(await screen.findByRole('radio', { name: /Báo giá K80/ }))
 
   expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'k80')
   expect(await screen.findByRole('status')).toHaveTextContent('Đã nhớ mẫu cho khách')
