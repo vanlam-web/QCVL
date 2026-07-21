@@ -59,6 +59,18 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
       status: 'active' as const,
       permissions: ['perm.manage_users' as const],
     })),
+    getOrganizationBillSettings: vi.fn(async () => ({
+      shop_name: 'QCVL',
+      shop_address: 'Xưởng in và thi công quảng cáo',
+      shop_phone: '',
+      default_bill_template: 'a4' as const,
+    })),
+    updateOrganizationBillSettings: vi.fn(async (input) => ({
+      shop_name: input.shop_name ?? 'QCVL',
+      shop_address: input.shop_address ?? 'Xưởng in và thi công quảng cáo',
+      shop_phone: input.shop_phone ?? '',
+      default_bill_template: input.default_bill_template ?? ('a4' as const),
+    })),
     ...overrides,
   }
 }
@@ -552,13 +564,15 @@ it('creates a temporary role from the role modal with grouped permissions', asyn
 
 it('saves shop info and default bill template from Thiết lập panels', async () => {
   window.localStorage.clear()
-  render(<FoundationAdminPage service={makeService()} onOpenDashboard={vi.fn()} />)
+  const service = makeService()
+  render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
 
   const sidebar = await screen.findByRole('navigation', { name: 'Menu thiết lập' })
   await userEvent.click(within(sidebar).getByRole('button', { name: 'Thông tin cửa hàng' }))
 
-  const shopPanel = screen.getByRole('region', { name: 'Thông tin cửa hàng' })
+  const shopPanel = await screen.findByRole('region', { name: 'Thông tin cửa hàng' })
   expect(within(sidebar).getByRole('button', { name: 'Thông tin cửa hàng' })).toHaveAttribute('aria-current', 'page')
+  await waitFor(() => expect(service.getOrganizationBillSettings).toHaveBeenCalled())
   await userEvent.clear(within(shopPanel).getByRole('textbox', { name: /Tên cửa hàng/ }))
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: /Tên cửa hàng/ }), 'In ảnh Văn Lâm')
   await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Địa chỉ' }))
@@ -566,18 +580,23 @@ it('saves shop info and default bill template from Thiết lập panels', async 
   await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }))
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }), '0909111222')
   await userEvent.click(within(shopPanel).getByRole('button', { name: 'Lưu thông tin cửa hàng' }))
-  expect(within(shopPanel).getByRole('status')).toHaveTextContent('Đã lưu cấu hình bill trên máy này.')
+  await waitFor(() =>
+    expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith({
+      shop_name: 'In ảnh Văn Lâm',
+      shop_address: '12 Nguyễn Trãi',
+      shop_phone: '0909111222',
+    }),
+  )
+  expect(await within(shopPanel).findByRole('status')).toHaveTextContent('Đã lưu cấu hình bill lên server')
   expect(within(shopPanel).getByRole('complementary', { name: 'Xem trước đầu bill' })).toHaveTextContent('In ảnh Văn Lâm')
 
   await userEvent.click(within(sidebar).getByRole('button', { name: 'Mẫu in' }))
-  const templatePanel = screen.getByRole('region', { name: 'Mẫu in' })
+  const templatePanel = await screen.findByRole('region', { name: 'Mẫu in' })
   await userEvent.click(within(templatePanel).getByRole('radio', { name: /K80 \(nhiệt\)/ }))
   await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu mẫu mặc định' }))
-
-  expect(JSON.parse(window.localStorage.getItem('qcvl.organizationBillSettings')!)).toMatchObject({
-    shop_name: 'In ảnh Văn Lâm',
-    shop_address: '12 Nguyễn Trãi',
-    shop_phone: '0909111222',
-    default_bill_template: 'k80',
-  })
+  await waitFor(() =>
+    expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith({
+      default_bill_template: 'k80',
+    }),
+  )
 })

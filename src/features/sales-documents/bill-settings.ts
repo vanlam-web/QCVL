@@ -33,7 +33,8 @@ export function normalizeOrganizationBillSettings(
   }
 }
 
-export function readOrganizationBillSettings(): OrganizationBillSettings {
+/** Local cache of last successful server settings (offline / fast first paint). */
+export function readOrganizationBillSettingsCache(): OrganizationBillSettings {
   if (typeof window === 'undefined') return { ...defaultOrganizationBillSettings }
   try {
     const raw = window.localStorage.getItem(storageKey)
@@ -44,15 +45,25 @@ export function readOrganizationBillSettings(): OrganizationBillSettings {
   }
 }
 
-export function writeOrganizationBillSettings(input: Partial<OrganizationBillSettings>): OrganizationBillSettings {
+export function writeOrganizationBillSettingsCache(input: Partial<OrganizationBillSettings>): OrganizationBillSettings {
   const next = normalizeOrganizationBillSettings({
-    ...readOrganizationBillSettings(),
+    ...readOrganizationBillSettingsCache(),
     ...input,
   })
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(storageKey, JSON.stringify(next))
   }
   return next
+}
+
+/** @deprecated Prefer server API; kept as cache alias. */
+export function readOrganizationBillSettings() {
+  return readOrganizationBillSettingsCache()
+}
+
+/** @deprecated Prefer server API; kept as cache alias. */
+export function writeOrganizationBillSettings(input: Partial<OrganizationBillSettings>) {
+  return writeOrganizationBillSettingsCache(input)
 }
 
 export function billTemplateLabel(template: BillTemplateId) {

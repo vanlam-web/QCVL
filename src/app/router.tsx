@@ -429,6 +429,7 @@ function QuotePrintRoute() {
   const [searchParams] = useSearchParams()
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -446,6 +447,7 @@ function QuotePrintRoute() {
       documentId={id}
       service={service}
       initialTemplate={initialTemplate}
+      loadBillSettings={foundationService.getOrganizationBillSettings}
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
@@ -458,6 +460,7 @@ function InvoicePrintRoute() {
   const [searchParams] = useSearchParams()
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -475,6 +478,7 @@ function InvoicePrintRoute() {
       documentId={id}
       service={service}
       initialTemplate={initialTemplate}
+      loadBillSettings={foundationService.getOrganizationBillSettings}
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
