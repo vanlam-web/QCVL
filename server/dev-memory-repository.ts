@@ -1174,6 +1174,43 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     async findSuppliersByCodes(input) {
       return new Set(input.codes.filter((code) => suppliers.has(code)))
     },
+    async createSupplier(input) {
+      const code = input.code?.trim() || nextManualSupplierCode(suppliers)
+      const duplicate = [...suppliers.values()].some((supplier) => supplier.code.toLowerCase() === code.toLowerCase())
+      if (duplicate || suppliers.has(code)) throw new Error('SUPPLIER_ALREADY_EXISTS')
+
+      const linkedCustomerId = input.linked_customer_id?.trim() || null
+      let linkedCustomer: { id: string; code: string; name: string } | null = null
+      if (linkedCustomerId) {
+        const customer = [...customers.values()].find((item) => item.id === linkedCustomerId)
+        if (!customer) throw new Error('LINKED_CUSTOMER_NOT_FOUND')
+        linkedCustomer = { id: customer.id, code: customer.code, name: customer.name }
+      }
+
+      const created: SupplierListData = {
+        id: `supplier-manual-${slug(`${code}-${input.name}`)}`,
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        email: input.email?.trim() || null,
+        address: input.address?.trim() || null,
+        tax_code: input.tax_code?.trim() || null,
+        linked_customer_id: linkedCustomerId,
+        linked_customer: linkedCustomer,
+        notes: input.notes?.trim() || null,
+        status: input.status?.trim() || 'active',
+        current_payable_amount: 0,
+        total_purchase_amount: 0,
+        created_at: new Date().toISOString(),
+        source_creator_name: null,
+        source_created_at: null,
+        company_name: null,
+      }
+      suppliers.set(created.code, created)
+      syncExactCustomerSupplierLinks(customers, suppliers)
+      await persist()
+      return created
+    },
     async upsertSuppliersByCode(input) {
       let created = 0
       let updated = 0
@@ -3052,6 +3089,16 @@ function nextManualCustomerCode(customers: Map<string, CustomerListData>) {
     maxNumber = Math.max(maxNumber, Number(match[1]))
   }
   return `KH${String(maxNumber + 1).padStart(6, '0')}`
+}
+
+function nextManualSupplierCode(suppliers: Map<string, SupplierListData>) {
+  let maxNumber = 0
+  for (const supplier of suppliers.values()) {
+    const match = /^ncc(\d+)$/i.exec(supplier.code.trim())
+    if (!match) continue
+    maxNumber = Math.max(maxNumber, Number(match[1]))
+  }
+  return `NCC${String(maxNumber + 1).padStart(6, '0')}`
 }
 
 function priceListKey(value: string) {

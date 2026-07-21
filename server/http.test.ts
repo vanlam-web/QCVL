@@ -1456,6 +1456,72 @@ describe('createHttpHandler', () => {
     })
   })
 
+  test('persists manual supplier create and lists it afterwards', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const createResponse = await handler(
+      new Request('http://api.local/api/v1/suppliers', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          name: 'NCC tạo tay',
+          phone: '0909111222',
+          email: 'ncc@example.com',
+          address: '12 Nguyễn Trãi',
+          notes: 'Sau import KV',
+        }),
+      }),
+    )
+    const created = await createResponse.json()
+
+    expect(createResponse.status).toBe(201)
+    expect(created.data).toEqual(expect.objectContaining({
+      code: expect.stringMatching(/^NCC\d{6}$/),
+      name: 'NCC tạo tay',
+      phone: '0909111222',
+      current_payable_amount: 0,
+      total_purchase_amount: 0,
+      status: 'active',
+    }))
+
+    const listResponse = await handler(
+      new Request(`http://api.local/api/v1/suppliers?q=${encodeURIComponent(created.data.code)}&page=1&page_size=15`, {
+        headers: { authorization },
+      }),
+    )
+    const listBody = await listResponse.json()
+    expect(listResponse.status).toBe(200)
+    expect(listBody.data.items).toEqual([
+      expect.objectContaining({ id: created.data.id, code: created.data.code, name: 'NCC tạo tay' }),
+    ])
+  })
+
+  test('returns 409 when creating a supplier with an existing code', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+
+    const first = await handler(
+      new Request('http://api.local/api/v1/suppliers', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'NCC-DUP-01', name: 'Lần 1' }),
+      }),
+    )
+    expect(first.status).toBe(201)
+
+    const duplicate = await handler(
+      new Request('http://api.local/api/v1/suppliers', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ code: 'ncc-dup-01', name: 'Lần 2' }),
+      }),
+    )
+    const conflictBody = await duplicate.json()
+    expect(duplicate.status).toBe(409)
+    expect(conflictBody.error.code).toBe('RESOURCE_CONFLICT')
+  })
+
   test('maps KiotViet customer creator to a QCVL account by username', async () => {
     const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
     const authorization = 'Bearer dev-token'
