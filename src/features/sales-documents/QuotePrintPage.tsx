@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { formatApiError } from '../../lib/api/error-message'
 import { displayPriceListName } from '../../lib/price-list-display'
+import { BillPrintToolbar } from './BillPrintToolbar'
+import {
+  isBillTemplateId,
+  readOrganizationBillSettings,
+  type BillTemplateId,
+  type OrganizationBillSettings,
+} from './bill-settings'
 import type { SalesDocumentService } from './sales-document-service'
 import type { SalesDocumentDetail } from './types'
 import {
@@ -14,13 +21,23 @@ export function QuotePrintPage({
   documentId,
   service,
   onClose,
+  initialTemplate,
 }: {
   documentId: string
   service: SalesDocumentService
   onClose: () => void
+  initialTemplate?: string | null
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettings())
+  const [template, setTemplate] = useState<BillTemplateId>(() =>
+    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettings().default_bill_template,
+  )
+
+  useEffect(() => {
+    setSettings(readOrganizationBillSettings())
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -74,21 +91,20 @@ export function QuotePrintPage({
   }
 
   return (
-    <main className="quote-print-shell">
-      <div className="quote-print-toolbar">
-        <button type="button" onClick={() => window.print()}>
-          In
-        </button>
-        <button type="button" onClick={onClose}>
-          Đóng
-        </button>
-      </div>
+    <main className={`quote-print-shell bill-template-${template}`}>
+      <BillPrintToolbar
+        template={template}
+        onTemplateChange={setTemplate}
+        onPrint={() => window.print()}
+        onClose={onClose}
+      />
 
       <article className="quote-print-page" aria-label={`Báo giá ${document.code}`}>
         <header className="quote-print-heading">
           <div>
-            <strong>QCVL</strong>
-            <p>Xưởng in và thi công quảng cáo</p>
+            <strong>{settings.shop_name}</strong>
+            {settings.shop_address ? <p>{settings.shop_address}</p> : null}
+            {settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
           </div>
           <div>
             <h1>BÁO GIÁ</h1>
@@ -188,4 +204,3 @@ export function QuotePrintPage({
     </main>
   )
 }
-

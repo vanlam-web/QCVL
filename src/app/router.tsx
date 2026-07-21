@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ForbiddenPage } from './ForbiddenPage'
 import { useAuth } from '../features/auth/auth-context'
 import { lazy, Suspense, useEffect, useMemo } from 'react'
@@ -426,8 +426,10 @@ function QuotePrintRoute() {
   const { currentUser, initialized, getAccessToken } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
   if (!currentUser) return <Navigate to={appRoutes.login} replace />
@@ -443,6 +445,7 @@ function QuotePrintRoute() {
     <QuotePrintPage
       documentId={id}
       service={service}
+      initialTemplate={initialTemplate}
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
@@ -452,8 +455,10 @@ function InvoicePrintRoute() {
   const { currentUser, initialized, getAccessToken } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
   if (!currentUser) return <Navigate to={appRoutes.login} replace />
@@ -469,6 +474,7 @@ function InvoicePrintRoute() {
     <InvoicePrintPage
       documentId={id}
       service={service}
+      initialTemplate={initialTemplate}
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
