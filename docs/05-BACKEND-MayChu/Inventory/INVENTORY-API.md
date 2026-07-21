@@ -17,6 +17,15 @@ V1 freeze 2026-07-14:
 - Backend/API notes for material opening and roll/sheet remain long-term design notes unless explicitly marked as V1-ready.
 - V1 acceptance: app runs, core pages open, PostgreSQL stock writers cover import PN, import/created HD, manual adjustment, and product-vs-movement mismatch remains 0.
 
+**Trạng thái docs ↔ runtime (2026-07-20):** xem [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) mục 2.
+
+- `operating_stock` Postgres = sum/recompute mọi `stock_movements` từ 0 — **chưa** có API chọn mốc mở / lọc sau mốc.
+- `/products` list được phép fallback số `kiotviet_provisional_stock` khi chưa có `operating_stock` (hiển thị tạm).
+- `POST` material opening Postgres: chỉ `inventory_shape = normal`. Đoạn API mô tả khui roll/sheet là **thiết kế dài / docs ahead**, không khẳng định đã ship.
+- `GET /inventory/rolls` và `/inventory/sheets`: handler sample/stub — không coi là object kho thật.
+- Manual product stock adjust: movement type runtime = `stocktake_balance`.
+
+
 - Ä‘á»c tá»“n kho theo sáº£n pháº©m
 - quáº£n lÃ½ cáº¥u hÃ¬nh tá»“n kho cá»§a sáº£n pháº©m
 - quáº£n lÃ½ cuá»™n váº­t lÃ½
@@ -193,6 +202,8 @@ Cáº­p nháº­t cáº¥u hÃ¬nh tá»“n kho cá»§a sáº£n pháº©m.
 
 ## 5. Roll inventory
 
+> **Runtime 2026-07-20:** `GET/POST/PATCH /inventory/rolls` là sample/stub hoặc docs-ahead — **không** coi là object kho vận hành thật. V1 freeze: roll/sheet dormant. SoT object-level: [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) mục 3 · PRD [03-ROLL-SHEET-OBJECTS.md](../../02-PRD-UX-PhongCanh/Inventory/03-ROLL-SHEET-OBJECTS.md).
+
 ### `GET /inventory/rolls`
 
 TÃ¬m cuá»™n váº­t lÃ½.
@@ -302,6 +313,8 @@ Endpoint nÃ y chá»‰ Ä‘á» xuáº¥t, khÃ´ng trá»« kho.
 ---
 
 ## 6. Sheet inventory
+
+> **Runtime 2026-07-20:** `GET/POST/PATCH /inventory/sheets` sample/stub hoặc docs-ahead — không object kho thật. Cùng V1 freeze với roll. Inventory README mục 2–3.
 
 ### `GET /inventory/sheets`
 
@@ -508,7 +521,7 @@ Quy táº¯c:
 
 #### Input cho `roll`
 
-**Trạng thái triển khai hiện tại:** payload roll đang xử lý phần cuộn cũ đã chuẩn hóa. Backend cập nhật `inventory_rolls.remaining_length_m`, đổi trạng thái `empty` nếu còn lại `0`, ghi `inventory_material_openings` và `stock_movements.material_opening` cho phần chênh lệch diện tích. Luồng tạo/khui cuộn mới phải đi từ chứng từ vận hành QCVL hoặc thao tác kho có truy vết; tồn tạm KiotViet chỉ là dữ liệu đối chiếu, không phải nguồn sinh tồn chính thức.
+**Trạng thái triển khai hiện tại:** **Docs ahead.** Postgres `createMaterialOpening` chỉ hỗ trợ `inventory_shape = normal`. Payload/mô tả roll bên dưới là hướng dài cho đến khi có object `inventory_rolls` vận hành thật. Tồn tạm KiotViet chỉ đối chiếu — xem [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) mục 2.
 
 ```json
 {
@@ -535,7 +548,7 @@ Quy táº¯c:
 
 #### Input cho `sheet`
 
-**Trạng thái triển khai hiện tại:** payload sheet đang xử lý phần tấm cũ đã chuẩn hóa. Backend cập nhật `inventory_sheets`: nếu bỏ thì chuyển `discarded`, nếu giữ thì cập nhật rộng/dài/diện tích còn lại. Backend ghi `inventory_material_openings` và `stock_movements.material_opening` cho phần chênh lệch diện tích. Luồng tạo tấm mới phải đi từ chứng từ vận hành QCVL hoặc thao tác kho có truy vết; tồn tạm KiotViet chỉ là dữ liệu đối chiếu, không phải nguồn sinh tồn chính thức.
+**Trạng thái triển khai hiện tại:** **Docs ahead.** Postgres chưa khui sheet object thật; mô tả dưới là hướng dài. Tồn tạm KiotViet chỉ đối chiếu — Inventory README mục 2.
 
 ```json
 {
@@ -681,7 +694,7 @@ API chÆ°a tráº£ `balance_after`, nÃªn `Tá»“n cuá»‘i` trong UI vá
 PostgreSQL current note 2026-07-14:
 
 - `stock_movements` is the read source for `GET /inventory/stock-movements`.
-- `GET /products` hydrates `operating_stock` from the latest movement of each product.
+- `GET /products` hydrates `operating_stock` from the latest movement of each product (Postgres recompute sums **all** movements from 0; **no** opening-checkpoint filter yet — Inventory README §2).
 - `ending_qty` is returned when a movement stores the balance after the transaction. If it is null, UI shows `Chua co`.
 - PostgreSQL now writes `stock_movements` for imported KiotViet purchase receipts (`purchase_receipt`) and invoices (`sale_invoice`). Re-import deletes old movements for the same document, inserts the new rows, then recomputes `ending_qty` for affected products.
 - PostgreSQL `saveSalesDocument` writes `sale_deduction` movements for completed POS invoices and removes invoice movements when the saved document is not a completed invoice.

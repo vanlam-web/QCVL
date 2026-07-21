@@ -1,5 +1,7 @@
 ﻿# Káº¾ HOáº CH PHÃT TRIá»‚N QC-OMS â€” FE + BE THEO Tá»ªNG GIAI ÄOáº N
 
+> Doc cleanup status (SoT vs runtime): [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md). Owner 2026-07-20: no more KiotViet import waves.
+
 > **Vai trÃ²:** Roadmap logic dÃ i háº¡n; tráº¡ng thÃ¡i sá»‘ng vÃ  queue hiá»‡n táº¡i náº±m á»Ÿ [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md).
 > **NgÃ y láº­p:** 2026-06-28
 > **Cáº­p nháº­t:** 2026-07-05 theo checklist sá»‘ng hiá»‡n táº¡i

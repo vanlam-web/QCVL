@@ -28,13 +28,15 @@ Màn Kiểm kho dài hạn giúp người dùng:
 - cân bằng kho
 - hủy phiếu tạm
 
-Trạng thái MVP hiện tại: ưu tiên xem/import lịch sử KiotViet, lọc danh sách, mở chi tiết, sửa ghi chú và hủy phiếu. `+ Kiểm kho`, `Xuất file`, `In` và `Sao chép` chưa là chức năng vận hành; nếu UI còn giữ nút placeholder thì phải để disabled hoặc không tính là đã làm.
+Trạng thái MVP hiện tại: ưu tiên xem lịch sử KiotViet **đã import**, lọc danh sách, mở chi tiết, sửa ghi chú và hủy phiếu. `+ Kiểm kho`, `Xuất file`, `In` và `Sao chép` chưa là chức năng vận hành; nếu UI còn giữ nút placeholder thì phải để disabled hoặc không tính là đã làm.
+
+**Owner 2026-07-20:** đợt import KiotViet đã xong — không mở thêm import file kiểm kho/hàng hóa KV làm việc tiếp theo. Mốc mở (nếu có) chọn từ phiếu **đã có trong hệ thống**.
 
 QC-OMS phải hỗ trợ kiểm kho theo tổng cho hàng thường và theo từng cuộn/tấm cho hàng cuộn/tấm.
 
 Kiểm kho khác với khui vật tư:
 
-- `Kiểm kho` là nghiệp vụ cân bằng số lượng thực tế so với số hệ thống; tạo `stocktakes`, `stocktake_items` và `stock_movements.stocktake_adjustment`.
+- `Kiểm kho` là nghiệp vụ cân bằng số lượng thực tế so với số hệ thống; tạo `stocktakes`, `stocktake_items` và stock movement điều chỉnh. **Runtime** sửa tồn thường dùng `movement_type = stocktake_balance` (doc cũ đôi khi viết `stocktake_adjustment`).
 - `Khui vật tư` là nghiệp vụ mở vật tư mới hoặc kết thúc phần cũ; ghi `inventory_material_openings` và `stock_movements.material_opening`, không tạo phiếu kiểm kho.
 - Cả hai đều hiện trong `Thẻ kho`, nhưng danh sách `Phiếu kiểm kho` chỉ chứa phiếu kiểm/cân bằng kho.
 
@@ -100,7 +102,7 @@ Kiểm kho khác với khui vật tư:
 - Bảng chính hiển thị mã hàng/tên hàng đầu tiên và 3 số lượng dễ hiểu: `Tồn trước`, `Kiểm được`, `Lệch`. Không hiện `Người tạo`, `SL lệch tăng`, `SL lệch giảm`, `Ghi chú`, `Tổng thực tế`, `Tổng chênh lệch` ở bảng chính để tránh rộng bảng và tránh nhầm giữa tiền/số lượng; các dữ liệu này vẫn giữ trong API/audit hoặc ô chi tiết khi cần.
 - Click nguyên dòng phiếu phải mở chi tiết kiểm kho inline. Với dòng import từ KV, chi tiết gắn nhãn `Nguồn KiotViet`.
 - Import lịch sử KV mặc định chỉ ghi dữ liệu đối soát; không tạo `stock_movements` và không thay đổi tồn vận hành.
-- Riêng một phiếu kiểm kho KV ban đầu có thể được chọn sau này làm mốc mở tồn QCVL. Việc này phải là thao tác rõ ràng: chọn mã phiếu/ngày chốt, ghi lại checkpoint, và chỉ tính chứng từ sau mốc vào tồn hiện tại.
+- Riêng một phiếu kiểm kho KV ban đầu có thể được chọn sau này làm mốc mở tồn QCVL. Việc này phải là thao tác rõ ràng: chọn mã phiếu/ngày chốt, ghi lại checkpoint, và chỉ tính chứng từ sau mốc vào tồn hiện tại. **Runtime 2026-07-20: chưa có UI/API chọn mốc** — [Inventory README](../../03-BUSINESS-NghiepVu/Inventory/README.md) mục 2.
 - File import KV dùng cho nút `Import KV` là `DanhSachChiTietKiemKho_KV...xlsx`. Preview phải kiểm tra công thức `SL lệch = Kiểm thực tế - Tồn kho`; nếu có dòng lỗi thì không cho import trừ khi API được gọi với chế độ partial rõ ràng.
 - KiotViet có ít nhất 2 format xuất chi tiết kiểm kho:
   - Bản 18 cột không có `Người tạo`: `Mã kiểm kho`, `Thời gian`, `Ngày cân bằng`, `SL thực tế`, `Tổng thực tế`, `Tổng chênh lệch`, `SL lệch tăng`, `SL lệch giảm`, `Ghi chú`, `Trạng thái`, `Mã hàng`, `Tên hàng`, `Thương hiệu`, `Đơn vị tính`, `Tồn kho`, `Kiểm thực tế`, `SL lệch`, `Giá trị lệch`.
@@ -108,7 +110,7 @@ Kiểm kho khác với khui vật tư:
   - `Người tạo` là dữ liệu nguồn từ KiotViet để map về tài khoản QCVL bằng `Tên đăng nhập` (`users.username`) sau khi bỏ hậu tố `{DEL}`. Không map theo tên hiển thị, SĐT hoặc email. UI/filter chỉ dùng một nguồn chuẩn là tài khoản QCVL (`created_by`); raw `Người tạo` KV chỉ lưu để audit/mapping, không hiển thị thành nguồn người thứ hai. Sau khi đã map, UI luôn hiển thị thông tin hiện tại của tài khoản QCVL, nên đổi tên hiển thị/SĐT trong tài khoản sẽ phản ánh lại ở danh sách.
 - UI chỉ dùng `Thời gian` làm ngày tạo/hiển thị chính. Không hiển thị `Ngày cân bằng` hoặc `Người cân bằng` ở danh sách, bộ lọc, ô chi tiết. Nếu backend còn giữ `source_balanced_at` thì chỉ là dữ liệu nguồn phục vụ audit/import nội bộ.
 - Import lại nhiều lần upsert theo `(organization_id, source_system, source_code)` và dòng nguồn; không nhân đôi phiếu kiểm kho.
-- Số `Kiểm thực tế` từ lịch sử KV không được tự động dùng làm tồn hiện tại. `Tồn kho` từ export hàng hóa KiotViet vẫn nằm ở `inventory_provisional_balances` chỉ để đối chiếu. Tồn QCVL phải tính từ mốc mở đã chọn + `stock_movements` sau mốc. Nếu chưa chọn mốc mở, không lấy dữ liệu KV để lấp vào tồn chính thức.
+- Số `Kiểm thực tế` từ lịch sử KV không được tự động dùng làm tồn hiện tại. `Tồn kho` từ export hàng hóa KiotViet vẫn nằm ở `inventory_provisional_balances` chỉ để đối chiếu. **SoT:** Tồn QCVL = mốc mở đã chọn + `stock_movements` sau mốc. **Hiển thị V1:** cột list được phép fallback số KV khi chưa có `operating_stock` (không đồng nghĩa đã chốt mốc) — Inventory README mục 1.
 
 Trạng thái ô chi tiết phiếu kiểm kho:
 

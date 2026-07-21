@@ -11,6 +11,7 @@ Quy trÃ¬nh phá»‘i há»£p:
 - [WORKFLOW-AUTO-SPEC-IMPLEMENT.md](./WORKFLOW-AUTO-SPEC-IMPLEMENT.md)
 - [PROJECT-COORDINATION.md](./PROJECT-COORDINATION.md)
 - [REVIEW-ISSUES.md](./REVIEW-ISSUES.md)
+- [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) — checklist chỉnh lý docs tạm (2026-07-20)
 
 ---
 
@@ -96,6 +97,15 @@ Current status 2026-07-17:
 - Link record noi bo 2026-07-17 dung `?open=` de mo detail that, khong dung `?search=` neu muc tieu la mo ban ghi. Detail title cua ban ghi dang mo khong duoc la self-link; vi du ten khach hang/NCC hien tai chi hien text thuong, con link cheo den khach/NCC/hoa don/phieu nhap/so quy khac moi giu `ManagementRecordLink`.
 - Đã deploy batch này lên NAS `3200` với `QCVL_NAS_RESTART=false`; `verify:local`, `build:nas`, `verify:nas-bundle`, `db:migrate`, `health:nas` pass. Health trace `14a943e1-b214-4573-83c1-c3c6e859c208`, persistence `postgres`. Chưa chạy `smoke:nas` vì thiếu `QCVL_SMOKE_PASSWORD`.
 
+
+Current status 2026-07-20 (Inventory stock docs):
+
+- SoT tồn kho tách 3 lớp trong `docs/03-BUSINESS-NghiepVu/Inventory/README.md`: (1) quyết định Owner / công thức mốc mở, (2) runtime Postgres cộng movement từ 0 + fallback KV list, chưa chọn mốc mở, roll/sheet stub, (3) hướng dài object/cuộn-tấm. Chỉ chỉnh docs; chưa làm runtime mốc mở.
+- Owner 2026-07-20: **đã import hết dữ liệu KiotViet cần dùng** — không mở thêm đợt import file KV. Việc tiếp theo = vận hành/đối soát trên dữ liệu đã có (mốc mở nếu chọn, tồn QCVL, POS). Nút import chỉ còn công cụ kỹ thuật phòng hờ.
+- Tiến độ chỉnh lý docs (BOM/Inventory/tiếp theo): [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md).
+- Rà POS trừ kho 2026-07-21: Postgres live trừ cả mã combo (bug); biên bản `docs/03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md`. Chưa sửa code.
+
+
 ---
 
 ## ÄÃ£ Merge VÃ o `main`
@@ -133,6 +143,7 @@ Chá»‰ má»Ÿ khi Owner chá»n vÃ  Spec xÃ¡c nháº­n Source of Trut
 | Viá»‡c | Má»©c sáºµn sÃ ng | Ghi chÃº |
 |---|---|---|
 | Purchase P4 â€” nháº­p cuá»™n/táº¥m váº­t lÃ½ | Trung bÃ¬nh | Cáº§n khá»›p vá»›i model kho cuá»™n/táº¥m hiá»‡n táº¡i trÆ°á»›c khi implement |
+| Inventory stock SoT alignment (mốc mở / công thức QCVL) | Docs SoT xong; runtime chờ Owner | Xem Inventory README. **Không** import KV thêm (Owner 2026-07-20). Code sau nếu làm: chọn mốc mở trên KK đã có, lọc movement sau mốc |
 | Product/Inventory/POS completion | Đang mở | V1 đang chạy được với dữ liệu import + fallback tồn KV tạm; chi tiet hang/dong hang va So quy detail da on tren `3202`; `/pos/cart/validate` da implement; phan con lai la detail cac module chua ra, POS roll/sheet object-level deduction, va doi chieu KV/QCVL theo bo loc |
 | V1 functional gaps | Đang mở | Làm trên local `3202` trước, xong từng bước mới đẩy `3200`: 1) tiep tuc ra soat UI detail con lai khi cham module; 2) cac nut them/sua/xoa con thieu; 3) filter con thieu hoac chua dung shared controls; 4) bao cao doi chieu du lieu theo tung module truoc khi coi V1 on dinh |
 | PriceBook product groups/filter | Trung bÃ¬nh | Cáº§n schema/UI filter nhÃ³m hÃ ng náº¿u Owner cáº§n |
