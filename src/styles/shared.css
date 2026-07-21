@@ -603,6 +603,36 @@
   overflow: visible;
 }
 
+.management-filter-sidebar :where(label, .management-filter-field),
+.management-filter-sidebar-form :where(label, .management-filter-field) {
+  display: grid;
+  gap: var(--management-filter-label-gap, var(--space-1));
+  color: var(--management-filter-label-color, var(--color-text-muted));
+  font-size: var(--management-filter-label-font-size, 0.875rem);
+  font-weight: var(--management-filter-label-font-weight, 700);
+}
+
+.management-filter-sidebar
+  :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.management-filter-sidebar-form
+  :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  width: 100%;
+  min-height: var(--management-filter-control-min-height, 2.25rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--management-filter-control-background, var(--color-surface));
+  color: var(--management-filter-control-color, var(--color-text));
+  padding: var(--management-filter-control-padding, 0 var(--space-2));
+  font-weight: var(--management-filter-control-font-weight, 400);
+  -webkit-text-fill-color: currentColor;
+}
+
+.management-filter-sidebar :where(input::placeholder, textarea::placeholder),
+.management-filter-sidebar-form :where(input::placeholder, textarea::placeholder) {
+  color: var(--color-text-muted);
+  opacity: 0.78;
+}
+
 .management-filter-rail {
   position: relative;
   align-self: stretch;
