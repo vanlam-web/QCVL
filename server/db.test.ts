@@ -158,6 +158,86 @@ describe('createPgRepository product units', () => {
     expect(pgMock.query.mock.calls.map(([sql]) => String(sql)).some((sql) => sql.includes('insert into customer_snapshots'))).toBe(true)
   })
 
+  test('creates manual products into products table with inventory settings', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      if (sql.includes('from products') && sql.includes('lower(code)')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from product_groups') && sql.includes('order by is_default desc')) {
+        return {
+          rows: [{ id: 'pg-default', code: 'GENERAL', name: 'Giá chung', is_default: true, is_active: true }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('insert into products')) {
+        expect(values?.[2]).toBe('SP-NEW-01')
+        expect(values?.[8]).toBe('goods')
+        expect(values?.[10]).toBe(true)
+        return { rows: [], rowCount: 1 }
+      }
+      if (sql.includes('insert into inventory_units')) return { rows: [{ id: 'unit-cai' }], rowCount: 1 }
+      if (sql.includes('from products') && sql.includes('created_at')) {
+        return {
+          rows: [{
+            created_at: '2026-07-21T00:00:00.000Z',
+            updated_at: '2026-07-21T00:00:00.000Z',
+            latest_purchase_cost_at: '2026-07-21T00:00:00.000Z',
+          }],
+          rowCount: 1,
+        }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const created = await repository.createProduct?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      code: 'SP-NEW-01',
+      name: 'Hàng tạo tay',
+      status: 'active',
+      unit_name: 'Cái',
+      sell_method: 'quantity',
+      product_kind: 'goods',
+      inventory_shape: 'normal',
+      track_inventory: true,
+      latest_purchase_cost: 12000,
+    })
+
+    expect(created).toEqual(expect.objectContaining({
+      code: 'SP-NEW-01',
+      name: 'Hàng tạo tay',
+      product_kind: 'goods',
+      track_inventory: true,
+      product_group: expect.objectContaining({ name: 'Giá chung' }),
+      latest_purchase_cost: 12000,
+    }))
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('insert into products'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('insert into product_inventory_settings'))).toBe(true)
+  })
+
+  test('rejects duplicate product codes when creating manual products', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from products') && sql.includes('lower(code)')) {
+        return { rows: [{ id: 'existing-product' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await expect(repository.createProduct?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      code: 'A10T',
+      name: 'Trùng mã',
+      status: 'active',
+      unit_name: 'Cái',
+      sell_method: 'quantity',
+      product_kind: 'goods',
+      inventory_shape: 'normal',
+      track_inventory: true,
+    })).rejects.toThrow('PRODUCT_ALREADY_EXISTS')
+  })
+
   test('moves same-sale cashbook timestamps when sales document time changes', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {

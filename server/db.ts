@@ -451,6 +451,141 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       return result.rows[0] ?? null
     },
 
+    async createProduct(input) {
+      await ensureProductCatalogSchema(pool)
+      await ensureProductUnitTables(pool)
+
+      const code = input.code.trim()
+      const name = input.name.trim()
+      const unitName = input.unit_name.trim() || 'Can cap nhat'
+      const existing = await pool.query(
+        `
+          select id
+          from products
+          where organization_id = $1
+            and lower(code) = lower($2)
+          limit 1
+        `,
+        [input.organizationId, code],
+      )
+      if (existing.rows[0]) throw new Error('PRODUCT_ALREADY_EXISTS')
+
+      let productGroup: ProductGroupListData | null = null
+      if (input.product_group_id) {
+        const groupResult = await pool.query<ProductGroupListData>(
+          `
+            select id::text, code, name, is_default, is_active
+            from product_groups
+            where organization_id = $1
+              and id = $2
+              and is_active = true
+            limit 1
+          `,
+          [input.organizationId, input.product_group_id],
+        )
+        productGroup = groupResult.rows[0] ?? null
+        if (!productGroup) {
+          throw new Error('PRODUCT_GROUP_NOT_FOUND')
+        }
+      } else {
+        productGroup = await ensureDefaultProductGroup(pool, input.organizationId)
+      }
+
+      const productId = randomUUID()
+      const latestPurchaseCost = input.latest_purchase_cost ?? null
+      try {
+        await pool.query(
+          `
+            insert into products (
+              id, organization_id, code, name, status, product_group_id, unit_name,
+              sell_method, product_kind, inventory_shape, track_inventory,
+              latest_purchase_cost, latest_purchase_cost_at, created_at, updated_at
+            )
+            values (
+              $1, $2, $3, $4, $5, $6, $7,
+              $8, $9, $10, $11,
+              $12, case when $12::numeric is null then null else now() end, now(), now()
+            )
+          `,
+          [
+            productId,
+            input.organizationId,
+            code,
+            name,
+            input.status,
+            productGroup?.id ?? null,
+            unitName,
+            input.sell_method,
+            input.product_kind,
+            input.inventory_shape,
+            input.track_inventory,
+            latestPurchaseCost,
+          ],
+        )
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new Error('PRODUCT_ALREADY_EXISTS')
+        throw error
+      }
+
+      const stockUnitId = await upsertInventoryUnit(pool, input.organizationId, unitName)
+      await upsertProductInventorySettings(
+        pool,
+        input.organizationId,
+        productId,
+        {
+          track_inventory: input.track_inventory,
+          inventory_shape: input.inventory_shape,
+        } as ProductImportDbRow,
+        stockUnitId,
+      )
+      const unitConversions = (input.unit_conversions ?? [])
+        .filter((conversion) => conversion.unit_name.trim() && conversion.stock_qty_per_unit > 0)
+        .map((conversion) => ({
+          source_code: conversion.source_code ?? null,
+          unit_name: conversion.unit_name.trim(),
+          stock_qty_per_unit: conversion.stock_qty_per_unit,
+          is_default_purchase_unit: Boolean(conversion.is_default_purchase_unit),
+          is_default_sale_unit: Boolean(conversion.is_default_sale_unit),
+        }))
+      if (unitConversions.length > 0) {
+        await upsertProductUnitConversions(pool, input.organizationId, productId, stockUnitId, unitConversions)
+      }
+
+      const createdAtResult = await pool.query(
+        `
+          select created_at, updated_at, latest_purchase_cost_at
+          from products
+          where id = $1
+          limit 1
+        `,
+        [productId],
+      )
+      const timestamps = createdAtResult.rows[0]
+      return {
+        id: productId,
+        code,
+        name,
+        status: input.status,
+        product_kind: input.product_kind,
+        unit_name: unitName,
+        sell_method: input.sell_method,
+        latest_purchase_cost: latestPurchaseCost,
+        latest_purchase_cost_at: timestamps?.latest_purchase_cost_at
+          ? new Date(String(timestamps.latest_purchase_cost_at)).toISOString()
+          : null,
+        default_sale_price: null,
+        product_group_id: productGroup?.id ?? null,
+        product_group: productGroup
+          ? { id: productGroup.id, code: productGroup.code, name: productGroup.name }
+          : null,
+        inventory_shape: input.inventory_shape,
+        track_inventory: input.track_inventory,
+        unit_conversions: unitConversions,
+        created_at: timestamps?.created_at ? new Date(String(timestamps.created_at)).toISOString() : new Date().toISOString(),
+        updated_at: timestamps?.updated_at ? new Date(String(timestamps.updated_at)).toISOString() : new Date().toISOString(),
+      }
+    },
+
     async listProducts(input) {
       await ensureStockMovementsTable(pool)
       const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
@@ -7422,6 +7557,56 @@ function nullableDbString(value: unknown) {
 
 function isUniqueViolation(error: unknown) {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === '23505'
+}
+
+async function ensureDefaultProductGroup(pool: pg.Pool, organizationId: string): Promise<ProductGroupListData> {
+  const existing = await pool.query<ProductGroupListData>(
+    `
+      select id::text, code, name, is_default, is_active
+      from product_groups
+      where organization_id = $1
+        and is_active = true
+      order by is_default desc, name asc
+      limit 1
+    `,
+    [organizationId],
+  )
+  if (existing.rows[0]) return existing.rows[0]
+
+  const id = randomUUID()
+  const name = 'Giá chung'
+  const code = 'GENERAL'
+  await pool.query(
+    `
+      insert into product_groups (id, organization_id, code, name, is_default, is_active, created_at, updated_at)
+      values ($1, $2, $3, $4, true, true, now(), now())
+      on conflict (organization_id, code)
+      do update set
+        name = excluded.name,
+        is_default = true,
+        is_active = true,
+        updated_at = now()
+      returning id::text, code, name, is_default, is_active
+    `,
+    [id, organizationId, code, name],
+  )
+  const created = await pool.query<ProductGroupListData>(
+    `
+      select id::text, code, name, is_default, is_active
+      from product_groups
+      where organization_id = $1
+        and code = $2
+      limit 1
+    `,
+    [organizationId, code],
+  )
+  return created.rows[0] ?? {
+    id,
+    code,
+    name,
+    is_default: true,
+    is_active: true,
+  }
 }
 
 function filterValues(url: URL, key: string) {

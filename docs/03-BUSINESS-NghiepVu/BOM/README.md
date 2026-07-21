@@ -59,8 +59,8 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 | `GET/POST/PUT /products/{id}/bom` | Repo Postgres + dev-memory; route POST|PUT | Có (MVP lưu active) |
 | `POST /boms/{id}/activate` | Không có route | Chưa cần cho KV |
 | Purchase / sửa tồn loại combo | UI đã loại combo | Có |
+| `POST /products` tạo combo tay | Persist + ép `track_inventory=false` (KV) | Có |
 | Deep-scan nhiều cấp / snapshot BOM trên chứng từ / POS “Lưu Combo mới” đầy đủ | Chưa | Xem mục 3 |
-| `POST /products` tạo combo tay | Vẫn stub HTTP | Một phần — BOM save thật sau khi có product id thật |
 
 ### Tiến trình tài liệu / code
 
@@ -84,7 +84,7 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 | `preview` / `validate` BOM API | Có trong BOM-API | Chưa |
 | Tự hiệu chỉnh định mức từ kiểm kho / khui / lịch sử | Phase sau | Chưa |
 | Sản xuất sẵn / work order tăng tồn combo | **Không làm** theo 2026-07-20 | Loại khỏi scope hiện tại |
-| `POST /products` create combo tay không stub | Cần product create thật | Chưa — ngoài slice KV import |
+| `POST /products` create combo tay | Persist Postgres + BOM `active` | **Có** |
 
 ---
 

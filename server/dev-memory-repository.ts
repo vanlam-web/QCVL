@@ -450,6 +450,73 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         is_active: true,
       }
     },
+    async createProduct(input) {
+      const code = input.code.trim()
+      const name = input.name.trim()
+      const unitName = input.unit_name.trim() || 'Can cap nhat'
+      const duplicate = [...products.values()].some((product) => product.code.toLowerCase() === code.toLowerCase())
+      if (duplicate || products.has(code)) throw new Error('PRODUCT_ALREADY_EXISTS')
+
+      let productGroupId = input.product_group_id ?? null
+      let productGroup: ProductGroupListData | null = null
+      if (productGroupId) {
+        const groupName = groupNamesById.get(productGroupId)
+        if (!groupName) throw new Error('PRODUCT_GROUP_NOT_FOUND')
+        productGroup = {
+          id: productGroupId,
+          code: slug(groupName).toUpperCase(),
+          name: groupName,
+          is_default: groupName === 'Gia chung' || groupName === 'Giá chung',
+          is_active: true,
+        }
+      } else {
+        let defaultEntry = [...groupNamesById.entries()].find(([, groupName]) => groupName === 'Giá chung' || groupName === 'Gia chung')
+        if (!defaultEntry) {
+          const defaultId = `pg-${slug('Giá chung')}`
+          groupIds.set('Giá chung', defaultId)
+          groupNamesById.set(defaultId, 'Giá chung')
+          defaultEntry = [defaultId, 'Giá chung']
+        }
+        productGroupId = defaultEntry[0]
+        productGroup = {
+          id: defaultEntry[0],
+          code: slug(defaultEntry[1]).toUpperCase(),
+          name: defaultEntry[1],
+          is_default: true,
+          is_active: true,
+        }
+      }
+
+      const now = new Date().toISOString()
+      const created: ProductListData = {
+        id: `product-manual-${slug(code)}`,
+        code,
+        name,
+        status: input.status,
+        product_kind: input.product_kind,
+        unit_name: unitName,
+        sell_method: input.sell_method,
+        latest_purchase_cost: input.latest_purchase_cost ?? null,
+        latest_purchase_cost_at: input.latest_purchase_cost == null ? null : now,
+        default_sale_price: null,
+        product_group_id: productGroupId,
+        product_group: productGroup ? { id: productGroup.id, code: productGroup.code, name: productGroup.name } : null,
+        inventory_shape: input.inventory_shape,
+        track_inventory: input.track_inventory,
+        unit_conversions: (input.unit_conversions ?? []).map((conversion) => ({
+          source_code: conversion.source_code ?? null,
+          unit_name: conversion.unit_name,
+          stock_qty_per_unit: conversion.stock_qty_per_unit,
+          is_default_purchase_unit: Boolean(conversion.is_default_purchase_unit),
+          is_default_sale_unit: Boolean(conversion.is_default_sale_unit),
+        })),
+        created_at: now,
+        updated_at: now,
+      }
+      products.set(created.code, created)
+      await persist()
+      return created
+    },
     async listProducts(input) {
       const search = normalize(input.url.searchParams.get('search') ?? '')
       const status = input.url.searchParams.get('status')

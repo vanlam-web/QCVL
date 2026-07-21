@@ -14,7 +14,7 @@
 | Import KV / migrate → BOM | `active` + note *Trusted…*; migrate `0008` cho draft cũ | Có |
 | `draft_bom` trên product list | Field tương thích; ưu tiên BOM `active` | Có |
 | `GET/POST/PUT /products/{id}/bom` | Repo Postgres + dev-memory | Có (MVP) |
-| `POST /products` tạo combo tay | **Vẫn stub HTTP** | Một phần — Deferred |
+| `POST /products` tạo combo tay | Persist Postgres + dev-memory; ép `track_inventory=false` theo KV | Có |
 | `POST /boms/{id}/activate` | Không có route | Chưa cần KV |
 | `preview` / `validate` / deep-scan | Không có | P4 đóng băng |
 | Trừ kho Postgres POS | Skip parent combo/service / `!track_inventory`; trừ thành phần BOM | Có |
@@ -35,7 +35,7 @@
 
 **Owner 2026-07-20:** Import KV → `active` ngay. `draft_bom` = tên tương thích = BOM đang dùng.
 
-Tạo combo tay (**Deferred**): mục tiêu `POST /products` (`sell_method=combo`, `track_inventory=false`) rồi `POST .../bom` → `active`. Hiện `POST /products` còn stub — BOM save thật chỉ khi đã có `product_id` thật.
+Tạo combo tay: `POST /products` (`sell_method=combo`, `track_inventory=false`) rồi `POST .../bom` → `active`. Runtime đã persist product + BOM.
 
 Payload dòng: `component_product_id`, `quantity`, `notes` (+ metadata đọc). Không `component_type`/role trên dòng.
 
