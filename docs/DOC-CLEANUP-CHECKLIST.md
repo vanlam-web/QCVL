@@ -4,6 +4,8 @@
 > **Không** thay PHASE-CHECKLIST (queue sản phẩm) và **không** thay IMPLEMENTATION-CHECKLIST (baseline code).  
 > **Updated:** 2026-07-21  
 > **Phạm vi lần này:** chỉ tài liệu. Runtime chỉ ghi ở cột “hiện trạng”, không làm code trừ khi Owner bảo.
+>
+> **Owner 2026-07-21 — đóng băng V1 tạm:** bản hiện tại **dùng được tạm**. Slice BOM/POS KV đã lên `main`. Các mục P4 / hướng dài = **nâng cấp làm sau**, không mở code trong đợt này.
 
 ---
 
@@ -65,13 +67,15 @@
 - [x] Đồng bộ Sales README / POS-CHECKOUT / audit / checklist sau #7 · nhánh sync → main
 - [x] **Không** re-import Excel — chỉ migrate BOM đã có
 
-## Còn mở / P4
+## P4 — Hướng dài (đóng băng — nâng cấp sau)
 
-### P4 — Code / hướng dài (chưa thuộc đợt docs đã chốt)
+> Owner 2026-07-21: **không làm ngay.** Giữ trong checklist để không mất hướng.
 
 - [ ] Runtime mốc mở tồn QCVL
 - [ ] Persist Purchase P2/P3/P5 (bỏ stub create/post/pay)
 - [ ] Deep-scan BOM / POS Lưu Combo / object cuộn-tấm đầy đủ
+
+**Không** xếp các mục trên vào queue code hiện tại cho đến khi Owner mở lại.
 
 ---
 
