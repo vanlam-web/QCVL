@@ -30,14 +30,10 @@ export function QuotePrintPage({
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettings())
+  const [settings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettings())
   const [template, setTemplate] = useState<BillTemplateId>(() =>
     isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettings().default_bill_template,
   )
-
-  useEffect(() => {
-    setSettings(readOrganizationBillSettings())
-  }, [])
 
   useEffect(() => {
     let active = true
