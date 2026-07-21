@@ -27,7 +27,7 @@
 | `POST` | `/v1/purchase/receipts/{id}/cancel` | Hủy phiếu |
 | `POST` | `/v1/suppliers/{id}/payments` | Trả tiền NCC |
 
-Không cần implement tất cả endpoint trong một slice. P1/P2/P3/P5 đã merge; P4 cuộn/tấm là candidate riêng theo [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md#9-lát-cắt-purchase).
+Không cần implement tất cả endpoint trong một slice. P1 nền có; **P2/P3/P5 live create/post/pay vẫn HTTP stub** dù SoT/UI từng ghi “đã merge” — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md). P4 cuộn/tấm là candidate riêng theo [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md#9-lát-cắt-purchase).
 
 Search contract:
 

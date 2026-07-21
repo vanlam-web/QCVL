@@ -21,12 +21,14 @@
 - Owner 2026-07-20: **đã import hết KV** — không xếp “import file mới” vào backlog docs/queue.
 - “Đã merge” trong slice cũ có thể chỉ là UI/import — luôn đối chiếu README 3 lớp.
 
-### PR đang mở (docs)
+### PR / nhánh (docs + runtime đã chốt)
 
-| PR | Chủ đề |
-|---|---|
-| [#4](https://github.com/vanlam-web/QCVL/pull/4) | BOM / combo KiotViet — SoT 3 lớp |
-| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Inventory + Sales path + Purchase/Finance 3 lớp + checklist |
+| PR | Chủ đề | Ghi chú |
+|---|---|---|
+| [#7](https://github.com/vanlam-web/QCVL/pull/7) | Runtime BOM KV + POS skip parent + `/bom` | **Đã gộp vào nhánh sync → main** |
+| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Inventory + Sales path + Purchase/Finance 3 lớp + checklist | Đã gộp; đồng bộ post-#7 trong sync |
+| [#4](https://github.com/vanlam-web/QCVL/pull/4) | BOM SoT 3 lớp (docs-only) | Superseded bởi #7 BOM README + sync |
+| [#6](https://github.com/vanlam-web/QCVL/pull/6) | POS skip parent hẹp | Superseded bởi #7 |
 
 ---
 
@@ -57,18 +59,19 @@
 
 ---
 
+## Đã xong thêm (runtime + sync docs 2026-07-21)
+
+- [x] Runtime BOM slice KV: migrate `0008` → `active`, POS skip parent, UI, `GET/POST/PUT /bom` · [#7](https://github.com/vanlam-web/QCVL/pull/7)
+- [x] Đồng bộ Sales README / POS-CHECKOUT / audit / checklist sau #7 · nhánh sync → main
+- [x] **Không** re-import Excel — chỉ migrate BOM đã có
+
 ## Còn mở / P4
 
-### P4 — Ngoài phạm vi đợt docs (chờ Owner bảo làm code)
+### P4 — Code / hướng dài (chưa thuộc đợt docs đã chốt)
 
-- [ ] Runtime BOM slice (import `active`, POS không trừ mã combo, UI, stub `/bom`) — **rà POS xong:** [Sales/POS-STOCK-AUDIT-2026-07-21.md](./03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md)
 - [ ] Runtime mốc mở tồn QCVL
 - [ ] Persist Purchase P2/P3/P5 (bỏ stub create/post/pay)
 - [ ] Deep-scan BOM / POS Lưu Combo / object cuộn-tấm đầy đủ
-
-### Đã rà (docs + code, chưa sửa runtime)
-
-- [x] **POS trừ kho Postgres** — 2026-07-21: xác nhận bug parent combo; thiếu test Postgres combo; dev-memory OK · [POS-STOCK-AUDIT-2026-07-21.md](./03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md)
 
 ---
 
@@ -78,11 +81,10 @@
 |---|---|---|---|
 | 2026-07-20 | PRD tồn: fallback KV vs “không lấp QCVL” | Inventory README | [x] PR #5 |
 | 2026-07-20 | Roll-sheet PRD “API thật” | stub/docs-ahead | [x] PR #5 |
-| 2026-07-20 | Postgres POS live trừ mã combo | Sales README path | [x] PR #5 |
-| 2026-07-20 | Doc “BOM nháp / draft chờ duyệt” | SoT+runtime vệ tinh | [x] PR #5 |
+| 2026-07-20 | Postgres POS live trừ mã combo | Sales README path | [x] PR #5 → code #7 |
+| 2026-07-20 | Doc “BOM nháp / draft chờ duyệt” | SoT+runtime vệ tinh | [x] PR #5 → runtime #7 |
 | 2026-07-21 | Purchase P2/P3/P5 “đã merge” vs HTTP stub | Purchase README | [x] PR #5 |
-| 2026-07-21 | POS Postgres trừ mã combo + thiếu test combo | Biên bản POS-STOCK-AUDIT | [x] rà xong; chờ code |
-| | | | [ ] |
+| 2026-07-21 | POS Postgres trừ mã combo + thiếu test combo | Biên bản → đã sửa code | [x] #7 + sync docs |
 
 ---
 
@@ -90,7 +92,7 @@
 
 | Module | Bảng trạng thái 3 lớp |
 |---|---|
-| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) *(đầy đủ hơn trên PR #4)* |
+| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) |
 | Inventory / tồn | [03-BUSINESS-NghiepVu/Inventory/README.md](./03-BUSINESS-NghiepVu/Inventory/README.md) |
 | Sales / trừ kho + lifecycle | [03-BUSINESS-NghiepVu/Sales/README.md](./03-BUSINESS-NghiepVu/Sales/README.md) |
 | Purchase | [03-BUSINESS-NghiepVu/Purchase/README.md](./03-BUSINESS-NghiepVu/Purchase/README.md) |

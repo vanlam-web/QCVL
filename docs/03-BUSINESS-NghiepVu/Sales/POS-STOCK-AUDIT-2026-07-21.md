@@ -1,8 +1,8 @@
 # POS Stock Audit — 2026-07-21
 
-> **Loại:** Biên bản rà code + doc (chưa sửa runtime).  
-> **Phạm vi:** Trừ kho khi checkout POS / lưu hóa đơn.  
-> **SoT:** [README.md](./README.md) mục Trừ kho khi bán · [BOM-RULES](../BOM/BOM-RULES.md) · [DOC-CLEANUP-CHECKLIST](../../DOC-CLEANUP-CHECKLIST.md).
+> **Loại:** Biên bản rà code (lịch sử).  
+> **Trạng thái 2026-07-21:** **Đã sửa runtime** — Postgres POS skip parent combo/service; BOM KV `active` + migrate `0008`; xem [Sales README](./README.md) · [BOM README](../BOM/README.md).  
+> Các mục dưới giữ nguyên nội dung lúc rà để đối chiếu; không còn là “chờ code”.
 
 ---
 
@@ -102,23 +102,19 @@ Tham khảo chính thức KV + thẻ kho xưởng:
 | 2 | Cùng lúc BOM `active`? | KV dùng thành phần **ngay khi bán**, không nháp duyệt. **Slice POS:** sửa skip parent trước; **vẫn trừ BOM `draft`\|`active`** cho đến khi migrate import → `active` (PR BOM riêng). Không chuyển “chỉ active” trước migrate — sẽ mất trừ thành phần. |
 | 3 | Movement cũ đã trừ nhầm mã combo? | KV **không bao giờ** sinh tồn-out cho mã combo. QCVL lệch lịch sử: **mặc định để nguyên** (ghi nhận lệch); chỉ dọn/đảo nếu Owner yêu cầu riêng sau khi rule POS đúng. |
 
-### Slice code đề xuất (KV-aligned, hẹp)
+### Slice đã làm (2026-07-21)
 
-1. Postgres (+ đồng bộ rule với dev-memory): load product trước khi trừ parent; skip parent theo gate mục 1.  
-2. Vẫn trừ thành phần từ BOM `draft`\|`active` (như hiện tại / như import HD).  
-3. Test Postgres: bán combo → không movement mã combo; có movement thành phần.  
-4. **Không** gộp migrate BOM `active` + UI nháp vào slice này trừ khi Owner bảo cùng PR.
+1. Postgres skip parent theo gate mục 1 (+ test combo).  
+2. Vẫn trừ thành phần từ BOM `draft`\|`active`.  
+3. Cùng PR runtime: migrate BOM KV → `active`, UI, `GET/POST/PUT /bom` — [BOM README](../BOM/README.md).
 
 ---
 
-## 6. Checklist nghiệm thu sau khi sửa code
+## 6. Checklist nghiệm thu
 
-- [ ] Bán 1 combo KV trên Postgres: `stock_movements` không có dòng mã combo  
-- [ ] Có đủ dòng thành phần × định mức × SL  
-- [ ] Hàng thường vẫn trừ parent  
-- [ ] Báo giá không sinh `sale_deduction`  
-- [ ] Dev-memory + Postgres cùng rule parent  
-- [ ] Test mới trong `db.test.ts` xanh  
+- [x] Test Postgres combo trong `db.test.ts`  
+- [x] Dev-memory + Postgres cùng rule skip parent  
+- [ ] Smoke NAS: bán 1 combo KV — thẻ kho không có mã combo (sau deploy + `db:migrate`)
 
 ---
 

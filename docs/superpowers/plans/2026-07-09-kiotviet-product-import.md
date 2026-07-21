@@ -5,7 +5,7 @@
 **Goal:** Add a reusable KiotViet Excel import flow for the Hàng hóa page that can preview and safely import the same KV product export many times without creating duplicates or silently deleting real data.
 
 
-> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**.
+> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**. BOM KV runtime slice đã xong (#7): `active` + POS skip parent — không làm theo các dòng “draft / never auto-active” bên dưới.
 
 **Architecture:** Extract the existing CLI mapper into a shared parser so CLI, server tests, and UI import use one mapping contract. Add a server preview/import endpoint that validates rows, optionally clears only demo products, and upserts product groups/products by organization + product code. Add a shared top-right import action to the Catalog toolbar and a modal that uploads `.xlsx`, shows a preview summary, and only writes after confirmation.
 
@@ -242,7 +242,7 @@ Import from `DanhSachSanPham_KV09072026-215404-812.xlsx` and later KV files with
 | `Đang kinh doanh` | `status = active` when `1`, otherwise `inactive` |
 | `Giá bán` | `price_list_items` of default active price list; not written to `products` |
 | `Tồn kho` | `inventory_provisional_balances` with `source_type = kiotviet_import`; not written to `stock_movements` |
-| `Hàng thành phần` | draft BOM in `product_boms`/`product_bom_items`; never auto-active |
+| `Hàng thành phần` | BOM in `product_boms`/`product_bom_items` — **SoT+runtime 2026-07-21:** `active` (migrate `0008` cho data đã import; không re-import) |
 | `Thời gian tạo` | `products.created_at`; accepts KiotViet Excel serial date or `dd/MM/yyyy HH:mm`; repeated import updates old wrong import-time timestamps to the KiotViet source time |
 
 **Columns deferred by decision:**

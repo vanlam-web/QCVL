@@ -235,10 +235,10 @@ Không hiển thị menu/chức năng trong lát cắt đầu tiên:
 | Slice | UI bật | UI chưa bật |
 |---|---|---|
 | P1 Supplier foundation | Danh sách NCC, tạo/sửa NCC, liên kết khách hàng | Đã merge |
-| P2 Purchase draft/list/detail | Danh sách phiếu nhập, tạo/sửa draft hàng thường | Đã merge |
-| P3 Post normal receipt | Nút Hoàn thành cho hàng thường, cập nhật giá nhập cuối | Đã merge cho hàng thường |
+| P2 Purchase draft/list/detail | Danh sách phiếu nhập, tạo/sửa draft hàng thường | **SoT đã chốt; runtime live create/post còn HTTP stub** — [Purchase README](../../03-BUSINESS-NghiepVu/Purchase/README.md) |
+| P3 Post normal receipt | Nút Hoàn thành cho hàng thường, cập nhật giá nhập cuối | **SoT đã chốt; runtime live post còn stub** — Purchase README |
 | P4 Roll/sheet purchase | Form tạo draft đã nhập được cuộn/tấm vật lý trong card dòng hàng | Post object vật lý/sửa posted nâng cao |
-| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | Đã merge; chi tiết phiếu nhập đã tách tab lịch sử thanh toán bằng dữ liệu `supplier_payments`; trả nhiều tài khoản trong một lần để sau |
+| P5 Supplier payments | Trả tiền NCC sau phiếu nhập, lịch sử thanh toán NCC | **SoT đã chốt; runtime live pay còn stub một phần** — Purchase README; trả nhiều tài khoản trong một lần để sau |
 
 Lưu ý UI: tab NCC được giữ để đúng bố cục KiotViet/QCVL, nhưng khi backend chưa có lịch sử nhập/trả hàng hoặc danh sách công nợ chi tiết đầy đủ, frontend chỉ hiển thị empty note rõ và không dựng dữ liệu giả.
 
@@ -322,7 +322,7 @@ Current decision 2026-07-12:
 
 ### 9.2. Purchase draft P2
 
-P2 đã merge. Phạm vi:
+P2 SoT đã chốt; **runtime create/post live vẫn stub** (xem Purchase README). Phạm vi:
 
 - form tạo phiếu nhập draft
 - chọn NCC
@@ -339,7 +339,7 @@ P2 dùng kho mặc định. Quy tắc có cho sửa mã `PN...` khi draft hay kh
 
 ### 9.3. Supplier payment P5
 
-P5 đã merge. KiotViet audit 2026-07-02 đã xác nhận mã thanh toán NCC dạng `PCPN...`, lịch sử thanh toán nằm trong chi tiết phiếu nhập, và action thanh toán nằm trong tab công nợ NCC.
+P5 SoT đã chốt; **runtime live pay còn stub một phần**. KiotViet audit 2026-07-02 đã xác nhận mã thanh toán NCC dạng `PCPN...`, lịch sử thanh toán nằm trong chi tiết phiếu nhập, và action thanh toán nằm trong tab công nợ NCC.
 
 Quyết định Owner đã chốt:
 
