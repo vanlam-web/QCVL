@@ -30,6 +30,7 @@ import {
 } from './admin-presenter'
 import {
   billTemplateLabel,
+  readImageFileAsDataUrl,
   readOrganizationBillSettingsCache,
   writeOrganizationBillSettingsCache,
   type OrganizationBillSettings,
@@ -215,6 +216,7 @@ export function FoundationAdminPage({
       shop_name: settings.shop_name,
       shop_address: settings.shop_address,
       shop_phone: settings.shop_phone,
+      logo_data_url: settings.logo_data_url,
     }
   })
   const [userSearch, setUserSearch] = useState('')
@@ -230,6 +232,7 @@ export function FoundationAdminPage({
       shop_name: saved.shop_name,
       shop_address: saved.shop_address,
       shop_phone: saved.shop_phone,
+      logo_data_url: saved.logo_data_url,
     })
     return saved
   }
@@ -666,6 +669,39 @@ export function FoundationAdminPage({
                   onChange={(event) => setShopDraft((current) => ({ ...current, shop_phone: event.target.value }))}
                 />
               </label>
+              <div className="admin-settings-logo-row">
+                <label>
+                  Logo cửa hàng
+                  <span className="admin-settings-field-hint">PNG / JPG / WEBP · tối đa ~280KB · dùng chung mọi mẫu in</span>
+                  <input
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={billSettingsLoading}
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      void readImageFileAsDataUrl(file)
+                        .then((logo_data_url) => setShopDraft((current) => ({ ...current, logo_data_url })))
+                        .catch((cause: unknown) => {
+                          setBillSettingsNotice({
+                            tone: 'warning',
+                            text: cause instanceof Error ? cause.message : 'Không đọc được logo.',
+                          })
+                        })
+                    }}
+                  />
+                </label>
+                {shopDraft.logo_data_url ? (
+                  <button
+                    className="button button-secondary"
+                    disabled={billSettingsLoading}
+                    type="button"
+                    onClick={() => setShopDraft((current) => ({ ...current, logo_data_url: null }))}
+                  >
+                    Xóa logo
+                  </button>
+                ) : null}
+              </div>
               <div className="admin-settings-form-actions">
                 <button className="button button-primary" disabled={billSettingsLoading} type="submit">
                   Lưu thông tin cửa hàng
@@ -673,7 +709,7 @@ export function FoundationAdminPage({
               </div>
             </form>
             <BillShopHeaderPreview
-              logo_data_url={billSettings.logo_data_url}
+              logo_data_url={shopDraft.logo_data_url}
               shop_address={shopDraft.shop_address}
               shop_name={shopDraft.shop_name}
               shop_phone={shopDraft.shop_phone}
@@ -688,7 +724,7 @@ export function FoundationAdminPage({
           <header className="admin-settings-panel-header">
             <div>
               <h2>Quản lý mẫu in</h2>
-              <p>Danh sách mẫu theo hóa đơn/báo giá — sửa tên, khổ, tiêu đề, cột, chân bill. Lưu server.</p>
+              <p>Danh sách mẫu theo hóa đơn/báo giá — tùy biến khối nội dung, cột, thông điệp. Logo sửa ở Thông tin cửa hàng.</p>
             </div>
             <p className="admin-settings-panel-meta">
               Cửa hàng: <strong>{billSettings.shop_name}</strong>
@@ -707,7 +743,6 @@ export function FoundationAdminPage({
             key={`bill-templates-${billSettings.templates.map((item) => item.id).join('-')}-${billSettings.logo_data_url ?? 'nologo'}-${billSettings.invoice_title}`}
             settings={billSettings}
             loading={billSettingsLoading}
-            onLogoError={(text) => setBillSettingsNotice({ tone: 'warning', text })}
             onSave={(patch) => saveBillSettings(patch)}
           />
         </section>

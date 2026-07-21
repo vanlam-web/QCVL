@@ -24,15 +24,25 @@ export function BillTemplateLivePreview({
         Xem trước · {billDocumentTypeLabel(template.document_type)} · {billTemplateLabel(template.paper_size)}
       </p>
       <div className={`bill-template-live-sheet is-${template.paper_size}`}>
-        {settings.logo_data_url ? (
+        {template.show_logo && settings.logo_data_url ? (
           <img alt="" className="bill-shop-preview-logo" src={settings.logo_data_url} />
         ) : null}
         <strong>{settings.shop_name.trim() || '—'}</strong>
-        {settings.shop_address.trim() ? <p>{settings.shop_address}</p> : <p className="is-muted">Chưa có địa chỉ</p>}
-        {settings.shop_phone.trim() ? <p>ĐT: {settings.shop_phone}</p> : <p className="is-muted">Chưa có điện thoại</p>}
+        {template.show_shop_address ? (
+          settings.shop_address.trim() ? <p>{settings.shop_address}</p> : <p className="is-muted">Chưa có địa chỉ</p>
+        ) : null}
+        {template.show_shop_phone ? (
+          settings.shop_phone.trim() ? <p>ĐT: {settings.shop_phone}</p> : <p className="is-muted">Chưa có điện thoại</p>
+        ) : null}
+        {template.header_note.trim() ? <p className="bill-template-live-promo">{template.header_note}</p> : null}
         <div aria-hidden="true" className="bill-shop-preview-rule" />
         <p className="bill-template-live-title">{template.title}</p>
-        <p className="bill-template-live-meta">KH: Công ty mẫu · NV: Admin</p>
+        <p className="bill-template-live-meta">
+          KH: Công ty mẫu
+          {template.show_customer_phone ? ' · 0909…' : ''}
+          {template.show_seller ? ' · NV: Admin' : ''}
+          {template.show_price_list ? ' · BG chung' : ''}
+        </p>
         <table className="bill-template-live-lines">
           <thead>
             <tr>
@@ -58,6 +68,16 @@ export function BillTemplateLivePreview({
           </tbody>
         </table>
         <p className="bill-template-live-total">Tổng: 200.000</p>
+        {template.document_type === 'invoice' && template.show_payment_summary ? (
+          <p className="bill-template-live-meta">Đã trả: 200.000 · Còn nợ: 0</p>
+        ) : null}
+        {template.show_notes ? <p className="bill-template-live-meta">Ghi chú: Giao trong ngày</p> : null}
+        {template.show_signatures ? (
+          <div className="bill-template-live-signatures" aria-hidden="true">
+            <span>Người bán</span>
+            <span>Khách hàng</span>
+          </div>
+        ) : null}
         <p className="bill-template-live-footer">{footer}</p>
       </div>
     </aside>

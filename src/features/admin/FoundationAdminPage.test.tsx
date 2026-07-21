@@ -650,6 +650,7 @@ it('saves shop info and default bill template from Thiết lập panels', async 
       shop_name: 'In ảnh Văn Lâm',
       shop_address: '12 Nguyễn Trãi',
       shop_phone: '0909111222',
+      logo_data_url: null,
     }),
   )
   expect(await within(shopPanel).findByRole('status')).toHaveTextContent('Đã lưu cấu hình bill lên server')
