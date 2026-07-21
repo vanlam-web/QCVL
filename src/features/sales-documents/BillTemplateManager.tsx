@@ -7,7 +7,6 @@ import {
   billTemplateSlotCode,
   createBlankBillTemplate,
   maxBillTemplatesPerDocumentType,
-  readImageFileAsDataUrl,
   type BillDocumentType,
   type BillPrintTemplate,
   type BillTemplateId,
@@ -18,16 +17,13 @@ export function BillTemplateManager({
   settings,
   loading,
   onSave,
-  onLogoError,
 }: {
   settings: OrganizationBillSettings
   loading?: boolean
   onSave: (patch: Partial<OrganizationBillSettings>) => Promise<void> | void
-  onLogoError?: (message: string) => void
 }) {
   const [documentType, setDocumentType] = useState<BillDocumentType>('invoice')
   const [templates, setTemplates] = useState<BillPrintTemplate[]>(() => settings.templates)
-  const [logoDataUrl, setLogoDataUrl] = useState<string | null>(() => settings.logo_data_url)
   const [selectedId, setSelectedId] = useState<string>(() =>
     settings.templates.find((item) => item.document_type === 'invoice' && item.is_default)?.id
       ?? settings.templates.find((item) => item.document_type === 'invoice')?.id
@@ -83,10 +79,7 @@ export function BillTemplateManager({
 
   async function handleSave(event: FormEvent) {
     event.preventDefault()
-    await onSave({
-      templates,
-      logo_data_url: logoDataUrl,
-    })
+    await onSave({ templates })
   }
 
   return (
@@ -150,7 +143,7 @@ export function BillTemplateManager({
             })}
           </ul>
           <p className="admin-settings-field-hint">
-            Tối đa {maxBillTemplatesPerDocumentType} mẫu / loại. Sửa sâu nội dung bên phải — chưa gồm editor HTML.
+            Tối đa {maxBillTemplatesPerDocumentType} mẫu / loại. Logo & tên cửa hàng sửa ở Thông tin cửa hàng.
           </p>
         </div>
 
@@ -178,6 +171,16 @@ export function BillTemplateManager({
               />
             </label>
             <label>
+              Thông điệp / khuyến mại
+              <textarea
+                disabled={loading}
+                placeholder="VD: Ưu đãi tháng này — để trống nếu không dùng"
+                rows={2}
+                value={selected.header_note}
+                onChange={(event) => updateSelected({ header_note: event.target.value })}
+              />
+            </label>
+            <label>
               Dòng chân bill
               <textarea
                 disabled={loading}
@@ -187,6 +190,95 @@ export function BillTemplateManager({
                 onChange={(event) => updateSelected({ footer_note: event.target.value })}
               />
             </label>
+            <fieldset className="admin-settings-checkboxes admin-settings-checkboxes-inline">
+              <legend>Khối đầu bill</legend>
+              <label>
+                <input
+                  checked={selected.show_logo}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_logo: event.target.checked })}
+                />
+                Hiện logo
+              </label>
+              <label>
+                <input
+                  checked={selected.show_shop_address}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_shop_address: event.target.checked })}
+                />
+                Hiện địa chỉ
+              </label>
+              <label>
+                <input
+                  checked={selected.show_shop_phone}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_shop_phone: event.target.checked })}
+                />
+                Hiện ĐT cửa hàng
+              </label>
+            </fieldset>
+            <fieldset className="admin-settings-checkboxes admin-settings-checkboxes-inline">
+              <legend>Thông tin giao dịch</legend>
+              <label>
+                <input
+                  checked={selected.show_customer_phone}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_customer_phone: event.target.checked })}
+                />
+                Hiện ĐT khách
+              </label>
+              <label>
+                <input
+                  checked={selected.show_seller}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_seller: event.target.checked })}
+                />
+                Hiện nhân viên
+              </label>
+              <label>
+                <input
+                  checked={selected.show_price_list}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_price_list: event.target.checked })}
+                />
+                Hiện bảng giá
+              </label>
+              <label>
+                <input
+                  checked={selected.show_notes}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_notes: event.target.checked })}
+                />
+                Hiện ghi chú
+              </label>
+              {selected.document_type === 'invoice' ? (
+                <label>
+                  <input
+                    checked={selected.show_payment_summary}
+                    disabled={loading}
+                    type="checkbox"
+                    onChange={(event) => updateSelected({ show_payment_summary: event.target.checked })}
+                  />
+                  Hiện đã trả / nợ / thừa
+                </label>
+              ) : null}
+              <label>
+                <input
+                  checked={selected.show_signatures}
+                  disabled={loading}
+                  type="checkbox"
+                  onChange={(event) => updateSelected({ show_signatures: event.target.checked })}
+                />
+                Hiện chữ ký
+              </label>
+            </fieldset>
             <fieldset className="admin-settings-checkboxes admin-settings-checkboxes-inline">
               <legend>Cột trên bill</legend>
               <label>
@@ -228,36 +320,6 @@ export function BillTemplateManager({
               />
               Đặt làm mẫu mặc định cho {billDocumentTypeLabel(documentType).toLowerCase()}
             </label>
-            <div className="admin-settings-logo-row">
-              <label>
-                Logo cửa hàng (dùng chung mọi mẫu)
-                <span className="admin-settings-field-hint">PNG / JPG / WEBP · tối đa ~280KB</span>
-                <input
-                  accept="image/png,image/jpeg,image/webp"
-                  disabled={loading}
-                  type="file"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) return
-                    void readImageFileAsDataUrl(file)
-                      .then(setLogoDataUrl)
-                      .catch((cause: unknown) => {
-                        onLogoError?.(cause instanceof Error ? cause.message : 'Không đọc được logo.')
-                      })
-                  }}
-                />
-              </label>
-              {logoDataUrl ? (
-                <button
-                  className="button button-secondary"
-                  disabled={loading}
-                  type="button"
-                  onClick={() => setLogoDataUrl(null)}
-                >
-                  Xóa logo
-                </button>
-              ) : null}
-            </div>
             <div className="admin-settings-form-actions">
               <button className="button button-primary" disabled={loading} type="submit">
                 Lưu mẫu in
@@ -282,7 +344,7 @@ export function BillTemplateManager({
               shop_name: settings.shop_name,
               shop_address: settings.shop_address,
               shop_phone: settings.shop_phone,
-              logo_data_url: logoDataUrl,
+              logo_data_url: settings.logo_data_url,
             }}
             template={selected}
           />

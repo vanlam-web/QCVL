@@ -149,12 +149,15 @@ export function InvoicePrintPage({
       <article className="quote-print-page" aria-label={`Hóa đơn ${document.code}`}>
         <header className="quote-print-heading">
           <div>
-            {settings.logo_data_url ? (
+            {printContent.show_logo && settings.logo_data_url ? (
               <img alt="" className="quote-print-logo" src={settings.logo_data_url} />
             ) : null}
             <strong>{settings.shop_name}</strong>
-            {settings.shop_address ? <p>{settings.shop_address}</p> : null}
-            {settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
+            {printContent.show_shop_address && settings.shop_address ? <p>{settings.shop_address}</p> : null}
+            {printContent.show_shop_phone && settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
+            {printContent.header_note.trim() ? (
+              <p className="quote-print-promo">{printContent.header_note}</p>
+            ) : null}
           </div>
           <div>
             <h1>{printContent.title}</h1>
@@ -177,18 +180,24 @@ export function InvoicePrintPage({
               <dt>Khách hàng</dt>
               <dd>{document.customer.name}</dd>
             </div>
-            <div>
-              <dt>Điện thoại</dt>
-              <dd>{document.customer.phone ?? ''}</dd>
-            </div>
-            <div>
-              <dt>Nhân viên</dt>
-              <dd>{document.seller.name}</dd>
-            </div>
-            <div>
-              <dt>Bảng giá</dt>
-              <dd>{displayPriceListName(document.price_list)}</dd>
-            </div>
+            {printContent.show_customer_phone ? (
+              <div>
+                <dt>Điện thoại</dt>
+                <dd>{document.customer.phone ?? ''}</dd>
+              </div>
+            ) : null}
+            {printContent.show_seller ? (
+              <div>
+                <dt>Nhân viên</dt>
+                <dd>{document.seller.name}</dd>
+              </div>
+            ) : null}
+            {printContent.show_price_list ? (
+              <div>
+                <dt>Bảng giá</dt>
+                <dd>{displayPriceListName(document.price_list)}</dd>
+              </div>
+            ) : null}
           </dl>
         </section>
 
@@ -244,29 +253,46 @@ export function InvoicePrintPage({
               <dt>Khách cần trả</dt>
               <dd>{salesDocumentMoneyText(document.total_amount)}</dd>
             </div>
-            <div>
-              <dt>Khách đã trả</dt>
-              <dd>{salesDocumentMoneyText(document.paid_amount)}</dd>
-            </div>
-            {remainingDebt > 0 ? (
-              <div>
-                <dt>Còn nợ</dt>
-                <dd>{salesDocumentMoneyText(remainingDebt)}</dd>
-              </div>
-            ) : null}
-            {surplus > 0 ? (
-              <div>
-                <dt>Tiền thừa</dt>
-                <dd>{salesDocumentMoneyText(surplus)}</dd>
-              </div>
+            {printContent.show_payment_summary ? (
+              <>
+                <div>
+                  <dt>Khách đã trả</dt>
+                  <dd>{salesDocumentMoneyText(document.paid_amount)}</dd>
+                </div>
+                {remainingDebt > 0 ? (
+                  <div>
+                    <dt>Còn nợ</dt>
+                    <dd>{salesDocumentMoneyText(remainingDebt)}</dd>
+                  </div>
+                ) : null}
+                {surplus > 0 ? (
+                  <div>
+                    <dt>Tiền thừa</dt>
+                    <dd>{salesDocumentMoneyText(surplus)}</dd>
+                  </div>
+                ) : null}
+              </>
             ) : null}
           </dl>
         </section>
 
-        {document.note ? (
+        {printContent.show_notes && document.note ? (
           <section className="quote-print-note" aria-label="Ghi chú">
             <h2>Ghi chú</h2>
             <p>{document.note}</p>
+          </section>
+        ) : null}
+
+        {printContent.show_signatures ? (
+          <section className="quote-print-signatures" aria-label="Chữ ký">
+            <div>
+              <p>Người bán</p>
+              <span />
+            </div>
+            <div>
+              <p>Khách hàng</p>
+              <span />
+            </div>
           </section>
         ) : null}
 

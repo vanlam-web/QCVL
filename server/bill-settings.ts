@@ -7,7 +7,17 @@ export interface BillPrintTemplateData {
   document_type: BillDocumentType
   paper_size: BillTemplateId
   title: string
+  header_note: string
   footer_note: string
+  show_logo: boolean
+  show_shop_address: boolean
+  show_shop_phone: boolean
+  show_customer_phone: boolean
+  show_seller: boolean
+  show_price_list: boolean
+  show_notes: boolean
+  show_payment_summary: boolean
+  show_signatures: boolean
   show_product_code: boolean
   show_unit: boolean
   show_discount: boolean
@@ -39,22 +49,40 @@ function isBillDocumentType(value: unknown): value is BillDocumentType {
   return value === 'invoice' || value === 'quote'
 }
 
+function defaultBillTemplateLayoutFields(input?: Partial<BillPrintTemplateData>) {
+  return {
+    header_note: String(input?.header_note ?? '').trim(),
+    footer_note: String(input?.footer_note ?? '').trim(),
+    show_logo: input?.show_logo ?? true,
+    show_shop_address: input?.show_shop_address ?? true,
+    show_shop_phone: input?.show_shop_phone ?? true,
+    show_customer_phone: input?.show_customer_phone ?? true,
+    show_seller: input?.show_seller ?? true,
+    show_price_list: input?.show_price_list ?? true,
+    show_notes: input?.show_notes ?? true,
+    show_payment_summary: input?.show_payment_summary ?? true,
+    show_signatures: input?.show_signatures ?? false,
+    show_product_code: input?.show_product_code ?? true,
+    show_unit: input?.show_unit ?? true,
+    show_discount: input?.show_discount ?? true,
+  }
+}
+
 export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSettingsData>): BillPrintTemplateData[] {
   const paper = isBillTemplateId(input.default_bill_template) ? input.default_bill_template : 'a4'
   const invoiceTitle = (input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG').trim() || 'HÓA ĐƠN BÁN HÀNG'
   const quoteTitle = (input.quote_title ?? 'BÁO GIÁ').trim() || 'BÁO GIÁ'
-  const footer = (input.footer_note ?? '').trim()
-  const columns = {
-    footer_note: footer,
-    show_product_code: input.show_product_code ?? true,
-    show_unit: input.show_unit ?? true,
-    show_discount: input.show_discount ?? true,
-  }
+  const layout = defaultBillTemplateLayoutFields({
+    footer_note: input.footer_note,
+    show_product_code: input.show_product_code,
+    show_unit: input.show_unit,
+    show_discount: input.show_discount,
+  })
   return [
-    { id: 'tpl-invoice-a4', name: 'Hóa đơn A4', document_type: 'invoice', paper_size: 'a4', title: invoiceTitle, ...columns, is_default: paper === 'a4' },
-    { id: 'tpl-invoice-k80', name: 'Hóa đơn K80', document_type: 'invoice', paper_size: 'k80', title: invoiceTitle, ...columns, is_default: paper === 'k80' },
-    { id: 'tpl-quote-a4', name: 'Báo giá A4', document_type: 'quote', paper_size: 'a4', title: quoteTitle, ...columns, is_default: paper === 'a4' },
-    { id: 'tpl-quote-k80', name: 'Báo giá K80', document_type: 'quote', paper_size: 'k80', title: quoteTitle, ...columns, is_default: paper === 'k80' },
+    { id: 'tpl-invoice-a4', name: 'Hóa đơn A4', document_type: 'invoice', paper_size: 'a4', title: invoiceTitle, ...layout, is_default: paper === 'a4' },
+    { id: 'tpl-invoice-k80', name: 'Hóa đơn K80', document_type: 'invoice', paper_size: 'k80', title: invoiceTitle, ...layout, is_default: paper === 'k80' },
+    { id: 'tpl-quote-a4', name: 'Báo giá A4', document_type: 'quote', paper_size: 'a4', title: quoteTitle, ...layout, is_default: paper === 'a4' },
+    { id: 'tpl-quote-k80', name: 'Báo giá K80', document_type: 'quote', paper_size: 'k80', title: quoteTitle, ...layout, is_default: paper === 'k80' },
   ]
 }
 
@@ -64,16 +92,19 @@ function normalizeOneTemplate(raw: unknown, fallback: BillPrintTemplateData): Bi
   const id = String(item.id ?? fallback.id).trim()
   const name = String(item.name ?? fallback.name).trim()
   if (!id || !name) return null
+  const layout = defaultBillTemplateLayoutFields({
+    ...fallback,
+    ...item,
+    header_note: item.header_note ?? fallback.header_note,
+    footer_note: item.footer_note ?? fallback.footer_note,
+  })
   return {
     id,
     name,
     document_type: isBillDocumentType(item.document_type) ? item.document_type : fallback.document_type,
     paper_size: isBillTemplateId(item.paper_size) ? item.paper_size : fallback.paper_size,
     title: String(item.title ?? fallback.title).trim() || fallback.title,
-    footer_note: String(item.footer_note ?? fallback.footer_note).trim(),
-    show_product_code: item.show_product_code ?? fallback.show_product_code,
-    show_unit: item.show_unit ?? fallback.show_unit,
-    show_discount: item.show_discount ?? fallback.show_discount,
+    ...layout,
     is_default: Boolean(item.is_default),
   }
 }

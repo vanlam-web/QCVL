@@ -3957,6 +3957,34 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   margin: 0.25rem 0 0;
 }
 
+.quote-print-promo {
+  margin-top: 0.5rem !important;
+  color: #374151;
+  font-size: 0.875rem;
+  font-style: italic;
+}
+
+.quote-print-signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-top: 1.75rem;
+  text-align: center;
+}
+
+.quote-print-signatures p {
+  margin: 0 0 2.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.quote-print-signatures span {
+  display: block;
+  border-top: 1px solid #9ca3af;
+  margin: 0 auto;
+  width: min(100%, 10rem);
+}
+
 .quote-print-heading dl,
 .quote-print-parties dl,
 .quote-print-totals dl {

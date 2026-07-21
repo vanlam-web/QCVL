@@ -7,7 +7,19 @@ export interface BillPrintTemplate {
   document_type: BillDocumentType
   paper_size: BillTemplateId
   title: string
+  /** Thông điệp / khuyến mại trên đầu bill (KV: nội dung tĩnh + token). */
+  header_note: string
   footer_note: string
+  show_logo: boolean
+  show_shop_address: boolean
+  show_shop_phone: boolean
+  show_customer_phone: boolean
+  show_seller: boolean
+  show_price_list: boolean
+  show_notes: boolean
+  /** Hóa đơn: khối khách đã trả / còn nợ / tiền thừa. */
+  show_payment_summary: boolean
+  show_signatures: boolean
   show_product_code: boolean
   show_unit: boolean
   show_discount: boolean
@@ -69,15 +81,35 @@ export function createBillTemplateId() {
   return `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+export function defaultBillTemplateLayoutFields(input?: Partial<BillPrintTemplate>) {
+  return {
+    header_note: (input?.header_note ?? '').trim(),
+    footer_note: (input?.footer_note ?? '').trim(),
+    show_logo: input?.show_logo ?? true,
+    show_shop_address: input?.show_shop_address ?? true,
+    show_shop_phone: input?.show_shop_phone ?? true,
+    show_customer_phone: input?.show_customer_phone ?? true,
+    show_seller: input?.show_seller ?? true,
+    show_price_list: input?.show_price_list ?? true,
+    show_notes: input?.show_notes ?? true,
+    show_payment_summary: input?.show_payment_summary ?? true,
+    show_signatures: input?.show_signatures ?? false,
+    show_product_code: input?.show_product_code ?? true,
+    show_unit: input?.show_unit ?? true,
+    show_discount: input?.show_discount ?? true,
+  }
+}
+
 export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSettings> | null | undefined): BillPrintTemplate[] {
   const paper = isBillTemplateId(input?.default_bill_template) ? input.default_bill_template : 'a4'
   const invoiceTitle = (input?.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG').trim() || 'HÓA ĐƠN BÁN HÀNG'
   const quoteTitle = (input?.quote_title ?? 'BÁO GIÁ').trim() || 'BÁO GIÁ'
-  const footer = (input?.footer_note ?? '').trim()
-  const show_product_code = input?.show_product_code ?? true
-  const show_unit = input?.show_unit ?? true
-  const show_discount = input?.show_discount ?? true
-  const columns = { show_product_code, show_unit, show_discount, footer_note: footer }
+  const layout = defaultBillTemplateLayoutFields({
+    footer_note: input?.footer_note,
+    show_product_code: input?.show_product_code,
+    show_unit: input?.show_unit,
+    show_discount: input?.show_discount,
+  })
 
   return [
     {
@@ -86,7 +118,7 @@ export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSetting
       document_type: 'invoice',
       paper_size: 'a4',
       title: invoiceTitle,
-      ...columns,
+      ...layout,
       is_default: paper === 'a4',
     },
     {
@@ -95,7 +127,7 @@ export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSetting
       document_type: 'invoice',
       paper_size: 'k80',
       title: invoiceTitle,
-      ...columns,
+      ...layout,
       is_default: paper === 'k80',
     },
     {
@@ -104,7 +136,7 @@ export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSetting
       document_type: 'quote',
       paper_size: 'a4',
       title: quoteTitle,
-      ...columns,
+      ...layout,
       is_default: paper === 'a4',
     },
     {
@@ -113,7 +145,7 @@ export function seedBillTemplatesFromFlat(input: Partial<OrganizationBillSetting
       document_type: 'quote',
       paper_size: 'k80',
       title: quoteTitle,
-      ...columns,
+      ...layout,
       is_default: paper === 'k80',
     },
   ]
@@ -123,16 +155,19 @@ function normalizeOneTemplate(
   raw: Partial<BillPrintTemplate> | null | undefined,
   fallback: BillPrintTemplate,
 ): BillPrintTemplate {
+  const layout = defaultBillTemplateLayoutFields({
+    ...fallback,
+    ...raw,
+    header_note: raw?.header_note ?? fallback.header_note,
+    footer_note: raw?.footer_note ?? fallback.footer_note,
+  })
   return {
     id: (raw?.id ?? fallback.id).trim() || fallback.id,
     name: (raw?.name ?? fallback.name).trim() || fallback.name,
     document_type: isBillDocumentType(raw?.document_type) ? raw.document_type : fallback.document_type,
     paper_size: isBillTemplateId(raw?.paper_size) ? raw.paper_size : fallback.paper_size,
     title: (raw?.title ?? fallback.title).trim() || fallback.title,
-    footer_note: (raw?.footer_note ?? fallback.footer_note).trim(),
-    show_product_code: raw?.show_product_code ?? fallback.show_product_code,
-    show_unit: raw?.show_unit ?? fallback.show_unit,
-    show_discount: raw?.show_discount ?? fallback.show_discount,
+    ...layout,
     is_default: Boolean(raw?.is_default),
   }
 }
@@ -392,10 +427,7 @@ export function createBlankBillTemplate(documentType: BillDocumentType, paper: B
     document_type: documentType,
     paper_size: paper,
     title: documentType === 'quote' ? 'BÁO GIÁ' : 'HÓA ĐƠN BÁN HÀNG',
-    footer_note: '',
-    show_product_code: true,
-    show_unit: true,
-    show_discount: true,
+    ...defaultBillTemplateLayoutFields(),
     is_default: false,
   }
 }

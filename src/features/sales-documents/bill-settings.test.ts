@@ -124,4 +124,29 @@ describe('organization bill settings', () => {
     expect(resolveNamedPrintTemplate(settings, 'invoice', { templateId: 'tpl-invoice-a4' }).paper_size).toBe('a4')
     expect(resolveNamedPrintTemplate(settings, 'invoice', {}).is_default).toBe(true)
   })
+
+  it('fills deeper layout toggles when older templates omit them', () => {
+    const settings = normalizeOrganizationBillSettings({
+      templates: [
+        {
+          id: 'tpl-invoice-a4',
+          name: 'Hóa đơn A4',
+          document_type: 'invoice',
+          paper_size: 'a4',
+          title: 'HÓA ĐƠN',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: false,
+          is_default: true,
+        } as never,
+      ],
+    })
+    const invoice = settings.templates.find((item) => item.document_type === 'invoice')!
+    expect(invoice.show_logo).toBe(true)
+    expect(invoice.show_signatures).toBe(false)
+    expect(invoice.show_payment_summary).toBe(true)
+    expect(invoice.header_note).toBe('')
+    expect(invoice.show_discount).toBe(false)
+  })
 })
