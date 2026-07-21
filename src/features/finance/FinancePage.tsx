@@ -364,7 +364,16 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       service
         .listVoucherCounterparties({ type: voucherCounterpartyType, search })
         .then((items) => {
-          if (active) setVoucherCounterpartyOptions(items)
+          if (!active) return
+          setVoucherCounterpartyOptions(items)
+          if (!search) return
+          const selected = items.find(
+            (option) =>
+              option.name === voucherCounterpartyName || `${option.code} - ${option.name}` === voucherCounterpartyName,
+          )
+          if (!selected) return
+          setVoucherCounterpartyId((current) => current || selected.id)
+          setVoucherCounterpartyPhone((current) => (current.trim() ? current : (selected.phone ?? '')))
         })
         .catch(() => {
           if (active) setVoucherCounterpartyOptions([])
@@ -375,14 +384,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       window.clearTimeout(timeout)
     }
   }, [service, voucherCounterpartyName, voucherCounterpartyType, voucherMode])
-
-  useEffect(() => {
-    if (!voucherCounterpartyName.trim() || voucherCounterpartyId) return
-    const selected = voucherCounterpartyOptions.find((option) => option.name === voucherCounterpartyName || `${option.code} - ${option.name}` === voucherCounterpartyName)
-    if (!selected) return
-    setVoucherCounterpartyId(selected.id)
-    setVoucherCounterpartyPhone(selected.phone ?? '')
-  }, [voucherCounterpartyId, voucherCounterpartyName, voucherCounterpartyOptions])
 
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
