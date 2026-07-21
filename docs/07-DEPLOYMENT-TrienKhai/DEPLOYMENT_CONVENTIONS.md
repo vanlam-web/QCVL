@@ -12,6 +12,13 @@ Deployment quyết định kiến trúc triển khai và vận hành, không quy
 - Không dùng chung Database, secret hoặc tài nguyên nhạy cảm giữa các môi trường.
 - Mọi cấu hình khác nhau theo môi trường phải được tài liệu hóa.
 
+## 2.1 Quyền triển khai NAS theo máy
+
+- Máy ngoài LAN không được deploy NAS, copy vào share NAS, chạy migrate NAS, hoặc restart/reset `qcvl-app`.
+- Máy ngoài LAN chỉ được build/test/push Git, sau đó ghi rõ commit để máy trong LAN kéo về.
+- Máy trong LAN chịu trách nhiệm deploy NAS, migrate, restart, health check và smoke test.
+- Nếu lỡ copy dở từ máy ngoài LAN, dừng ở mức ghi trạng thái; máy trong LAN phải kéo `origin/main` và deploy sạch lại.
+
 ## 3. Secret và Security
 
 - Không hardcode password, API key, token, secret hoặc connection string.

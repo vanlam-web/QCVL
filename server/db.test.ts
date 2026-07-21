@@ -376,7 +376,183 @@ describe('createPgRepository product units', () => {
     expect(canonicalSql).toContain('CB')
   })
 
-  test('keeps linked supplier receipts out of customer debt totals', async () => {
+  test('builds customer debt detail from vouchers instead of KiotViet balance_after anchor', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-kv-kh000001',
+            customer_code: 'KH000001',
+            customer_name: 'Khach test',
+            total_debt: '999999',
+            open_invoice_count: 1,
+            oldest_order_code: 'HD000001',
+            has_kiotviet_anchor: true,
+            last_activity_at: new Date('2026-07-04T01:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) {
+        return {
+          rows: [{
+            id: 'order-hd000001',
+            code: 'HD000001',
+            created_at: new Date('2026-07-01T01:00:00.000Z'),
+            total_amount: '100000',
+            paid_amount: '0',
+            debt_amount: '100000',
+            remaining_debt: '100000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select id, source_code, created_at, transaction_type')) {
+        return {
+          rows: [
+            {
+              id: 'adjustment-ckkh000001',
+              source_code: 'CKKH000001',
+              created_at: new Date('2026-07-03T01:00:00.000Z'),
+              transaction_type: 'payment_discount',
+              amount_delta: '-10000',
+              paid_amount: '0',
+              remaining_amount: '0',
+              balance_after: '989999',
+              source_file: 'kv.xlsx',
+            },
+            {
+              id: 'adjustment-cb000001',
+              source_code: 'CB000001',
+              created_at: new Date('2026-07-04T01:00:00.000Z'),
+              transaction_type: 'debt_adjustment',
+              amount_delta: '5000',
+              paid_amount: '0',
+              remaining_amount: '5000',
+              balance_after: '999999',
+              source_file: 'kv.xlsx',
+            },
+          ],
+          rowCount: 2,
+        }
+      }
+      if (sql.includes('select') && sql.includes('cbe.id') && sql.includes('from cashbook_entries cbe')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt000001',
+            code: 'TT000001',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '40000',
+            finance_account: null,
+            is_business_accounted: true,
+            source_type: 'payment_receipt_method',
+            created_at: new Date('2026-07-02T01:00:00.000Z'),
+            note: 'Thu no',
+            counterparty: { type: 'customer', name: 'Khach test', phone: null },
+            created_by: null,
+            source: { type: 'payment_receipt_method', customer_id: 'customer-kv-kh000001' },
+            allocations: [],
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('supplier_id') && sql.includes('remaining_amount')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from users')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from finance_accounts')) return { rows: [], rowCount: 0 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-kv-kh000001',
+    })
+
+    expect(debt?.total_debt).toBe(100000 - 40000 - 10000 + 5000)
+    expect(debt?.adjustments.map((row) => row.source_code)).toContain('CKKH000001')
+    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual([
+      'HD000001',
+      'TT000001',
+      'CKKH000001',
+      'CB000001',
+    ])
+    const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
+    expect(canonicalSql).not.toContain('kiotviet_anchor as')
+    expect(canonicalSql).not.toContain('balance_after')
+  })
+
+  test('keeps fully paid invoices in customer debt ledger documents', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('with live_invoice_debt')) {
+        return {
+          rows: [{
+            customer_id: 'customer-paid',
+            customer_code: 'KHPAID',
+            customer_name: 'Khach paid',
+            total_debt: '0',
+            open_invoice_count: 0,
+            oldest_order_code: '',
+            has_kiotviet_anchor: false,
+            last_activity_at: new Date('2026-07-02T01:00:00.000Z'),
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('as ledger_total_amount')) {
+        return {
+          rows: [{
+            id: 'order-paid',
+            code: 'HD000099',
+            created_at: new Date('2026-07-01T01:00:00.000Z'),
+            ledger_total_amount: '100000',
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('o.id,') && sql.includes('coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select id, source_code, created_at, transaction_type')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select') && sql.includes('cbe.id') && sql.includes('from cashbook_entries cbe')) {
+        return {
+          rows: [{
+            id: 'cashbook-tt000099',
+            code: 'TT000099',
+            status: 'posted',
+            direction: 'in',
+            amount_delta: '100000',
+            finance_account: null,
+            is_business_accounted: true,
+            source_type: 'payment_receipt_method',
+            created_at: new Date('2026-07-02T01:00:00.000Z'),
+            note: 'Thu het no',
+            counterparty: { type: 'customer', name: 'Khach paid', phone: null },
+            created_by: null,
+            source: { type: 'payment_receipt_method', customer_id: 'customer-paid', order_code: 'HD000099' },
+            allocations: [],
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('supplier_id') && sql.includes('remaining_amount')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from users')) return { rows: [], rowCount: 0 }
+      if (sql.includes('from finance_accounts')) return { rows: [], rowCount: 0 }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const debt = await repository.getCustomerDebt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      customerId: 'customer-paid',
+    })
+
+    expect(debt?.invoices).toEqual([])
+    expect(debt?.total_debt).toBe(0)
+    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual(['HD000099', 'TT000099'])
+  })
+
+  test('subtracts linked supplier receipts from linked customer debt view', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('with live_invoice_debt')) {
@@ -385,7 +561,7 @@ describe('createPgRepository product units', () => {
             customer_id: 'customer-kv-kh000384',
             customer_code: 'KH000384',
             customer_name: 'Khach test',
-            total_debt: '600000',
+            total_debt: sql.includes('linked_supplier_debt') ? '510000' : '600000',
             open_invoice_count: 1,
             oldest_order_code: 'HD010729',
             has_kiotviet_anchor: false,
@@ -439,13 +615,19 @@ describe('createPgRepository product units', () => {
       organizationId: '11111111-1111-1111-1111-111111111111',
       customerId: 'customer-kv-kh000384',
     })
+    const list = await repository.listCustomerDebts?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      url: new URL('http://api.local/api/v1/finance/customer-debts'),
+    })
     const totals = await repository.getCustomerFinancialTotals?.('11111111-1111-1111-1111-111111111111')
 
-    expect(debt?.total_debt).toBe(600000)
+    expect(debt?.total_debt).toBe(510000)
+    expect((debt as any)?.ledger_rows.map((row: { code: string }) => row.code)).toEqual(['HD010729', 'PN000685'])
     expect(debt?.linked_supplier_receipts).toEqual([expect.objectContaining({ code: 'PN000685', remaining_amount: 90000 })])
-    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(600000)
+    expect(list).toEqual([expect.objectContaining({ customer_id: 'customer-kv-kh000384', total_debt: 510000 })])
+    expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
     const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
-    expect(canonicalSql).not.toContain('linked_supplier_offset')
+    expect(canonicalSql).toContain('linked_supplier_debt')
   })
 
   test('does not net linked supplier payable in the in-memory customer debt formula', async () => {
@@ -476,7 +658,7 @@ describe('createPgRepository product units', () => {
   test('returns customer-debt cashbook rows with the debt detail payload', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('from cashbook_entries cbe')) {
+      if (sql.includes('select') && sql.includes('cbe.id') && sql.includes('from cashbook_entries cbe')) {
         return {
           rows: [{
             id: 'cashbook-tt001838',
@@ -563,6 +745,22 @@ describe('createPgRepository product units', () => {
     }
     pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('with live_invoice_debt')) return { rows: [canonicalRow], rowCount: 1 }
+      if (sql.includes('select id, source_code, created_at, transaction_type')) {
+        return {
+          rows: [{
+            id: 'adjustment-cb000123',
+            source_code: 'CB000123',
+            created_at: new Date('2026-07-19T00:00:00.000Z'),
+            transaction_type: 'Điều chỉnh',
+            amount_delta: '-50000',
+            paid_amount: '0',
+            remaining_amount: '0',
+            balance_after: '999999',
+            source_file: null,
+          }],
+          rowCount: 1,
+        }
+      }
       if (sql.includes('select customer_id, sum(total_amount) as total_sales_amount')) {
         return {
           rows: [{ customer_id: 'customer-kv-kh000384', total_sales_amount: '719396', last_activity_at: new Date('2026-07-20T00:00:00.000Z') }],
@@ -1236,6 +1434,158 @@ describe('createPgRepository product units', () => {
       'NCC test',
       '2026-07-12T09:00:00.000Z',
     ]))
+  })
+
+  test('renumbers a new manual purchase receipt under the database lock when its stale PN code already exists', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      const normalizedSql = sql.trim().toLowerCase()
+      if (normalizedSql === 'begin' || normalizedSql === 'commit' || normalizedSql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [], rowCount: 1 }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('id = $2')) return { rows: [], rowCount: 0 }
+      if (sql.includes('select max(') && sql.includes('from purchase_receipt_snapshots')) return { rows: [{ max_number: 689 }], rowCount: 1 }
+      if (sql.includes('insert into purchase_receipt_snapshots')) {
+        expect(values?.[2]).toBe('PN000690')
+        const saved = JSON.parse(String(values?.[3])) as { code: string }
+        expect(saved.code).toBe('PN000690')
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const saved = await repository.savePurchaseReceipt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      sourceType: 'manual',
+      receipt: {
+        id: 'purchase-receipt-new',
+        code: 'PN000689',
+        supplier_id: 'supplier-thn',
+        supplier: { id: 'supplier-thn', code: 'THN', name: 'Thịnh Hồng Nguyên' },
+        received_at: '2026-07-21T06:00:00.000Z',
+        status: 'draft',
+        supplier_document_no: null,
+        subtotal_amount: 11926,
+        discount_amount: 0,
+        payable_amount: 11926,
+        paid_amount: 0,
+        remaining_amount: 11926,
+        notes: null,
+        created_by: { id: 'user-1', name: 'Admin' },
+        created_at: '2026-07-21T06:00:00.000Z',
+        updated_at: '2026-07-21T06:00:00.000Z',
+        items: [],
+        supplier_payments: [],
+      },
+    })
+
+    expect(saved?.code).toBe('PN000690')
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('pg_advisory_xact_lock'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('select max(') && sql.includes('purchase_receipt_snapshots'))).toBe(true)
+  })
+
+  test('recomputes supplier payable from PN and PCPN vouchers instead of receipt remaining only', async () => {
+    const { createPgRepository } = await import('./db')
+    let updatedSupplier: { current_payable_amount: number; total_purchase_amount: number } | null = null
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      const normalizedSql = sql.trim().toLowerCase()
+      if (normalizedSql === 'begin' || normalizedSql === 'commit' || normalizedSql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('pg_advisory_xact_lock')) return { rows: [], rowCount: 1 }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('id = $2')) return { rows: [], rowCount: 0 }
+      if (sql.includes('insert into purchase_receipt_snapshots')) return { rows: [], rowCount: 1 }
+      if (sql.includes('select id, data') && sql.includes('from supplier_snapshots')) {
+        return {
+          rows: [{
+            id: 'supplier-1',
+            data: {
+              id: 'supplier-1',
+              code: 'NCC001',
+              name: 'NCC test',
+              phone: null,
+              email: null,
+              address: null,
+              tax_code: null,
+              linked_customer_id: null,
+              linked_customer: null,
+              notes: null,
+              status: 'active',
+              current_payable_amount: 0,
+              total_purchase_amount: 0,
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('select data') && sql.includes('from purchase_receipt_snapshots')) {
+        return {
+          rows: [{
+            data: {
+              id: 'receipt-pn000566',
+              code: 'PN000566',
+              supplier_id: 'supplier-1',
+              supplier: { id: 'supplier-1', code: 'NCC001', name: 'NCC test' },
+              received_at: '2026-07-01T00:00:00.000Z',
+              status: 'posted',
+              payable_amount: 3206581,
+              paid_amount: 0,
+              remaining_amount: 3206581,
+              supplier_payments: [],
+              items: [],
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from cashbook_entries') && sql.includes('purchase_supplier_payment')) {
+        return {
+          rows: [{
+            id: 'cashbook-pcpn000566',
+            code: 'PCPN000566',
+            created_at: new Date('2026-07-02T00:00:00.000Z'),
+            amount_delta: '-1000000',
+            status: 'posted',
+            source: { order_code: 'PN000566' },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('update supplier_snapshots')) {
+        updatedSupplier = JSON.parse(String(values?.[2]))
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.savePurchaseReceipt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      sourceType: 'kiotviet_import',
+      receipt: {
+        id: 'receipt-pn000566',
+        code: 'PN000566',
+        supplier_id: 'supplier-1',
+        supplier: { id: 'supplier-1', code: 'NCC001', name: 'NCC test' },
+        received_at: '2026-07-01T00:00:00.000Z',
+        status: 'posted',
+        supplier_document_no: null,
+        subtotal_amount: 3206581,
+        discount_amount: 0,
+        payable_amount: 3206581,
+        paid_amount: 0,
+        remaining_amount: 3206581,
+        notes: null,
+        created_by: { id: 'user-1', name: 'Admin' },
+        created_at: '2026-07-01T00:00:00.000Z',
+        updated_at: '2026-07-01T00:00:00.000Z',
+        items: [],
+        supplier_payments: [],
+      },
+    })
+
+    expect(updatedSupplier?.total_purchase_amount).toBe(3206581)
+    expect(updatedSupplier?.current_payable_amount).toBe(2206581)
+    expect((updatedSupplier as any)?.debt_ledger_rows.map((row: { code: string }) => row.code)).toEqual(['PN000566', 'PCPN000566'])
   })
 
   test('writes PostgreSQL stock movements from imported KiotViet invoices', async () => {

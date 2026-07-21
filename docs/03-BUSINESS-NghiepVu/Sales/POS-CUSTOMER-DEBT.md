@@ -1,7 +1,7 @@
 # POS-CUSTOMER-DEBT — Nghiệp vụ công nợ khách hàng
 
 > **Nguồn:** Tách khỏi `02-PRD-UX-PhongCanh/POS/K03/01-K03A-DOI-TAC.md`  
-> **Runtime:** tổng nợ UI Customers/Finance đọc canonical `server/modules/finance/customer-debt.ts`. Trạng thái ngắn: [Sales README](./README.md) · [Finance README](../Finance/README.md).
+> **Runtime:** tổng nợ UI Customers/Finance/POS đọc canonical `server/modules/finance/customer-debt.ts`. Công thức chuẩn: [Finance CUSTOMER-DEBT.md](../Finance/CUSTOMER-DEBT.md). Trạng thái ngắn: [Sales README](./README.md) · [Finance README](../Finance/README.md).
 
 ---
 
@@ -13,11 +13,13 @@ Tài liệu này là Source of Truth cho cách ghi nhận và tính số dư cô
 
 ## 2. QUY TẮC CÔNG NỢ
 
-### BR-DEBT-00: Quản lý theo hóa đơn
+### BR-DEBT-00: Quản lý theo hóa đơn và tổng canonical
 
 Công nợ được quản lý theo từng hóa đơn còn nợ, không chỉ theo một số tổng.
 
-Tổng nợ khách hàng là tổng cộng các khoản còn nợ của các hóa đơn chưa thu đủ.
+Tổng nợ khách hàng hiển thị chính phải lấy từ công thức canonical ở [Finance CUSTOMER-DEBT.md](../Finance/CUSTOMER-DEBT.md).
+
+Với dữ liệu import KiotViet, import chỉ tạo chứng từ ban đầu để khỏi nhập tay lại. Hóa đơn, phiếu thu, điều chỉnh và chiết khấu import phải được tính/sửa/thu/hủy như chứng từ QCVL, không dùng import làm mốc khóa công thức.
 
 ### BR-DEBT-01: Phát sinh từ bán hàng
 

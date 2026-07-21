@@ -8,6 +8,7 @@ import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/cu
 import {
   buildCustomerDebtLedgerRows,
   customerDebtCurrentAmountFromLedger,
+  customerDebtLedgerRowsFromBackend,
 } from '../catalog/customer-debt-ledger'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer, CustomerGroup } from '../catalog/types'
@@ -626,13 +627,15 @@ function CustomerPosDebtPanel({
         total_amount: invoice.total_amount,
         payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
       }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    debtLedger.cashbookHistory,
-    debtLedger.debt.adjustments ?? [],
-    debtLedger.debt.linked_supplier_receipts ?? [],
-    { currentTotal: debtLedger.debt.total_debt },
-  )
+  const ledgerRows = (debtLedger.debt.ledger_rows?.length ?? 0) > 0
+    ? customerDebtLedgerRowsFromBackend(debtLedger.debt)
+    : buildCustomerDebtLedgerRows(
+        invoiceRows,
+        debtLedger.cashbookHistory,
+        debtLedger.debt.adjustments ?? [],
+        debtLedger.debt.linked_supplier_receipts ?? [],
+        { currentTotal: debtLedger.debt.total_debt },
+      )
   const visibleLedgerRows = ledgerRows.slice(0, 10)
 
   return (

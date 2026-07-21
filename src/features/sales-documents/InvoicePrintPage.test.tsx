@@ -159,7 +159,7 @@ it('uses saved shop header and switches between A4 and K80 templates', async () 
   expect(screen.getByText('ĐT: 0909111222')).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-a4')
 
-  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mẫu in' }), 'k80')
+  await userEvent.click(screen.getByRole('radio', { name: /K80 \(nhiệt\)/ }))
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
 })
 
@@ -170,5 +170,5 @@ it('honors initialTemplate when opening the bill', async () => {
 
   expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
-  expect(screen.getByRole('combobox', { name: 'Mẫu in' })).toHaveValue('k80')
+  expect(screen.getByRole('radio', { name: /K80 \(nhiệt\)/ })).toBeChecked()
 })

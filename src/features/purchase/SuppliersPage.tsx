@@ -87,6 +87,11 @@ function supplierReceiptBelongsToSupplier(receipt: PurchaseReceipt, supplier: Su
     || receipt.supplier.code === supplier.code
 }
 
+function supplierDebtLedgerHref(code: string) {
+  if (/^PN\d/i.test(code)) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
+  return managementRecordOpenHref('/finance', code)
+}
+
 function supplierReceiptStatusText(status: PurchaseReceiptStatus) {
   switch (status) {
     case 'posted':
@@ -567,6 +572,9 @@ export function SuppliersPage({
         )
       : []
     const currentSupplierDebtReceipts = currentSupplierReceipts.filter((receipt) => supplierReceiptOutstanding(receipt) > 0)
+    const supplierDebtLedgerRows = detailSupplier?.debt_ledger_rows?.length
+      ? [...detailSupplier.debt_ledger_rows].reverse()
+      : []
 
     return (
       <ManagementDetailPanel>
@@ -675,7 +683,32 @@ export function SuppliersPage({
                 { label: 'Trạng thái', value: supplierStatus },
               ]}
             />
-            {currentSupplierDebtReceipts.length === 0 ? (
+            {supplierDebtLedgerRows.length > 0 ? (
+              <table aria-label="Lịch sử công nợ NCC" className="management-detail-table management-detail-linked-table">
+                <thead>
+                  <tr>
+                    <th>Mã phiếu</th>
+                    <th>Thời gian</th>
+                    <th>Giá trị</th>
+                    <th>Công nợ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplierDebtLedgerRows.map((row) => (
+                    <tr key={row.id}>
+                      <td>
+                        <ManagementRecordLink href={supplierDebtLedgerHref(row.code)}>
+                          {row.code}
+                        </ManagementRecordLink>
+                      </td>
+                      <td>{formatKvDateTime(row.created_at)}</td>
+                      <td><MoneyText value={row.amount_delta} /></td>
+                      <td><MoneyText value={row.balance_after} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : currentSupplierDebtReceipts.length === 0 ? (
               <ManagementDetailInlineNote>Không còn phiếu nhập đang nợ cho nhà cung cấp này.</ManagementDetailInlineNote>
             ) : (
               <table aria-label="Danh sách phiếu nợ của NCC này" className="management-detail-table management-detail-linked-table">

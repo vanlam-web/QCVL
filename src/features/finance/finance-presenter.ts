@@ -237,19 +237,7 @@ export function cashbookLinkedDocumentRows(entry: CashbookEntryDetail) {
         : allocation.remaining_after === 0 ? 'Đã thanh toán' : 'Còn nợ',
     }))
   }
-
-  const inferredCode = cashbookLinkedDocumentCode(entry)
-  if (inferredCode === null) return []
-
-  return [{
-    id: inferredCode,
-    code: inferredCode,
-    totalAmount: Math.abs(entry.amount_delta),
-    settledBefore: 0,
-    allocatedAmount: Math.abs(entry.amount_delta),
-    remainingAmount: 0,
-    status: entry.direction === 'in' && entry.status === 'posted' ? 'Thu đủ' : cashbookDetailStatusText(entry.status),
-  }]
+  return []
 }
 
 export function cashbookDetailNoteText(entry: CashbookEntryDetail) {

@@ -208,6 +208,15 @@ export interface CustomerDebtDetail {
     remaining_amount: number
   }>
   cashbook_entries?: CashbookEntry[]
+  ledger_rows?: Array<{
+    id: string
+    code: string
+    created_at: string
+    amount_delta: number
+    balance_after: number
+    source_type?: string
+    source_id?: string | null
+  }>
 }
 
 export interface RecentPriceList {

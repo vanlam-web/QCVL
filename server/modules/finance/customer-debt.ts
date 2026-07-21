@@ -1,31 +1,17 @@
-// Canonical customer debt formula. Every read path (debt list, debt detail,
-// customer list totals) must use this single query so all screens agree.
-//
-// Semantics per customer:
-//
-// - Without a KiotViet anchor (no imported `customer_debt_adjustments` row):
-//     total_debt = sum(live invoice remaining debt)
-//   Live remaining debt is `customer_debt_entries.remaining_debt` when an open
-//   entry exists, otherwise `orders.debt_amount`.
-//
-// - With a KiotViet anchor (latest imported adjustment, `balance_after` is the
-//   KiotViet balance snapshot at that time):
-//     total_debt = balance_after
-//                + sum(total_amount of non-cancelled invoices created after the anchor)
-//                - sum(QCVL payments after the anchor: POS checkout + debt collection
-//                      cashbook entries, matched relationally via source order or the
-//                      customer id stamped in entry source)
-//                + sum(KiotViet cashbook debt flows after the anchor: in = pay down,
-//                      out = add debt; matched by the KV debt voucher code pattern)
-//
-// Customer receivable and supplier payable stay in separate ledgers. A linked
-// supplier receipt must not reduce customer debt unless a real customer debt
-// adjustment/collection document exists.
-//
-// Totals are NOT clamped to zero: a negative total means the customer has
-// credit (paid more than owed) and must stay visible for reconciliation.
+import { buildPartnerDebtLedger, type PartnerDebtDocumentInput } from './partner-debt-ledger.js'
 
-export const KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN = '^(CB|TTHD|TT[0-9]|TTM(HD)?[0-9]|TNHHD[0-9])'
+// Canonical customer debt formula. Every read path must use voucher effects,
+// never KiotViet `balance_after` as a runtime anchor.
+//
+// Pure customer:
+// - `HD/HDO`: increase debt.
+// - `TT/TTHD/TTHDO/TTM/TTMHD/TNH/TNHHD`: decrease debt.
+// - `CKKH`: decrease debt.
+// - `CB`: increase/decrease by normalized `amount_delta`.
+//
+// Totals are NOT clamped to zero: a negative total means customer credit.
+
+export const KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN = '^(CB|TTHD|TTHDO|TT[0-9]|TTMHD|TTM[0-9]|TNHHD|TNH[0-9])'
 
 export interface CustomerDebtTotalsRow {
   customer_id: string
@@ -46,9 +32,9 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         o.customer_id,
         min(o.customer_snapshot->>'code') as customer_code,
         min(o.customer_snapshot->>'name') as customer_name,
-        sum(coalesce(cde.remaining_debt, o.debt_amount)) as remaining_debt,
-        count(*)::int as open_invoice_count,
-        (array_agg(o.code order by coalesce(cde.created_at, o.created_at) asc))[1] as oldest_order_code,
+        sum(o.total_amount) as invoice_total,
+        count(*) filter (where coalesce(cde.remaining_debt, o.debt_amount) > 0)::int as open_invoice_count,
+        (array_agg(o.code order by coalesce(cde.created_at, o.created_at) asc) filter (where coalesce(cde.remaining_debt, o.debt_amount) > 0))[1] as oldest_order_code,
         max(coalesce(cde.updated_at, o.updated_at)) as last_activity_at
       from orders o
       left join customer_debt_entries cde
@@ -60,114 +46,106 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         and o.order_type = 'invoice'
         and o.status <> 'cancelled'
         and o.customer_id is not null
-        and coalesce(cde.remaining_debt, o.debt_amount) > 0
       group by o.customer_id
     ),
-    kiotviet_anchor as (
-      select distinct on (customer_id)
+    customer_adjustment_debt as (
+      select
         customer_id,
-        customer_snapshot->>'code' as customer_code,
-        customer_snapshot->>'name' as customer_name,
-        balance_after,
-        source_code,
-        created_at
+        min(customer_snapshot->>'code') as customer_code,
+        min(customer_snapshot->>'name') as customer_name,
+        sum(
+          case
+            when source_code ~* '^CKKH[0-9]' then -abs(amount_delta)
+            when source_code ~* '^CB[0-9]' then amount_delta
+            else 0
+          end
+        ) as adjustment_total,
+        max(created_at) as last_activity_at
       from customer_debt_adjustments
       where organization_id = $1
-        and source_system = 'kiotviet'
-      order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
+      group by customer_id
     ),
-    invoices_after_anchor as (
+    customer_payment_debt as (
       select
-        a.customer_id,
-        sum(o.total_amount) as gross_total,
-        count(*) filter (where coalesce(cde.remaining_debt, o.debt_amount) > 0)::int as open_invoice_count,
-        (array_agg(o.code order by o.created_at asc) filter (where coalesce(cde.remaining_debt, o.debt_amount) > 0))[1] as oldest_order_code,
-        max(o.created_at) as last_activity_at
-      from kiotviet_anchor a
-      join orders o
-        on o.organization_id = $1
-       and o.customer_id = a.customer_id
-       and o.order_type = 'invoice'
-       and o.status <> 'cancelled'
-       and o.created_at > a.created_at
-      left join customer_debt_entries cde
-        on cde.organization_id = o.organization_id
-       and cde.order_id = o.id
-       and cde.status = 'open'
-       and cde.remaining_debt > 0
-      group by a.customer_id
-    ),
-    qcvl_payments_after_anchor as (
-      select
-        a.customer_id,
-        sum(case when cbe.direction = 'in' then abs(cbe.amount_delta) else -abs(cbe.amount_delta) end) as paid_total,
+        coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) as customer_id,
+        min(coalesce(cs.code, o.customer_snapshot->>'code', cbe.source->>'counterparty_code', '')) as customer_code,
+        min(coalesce(cs.data->>'name', o.customer_snapshot->>'name', cbe.counterparty->>'name', '')) as customer_name,
+        sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
         max(cbe.created_at) as last_activity_at
-      from kiotviet_anchor a
-      join cashbook_entries cbe
-        on cbe.organization_id = $1
-       and cbe.status = 'posted'
-       and cbe.source_type = 'payment_receipt_method'
-       and cbe.created_at > a.created_at
+      from cashbook_entries cbe
       left join orders o
         on o.organization_id = cbe.organization_id
        and o.code = cbe.source->>'order_code'
-      where (o.id is not null and o.customer_id = a.customer_id and o.status <> 'cancelled')
-         or (o.id is null and cbe.source->>'customer_id' = a.customer_id)
-      group by a.customer_id
+       and o.status <> 'cancelled'
+      left join customer_snapshots cs
+        on cs.organization_id = cbe.organization_id
+       and lower(cs.code) = lower(cbe.source->>'counterparty_code')
+      where cbe.organization_id = $1
+        and cbe.status = 'posted'
+        and (
+          cbe.source_type = 'payment_receipt_method'
+          or (
+            cbe.source_type = 'kiotviet_cashbook'
+            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+          )
+        )
+        and coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) is not null
+      group by coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id)
     ),
-    kiotviet_cashbook_after_anchor as (
+    linked_supplier_debt as (
       select
-        a.customer_id,
-        sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
-        max(cbe.created_at) as last_activity_at
-      from kiotviet_anchor a
-      join cashbook_entries cbe
-        on cbe.organization_id = $1
-       and cbe.status = 'posted'
-       and cbe.source_type = 'kiotviet_cashbook'
-       and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
-       and cbe.source->>'counterparty_code' = a.customer_code
-       and cbe.created_at > a.created_at
-      group by a.customer_id
+        s.data->>'linked_customer_id' as customer_id,
+        min(coalesce(cs.code, '')) as customer_code,
+        min(coalesce(cs.data->>'name', '')) as customer_name,
+        sum(-abs(coalesce(nullif(pr.data->>'payable_amount', '')::numeric, 0)) + abs(coalesce(nullif(pr.data->>'paid_amount', '')::numeric, 0))) as amount_delta,
+        max(coalesce(nullif(pr.data->>'received_at', '')::timestamptz, pr.created_at)) as last_activity_at
+      from supplier_snapshots s
+      join purchase_receipt_snapshots pr
+        on pr.organization_id = s.organization_id
+       and (
+         pr.data->>'supplier_id' = s.id
+         or pr.data->'supplier'->>'id' = s.id
+         or lower(pr.data->'supplier'->>'code') = lower(s.code)
+       )
+      left join customer_snapshots cs
+        on cs.organization_id = s.organization_id
+       and cs.id = s.data->>'linked_customer_id'
+      where s.organization_id = $1
+        and coalesce(s.data->>'linked_customer_id', '') <> ''
+        and pr.data->>'status' = 'posted'
+      group by s.data->>'linked_customer_id'
     ),
     debt_customers as (
       select customer_id from live_invoice_debt
       union
-      select customer_id from kiotviet_anchor
+      select customer_id from customer_adjustment_debt
+      union
+      select customer_id from customer_payment_debt
+      union
+      select customer_id from linked_supplier_debt
     )
     select
       dc.customer_id,
-      coalesce(a.customer_code, lid.customer_code, '') as customer_code,
-      coalesce(a.customer_name, lid.customer_name, '') as customer_name,
-      case when a.customer_id is not null
-        then a.balance_after
-           + coalesce(iaa.gross_total, 0)
-           - coalesce(qpa.paid_total, 0)
-           + coalesce(kca.amount_delta, 0)
-        else coalesce(lid.remaining_debt, 0)
-      end as total_debt,
-      case when a.customer_id is not null
-        then coalesce(iaa.open_invoice_count, 0)
-        else coalesce(lid.open_invoice_count, 0)
-      end as open_invoice_count,
-      case when a.customer_id is not null
-        then coalesce(iaa.oldest_order_code, a.source_code)
-        else coalesce(lid.oldest_order_code, '')
-      end as oldest_order_code,
-      (a.customer_id is not null) as has_kiotviet_anchor,
+      coalesce(lid.customer_code, cad.customer_code, cpd.customer_code, lsd.customer_code, '') as customer_code,
+      coalesce(lid.customer_name, cad.customer_name, cpd.customer_name, lsd.customer_name, '') as customer_name,
+      coalesce(lid.invoice_total, 0)
+        + coalesce(cad.adjustment_total, 0)
+        + coalesce(cpd.amount_delta, 0)
+        + coalesce(lsd.amount_delta, 0) as total_debt,
+      coalesce(lid.open_invoice_count, 0) as open_invoice_count,
+      coalesce(lid.oldest_order_code, '') as oldest_order_code,
+      false as has_kiotviet_anchor,
       greatest(
-        coalesce(a.created_at, timestamptz 'epoch'),
         coalesce(lid.last_activity_at, timestamptz 'epoch'),
-        coalesce(iaa.last_activity_at, timestamptz 'epoch'),
-        coalesce(qpa.last_activity_at, timestamptz 'epoch'),
-        coalesce(kca.last_activity_at, timestamptz 'epoch')
+        coalesce(cad.last_activity_at, timestamptz 'epoch'),
+        coalesce(cpd.last_activity_at, timestamptz 'epoch'),
+        coalesce(lsd.last_activity_at, timestamptz 'epoch')
       ) as last_activity_at
     from debt_customers dc
-    left join kiotviet_anchor a on a.customer_id = dc.customer_id
     left join live_invoice_debt lid on lid.customer_id = dc.customer_id
-    left join invoices_after_anchor iaa on iaa.customer_id = dc.customer_id
-    left join qcvl_payments_after_anchor qpa on qpa.customer_id = dc.customer_id
-    left join kiotviet_cashbook_after_anchor kca on kca.customer_id = dc.customer_id
+    left join customer_adjustment_debt cad on cad.customer_id = dc.customer_id
+    left join customer_payment_debt cpd on cpd.customer_id = dc.customer_id
+    left join linked_supplier_debt lsd on lsd.customer_id = dc.customer_id
     ${customerFilter}
   `
 }
@@ -250,57 +228,71 @@ export function computeCustomerDebtTotal(input: {
   const openInvoices = customerInvoices
     .filter((invoice) => invoice.debt_amount > 0)
     .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
-  const liveRemaining = openInvoices.reduce((sum, invoice) => sum + invoice.debt_amount, 0)
-  const anchor = [...input.adjustments]
-    .filter((adjustment) => adjustment.customer_id === input.customerId)
-    .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))[0]
-
-  if (!anchor) {
-    return {
-      customer_id: input.customerId,
-      customer_code: input.customerCode,
-      customer_name: input.customerName,
-      total_debt: liveRemaining,
-      open_invoice_count: openInvoices.length,
-      oldest_order_code: openInvoices[0]?.code ?? '',
-      has_kiotviet_anchor: false,
-      adjustments: input.adjustments.filter((adjustment) => adjustment.customer_id === input.customerId),
-    }
-  }
-
-  const anchorTime = Date.parse(anchor.created_at)
-  const invoicesAfter = customerInvoices.filter((invoice) => Date.parse(invoice.created_at) > anchorTime)
-  const openAfter = invoicesAfter.filter((invoice) => invoice.debt_amount > 0)
-  const grossAfter = invoicesAfter.reduce((sum, invoice) => sum + invoice.total_amount, 0)
-
-  let qcvlPaid = 0
-  let kvCashbookDelta = 0
+  const documents: PartnerDebtDocumentInput[] = customerInvoices.map((invoice) => ({
+    id: invoice.id,
+    code: invoice.code,
+    time: invoice.created_at,
+    amount: invoice.total_amount,
+    status: 'posted',
+    sourceType: 'invoice',
+    sourceId: invoice.id,
+  }))
   for (const entry of input.cashbookEntries) {
-    if (entry.status !== 'posted' || Date.parse(entry.created_at) <= anchorTime) continue
+    if (entry.status !== 'posted') continue
     if (entry.source_type === 'payment_receipt_method') {
       const matchesCustomer = entry.source?.customer_id === input.customerId
         || (entry.source?.order_code
           && customerInvoices.some((invoice) => invoice.code === entry.source?.order_code))
       if (!matchesCustomer) continue
-      qcvlPaid += entry.direction === 'in' ? Math.abs(entry.amount_delta) : -Math.abs(entry.amount_delta)
+      documents.push({
+        id: entry.code,
+        code: entry.code,
+        time: entry.created_at,
+        amount: Math.abs(entry.amount_delta),
+        status: 'posted',
+        sourceType: 'payment',
+        sourceId: entry.code,
+      })
       continue
     }
     if (entry.source_type === 'kiotviet_cashbook') {
       const codeOk = new RegExp(KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN, 'i').test(entry.code)
       const counterpartyOk = (entry.source?.counterparty_code ?? '') === input.customerCode
       if (!codeOk || !counterpartyOk) continue
-      kvCashbookDelta += entry.direction === 'in' ? -Math.abs(entry.amount_delta) : Math.abs(entry.amount_delta)
+      documents.push({
+        id: entry.code,
+        code: entry.code,
+        time: entry.created_at,
+        amount: Math.abs(entry.amount_delta),
+        normalizedAmountDelta: entry.direction === 'in' ? -Math.abs(entry.amount_delta) : Math.abs(entry.amount_delta),
+        status: 'posted',
+        sourceType: 'payment',
+        sourceId: entry.code,
+      })
     }
   }
+  for (const adjustment of input.adjustments.filter((row) => row.customer_id === input.customerId)) {
+    documents.push({
+      id: adjustment.id,
+      code: adjustment.source_code,
+      time: adjustment.created_at,
+      amount: Math.abs(adjustment.amount_delta),
+      normalizedAmountDelta: adjustment.amount_delta,
+      status: 'posted',
+      sourceType: 'adjustment',
+      sourceId: adjustment.id,
+    })
+  }
+  const ledger = buildPartnerDebtLedger({ view: 'customer', linked: false, documents })
 
   return {
     customer_id: input.customerId,
     customer_code: input.customerCode,
     customer_name: input.customerName,
-    total_debt: anchor.balance_after + grossAfter - qcvlPaid + kvCashbookDelta,
-    open_invoice_count: openAfter.length,
-    oldest_order_code: openAfter[0]?.code ?? anchor.source_code,
-    has_kiotviet_anchor: true,
+    total_debt: ledger.totalDebt,
+    open_invoice_count: openInvoices.length,
+    oldest_order_code: openInvoices[0]?.code ?? '',
+    has_kiotviet_anchor: false,
     adjustments: input.adjustments
       .filter((adjustment) => adjustment.customer_id === input.customerId)
       .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),

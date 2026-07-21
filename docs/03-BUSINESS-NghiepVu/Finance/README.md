@@ -3,7 +3,7 @@
 > Index SoT tài chính. Queue: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).  
 > Checklist docs: [../../DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
 >
-> Công nợ khách chi tiết: [../Sales/POS-CUSTOMER-DEBT.md](../Sales/POS-CUSTOMER-DEBT.md) · PRD [../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md](../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md).
+> Công thức công nợ khách: [CUSTOMER-DEBT.md](./CUSTOMER-DEBT.md) · POS debt: [../Sales/POS-CUSTOMER-DEBT.md](../Sales/POS-CUSTOMER-DEBT.md) · PRD [../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md](../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md).
 
 ---
 
@@ -12,6 +12,7 @@
 | File | Mô tả |
 |---|---|
 | [CASHBOOK.md](./CASHBOOK.md) | Sổ quỹ, quỹ/tài khoản, phiếu thu/chi |
+| [CUSTOMER-DEBT.md](./CUSTOMER-DEBT.md) | Công thức chuẩn tổng công nợ khách hàng |
 
 ---
 
@@ -22,7 +23,7 @@
 | A | Sổ quỹ tiền mặt + tài khoản ngân hàng (không ví điện tử MVP trừ khi Owner mở) |
 | B | Phiếu thu/chi; thu từ hóa đơn/thu nợ truy vết phân bổ |
 | C | Lọc theo chế độ công nợ đối tác (tính / không tính / không có công nợ) khi SoT đã chốt |
-| D | Công nợ khách: công thức chuẩn ở backend Finance (ledger/invoice-level) — UI Customers/Finance chỉ hiển thị |
+| D | Công nợ khách: công thức chuẩn ở [CUSTOMER-DEBT.md](./CUSTOMER-DEBT.md) và backend Finance — UI Customers/Finance/POS chỉ hiển thị số canonical |
 | E | Owner 2026-07-20: **đã import hết** So quỹ KV cần dùng — không mở đợt import mới |
 | F | Owner 2026-07-21: **được hiển thị số âm** trên báo cáo/đối soát/lịch sử (đối chiếu import KV) |
 | G | Owner 2026-07-21: **thu nợ live** không cho trả nhiều hơn nợ còn lại (không tạo trả trước / âm vận hành mới) — [POS-CUSTOMER-DEBT](../Sales/POS-CUSTOMER-DEBT.md) |

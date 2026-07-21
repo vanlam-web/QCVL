@@ -159,8 +159,8 @@ describe('finance presenter', () => {
     } satisfies CashbookEntryDetail
 
     expect(cashbookLinkedDocumentCode(importedInvoiceReceipt)).toBe('HD011149')
-    expect(cashbookLinkedDocumentRows(importedInvoiceReceipt)[0]?.code).toBe('HD011149')
+    expect(cashbookLinkedDocumentRows(importedInvoiceReceipt)).toEqual([])
     expect(cashbookLinkedDocumentCode(importedSupplierPayment)).toBe('PN000679')
-    expect(cashbookLinkedDocumentRows(importedSupplierPayment)[0]?.code).toBe('PN000679')
+    expect(cashbookLinkedDocumentRows(importedSupplierPayment)).toEqual([])
   })
 })

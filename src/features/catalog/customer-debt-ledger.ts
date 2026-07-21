@@ -19,6 +19,21 @@ export interface CustomerDebtLedgerRow {
   related_code?: string
 }
 
+export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail, 'ledger_rows'>): CustomerDebtLedgerRow[] {
+  return [...(debt.ledger_rows ?? [])]
+    .reverse()
+    .map((row) => ({
+      id: row.id,
+      code: row.code,
+      created_at: row.created_at,
+      type: backendCustomerDebtLedgerRowType(row),
+      value_delta: row.amount_delta,
+      running_debt: row.balance_after,
+      href: backendCustomerDebtLedgerRowHref(row),
+      related_code: row.code,
+    }))
+}
+
 type CustomerDebtLedgerSortableRow = Omit<CustomerDebtLedgerRow, 'running_debt'> & {
   running_debt?: number
 }
@@ -123,6 +138,21 @@ export function customerDebtHasLiveLedger(debt: CustomerDebtDetail) {
 function customerDebtAdjustmentHref(code: string) {
   if (/^PN/i.test(code)) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
   return null
+}
+
+function backendCustomerDebtLedgerRowType(row: NonNullable<CustomerDebtDetail['ledger_rows']>[number]) {
+  if (row.source_type === 'invoice' || /^HDO?\d/i.test(row.code)) return 'Bán hàng'
+  if (/^CKKH\d/i.test(row.code)) return 'Chiết khấu'
+  if (row.source_type === 'adjustment' || /^CB\d/i.test(row.code)) return 'Điều chỉnh'
+  return 'Thanh toán'
+}
+
+function backendCustomerDebtLedgerRowHref(row: NonNullable<CustomerDebtDetail['ledger_rows']>[number]) {
+  if (row.source_type === 'invoice' || /^HDO?\d/i.test(row.code)) {
+    return managementRecordOpenHref('/sales-documents', row.code, { type: 'invoice' })
+  }
+  if (row.source_type === 'payment') return managementRecordOpenHref('/finance', row.code)
+  return customerDebtAdjustmentHref(row.code)
 }
 
 // The backend total (`debt.total_debt`) is the single source of truth for the
