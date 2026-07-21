@@ -4,6 +4,9 @@
 
 **Goal:** Add a reusable KiotViet Excel import flow for the Hàng hóa page that can preview and safely import the same KV product export many times without creating duplicates or silently deleting real data.
 
+
+> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**.
+
 **Architecture:** Extract the existing CLI mapper into a shared parser so CLI, server tests, and UI import use one mapping contract. Add a server preview/import endpoint that validates rows, optionally clears only demo products, and upserts product groups/products by organization + product code. Add a shared top-right import action to the Catalog toolbar and a modal that uploads `.xlsx`, shows a preview summary, and only writes after confirmation.
 
 **Tech Stack:** React 19, TypeScript, Vite, Node HTTP server, PostgreSQL repository, Vitest, existing QCVL API envelope/error handling, existing `ManagementCompactToolbar` and shared CSS.
