@@ -60,8 +60,10 @@
 - [x] Tách AC BOM-RULES: slice KV done vs P4 đóng băng
 - [x] Freeze note Purchase/Finance/Sales mục hướng dài + queue PHASE A (V1) / B (P4)
 - [ ] Mojibake / encoding PHASE-CHECKLIST header, INVENTORY-API — sửa khi đụng file (không bắt buộc một lần)
-- [ ] Chốt SoT debt “âm đối soát vs không trả trước” thành một rule Owner trước khi code Finance sâu
+- [x] Chốt SoT debt: hiện âm đối soát + thu live không trả thừa (Owner 2026-07-21) · Finance README F/G · BR-DEBT-06
+- [x] Hướng tiếp: vận hành đơn mới sau import + đối soát trùng KV · Sales README
 - [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
+- [ ] Owner chỉ loại đơn cần UI trước (HD đã có / PN / tạo SP / …) rồi mới mở slice code
 
 ---
 

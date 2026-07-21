@@ -60,6 +60,42 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 
 ---
 
+## Vận hành đơn mới sau import (Owner 2026-07-21)
+
+> **Mục tiêu:** Không import file KV mới. Nhập **đơn phát sinh trên QCVL** sau đợt import; UI tạo một số loại đơn còn thiếu; sau khi nhập → **đối soát trùng/lệch với chứng từ KV đã có**.
+
+### 1. SoT hướng làm
+
+| # | Chốt |
+|---|---|
+| A | Master + chứng từ lịch sử KV **đã import đủ** — không mở đợt import mới |
+| B | Đơn mới = chứng từ tạo trên QCVL (POS / sổ quỹ / …), **không** nhập lại bằng file Excel KV |
+| C | Sau khi có đơn mới: đối soát với mã KV đã import (`HD…`, `PN…`, `TTHD…`…) — tránh nhầm / trùng nghiệp vụ |
+| D | P4 (mốc mở, Purchase persist nếu vẫn stub, deep-scan…) vẫn đóng băng trừ khi chặn trực tiếp việc nhập đơn Owner chọn |
+
+### 2. Runtime tạo đơn hôm nay
+
+| Loại đơn | Tạo live? | Ghi chú |
+|---|---|---|
+| Hóa đơn bán POS → `HD…` | **Có** (Postgres) | Mã = `max(HD)+1` trên tập đã có (gồm HD import) |
+| Báo giá → `BG…` | **Có** | Qua POS |
+| Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
+| Phiếu nhập → `PN…` | **Chưa** — HTTP stub | Form UI có; chưa persist — [Purchase README](../Purchase/README.md) |
+| Tạo hàng hóa mới | **Chưa** — `POST /products` stub | Chặn nếu đơn mới cần mã hàng chưa có trong catalog |
+
+### 3. Đối soát trùng KV (SoT tối thiểu)
+
+- Không gian mã: `UNIQUE (organization_id, code)` — trùng mã DB sẽ lỗi.
+- HD/BG mới: sinh tiếp sau mã lớn nhất đã có (gồm import) → giảm trùng mã tự động; **chưa** có màn hình “check trùng KV” riêng khi lưu.
+- Đối soát vận hành: tra list Hóa đơn / Phiếu nhập / Sổ quỹ theo mã trước khi tin tồn/công nợ.
+- **Chưa chốt UI:** báo cáo/cờ “đơn QCVL vs đã có trên KV” — làm khi Owner mở slice.
+
+### 4. Việc docs/code tiếp theo (chờ Owner chỉ loại đơn)
+
+Trước khi sửa code: Owner chọn loại đơn cần nhập trước (HD POS đã có / PN live / tạo SP / khác) và liệt kê chỗ UI còn thiếu khi thử nhập.
+
+---
+
 ## Ghi chú BOM/Combo (ranh giới sản phẩm)
 
 - **SoT + runtime slice KV (combo phẳng cấp 1):** đã khớp — [BOM README](../BOM/README.md).
@@ -87,6 +123,7 @@ Chi tiết rule: [POS-ORDER-LIFECYCLE.md](./POS-ORDER-LIFECYCLE.md). Khi đọc 
 | Hạng mục | Ghi chú |
 |---|---|
 | Import khách KV | **Đã xong / đóng** (Owner 2026-07-20 không import thêm) |
+| Số âm / thu live | Owner 2026-07-21: được hiện âm khi đối soát; thu live không trả thừa — [POS-CUSTOMER-DEBT BR-DEBT-06](./POS-CUSTOMER-DEBT.md) |
 | List/detail Customers | PRD: [../../02-PRD-UX-PhongCanh/Customers/](../../02-PRD-UX-PhongCanh/Customers/) |
 | Tổng nợ / tab nợ | UI đọc **canonical** Finance (`customer-debt`); ledger hiển thị; không tự cấn trừ NCC liên kết |
 | SoT debt | [POS-CUSTOMER-DEBT.md](./POS-CUSTOMER-DEBT.md) — nếu doc cũ nói “không âm tuyệt đối” mà runtime có số âm đối soát, ưu tiên canonical backend + ghi chú đối soát |
