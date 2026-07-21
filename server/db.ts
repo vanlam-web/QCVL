@@ -4501,16 +4501,6 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const cashbookResult = customerCode
         ? await pool.query(
             `
-              with kiotviet_anchor as (
-                select distinct on (customer_id)
-                  customer_id,
-                  created_at
-                from customer_debt_adjustments
-                where organization_id = $1
-                  and customer_id = $2
-                  and source_system = 'kiotviet'
-                order by customer_id, created_at desc, source_row desc nulls last, updated_at desc
-              )
               select
                 cbe.id,
                 cbe.code,
@@ -4527,7 +4517,6 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 cbe.source,
                 cbe.allocations
               from cashbook_entries cbe
-              left join kiotviet_anchor a on true
               left join orders o
                 on o.organization_id = cbe.organization_id
                and o.code = cbe.source->>'order_code'
@@ -4544,10 +4533,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                   or (
                     cbe.source_type = 'kiotviet_cashbook'
                     and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
-                    and cbe.source->>'counterparty_code' = $3
+                    and (
+                      cbe.source->>'counterparty_code' = $3
+                      or (o.id is not null and o.customer_id = $2 and o.status <> 'cancelled')
+                    )
                   )
                 )
-                and (a.customer_id is null or cbe.created_at > a.created_at)
               order by cbe.created_at desc, cbe.code desc
             `,
             [input.organizationId, input.customerId, customerCode],

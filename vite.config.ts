@@ -38,7 +38,7 @@ export const pwaOptions = {
 } satisfies Partial<VitePWAOptions>
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
+  const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
 
   return {
     plugins: [

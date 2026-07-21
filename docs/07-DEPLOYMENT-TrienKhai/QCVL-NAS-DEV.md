@@ -239,7 +239,7 @@ Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c','npm run api:de
 Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c','npx vite --host 0.0.0.0 --port 3202') -WorkingDirectory 'D:\Phần mềm\QCVL' -WindowStyle Hidden
 ```
 
-`npm run api:dev` phai la watch mode (`tsx watch server/index.ts`). Khong chay tay `tsx server/index.ts` khi dang sua backend, vi API `3100` se giu code cu. Dau hieu sai: frontend `3202` co UI moi nhung goi route moi bi `RESOURCE_NOT_FOUND` / `Khong tim thay du lieu can thao tac`. Cach sua: dung process dang nghe port `3100`, bat lai bang `npm run api:dev`, du lieu local van doc tu `logs/dev-memory-state.json`.
+`npm run api:dev` phai nap PostgreSQL NAS va sau do chay watch mode (`tsx watch server/index.ts`). Mac dinh script doc `\\100.84.228.125\docker\QCVL\.env`, dung DB qua Tailscale `100.84.228.125:55433`, va `/api/v1/health` phai tra `persistence: "postgres"` de `3202` chung du lieu voi `3200`. Khong chay tay `tsx server/index.ts` khi dang sua backend, vi API `3100` se giu code cu hoac roi ve memory. Dau hieu sai: frontend `3202` co UI moi nhung goi route moi bi `RESOURCE_NOT_FOUND` / `Khong tim thay du lieu can thao tac`, hoac health tra `persistence: "memory"`. Cach sua: dung process dang nghe port `3100`, bat lai bang `npm run api:dev`.
 
 Lenh kiem tra:
 

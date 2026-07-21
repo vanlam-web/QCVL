@@ -961,7 +961,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         })),
         linked_supplier_receipts: linkedSupplierReceiptOffsets(input.customerId),
         cashbook_entries: [],
-        ledger_rows: [],
+        ledger_rows: debt.ledger_rows,
       }
     },
     async upsertImportedKiotVietCustomerDebtAdjustments(input) {

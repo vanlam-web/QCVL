@@ -481,6 +481,14 @@ describe('createPgRepository product units', () => {
     const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
     expect(canonicalSql).not.toContain('kiotviet_anchor as')
     expect(canonicalSql).not.toContain('balance_after')
+    const cashbookSql = String(pgMock.query.mock.calls.find(([sql]) => (
+      String(sql).includes('select')
+      && String(sql).includes('cbe.id')
+      && String(sql).includes('from cashbook_entries cbe')
+    ))?.[0])
+    expect(cashbookSql).not.toContain('kiotviet_anchor')
+    expect(cashbookSql).not.toContain('cbe.created_at >')
+    expect(cashbookSql).toMatch(/cbe\.source_type = 'kiotviet_cashbook'[\s\S]*o\.id is not null[\s\S]*o\.customer_id = \$2/)
   })
 
   test('keeps fully paid invoices in customer debt ledger documents', async () => {

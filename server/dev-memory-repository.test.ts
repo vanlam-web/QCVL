@@ -3449,6 +3449,11 @@ describe('createDevMemoryRepository persistence', () => {
 
     const debt = await repository.getCustomerDebt?.({ organizationId: 'org-dev-memory', customerId })
     expect(debt?.total_debt).toBe(150000)
+    expect(debt?.ledger_rows.map((row) => [row.code, row.amount_delta, row.balance_after])).toEqual([
+      ['HD020001', 100000, 100000],
+      ['HD020002', 200000, 300000],
+      [collected?.payment_receipt_id, -150000, 150000],
+    ])
     expect(debt?.invoices).toEqual([
       expect.objectContaining({ order_code: 'HD020002', remaining_debt: 150000 }),
     ])
