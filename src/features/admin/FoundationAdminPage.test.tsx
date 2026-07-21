@@ -565,13 +565,14 @@ it('saves shop info and default bill template from Thiết lập panels', async 
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Địa chỉ' }), '12 Nguyễn Trãi')
   await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }))
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }), '0909111222')
-  await userEvent.click(within(shopPanel).getByRole('button', { name: 'Lưu' }))
+  await userEvent.click(within(shopPanel).getByRole('button', { name: 'Lưu thông tin cửa hàng' }))
   expect(within(shopPanel).getByRole('status')).toHaveTextContent('Đã lưu cấu hình bill trên máy này.')
+  expect(within(shopPanel).getByRole('complementary', { name: 'Xem trước đầu bill' })).toHaveTextContent('In ảnh Văn Lâm')
 
   await userEvent.click(within(sidebar).getByRole('button', { name: 'Mẫu in' }))
   const templatePanel = screen.getByRole('region', { name: 'Mẫu in' })
-  await userEvent.selectOptions(within(templatePanel).getByRole('combobox', { name: 'Mẫu mặc định' }), 'k80')
-  await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu' }))
+  await userEvent.click(within(templatePanel).getByRole('radio', { name: /K80 \(nhiệt\)/ }))
+  await userEvent.click(within(templatePanel).getByRole('button', { name: 'Lưu mẫu mặc định' }))
 
   expect(JSON.parse(window.localStorage.getItem('qcvl.organizationBillSettings')!)).toMatchObject({
     shop_name: 'In ảnh Văn Lâm',

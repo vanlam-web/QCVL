@@ -1,4 +1,5 @@
-import { billTemplateLabel, type BillTemplateId } from './bill-settings'
+import { BillTemplatePicker } from './BillTemplatePicker'
+import type { BillTemplateId } from './bill-settings'
 
 export function BillPrintToolbar({
   template,
@@ -13,17 +14,13 @@ export function BillPrintToolbar({
 }) {
   return (
     <div className="quote-print-toolbar">
-      <label className="bill-template-picker">
-        <span>Mẫu in</span>
-        <select
-          aria-label="Mẫu in"
-          value={template}
-          onChange={(event) => onTemplateChange(event.target.value as BillTemplateId)}
-        >
-          <option value="a4">{billTemplateLabel('a4')}</option>
-          <option value="k80">{billTemplateLabel('k80')}</option>
-        </select>
-      </label>
+      <BillTemplatePicker
+        compact
+        legend="Mẫu in"
+        name="print_bill_template"
+        value={template}
+        onChange={onTemplateChange}
+      />
       <button type="button" onClick={onPrint}>
         In
       </button>
