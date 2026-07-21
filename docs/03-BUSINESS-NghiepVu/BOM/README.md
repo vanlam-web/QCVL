@@ -67,8 +67,8 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 | Việc | Trạng thái |
 |---|---|
 | SoT 3 lớp (quyết định / runtime / hướng dài) | Xong |
-| Runtime slice KV: (1) migrate BOM đã có → `active` (+ sửa path Import khẩn) · (2) POS skip parent · (3) `draft_bom`/UI · (4) GET\|POST `/bom` | **Xong** — PR runtime slice |
-| Hướng dài mục 3 | **Chưa** — không nhầm với slice KV |
+| Runtime slice KV: (1) migrate BOM đã có → `active` (+ sửa path Import khẩn) · (2) POS skip parent · (3) `draft_bom`/UI · (4) GET\|POST `/bom` | **Xong** — đã lên `main` |
+| Hướng dài mục 3 | **Đóng băng** (Owner 2026-07-21: bản dùng được tạm; nâng cấp sau) |
 
 **Quy tắc:** Doc vệ tinh chỉ được viết “import `active` / dùng ngay” như **SoT đã khớp runtime** khi mục 2 ghi Có. Không viết “nháp chờ duyệt” cho BOM KV.
 

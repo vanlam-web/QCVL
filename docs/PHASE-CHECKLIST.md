@@ -105,6 +105,13 @@ Current status 2026-07-20 (Inventory stock docs):
 - Tiến độ chỉnh lý docs (BOM/Inventory/tiếp theo): [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md).
 - Rà POS trừ kho 2026-07-21: Postgres live trừ cả mã combo (bug); biên bản `docs/03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md`. Chưa sửa code.
 
+Current status 2026-07-21 (đóng băng V1 tạm — Owner):
+
+- **Bản hiện tại dùng được tạm.** Slice BOM/POS KV đã lên `main` (migrate `0008`, POS skip parent combo, UI/`/bom`). Không re-import Excel.
+- P4 / hướng dài (mốc mở tồn, Purchase persist stub, deep-scan BOM, Lưu Combo, object cuộn-tấm) = **nâng cấp làm sau** — đóng băng, không mở code cho đến khi Owner bảo.
+- Docs tạm: [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) · [BOM README](./03-BUSINESS-NghiepVu/BOM/README.md) · [Inventory README](./03-BUSINESS-NghiepVu/Inventory/README.md).
+- **Queue tiếp theo (chờ Owner chọn module):** vận hành/đối soát V1 trên dữ liệu đã có — không gồm các mục P4 đóng băng ở trên. Ví dụ ứng viên: cứng hóa UI/filter, Finance/So quỹ vận hành, re-check `REV-2026-07-08-001`.
+
 
 ---
 
