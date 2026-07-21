@@ -1243,12 +1243,12 @@ export function CatalogPage({
                                 {product.draft_bom ? (
                                   <dl className="management-detail-meta-grid management-detail-meta-grid-four">
                                     <div>
-                                      <dt>BOM nháp KiotViet</dt>
+                                      <dt>BOM KiotViet</dt>
                                       <dd>{product.draft_bom.item_count} vật tư</dd>
                                     </div>
                                     <div>
                                       <dt>Trạng thái</dt>
-                                      <dd>Cần rà soát trước khi kích hoạt</dd>
+                                      <dd>{product.draft_bom.status === 'active' ? 'Đang dùng khi bán' : product.draft_bom.status}</dd>
                                     </div>
                                   </dl>
                                 ) : null}

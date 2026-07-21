@@ -2,6 +2,8 @@
 
 > **Vai trò:** Draft kỹ thuật từ Source of Truth nghiệp vụ.
 > **Business:** [BOM-RULES.md](../../03-BUSINESS-NghiepVu/BOM/BOM-RULES.md)
+>
+> **Runtime 2026-07-21:** `GET` + `POST|PUT /api/v1/products/{id}/bom` đã nối Postgres/dev-memory (lưu version `active`). Import KV ghi BOM `active`. `POST /boms/{id}/activate`, preview/validate, deep-scan — chưa. SoT tiến trình: [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md).
 
 ---
 

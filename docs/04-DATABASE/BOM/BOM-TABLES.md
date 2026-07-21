@@ -78,15 +78,16 @@ Backend/database layer phải hỗ trợ:
 
 ## 4. Import KiotViet
 
-Dữ liệu `Hàng thành phần` từ KiotViet được import vào trạng thái nháp/cần rà soát.
+Dữ liệu `Hàng thành phần` từ KiotViet được import thành BOM **`active`**, dùng ngay khi bán (Owner 2026-07-20).
 
 Không lưu định dạng text `Ma:SoLuong|Ma:SoLuong` làm schema chính.
- 
-## Ghi chú triển khai import KiotViet 2026-07-10
+
+## Ghi chú triển khai import KiotViet (cập nhật 2026-07-21)
 
 - Parse `Hàng thành phần` dạng `Mã:Định mức|Mã:Định mức`.
-- Lưu thành `product_boms.status = draft`, không tự active.
+- Lưu thành `product_boms.status = active` với note `Trusted for stock deduction`.
 - Tạo version mới cho mỗi lần import lại mã có BOM.
-- Archive draft KiotViet cũ của cùng sản phẩm trước khi tạo draft mới.
+- Archive BOM KiotViet cũ (`draft` hoặc `active`) của cùng sản phẩm trước khi tạo bản mới.
+- Migration `0008_promote_kiotviet_bom_active.sql` promote draft KV cũ → `active`.
 - Thiếu sản phẩm cha hoặc thiếu component theo mã hàng thì bỏ qua BOM đó và tăng `bom_skipped_rows`.
 - Ghi source text vào `notes` để đối soát, schema chính vẫn là `product_bom_items`.

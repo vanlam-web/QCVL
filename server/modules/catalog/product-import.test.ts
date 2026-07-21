@@ -370,7 +370,7 @@ describe('product import server flow', () => {
     })
   })
 
-  it('applies KiotViet BOM rows as draft BOMs after product upsert', async () => {
+  it('applies KiotViet BOM rows as active BOMs after product upsert', async () => {
     const upsertDraftProductBoms = vi.fn(async () => ({ created: 1, updated: 0, skipped: 0 }))
     const repository = {
       upsertProductGroupsByName: vi.fn(async () => new Map([['Alu>>Vật tư', 'group-1']])),
@@ -398,7 +398,7 @@ describe('product import server flow', () => {
           { component_code: 'DCS', quantity: 0.6 },
           { component_code: 'F5', quantity: 0.3 },
         ],
-        note: 'Imported from KiotViet product BOM. Review before activating.',
+        note: 'Imported from KiotViet product BOM. Trusted for stock deduction.',
       }],
     })
     expect(result.summary).toMatchObject({

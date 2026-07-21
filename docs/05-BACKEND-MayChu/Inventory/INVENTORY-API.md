@@ -105,7 +105,7 @@ TÃ¬m sáº£n pháº©m kÃ¨m thÃ´ng tin tá»“n kho tá»•ng há»£p.
 
 - `kiotviet_provisional_stock`: tồn tạm từ `inventory_provisional_balances`, lấy từ export Hàng hóa KiotViet.
 - `latest_kiotviet_stocktake`: phiếu kiểm kho KiotViet gần nhất từ `stocktakes`/`stocktake_items`, chỉ dùng làm bằng chứng đối soát.
-- `draft_bom`: BOM nháp import từ KiotViet.
+- `draft_bom`: field tương thích — BOM đang dùng (`active`, fallback `draft`) import/lưu từ KiotViet hoặc tay.
 
 `latest_kiotviet_stocktake.actual_qty` không được dùng để cập nhật `inventory_provisional_balances`, tồn vận hành, hoặc tạo `stock_movements`.
 

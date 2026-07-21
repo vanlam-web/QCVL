@@ -43,7 +43,7 @@ it('previews a KiotViet product file before importing', async () => {
   expect(screen.getByText('17 cập nhật')).toBeInTheDocument()
   expect(screen.getByText('620 dòng giá bán')).toBeInTheDocument()
   expect(screen.getByText('517 dòng tồn tạm')).toBeInTheDocument()
-  expect(screen.getByText('189 dòng BOM nháp')).toBeInTheDocument()
+  expect(screen.getByText('189 dòng BOM')).toBeInTheDocument()
   expect(screen.getByText('Giá chung')).toBeInTheDocument()
   expect(screen.getByText('11 cần sửa')).toBeInTheDocument()
   expect(screen.queryByText(/thiếu ĐVT/)).not.toBeInTheDocument()

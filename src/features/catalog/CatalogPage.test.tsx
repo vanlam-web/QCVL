@@ -1005,11 +1005,11 @@ it('shows KiotViet provisional stock and draft BOM metadata for imported product
             source_label: 'KiotViet product import',
           },
           draft_bom: {
-            id: 'bom-draft-hh',
+            id: 'bom-active-hh',
             version: 1,
-            status: 'draft' as const,
+            status: 'active' as const,
             item_count: 2,
-            notes: 'Imported from KiotViet product BOM. Review before activating.',
+            notes: 'Imported from KiotViet product BOM. Trusted for stock deduction.',
           },
         },
       ],
@@ -1035,9 +1035,9 @@ it('shows KiotViet provisional stock and draft BOM metadata for imported product
 
   await userEvent.click(within(detail).getByRole('tab', { name: 'BOM/Vật tư cấu thành' }))
   const bomPanel = within(detail).getByRole('region', { name: 'BOM HH' })
-  expect(within(bomPanel).getByText('BOM nháp KiotViet')).toBeInTheDocument()
+  expect(within(bomPanel).getByText('BOM KiotViet')).toBeInTheDocument()
   expect(within(bomPanel).getByText('2 vật tư')).toBeInTheDocument()
-  expect(within(bomPanel).getByText('Cần rà soát trước khi kích hoạt')).toBeInTheDocument()
+  expect(within(bomPanel).getByText('Đang dùng khi bán')).toBeInTheDocument()
 })
 
 it('shows calculated QCVL operating stock as the main product stock value', async () => {

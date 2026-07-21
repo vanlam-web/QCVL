@@ -49,7 +49,7 @@ export interface Product {
   draft_bom?: {
     id: string
     version: number
-    status: 'draft'
+    status: 'draft' | 'active' | 'archived'
     item_count: number
     notes: string | null
   } | null
