@@ -576,7 +576,12 @@ export function PurchaseReceiptsPage({
   const receiptSupplierSearchQuery = normalizeManagementSearchText(receiptSupplierSearch)
   const receiptSupplierSearchResults = useMemo(() => {
     const search = receiptSupplierSearch.trim()
-    const remoteSuppliers = receiptSupplierCatalogSearchResult.search === search ? receiptSupplierCatalogSearchResult.suppliers : []
+    const remoteSuppliers =
+      search.length === 0
+        ? []
+        : receiptSupplierCatalogSearchResult.search === search
+          ? receiptSupplierCatalogSearchResult.suppliers
+          : []
     return uniqueReceiptSuppliersById([...remoteSuppliers, ...suppliers])
       .filter((supplier) => supplier.status === 'active')
       .filter((supplier) => supplierMatchesReceiptSearch(supplier, receiptSupplierSearchQuery))
@@ -740,7 +745,6 @@ export function PurchaseReceiptsPage({
 
     const search = receiptSupplierSearch.trim()
     if (search.length === 0) {
-      setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
       return undefined
     }
 

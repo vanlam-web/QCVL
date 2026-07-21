@@ -364,7 +364,14 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             case
               when default_bill_template in ('a4', 'k80') then default_bill_template
               else 'a4'
-            end as default_bill_template
+            end as default_bill_template,
+            coalesce(nullif(btrim(invoice_title), ''), 'HÓA ĐƠN BÁN HÀNG') as invoice_title,
+            coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ') as quote_title,
+            coalesce(footer_note, '') as footer_note,
+            coalesce(show_product_code, true) as show_product_code,
+            coalesce(show_unit, true) as show_unit,
+            coalesce(show_discount, true) as show_discount,
+            logo_data_url
           from organizations
           where id = $1
           limit 1
@@ -378,19 +385,21 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           shop_address: '',
           shop_phone: '',
           default_bill_template: 'a4' as const,
+          invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+          quote_title: 'BÁO GIÁ',
+          footer_note: '',
+          show_product_code: true,
+          show_unit: true,
+          show_discount: true,
+          logo_data_url: null,
         }
       }
-      return {
-        shop_name: String(row.shop_name),
-        shop_address: String(row.shop_address ?? ''),
-        shop_phone: String(row.shop_phone ?? ''),
-        default_bill_template: row.default_bill_template === 'k80' ? 'k80' : 'a4',
-      }
+      return mapOrganizationBillSettingsRow(row)
     },
 
     async updateOrganizationBillSettings(input) {
       await ensureOrganizationBillSettingsColumns(pool)
-      const currentResult = await pool.query(
+      const current = await pool.query(
         `
           select
             coalesce(nullif(btrim(shop_name), ''), name) as shop_name,
@@ -399,25 +408,47 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             case
               when default_bill_template in ('a4', 'k80') then default_bill_template
               else 'a4'
-            end as default_bill_template
+            end as default_bill_template,
+            coalesce(nullif(btrim(invoice_title), ''), 'HÓA ĐƠN BÁN HÀNG') as invoice_title,
+            coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ') as quote_title,
+            coalesce(footer_note, '') as footer_note,
+            coalesce(show_product_code, true) as show_product_code,
+            coalesce(show_unit, true) as show_unit,
+            coalesce(show_discount, true) as show_discount,
+            logo_data_url
           from organizations
           where id = $1
           limit 1
         `,
         [input.organizationId],
       )
-      const row = currentResult.rows[0]
-      const current = {
-        shop_name: String(row?.shop_name ?? 'QCVL'),
-        shop_address: String(row?.shop_address ?? ''),
-        shop_phone: String(row?.shop_phone ?? ''),
-        default_bill_template: (row?.default_bill_template === 'k80' ? 'k80' : 'a4') as 'a4' | 'k80',
-      }
+      const mapped = current.rows[0]
+        ? mapOrganizationBillSettingsRow(current.rows[0])
+        : {
+            shop_name: 'QCVL',
+            shop_address: '',
+            shop_phone: '',
+            default_bill_template: 'a4' as const,
+            invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+            quote_title: 'BÁO GIÁ',
+            footer_note: '',
+            show_product_code: true,
+            show_unit: true,
+            show_discount: true,
+            logo_data_url: null,
+          }
       const next = {
-        shop_name: input.patch.shop_name ?? current.shop_name,
-        shop_address: input.patch.shop_address ?? current.shop_address,
-        shop_phone: input.patch.shop_phone ?? current.shop_phone,
-        default_bill_template: input.patch.default_bill_template ?? current.default_bill_template,
+        shop_name: input.patch.shop_name ?? mapped.shop_name,
+        shop_address: input.patch.shop_address ?? mapped.shop_address,
+        shop_phone: input.patch.shop_phone ?? mapped.shop_phone,
+        default_bill_template: input.patch.default_bill_template ?? mapped.default_bill_template,
+        invoice_title: input.patch.invoice_title ?? mapped.invoice_title,
+        quote_title: input.patch.quote_title ?? mapped.quote_title,
+        footer_note: input.patch.footer_note ?? mapped.footer_note,
+        show_product_code: input.patch.show_product_code ?? mapped.show_product_code,
+        show_unit: input.patch.show_unit ?? mapped.show_unit,
+        show_discount: input.patch.show_discount ?? mapped.show_discount,
+        logo_data_url: input.patch.logo_data_url !== undefined ? input.patch.logo_data_url : mapped.logo_data_url,
       }
       await pool.query(
         `
@@ -426,10 +457,30 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             shop_name = $2,
             shop_address = $3,
             shop_phone = $4,
-            default_bill_template = $5
+            default_bill_template = $5,
+            invoice_title = $6,
+            quote_title = $7,
+            footer_note = $8,
+            show_product_code = $9,
+            show_unit = $10,
+            show_discount = $11,
+            logo_data_url = $12
           where id = $1
         `,
-        [input.organizationId, next.shop_name, next.shop_address, next.shop_phone, next.default_bill_template],
+        [
+          input.organizationId,
+          next.shop_name,
+          next.shop_address,
+          next.shop_phone,
+          next.default_bill_template,
+          next.invoice_title,
+          next.quote_title,
+          next.footer_note,
+          next.show_product_code,
+          next.show_unit,
+          next.show_discount,
+          next.logo_data_url,
+        ],
       )
       return next
     },
@@ -7952,6 +8003,13 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   await pool.query('alter table organizations add column if not exists shop_address text')
   await pool.query('alter table organizations add column if not exists shop_phone text')
   await pool.query('alter table organizations add column if not exists default_bill_template text')
+  await pool.query('alter table organizations add column if not exists invoice_title text')
+  await pool.query('alter table organizations add column if not exists quote_title text')
+  await pool.query('alter table organizations add column if not exists footer_note text')
+  await pool.query('alter table organizations add column if not exists show_product_code boolean')
+  await pool.query('alter table organizations add column if not exists show_unit boolean')
+  await pool.query('alter table organizations add column if not exists show_discount boolean')
+  await pool.query('alter table organizations add column if not exists logo_data_url text')
   await pool.query(`
     update organizations
     set shop_name = coalesce(nullif(btrim(shop_name), ''), name)
@@ -7974,6 +8032,46 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
        or btrim(default_bill_template) = ''
        or default_bill_template not in ('a4', 'k80')
   `)
+  await pool.query(`
+    update organizations
+    set invoice_title = coalesce(nullif(btrim(invoice_title), ''), 'HÓA ĐƠN BÁN HÀNG')
+    where invoice_title is null or btrim(invoice_title) = ''
+  `)
+  await pool.query(`
+    update organizations
+    set quote_title = coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ')
+    where quote_title is null or btrim(quote_title) = ''
+  `)
+  await pool.query(`
+    update organizations
+    set footer_note = coalesce(footer_note, '')
+    where footer_note is null
+  `)
+  await pool.query(`
+    update organizations
+    set show_product_code = coalesce(show_product_code, true),
+        show_unit = coalesce(show_unit, true),
+        show_discount = coalesce(show_discount, true)
+    where show_product_code is null
+       or show_unit is null
+       or show_discount is null
+  `)
+}
+
+function mapOrganizationBillSettingsRow(row: Record<string, unknown>) {
+  return {
+    shop_name: String(row.shop_name ?? 'QCVL'),
+    shop_address: String(row.shop_address ?? ''),
+    shop_phone: String(row.shop_phone ?? ''),
+    default_bill_template: (row.default_bill_template === 'k80' ? 'k80' : 'a4') as 'a4' | 'k80',
+    invoice_title: String(row.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG'),
+    quote_title: String(row.quote_title ?? 'BÁO GIÁ'),
+    footer_note: String(row.footer_note ?? ''),
+    show_product_code: row.show_product_code !== false,
+    show_unit: row.show_unit !== false,
+    show_discount: row.show_discount !== false,
+    logo_data_url: typeof row.logo_data_url === 'string' && row.logo_data_url ? row.logo_data_url : null,
+  }
 }
 
 async function replacePermissionsForUser(pool: pg.Pool, userId: string, permissions: `perm.${string}`[]) {

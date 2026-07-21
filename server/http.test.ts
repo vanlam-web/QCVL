@@ -19,6 +19,13 @@ function repository(passwordHash: string, displayName = 'Admin'): ServerReposito
     shop_address: 'Xưởng in và thi công quảng cáo',
     shop_phone: '',
     default_bill_template: 'a4' as const,
+    invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+    quote_title: 'BÁO GIÁ',
+    footer_note: '',
+    show_product_code: true,
+    show_unit: true,
+    show_discount: true,
+    logo_data_url: null as string | null,
   }
 
   return {
@@ -56,6 +63,13 @@ function repository(passwordHash: string, displayName = 'Admin'): ServerReposito
         shop_address: input.patch.shop_address ?? billSettings.shop_address,
         shop_phone: input.patch.shop_phone ?? billSettings.shop_phone,
         default_bill_template: input.patch.default_bill_template ?? billSettings.default_bill_template,
+        invoice_title: input.patch.invoice_title ?? billSettings.invoice_title,
+        quote_title: input.patch.quote_title ?? billSettings.quote_title,
+        footer_note: input.patch.footer_note ?? billSettings.footer_note,
+        show_product_code: input.patch.show_product_code ?? billSettings.show_product_code,
+        show_unit: input.patch.show_unit ?? billSettings.show_unit,
+        show_discount: input.patch.show_discount ?? billSettings.show_discount,
+        logo_data_url: input.patch.logo_data_url !== undefined ? input.patch.logo_data_url : billSettings.logo_data_url,
       }
       return { ...billSettings }
     },
@@ -423,9 +437,29 @@ describe('createHttpHandler', () => {
       default_bill_template: 'k80',
     })
 
+    const content = await handler(
+      new Request('http://api.local/api/v1/organization/bill-settings', {
+        method: 'PATCH',
+        headers: { ...headers, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          invoice_title: 'PHIẾU BÁN HÀNG',
+          show_product_code: false,
+          footer_note: 'Cảm ơn quý khách',
+        }),
+      }),
+    )
+    const contentBody = await content.json()
+    expect(content.status).toBe(200)
+    expect(contentBody.data).toMatchObject({
+      invoice_title: 'PHIẾU BÁN HÀNG',
+      show_product_code: false,
+      footer_note: 'Cảm ơn quý khách',
+    })
+
     const reread = await handler(new Request('http://api.local/api/v1/organization/bill-settings', { headers }))
     const rereadBody = await reread.json()
     expect(rereadBody.data.default_bill_template).toBe('k80')
+    expect(rereadBody.data.invoice_title).toBe('PHIẾU BÁN HÀNG')
   })
 
   test('rejects bill settings updates without admin panel permission', async () => {

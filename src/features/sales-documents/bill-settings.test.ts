@@ -2,8 +2,10 @@ import {
   billTemplateDescription,
   billTemplateLabel,
   defaultOrganizationBillSettings,
+  invoiceFooterText,
   isBillTemplateId,
   normalizeOrganizationBillSettings,
+  quoteFooterText,
   readOrganizationBillSettings,
   writeOrganizationBillSettings,
 } from './bill-settings'
@@ -23,8 +25,12 @@ describe('organization bill settings', () => {
       shop_address: '12 Nguyễn Trãi',
       shop_phone: '0909111222',
       default_bill_template: 'k80',
+      invoice_title: 'PHIẾU BÁN',
+      show_product_code: false,
     })
     expect(saved.default_bill_template).toBe('k80')
+    expect(saved.invoice_title).toBe('PHIẾU BÁN')
+    expect(saved.show_product_code).toBe(false)
     expect(readOrganizationBillSettings()).toEqual(saved)
   })
 
@@ -42,5 +48,10 @@ describe('organization bill settings', () => {
   it('describes templates for the settings UI', () => {
     expect(billTemplateDescription('a4')).toMatch(/A4/)
     expect(billTemplateDescription('k80')).toMatch(/80mm/)
+  })
+
+  it('uses custom footer when set', () => {
+    expect(invoiceFooterText({ ...defaultOrganizationBillSettings, footer_note: 'Cảm ơn quý khách' })).toBe('Cảm ơn quý khách')
+    expect(quoteFooterText(defaultOrganizationBillSettings)).toMatch(/báo giá/i)
   })
 })

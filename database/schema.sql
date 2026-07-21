@@ -8,6 +8,13 @@ create table if not exists organizations (
   shop_address text not null default '',
   shop_phone text not null default '',
   default_bill_template text not null default 'a4' check (default_bill_template in ('a4', 'k80')),
+  invoice_title text not null default 'HÓA ĐƠN BÁN HÀNG',
+  quote_title text not null default 'BÁO GIÁ',
+  footer_note text not null default '',
+  show_product_code boolean not null default true,
+  show_unit boolean not null default true,
+  show_discount boolean not null default true,
+  logo_data_url text,
   created_at timestamptz not null default now()
 );
 
