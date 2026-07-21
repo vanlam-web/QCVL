@@ -103,7 +103,7 @@ Current status 2026-07-20 (Inventory stock docs):
 - SoT tồn kho tách 3 lớp trong `docs/03-BUSINESS-NghiepVu/Inventory/README.md`: (1) quyết định Owner / công thức mốc mở, (2) runtime Postgres cộng movement từ 0 + fallback KV list, chưa chọn mốc mở, roll/sheet stub, (3) hướng dài object/cuộn-tấm. Chỉ chỉnh docs; chưa làm runtime mốc mở.
 - Owner 2026-07-20: **đã import hết dữ liệu KiotViet cần dùng** — không mở thêm đợt import file KV. Việc tiếp theo = vận hành/đối soát trên dữ liệu đã có (mốc mở nếu chọn, tồn QCVL, POS). Nút import chỉ còn công cụ kỹ thuật phòng hờ.
 - Tiến độ chỉnh lý docs (BOM/Inventory/tiếp theo): [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md).
-- Rà POS trừ kho 2026-07-21: Postgres live trừ cả mã combo (bug); biên bản `docs/03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md`. Chưa sửa code.
+- Rà POS trừ kho 2026-07-21: biên bản `docs/03-BUSINESS-NghiepVu/Sales/POS-STOCK-AUDIT-2026-07-21.md` = **lịch sử**. **Đã sửa trên `main`** (skip parent combo + BOM `active` / migrate `0008`).
 
 Current status 2026-07-21 (đóng băng V1 tạm — Owner):
 
@@ -137,26 +137,33 @@ Current status 2026-07-21 (đóng băng V1 tạm — Owner):
 | Quote print Phase 3B | PR #22, `2c5e067` | In/xem bÃ¡o giÃ¡ Ä‘Æ¡n giáº£n |
 | Sales Documents payment history | Commit `ec23e1b` | Ná»‘i tab lá»‹ch sá»­ thanh toÃ¡n tá»« `payment_receipts`, fallback dá»¯ liá»‡u thiáº¿u Ä‘á»ƒ khÃ´ng sáº­p detail |
 | Purchase P1 â€” Supplier foundation | PR #23, `ad19559` | Danh sÃ¡ch/chi tiáº¿t NCC, linked customer |
-| Purchase P2 â€” Receipt draft/list/detail | PR #24, `0239061` | Phiáº¿u nháº­p draft/list/detail cho hÃ ng thÆ°á»ng |
-| Purchase P3 â€” Post normal receipt | PR #26, `2c87a6e` | HoÃ n thÃ nh phiáº¿u nháº­p hÃ ng thÆ°á»ng, tÄƒng tá»“n/cÃ´ng ná»£/cashbook |
-| Purchase P5 â€” Supplier payments | PR #30 | Chi tiá»n/thanh toÃ¡n NCC sau phiáº¿u nháº­p |
+| Purchase P2 â€” Receipt draft/list/detail | PR #24, `0239061` | UI/spec; **live create vẫn stub** — [Purchase README](./03-BUSINESS-NghiepVu/Purchase/README.md) |
+| Purchase P3 â€” Post normal receipt | PR #26, `2c87a6e` | UI/spec; **live post vẫn stub** — Purchase README |
+| Purchase P5 â€” Supplier payments | PR #30 | UI/spec; **live pay vẫn stub một phần** — Purchase README |
 
 ---
 
-## Queue CÃ³ Thá»ƒ Má»Ÿ Tiáº¿p
+## Queue có thể mở tiếp
 
-Chá»‰ má»Ÿ khi Owner chá»n vÃ  Spec xÃ¡c nháº­n Source of Truth cÃ²n Ä‘Ãºng vá»›i hiá»‡n tráº¡ng code.
+Chỉ mở khi Owner chọn và Spec còn đúng với runtime. **Tách 2 nhóm** (Owner 2026-07-21 đóng băng P4).
 
-| Viá»‡c | Má»©c sáºµn sÃ ng | Ghi chÃº |
-|---|---|---|
-| Purchase P4 â€” nháº­p cuá»™n/táº¥m váº­t lÃ½ | Trung bÃ¬nh | Cáº§n khá»›p vá»›i model kho cuá»™n/táº¥m hiá»‡n táº¡i trÆ°á»›c khi implement |
-| Inventory stock SoT alignment (mốc mở / công thức QCVL) | Docs SoT xong; runtime chờ Owner | Xem Inventory README. **Không** import KV thêm (Owner 2026-07-20). Code sau nếu làm: chọn mốc mở trên KK đã có, lọc movement sau mốc |
-| Product/Inventory/POS completion | Đang mở | V1 đang chạy được với dữ liệu import + fallback tồn KV tạm; chi tiet hang/dong hang va So quy detail da on tren `3202`; `/pos/cart/validate` da implement; phan con lai la detail cac module chua ra, POS roll/sheet object-level deduction, va doi chieu KV/QCVL theo bo loc |
-| V1 functional gaps | Đang mở | Làm trên local `3202` trước, xong từng bước mới đẩy `3200`: 1) tiep tuc ra soat UI detail con lai khi cham module; 2) cac nut them/sua/xoa con thieu; 3) filter con thieu hoac chua dung shared controls; 4) bao cao doi chieu du lieu theo tung module truoc khi coi V1 on dinh |
-| PriceBook product groups/filter | Trung bÃ¬nh | Cáº§n schema/UI filter nhÃ³m hÃ ng náº¿u Owner cáº§n |
-| Sales Documents edit/cancel/reversal | Cáº§n chá»‘t thÃªm | Cháº¡m kho/tiá»n/cÃ´ng ná»£, pháº£i cÃ³ spec Ä‘áº£o nghiá»‡p vá»¥ |
-| Production reconciliation má»Ÿ rá»™ng | Cáº§n review hiá»‡n tráº¡ng | Chá»‰ lÃ m khi Ä‘Ã£ xÃ¡c nháº­n pháº§n read-only hiá»‡n táº¡i vÃ  dá»¯ liá»‡u mÃ¡y sáº£n xuáº¥t |
-| Realtime module updates | Trung bÃ¬nh | Chá»‰ má»Ÿ cho module cÃ³ lá»£i rÃµ nhÆ° production queue hoáº·c stock/user lock |
+### A — V1 vận hành / cứng hóa (có thể chọn)
+
+| Việc | Ghi chú |
+|---|---|
+| V1 functional gaps (UI detail, nút thêm/sửa/xóa, filter) | Làm `3202` trước, xong mới `3200` |
+| Finance / Sổ quỹ vận hành | Accounts + voucher; **không** import So quỹ KV mới |
+| Re-check `REV-2026-07-08-001` | Nếu còn mở trên REVIEW-ISSUES |
+| PriceBook product groups/filter | Chỉ khi Owner cần |
+| Sales Documents edit/cancel/reversal | Cần chốt thêm spec đảo kho/tiền/nợ |
+
+### B — P4 đóng băng (nâng cấp sau — không mở code)
+
+| Việc | Ghi chú |
+|---|---|
+| Inventory mốc mở / công thức QCVL sau mốc | Inventory README · DOC-CLEANUP P4 |
+| Purchase persist P2/P3/P5 (bỏ stub) + P4 nhập cuộn/tấm | Purchase README mục 2–3 |
+| POS roll/sheet object-level + deep-scan BOM / Lưu Combo | BOM README mục 3 · DOC-CLEANUP P4 |
 
 ---
 

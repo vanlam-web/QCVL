@@ -48,6 +48,8 @@
 
 ## 3. Hướng dài / chưa làm
 
+> Owner 2026-07-21: **P4 đóng băng** — bản V1 dùng được tạm trên dữ liệu PN đã import; persist live + object cuộn/tấm = nâng cấp sau.
+
 - Persist thật P2 draft + P3 post hàng thường + P5 thanh toán NCC
 - P4 object cuộn/tấm khi post phiếu nhập
 - Trả hàng nhập, đặt hàng nhập, báo cáo NCC nâng cao

@@ -77,9 +77,11 @@ PRD/UX: [../../02-PRD-UX-PhongCanh/Inventory/](../../02-PRD-UX-PhongCanh/Invento
 
 ## 3. Hướng dài / chưa làm
 
+> Owner 2026-07-21: mốc mở / object cuộn-tấm / khui roll-sheet = **P4 đóng băng**. Báo cáo đối chiếu KV↔QCVL theo filter vẫn có thể làm trong queue V1 (nhóm A PHASE) nếu Owner chọn.
+
 | Hạng mục | Ghi chú |
 |---|---|
-| UI/API chọn phiếu KV / ngày làm mốc mở | Trên dữ liệu KK **đã import**; Owner 2026-07-20: không mở đợt import KV mới |
+| UI/API chọn phiếu KV / ngày làm mốc mở | P4 đóng băng — trên dữ liệu KK **đã import**; không import KV mới |
 | Lọc movement trước/sau mốc | Tránh tính trùng lịch sử trước mốc |
 | Trả hàng / đảo chứng từ sau mốc | Movement đảo |
 | Cuộn/tấm object + kiểm kho theo object + POS chọn object | PRD 03-ROLL-SHEET; V1 freeze 2026-07-14 giữ dormant |

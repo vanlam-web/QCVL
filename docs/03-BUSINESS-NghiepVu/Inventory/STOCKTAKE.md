@@ -81,7 +81,7 @@ Lưu tạm không tạo stock movement và không đổi tồn kho.
 Khi cân bằng kho:
 
 - phiếu chuyển sang `balanced`
-- hệ thống tạo stock movement loại `stocktake_adjustment` cho từng dòng có chênh lệch
+- hệ thống tạo stock movement loại `stocktake_balance` cho từng dòng có chênh lệch (tên cũ trong doc: `stocktake_adjustment` — deprecated)
 - tồn kho hệ thống cập nhật theo số lượng thực tế
 
 ### BR-STK-05: Hủy phiếu
@@ -103,7 +103,7 @@ Nếu người dùng sửa số tồn trực tiếp, hệ thống tự động s
 Phiếu tự động:
 
 - có trạng thái `balanced` ngay
-- tạo stock movement loại `stocktake_adjustment`
+- tạo stock movement loại `stocktake_balance` (không dùng tên cũ `stocktake_adjustment` khi viết API mới)
 - có ghi chú theo mẫu:
 
 ```text

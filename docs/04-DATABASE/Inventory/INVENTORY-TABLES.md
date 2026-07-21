@@ -216,7 +216,7 @@ Lưu từng cuộn vật tư vật lý để quản lý tồn theo khổ rộng 
 ### Quy tắc dữ liệu
 
 - Thông thường `remaining_length_m <= initial_length_m`.
-- Nếu kiểm kho/điều chỉnh hợp lệ làm số còn lại lớn hơn số ban đầu, không sửa âm thầm; phải có `stock_movements` loại `stocktake_adjustment` hoặc `manual_adjustment` để truy vết lý do.
+- Nếu kiểm kho/điều chỉnh hợp lệ làm số còn lại lớn hơn số ban đầu, không sửa âm thầm; phải có `stock_movements` loại `stocktake_balance` (tên doc cũ: `stocktake_adjustment`) hoặc `manual_adjustment` để truy vết lý do.
 - Nếu cuộn được tạo từ khui vật tư hoặc chứng từ vận hành QCVL, nguồn thay đổi phải truy được qua chứng từ tương ứng và `stock_movements`.
 
 ### Index
@@ -428,7 +428,7 @@ Ghi mọi biến động tồn kho chính thức trong MVP.
 | `sale_deduction` | Trừ kho khi tạo/lưu đơn bán chính thức |
 | `invoice_reversal` | Đảo tồn kho phát sinh từ hóa đơn bị hủy hoặc bị thay thế bởi bản sửa |
 | `invoice_revision` | Ghi tồn kho theo hóa đơn bản sửa nếu cần phân biệt với checkout thường |
-| `stocktake_adjustment` | Điều chỉnh từ kiểm kho/cân bằng kho |
+| `stocktake_balance` | Điều chỉnh từ kiểm kho/cân bằng kho (runtime). Tên doc cũ `stocktake_adjustment` = cùng nghĩa, không dùng khi viết mới |
 | `manual_adjustment` | Điều chỉnh thủ công có lý do |
 | `remnant_created` | Tạo tấm lỡ từ phần thừa |
 | `remnant_discarded` | Bỏ/hủy tấm lỡ |
@@ -438,7 +438,7 @@ Ghi mọi biến động tồn kho chính thức trong MVP.
 ### Ràng buộc
 
 - `quantity_delta <> 0`
-- `movement_type IN ('sale_deduction', 'invoice_reversal', 'invoice_revision', 'stocktake_adjustment', 'manual_adjustment', 'remnant_created', 'remnant_discarded', 'purchase_receipt', 'material_opening')`
+- `movement_type IN ('sale_deduction', 'invoice_reversal', 'invoice_revision', 'stocktake_balance', 'manual_adjustment', 'remnant_created', 'remnant_discarded', 'purchase_receipt', 'material_opening')` — chấp nhận alias lịch sử `stocktake_adjustment` nếu còn trong data cũ
 - `stock_unit_id` phải thuộc cùng `organization_id`.
 - `product_id` phải cùng `organization_id`.
 - Nếu `inventory_object_type = 'roll'`, `inventory_roll_id` bắt buộc và `inventory_sheet_id` null.

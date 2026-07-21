@@ -183,12 +183,16 @@ Quy tắc import (Owner 2026-07-20):
 
 ## 8. Acceptance Criteria
 
-- BOM chuẩn có version; sửa BOM tạo version mới.
-- POS có thể dùng BOM phát sinh ở chế độ `Không lưu - Chỉ trừ kho`.
-- POS có thể lưu BOM phát sinh thành combo mới khi người dùng chọn rõ.
-- Hóa đơn lưu snapshot BOM đã dùng.
-- Backend chặn vòng lặp BOM.
-- Backend giới hạn deep-scan mặc định tối đa 5 cấp.
-- BOM thiếu cấu hình không chặn checkout trong MVP, nhưng phải có cảnh báo/flag.
+### Slice KV (đã đạt trên `main` — 2026-07-21)
+
+- BOM chuẩn có version; import/lưu tạo version mới `active`.
+- Bán combo: trừ thành phần; không trừ mã combo / service / `!track_inventory`.
 - BOM không tự tính hoặc ép giá bán.
-- Vật tư cuộn/tấm trong BOM trừ kho theo tồn vật lý, không trừ tổng `m2`.
+- BOM thiếu cấu hình: MVP không chặn checkout (cảnh báo/flag — tối thiểu).
+
+### Hướng dài / P4 (đóng băng — nâng cấp sau)
+
+- POS BOM phát sinh: `Không lưu - Chỉ trừ kho` / `Lưu Combo mới`.
+- Hóa đơn lưu snapshot BOM đã dùng.
+- Backend chặn vòng lặp BOM; deep-scan max 5 cấp.
+- Vật tư cuộn/tấm trong BOM trừ theo tồn vật lý object, không trừ tổng `m2`.
