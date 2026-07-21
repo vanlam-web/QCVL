@@ -4,7 +4,9 @@ import { displayPriceListName } from '../../lib/price-list-display'
 import { BillPrintToolbar } from './BillPrintToolbar'
 import {
   isBillTemplateId,
-  readOrganizationBillSettings,
+  quoteFooterText,
+  readOrganizationBillSettingsCache,
+  writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
 } from './bill-settings'
@@ -22,17 +24,19 @@ export function QuotePrintPage({
   service,
   onClose,
   initialTemplate,
+  loadBillSettings,
 }: {
   documentId: string
   service: SalesDocumentService
   onClose: () => void
   initialTemplate?: string | null
+  loadBillSettings?: () => Promise<OrganizationBillSettings>
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [settings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettings())
+  const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettingsCache())
   const [template, setTemplate] = useState<BillTemplateId>(() =>
-    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettings().default_bill_template,
+    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettingsCache().default_bill_template,
   )
 
   useEffect(() => {
@@ -41,9 +45,19 @@ export function QuotePrintPage({
     async function loadDocument() {
       setError(null)
       try {
-        const result = await service.getSalesDocument(documentId)
+        const [result, remoteSettings] = await Promise.all([
+          service.getSalesDocument(documentId),
+          loadBillSettings ? loadBillSettings().catch(() => null) : Promise.resolve(null),
+        ])
         if (!active) return
         setDocument(result)
+        if (remoteSettings) {
+          const saved = writeOrganizationBillSettingsCache(remoteSettings)
+          setSettings(saved)
+          if (!isBillTemplateId(initialTemplate)) {
+            setTemplate(saved.default_bill_template)
+          }
+        }
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được báo giá.'))
       }
@@ -54,7 +68,7 @@ export function QuotePrintPage({
     return () => {
       active = false
     }
-  }, [documentId, service])
+  }, [documentId, initialTemplate, loadBillSettings, service])
 
   if (error) {
     return (
@@ -98,12 +112,15 @@ export function QuotePrintPage({
       <article className="quote-print-page" aria-label={`Báo giá ${document.code}`}>
         <header className="quote-print-heading">
           <div>
+            {settings.logo_data_url ? (
+              <img alt="" className="quote-print-logo" src={settings.logo_data_url} />
+            ) : null}
             <strong>{settings.shop_name}</strong>
             {settings.shop_address ? <p>{settings.shop_address}</p> : null}
             {settings.shop_phone ? <p>ĐT: {settings.shop_phone}</p> : null}
           </div>
           <div>
-            <h1>BÁO GIÁ</h1>
+            <h1>{settings.quote_title}</h1>
             <dl>
               <div>
                 <dt>Mã</dt>
@@ -142,12 +159,12 @@ export function QuotePrintPage({
           <thead>
             <tr>
               <th>STT</th>
-              <th>Mã hàng</th>
+              {settings.show_product_code ? <th>Mã hàng</th> : null}
               <th>Nội dung</th>
-              <th>ĐVT</th>
+              {settings.show_unit ? <th>ĐVT</th> : null}
               <th>SL</th>
               <th>Đơn giá</th>
-              <th>CK</th>
+              {settings.show_discount ? <th>CK</th> : null}
               <th>Thành tiền</th>
             </tr>
           </thead>
@@ -155,16 +172,18 @@ export function QuotePrintPage({
             {document.items.map((item) => (
               <tr key={item.id}>
                 <td>{item.line_no}</td>
-                <td>{item.product.code}</td>
+                {settings.show_product_code ? <td>{item.product.code}</td> : null}
                 <td>
                   <strong>{item.product.name}</strong>
                   <p>{salesDocumentQuoteLineDimensionText(item)}</p>
                   {item.note ? <p>{item.note}</p> : null}
                 </td>
-                <td>{item.product.unit_name}</td>
+                {settings.show_unit ? <td>{item.product.unit_name}</td> : null}
                 <td>{salesDocumentMeasureText(item.quantity)}</td>
                 <td>{salesDocumentMoneyText(item.unit_price)}</td>
-                <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
+                {settings.show_discount ? (
+                  <td>{item.discount_amount > 0 ? salesDocumentMoneyText(item.discount_amount) : ''}</td>
+                ) : null}
                 <td>{salesDocumentMoneyText(item.line_total)}</td>
               </tr>
             ))}
@@ -195,7 +214,7 @@ export function QuotePrintPage({
           </section>
         ) : null}
 
-        <p className="quote-print-footnote">Giá trị báo giá chỉ dùng để xác nhận nội dung trước khi bán.</p>
+        <p className="quote-print-footnote">{quoteFooterText(settings)}</p>
       </article>
     </main>
   )

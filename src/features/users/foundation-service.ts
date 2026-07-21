@@ -1,6 +1,7 @@
 import type { CurrentUserData } from '../../lib/api/types'
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
+import type { OrganizationBillSettings } from '../sales-documents/bill-settings'
 import type { Permission, PermissionCode, UserListResponse } from './types'
 
 export interface ApiRequester {
@@ -76,6 +77,13 @@ export function createFoundationService(api: ApiRequester) {
         body: JSON.stringify({ permissions }),
       }),
     listPermissions: () => api.request<Permission[]>('/api/v1/permissions'),
+    getOrganizationBillSettings: () =>
+      api.request<OrganizationBillSettings>('/api/v1/organization/bill-settings'),
+    updateOrganizationBillSettings: (input: Partial<OrganizationBillSettings>) =>
+      api.request<OrganizationBillSettings>('/api/v1/organization/bill-settings', {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
   }
 }
 

@@ -868,6 +868,25 @@ export interface ServerRepository {
     documents: SalesDocumentData[]
     cashbookEntries: CashbookEntryData[]
   }): Promise<void>
+  getOrganizationBillSettings?(input: { organizationId: string }): Promise<OrganizationBillSettingsData>
+  updateOrganizationBillSettings?(input: {
+    organizationId: string
+    patch: Partial<OrganizationBillSettingsData>
+  }): Promise<OrganizationBillSettingsData>
+}
+
+export interface OrganizationBillSettingsData {
+  shop_name: string
+  shop_address: string
+  shop_phone: string
+  default_bill_template: 'a4' | 'k80'
+  invoice_title: string
+  quote_title: string
+  footer_note: string
+  show_product_code: boolean
+  show_unit: boolean
+  show_discount: boolean
+  logo_data_url: string | null
 }
 
 export interface HttpHandlerOptions {
@@ -2940,6 +2959,36 @@ async function getDevApiResponse(
     return { found: true, data: { id: getIdFromPath(path) ?? randomUUID(), code: body.code ?? 'POS-NEW', name: body.name ?? 'May moi', status: body.status ?? 'active' } }
   }
 
+  if (method === 'GET' && path === '/api/v1/organization/bill-settings') {
+    return {
+      found: true,
+      data: await readOrganizationBillSettingsForUser(repository, currentUser),
+    }
+  }
+  if (method === 'PATCH' && path === '/api/v1/organization/bill-settings') {
+    if (!currentUser.permissions.includes('perm.access_admin_panel')) {
+      throw new HttpError(403, 'PERMISSION_DENIED', 'Missing permission perm.access_admin_panel.')
+    }
+    const body = await readJson(request)
+    const patch = parseOrganizationBillSettingsPatch(body)
+    if (repository.updateOrganizationBillSettings) {
+      return {
+        found: true,
+        data: await repository.updateOrganizationBillSettings({
+          organizationId: currentUser.organization.id,
+          patch,
+        }),
+      }
+    }
+    return {
+      found: true,
+      data: normalizeOrganizationBillSettingsData({
+        ...(await readOrganizationBillSettingsForUser(repository, currentUser)),
+        ...patch,
+      }),
+    }
+  }
+
   if (method === 'GET' && path === '/api/v1/permissions') return { found: true, data: allPermissions }
   if (method === 'GET' && path === '/api/v1/users') {
     const items = await repository.listUsers?.({ organizationId: currentUser.organization.id, url })
@@ -4913,6 +4962,98 @@ function requiredString(value: unknown, field: string) {
 function nullableString(value: unknown) {
   const result = String(value ?? '').trim()
   return result ? result : null
+}
+
+function isBillTemplateId(value: unknown): value is OrganizationBillSettingsData['default_bill_template'] {
+  return value === 'a4' || value === 'k80'
+}
+
+function isBillLogoDataUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value) return false
+  return /^data:image\/(png|jpeg|jpg|webp);base64,/i.test(value) && value.length <= 400_000
+}
+
+function readBooleanField(value: unknown, field: string) {
+  if (typeof value === 'boolean') return value
+  if (value === 'true' || value === '1') return true
+  if (value === 'false' || value === '0') return false
+  throw new HttpError(400, 'VALIDATION_ERROR', `${field} must be boolean.`, { [field]: [`${field} must be boolean.`] })
+}
+
+function normalizeOrganizationBillSettingsData(
+  input: Partial<OrganizationBillSettingsData> & { organization_name?: string },
+): OrganizationBillSettingsData {
+  const fallbackName = (input.organization_name ?? input.shop_name ?? 'QCVL').trim() || 'QCVL'
+  const logo = input.logo_data_url
+  return {
+    shop_name: (input.shop_name ?? fallbackName).trim() || fallbackName,
+    shop_address: (input.shop_address ?? '').trim(),
+    shop_phone: (input.shop_phone ?? '').trim(),
+    default_bill_template: isBillTemplateId(input.default_bill_template) ? input.default_bill_template : 'a4',
+    invoice_title: (input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG').trim() || 'HÓA ĐƠN BÁN HÀNG',
+    quote_title: (input.quote_title ?? 'BÁO GIÁ').trim() || 'BÁO GIÁ',
+    footer_note: (input.footer_note ?? '').trim(),
+    show_product_code: input.show_product_code ?? true,
+    show_unit: input.show_unit ?? true,
+    show_discount: input.show_discount ?? true,
+    logo_data_url: logo === null || logo === ''
+      ? null
+      : isBillLogoDataUrl(logo)
+        ? logo
+        : null,
+  }
+}
+
+function parseOrganizationBillSettingsPatch(body: Record<string, unknown>): Partial<OrganizationBillSettingsData> {
+  const patch: Partial<OrganizationBillSettingsData> = {}
+  if ('shop_name' in body) patch.shop_name = requiredString(body.shop_name, 'shop_name')
+  if ('shop_address' in body) patch.shop_address = String(body.shop_address ?? '').trim()
+  if ('shop_phone' in body) patch.shop_phone = String(body.shop_phone ?? '').trim()
+  if ('default_bill_template' in body) {
+    if (!isBillTemplateId(body.default_bill_template)) {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'default_bill_template must be a4 or k80.', {
+        default_bill_template: ['default_bill_template must be a4 or k80.'],
+      })
+    }
+    patch.default_bill_template = body.default_bill_template
+  }
+  if ('invoice_title' in body) patch.invoice_title = requiredString(body.invoice_title, 'invoice_title')
+  if ('quote_title' in body) patch.quote_title = requiredString(body.quote_title, 'quote_title')
+  if ('footer_note' in body) patch.footer_note = String(body.footer_note ?? '').trim()
+  if ('show_product_code' in body) patch.show_product_code = readBooleanField(body.show_product_code, 'show_product_code')
+  if ('show_unit' in body) patch.show_unit = readBooleanField(body.show_unit, 'show_unit')
+  if ('show_discount' in body) patch.show_discount = readBooleanField(body.show_discount, 'show_discount')
+  if ('logo_data_url' in body) {
+    if (body.logo_data_url === null || body.logo_data_url === '') {
+      patch.logo_data_url = null
+    } else if (isBillLogoDataUrl(body.logo_data_url)) {
+      patch.logo_data_url = body.logo_data_url
+    } else {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'logo_data_url must be a small PNG/JPG/WEBP data URL.', {
+        logo_data_url: ['logo_data_url must be a small PNG/JPG/WEBP data URL.'],
+      })
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    throw new HttpError(400, 'VALIDATION_ERROR', 'At least one bill settings field is required.')
+  }
+  return patch
+}
+
+async function readOrganizationBillSettingsForUser(
+  repository: ServerRepository,
+  currentUser: CurrentUserData,
+): Promise<OrganizationBillSettingsData> {
+  if (repository.getOrganizationBillSettings) {
+    return repository.getOrganizationBillSettings({ organizationId: currentUser.organization.id })
+  }
+  return normalizeOrganizationBillSettingsData({
+    organization_name: currentUser.organization.name,
+    shop_name: currentUser.organization.name,
+    shop_address: 'Xưởng in và thi công quảng cáo',
+    shop_phone: '',
+    default_bill_template: 'a4',
+  })
 }
 
 const PRODUCT_CREATE_KINDS = ['goods', 'service', 'auxiliary_material', 'roll', 'sheet', 'combo'] as const
