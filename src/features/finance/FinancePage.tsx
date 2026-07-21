@@ -311,7 +311,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
 
   useEffect(() => {
     if (voucherMode === null || (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier')) {
-      setVoucherCounterpartyOptions([])
       return undefined
     }
     let active = true

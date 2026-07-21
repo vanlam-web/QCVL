@@ -880,14 +880,22 @@ export function PurchaseReceiptsPage({
 
   useEffect(() => {
     if (!isCreatingReceipt || form.supplier_id || suppliers.length === 0) return
-    setForm((current) => current.supplier_id ? current : { ...current, supplier_id: defaultReceiptSupplierId(suppliers) })
+    const nextSupplierId = defaultReceiptSupplierId(suppliers)
+    const frame = window.setTimeout(() => {
+      setForm((current) => current.supplier_id ? current : { ...current, supplier_id: nextSupplierId })
+    }, 0)
+    return () => window.clearTimeout(frame)
   }, [form.supplier_id, isCreatingReceipt, suppliers])
 
   useEffect(() => {
     if (!isCreatingReceipt) return
     if (receiptSupplierSearchActive) return
     const supplier = suppliers.find((candidate) => candidate.id === form.supplier_id)
-    setReceiptSupplierSearch(supplier ? supplierSearchText(supplier) : '')
+    const nextSearch = supplier ? supplierSearchText(supplier) : ''
+    const frame = window.setTimeout(() => {
+      setReceiptSupplierSearch(nextSearch)
+    }, 0)
+    return () => window.clearTimeout(frame)
   }, [form.supplier_id, isCreatingReceipt, receiptSupplierSearchActive, suppliers])
 
   useEffect(() => {
