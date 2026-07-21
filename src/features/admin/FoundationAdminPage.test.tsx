@@ -621,3 +621,23 @@ it('saves shop info and default bill template from Thiết lập panels', async 
     ),
   )
 })
+
+it('shows a clear cache notice when bill settings API is missing', async () => {
+  window.localStorage.clear()
+  const service = makeService({
+    getOrganizationBillSettings: vi.fn(async () => {
+      throw new ApiError(404, 'RESOURCE_NOT_FOUND', 'missing', 'trace-1')
+    }),
+  })
+  render(<FoundationAdminPage service={service} onOpenDashboard={vi.fn()} />)
+
+  const sidebar = await screen.findByRole('navigation', { name: 'Menu thiết lập' })
+  await userEvent.click(within(sidebar).getByRole('button', { name: 'Quản lý mẫu in' }))
+  const templatePanel = await screen.findByRole('region', { name: 'Quản lý mẫu in' })
+
+  expect(await within(templatePanel).findByRole('alert')).toHaveTextContent(
+    /Không tải được cấu hình bill từ server\. Đang dùng bản máy này/,
+  )
+  expect(within(templatePanel).getByRole('heading', { name: 'Quản lý mẫu in' })).toBeInTheDocument()
+  expect(within(templatePanel).getByRole('radio', { name: /A4/ })).toBeChecked()
+})

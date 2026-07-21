@@ -6,8 +6,15 @@ import { fileURLToPath } from 'node:url'
 const root = process.cwd()
 
 export function resolveNasEnvPath(env) {
+  if (env.QCVL_NAS_ENV_PATH) return env.QCVL_NAS_ENV_PATH
   const nasRoot = env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
-  return env.QCVL_NAS_ENV_PATH ?? join(dirname(nasRoot), '.env')
+  // Keep Windows UNC siblings portable on Linux CI (path.dirname breaks \\server\share).
+  if (nasRoot.includes('\\')) {
+    const trimmed = nasRoot.replace(/[\\/]+$/, '')
+    const parent = trimmed.replace(/[\\/][^\\/]+$/, '')
+    return `${parent}\\.env`
+  }
+  return join(dirname(nasRoot), '.env')
 }
 
 export function readEnvFile(path) {
