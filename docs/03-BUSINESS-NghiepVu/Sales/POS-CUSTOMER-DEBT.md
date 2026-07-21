@@ -1,6 +1,7 @@
 # POS-CUSTOMER-DEBT — Nghiệp vụ công nợ khách hàng
 
-> **Nguồn:** Tách khỏi `02-PRD-UX-PhongCanh/POS/K03/01-K03A-DOI-TAC.md`
+> **Nguồn:** Tách khỏi `02-PRD-UX-PhongCanh/POS/K03/01-K03A-DOI-TAC.md`  
+> **Runtime:** tổng nợ UI Customers/Finance đọc canonical `server/modules/finance/customer-debt.ts`. Trạng thái ngắn: [Sales README](./README.md) · [Finance README](../Finance/README.md).
 
 ---
 

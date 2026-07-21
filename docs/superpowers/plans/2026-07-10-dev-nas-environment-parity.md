@@ -1,5 +1,8 @@
 # Dev NAS Environment Parity Implementation Plan
 
+
+> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make dev `3202` and NAS `3200` deploy through the same code/schema path so accepted dev changes can be promoted to NAS without repeated production-only fixes.

@@ -66,6 +66,32 @@ Chi tiết BOM import/UI stub: checklist + PR BOM docs (#4) nếu đã merge; So
 
 ---
 
+## Vòng đời POS / chứng từ — trạng thái (2026-07-20)
+
+| Hạng mục | SoT | Runtime |
+|---|---|---|
+| Nháp POS local | Chưa trừ kho / chưa doanh thu | Có |
+| Lưu báo giá `BG...` | Không giữ hàng, không trừ kho | Có |
+| Mở lại báo giá → POS | Đưa vào nháp để sửa/checkout | Có; **không** đảm bảo overwrite báo giá gốc / luôn gửi `source_quote_id` |
+| Checkout → `HD...` | Trừ kho + tiền/công nợ | Có — **trừ kho combo:** xem mục Trừ kho khi bán |
+| Sửa hóa đơn (revision) | Mã `MaCu.01`, đảo an toàn | Có một phần |
+| Hủy hóa đơn / đảo kho-tiền | Spec đầy đủ | **Một phần** — không khẳng định đủ rule 10 ngày/soft-lock/đảo đầy đủ |
+
+Chi tiết rule: [POS-ORDER-LIFECYCLE.md](./POS-ORDER-LIFECYCLE.md). Khi đọc lifecycle, ưu tiên bảng runtime trên; phần SoT rộng hơn code thì để hướng dài.
+
+---
+
+## Khách hàng / công nợ — trạng thái ngắn
+
+| Hạng mục | Ghi chú |
+|---|---|
+| Import khách KV | **Đã xong / đóng** (Owner 2026-07-20 không import thêm) |
+| List/detail Customers | PRD: [../../02-PRD-UX-PhongCanh/Customers/](../../02-PRD-UX-PhongCanh/Customers/) |
+| Tổng nợ / tab nợ | UI đọc **canonical** Finance (`customer-debt`); ledger hiển thị; không tự cấn trừ NCC liên kết |
+| SoT debt | [POS-CUSTOMER-DEBT.md](./POS-CUSTOMER-DEBT.md) — nếu doc cũ nói “không âm tuyệt đối” mà runtime có số âm đối soát, ưu tiên canonical backend + ghi chú đối soát |
+
+---
+
 ## Tham chiếu
 
 - [PRD-UX POS](../../02-PRD-UX-PhongCanh/POS/)

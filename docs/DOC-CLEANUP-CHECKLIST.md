@@ -2,7 +2,7 @@
 
 > **Vai trò:** Một nơi tạm để theo dõi chỉnh lý docs ↔ SoT ↔ runtime.  
 > **Không** thay PHASE-CHECKLIST (queue sản phẩm) và **không** thay IMPLEMENTATION-CHECKLIST (baseline code).  
-> **Updated:** 2026-07-20  
+> **Updated:** 2026-07-21  
 > **Phạm vi lần này:** chỉ tài liệu. Runtime chỉ ghi ở cột “hiện trạng”, không làm code trừ khi Owner bảo.
 
 ---
@@ -19,73 +19,64 @@
 - SoT mục tiêu ≠ “đã ship”.
 - Nói hành vi đang chạy → ghi **Runtime** hoặc link README mục 2 của module.
 - Owner 2026-07-20: **đã import hết KV** — không xếp “import file mới” vào backlog docs/queue.
+- “Đã merge” trong slice cũ có thể chỉ là UI/import — luôn đối chiếu README 3 lớp.
 
 ### PR đang mở (docs)
 
 | PR | Chủ đề |
 |---|---|
 | [#4](https://github.com/vanlam-web/QCVL/pull/4) | BOM / combo KiotViet — SoT 3 lớp |
-| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Tồn QCVL + hết import + trừ kho path + dọn BOM nháp vệ tinh + roll/sheet API stub |
+| [#5](https://github.com/vanlam-web/QCVL/pull/5) | Inventory + Sales path + Purchase/Finance 3 lớp + checklist |
 
 ---
 
 ## Đã xong
 
-- [x] **BOM/combo KV** — README 3 lớp; RULES/TABLES/API; vệ tinh Sales/K02/plan; AC slice vs hướng dài · PR #4
-- [x] **Tồn QCVL / KV tạm / mốc mở** — Inventory README 3 lớp; chốt mâu thuẫn fallback list; roll/sheet stub; API notes · PR #5
-- [x] **Owner: đã import hết** — không mở đợt import KV mới; nút import = phòng hờ · ghi trong Inventory README + PHASE + PRD · PR #5
-- [x] **Trừ kho bán hàng: POS live Postgres vs import HD / dev-memory** — bảng path × SoT trên Sales README + POS-CHECKOUT · PR #5
-- [x] **Stub BOM API / UI “BOM nháp”** — dọn vệ tinh PRD/API/plan/POS-TABLES/BOM-TABLES theo SoT+runtime · PR #5
-- [x] **Material opening / roll-sheet API docs** — banner stub trên §5–6 INVENTORY-API; khui roll/sheet = docs-ahead · PR #5
+### P1
+
+- [x] BOM/combo KV SoT 3 lớp · PR #4
+- [x] Tồn QCVL / KV tạm / mốc mở · PR #5
+- [x] Owner: đã import hết KV · PR #5
+- [x] Trừ kho bán: POS live vs import HD / dev-memory · PR #5
+- [x] Vệ tinh “BOM nháp / draft chờ duyệt” · PR #5
+- [x] Material opening / roll-sheet API stub banners · PR #5
+
+### P2
+
+- [x] **Purchase** — README 3 lớp; P2/P3/P5 live = stub dù doc từng ghi merge · PR #5
+- [x] **Finance** — README 3 lớp; So quỹ import đóng; debt canonical pointer · PR #5
+- [x] **POS lifecycle / chứng từ** — bảng runtime trên Sales README; lifecycle header · PR #5
+- [x] **Customers** — import đóng; debt UI → Finance canonical · PR #5
+
+### P3 (vòng này)
+
+- [x] Banner **Historical plan** trên `docs/superpowers/plans/2026-07-*.md` · PR #5
+- [x] `03-MVP-SCOPE.md` + `DEVELOPMENT-PLAN.md` trỏ checklist · PR #5
+- [ ] Mojibake / encoding PHASE-CHECKLIST, INVENTORY-API — sửa khi đụng file (không bắt buộc một lần)
+- [ ] Rút trùng SoT còn sót khi rà thêm (backlog)
 
 ---
 
-## Đang / sắp làm (tick khi xong)
+## Còn mở / P4
 
-Đánh dấu theo thứ tự ưu tiên đề xuất. Owner có thể đổi thứ tự.
+### P4 — Ngoài phạm vi đợt docs (chờ Owner bảo làm code)
 
-### P1 — Lệch docs↔runtime dễ gây hiểu nhầm
-
-- [x] **Trừ kho bán hàng** · PR #5
-- [x] **Stub BOM API / UI “BOM nháp”** · PR #5 (vệ tinh trên `main`/branch này)
-- [x] **Material opening / roll-sheet API docs** · PR #5
-
-### P2 — Module chưa có bảng trạng thái 3 lớp
-
-- [ ] **Purchase / phiếu nhập** — SoT vs P2–P5 đã merge vs P4 cuộn-tấm chưa; không import KV thêm  
-  Entry đề xuất: `docs/03-BUSINESS-NghiepVu/Purchase/README.md` (hoặc mở rộng file index hiện có)
-
-- [ ] **Finance / sổ quỹ / công nợ** — import So quỹ đã có dữ liệu; SoT thu nợ / debt formula vs UI  
-  Entry đề xuất: `docs/03-BUSINESS-NghiepVu/Finance/` (README 3 lớp nếu chưa có)
-
-- [ ] **POS checkout / báo giá / sales documents** — nháp local, revision, cancel; doc vs runtime  
-  Entry: `docs/03-BUSINESS-NghiepVu/Sales/README.md` (bổ sung mục trạng thái ngoài BOM)
-
-- [ ] **Customers** — import xong; debt summary / tab nợ đã sửa gần đây; rà doc còn lệch không
-
-### P3 — Dọn lịch sử / trùng / thừa
-
-- [ ] **`docs/superpowers/plans/*`** — gắn banner “historical; SoT hiện hành = BOM/Inventory README”; bỏ câu như runtime đã `active`/đã có mốc mở  
-- [ ] **`DEVELOPMENT-PLAN.md` / `03-MVP-SCOPE.md`** — một dòng trỏ checklist này + README module; tránh timeline “còn phải import”  
-- [ ] **Mojibake / encoding** trong PHASE-CHECKLIST, INVENTORY-API (sửa khi đụng file, không bắt buộc cả file một lần)  
-- [ ] **Trùng SoT** — cùng một quyết định lặp 5 nơi: giữ 1 SoT + link, rút vệ tinh
-
-### P4 — Ngoài phạm vi đợt docs này (chỉ ghi để không quên)
-
-- [ ] Runtime BOM slice (import `active`, POS không trừ mã combo, UI, stub `/bom`) — **code**, chờ Owner  
-- [ ] Runtime mốc mở tồn QCVL — **code**, chờ Owner  
-- [ ] Deep-scan BOM / POS Lưu Combo mới / object cuộn-tấm đầy đủ — hướng dài
+- [ ] Runtime BOM slice (import `active`, POS không trừ mã combo, UI, stub `/bom`)
+- [ ] Runtime mốc mở tồn QCVL
+- [ ] Persist Purchase P2/P3/P5 (bỏ stub create/post/pay)
+- [ ] Deep-scan BOM / POS Lưu Combo / object cuộn-tấm đầy đủ
 
 ---
 
-## Backlog phát hiện thêm (thêm dòng khi rà)
+## Backlog phát hiện thêm
 
 | Ngày | Chỗ lệch | Ghi chú | Đã xử lý |
 |---|---|---|---|
-| 2026-07-20 | PRD tồn: fallback KV vs “không lấp QCVL” | Đã chốt đọc trong Inventory README | [x] PR #5 |
-| 2026-07-20 | Roll-sheet PRD nói “API thật” | Đổi thành stub/docs-ahead | [x] PR #5 |
-| 2026-07-20 | Postgres POS live trừ cả mã combo | Ghi bảng path trên Sales README; SoT = chỉ thành phần | [x] PR #5 |
-| 2026-07-20 | Nhiều doc vẫn SoT cũ “BOM nháp / draft chờ duyệt” | Đổi SoT+runtime trên PRD/API/plan/TABLES | [x] PR #5 |
+| 2026-07-20 | PRD tồn: fallback KV vs “không lấp QCVL” | Inventory README | [x] PR #5 |
+| 2026-07-20 | Roll-sheet PRD “API thật” | stub/docs-ahead | [x] PR #5 |
+| 2026-07-20 | Postgres POS live trừ mã combo | Sales README path | [x] PR #5 |
+| 2026-07-20 | Doc “BOM nháp / draft chờ duyệt” | SoT+runtime vệ tinh | [x] PR #5 |
+| 2026-07-21 | Purchase P2/P3/P5 “đã merge” vs HTTP stub | Purchase README | [x] PR #5 |
 | | | | [ ] |
 
 ---
@@ -94,12 +85,14 @@
 
 | Module | Bảng trạng thái 3 lớp |
 |---|---|
-| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) *(3 lớp đầy đủ trên PR #4)* |
+| BOM | [03-BUSINESS-NghiepVu/BOM/README.md](./03-BUSINESS-NghiepVu/BOM/README.md) *(đầy đủ hơn trên PR #4)* |
 | Inventory / tồn | [03-BUSINESS-NghiepVu/Inventory/README.md](./03-BUSINESS-NghiepVu/Inventory/README.md) |
-| Sales / trừ kho bán | [03-BUSINESS-NghiepVu/Sales/README.md](./03-BUSINESS-NghiepVu/Sales/README.md) |
+| Sales / trừ kho + lifecycle | [03-BUSINESS-NghiepVu/Sales/README.md](./03-BUSINESS-NghiepVu/Sales/README.md) |
+| Purchase | [03-BUSINESS-NghiepVu/Purchase/README.md](./03-BUSINESS-NghiepVu/Purchase/README.md) |
+| Finance | [03-BUSINESS-NghiepVu/Finance/README.md](./03-BUSINESS-NghiepVu/Finance/README.md) |
 | Queue sản phẩm | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |
 | Document rules | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
 
 ---
 
-Khi chỉnh lý xong một khối P1/P2: cập nhật bảng **Đã xong**, tick checkbox, ghi PR. Không cần mở file SoT khác chỉ để “đánh dấu tiến độ”.
+Khi chỉnh lý xong một khối: cập nhật bảng **Đã xong**, tick checkbox, ghi PR. Không cần mở file SoT khác chỉ để “đánh dấu tiến độ”.

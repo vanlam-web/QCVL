@@ -2,6 +2,7 @@
 
 > Trang thai: Da chot dinh huong theo Owner - 2026-07-01
 > Source of Truth: pham vi san pham hien tai de tranh copy du KiotViet.
+> Doc cleanup / SoT vs runtime: [../DOC-CLEANUP-CHECKLIST.md](../DOC-CLEANUP-CHECKLIST.md). Owner 2026-07-20: da import het KV — khong mo import moi.
 
 ---
 

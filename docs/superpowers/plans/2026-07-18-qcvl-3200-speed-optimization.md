@@ -1,5 +1,8 @@
 # QCVL 3200 Speed Optimization Implementation Plan
 
+
+> **Historical plan (2026-07 docs cleanup):** File này là lịch sử triển khai. SoT hiện hành + runtime: `docs/DOC-CLEANUP-CHECKLIST.md`, `docs/03-BUSINESS-NghiepVu/Inventory/README.md`, `docs/03-BUSINESS-NghiepVu/Sales/README.md`, `docs/03-BUSINESS-NghiepVu/BOM/`. Owner 2026-07-20: **không mở đợt import KiotViet mới**.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Make `http://100.84.228.125:3200` feel fast on `dashboard`, `finance`, and `sales-documents` by removing expensive read-path work and paging heavy collections in SQL.
