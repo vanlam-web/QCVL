@@ -26,7 +26,6 @@ import type {
   UpdateCustomerDebtAdjustmentInput,
   UpdateCashbookEntryInput,
 } from './types'
-import type { UserListResponse } from '../users/types'
 
 export interface FinanceApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
@@ -119,16 +118,17 @@ export function createFinanceService(api: FinanceApiRequester) {
       const result = await api.request<{ items: FinanceSalesDocumentSummary[] }>(`/api/v1/sales-documents?${params.toString()}`)
       return result.items.find((item) => item.code === code) ?? null
     },
-    listVoucherCounterparties: async (input: { type: 'customer' | 'supplier' | 'employee'; search?: string }) => {
+    listVoucherCounterparties: async (input: { type: 'customer' | 'supplier' | 'employee' | 'delivery_partner'; search?: string }) => {
       const params = new URLSearchParams()
       if (input.search?.trim()) params.set('search', input.search.trim())
-      if (input.type === 'employee') {
+      if (input.type === 'employee' || input.type === 'delivery_partner') {
         params.set('status', 'active')
-        const result = await api.request<UserListResponse>(`/api/v1/users?${params.toString()}`)
+        const path = input.type === 'employee' ? '/api/v1/employees' : '/api/v1/delivery-partners'
+        const result = await api.request<{ items: CashbookVoucherCounterpartyOption[] }>(`${path}?${params.toString()}`)
         return result.items.slice(0, 8).map((item) => ({
           id: item.id,
-          code: item.username ?? item.phone ?? item.email ?? item.id,
-          name: item.display_name,
+          code: item.code,
+          name: item.name,
           phone: item.phone ?? null,
         }))
       }
@@ -173,6 +173,40 @@ export function createFinanceService(api: FinanceApiRequester) {
           tax_code: '',
           linked_customer_id: null,
           notes: '',
+        }),
+      })
+      return {
+        id: created.id,
+        code: created.code,
+        name: created.name,
+        phone: created.phone ?? null,
+      }
+    },
+    createVoucherEmployee: async (input: { name: string; phone?: string | null; code?: string }) => {
+      const created = await api.request<CashbookVoucherCounterpartyOption>('/api/v1/employees', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          status: 'active',
+          ...(input.code?.trim() ? { code: input.code.trim() } : {}),
+          ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
+        }),
+      })
+      return {
+        id: created.id,
+        code: created.code,
+        name: created.name,
+        phone: created.phone ?? null,
+      }
+    },
+    createVoucherDeliveryPartner: async (input: { name: string; phone?: string | null; code?: string }) => {
+      const created = await api.request<CashbookVoucherCounterpartyOption>('/api/v1/delivery-partners', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: input.name,
+          status: 'active',
+          ...(input.code?.trim() ? { code: input.code.trim() } : {}),
+          ...(input.phone?.trim() ? { phone: input.phone.trim() } : {}),
         }),
       })
       return {

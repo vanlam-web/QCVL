@@ -8,7 +8,7 @@ import {
   type AllocatableInvoice,
   type AllocatablePurchaseReceipt,
 } from './modules/finance/kiotviet-cashbook-allocation.js'
-import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
+import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type DeliveryPartnerListItemData, type EmployeeListItemData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 import {
   mergeOrganizationBillSettingsPatch,
   normalizeOrganizationBillSettingsData,
@@ -61,6 +61,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   ])
   const customers = new Map<string, CustomerListData>()
   const suppliers = new Map<string, SupplierListData>()
+  const employees = new Map<string, EmployeeListItemData>()
+  const deliveryPartners = new Map<string, DeliveryPartnerListItemData>()
   const customerGroupIds = new Map<string, string>()
   const customerGroupNamesById = new Map<string, string>()
   const users = new Map<string, UserListItemData>()
@@ -135,6 +137,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       financeAccounts,
       customers,
       suppliers,
+      employees,
+      deliveryPartners,
       customerGroupIds,
       customerGroupNamesById,
       users,
@@ -165,6 +169,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       financeAccounts,
       customers,
       suppliers,
+      employees,
+      deliveryPartners,
       customerGroupIds,
       customerGroupNamesById,
       users,
@@ -332,6 +338,64 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           if (!search) return true
           return normalize(`${item.display_name} ${item.email} ${item.username ?? ''} ${item.phone ?? ''}`).includes(search)
         })
+    },
+    async listEmployees(input) {
+      const search = normalize(input.url.searchParams.get('search') ?? '')
+      const status = input.url.searchParams.get('status')
+      return [...employees.values()]
+        .filter((item) => {
+          if (status === 'active' || status === 'inactive') {
+            if (item.status !== status) return false
+          }
+          if (!search) return true
+          return normalize(`${item.code} ${item.name} ${item.phone ?? ''} ${item.note ?? ''}`).includes(search)
+        })
+        .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    },
+    async createEmployee(input) {
+      const now = new Date().toISOString()
+      const code = input.code?.trim() || `NV${String(employees.size + 1).padStart(6, '0')}`
+      const employee: EmployeeListItemData = {
+        id: randomUUID(),
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        note: input.note?.trim() || null,
+        status: input.status ?? 'active',
+        created_at: now,
+      }
+      employees.set(employee.id, employee)
+      await persist()
+      return employee
+    },
+    async listDeliveryPartners(input) {
+      const search = normalize(input.url.searchParams.get('search') ?? '')
+      const status = input.url.searchParams.get('status')
+      return [...deliveryPartners.values()]
+        .filter((item) => {
+          if (status === 'active' || status === 'inactive') {
+            if (item.status !== status) return false
+          }
+          if (!search) return true
+          return normalize(`${item.code} ${item.name} ${item.phone ?? ''} ${item.note ?? ''}`).includes(search)
+        })
+        .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+    },
+    async createDeliveryPartner(input) {
+      const now = new Date().toISOString()
+      const code = input.code?.trim() || `DVVC${String(deliveryPartners.size + 1).padStart(6, '0')}`
+      const deliveryPartner: DeliveryPartnerListItemData = {
+        id: randomUUID(),
+        code,
+        name: input.name.trim(),
+        phone: input.phone?.trim() || null,
+        note: input.note?.trim() || null,
+        status: input.status ?? 'active',
+        created_at: now,
+      }
+      deliveryPartners.set(deliveryPartner.id, deliveryPartner)
+      await persist()
+      return deliveryPartner
     },
     async listFinanceAccounts(input) {
       const isActive = input.url.searchParams.get('is_active')
@@ -1910,6 +1974,8 @@ interface DevMemoryMaps {
   financeAccounts: Map<string, FinanceAccountData>
   customers: Map<string, CustomerListData>
   suppliers: Map<string, SupplierListData>
+  employees: Map<string, EmployeeListItemData>
+  deliveryPartners: Map<string, DeliveryPartnerListItemData>
   customerGroupIds: Map<string, string>
   customerGroupNamesById: Map<string, string>
   users: Map<string, UserListItemData>
@@ -1937,6 +2003,8 @@ interface DevMemoryState {
   financeAccounts: Array<[string, FinanceAccountData]>
   customers: Array<[string, CustomerListData]>
   suppliers: Array<[string, SupplierListData]>
+  employees?: Array<[string, EmployeeListItemData]>
+  deliveryPartners?: Array<[string, DeliveryPartnerListItemData]>
   customerGroupIds: Array<[string, string]>
   customerGroupNamesById: Array<[string, string]>
   users: Array<[string, UserListItemData]>
@@ -1969,6 +2037,8 @@ async function loadState(stateFile: string, maps: DevMemoryMaps) {
   replaceMap(maps.financeAccounts, state.financeAccounts)
   replaceMap(maps.customers, state.customers?.map(([key, customer]) => [key, sanitizePersistedCustomer(customer)]))
   replaceMap(maps.suppliers, state.suppliers)
+  replaceMap(maps.employees, state.employees)
+  replaceMap(maps.deliveryPartners, state.deliveryPartners)
   replaceMap(maps.customerGroupIds, state.customerGroupIds)
   replaceMap(maps.customerGroupNamesById, state.customerGroupNamesById)
   replaceMap(maps.users, state.users)
@@ -2019,6 +2089,8 @@ async function saveState(stateFile: string, maps: DevMemoryMaps) {
     financeAccounts: [...maps.financeAccounts.entries()],
     customers: [...maps.customers.entries()].map(([key, customer]) => [key, sanitizePersistedCustomer(customer)]),
     suppliers: [...maps.suppliers.entries()],
+    employees: [...maps.employees.entries()],
+    deliveryPartners: [...maps.deliveryPartners.entries()],
     customerGroupIds: [...maps.customerGroupIds.entries()],
     customerGroupNamesById: [...maps.customerGroupNamesById.entries()],
     users: [...maps.users.entries()],

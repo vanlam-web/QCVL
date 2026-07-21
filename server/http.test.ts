@@ -3994,6 +3994,14 @@ describe('createHttpHandler', () => {
     )
     const loginBody = await login.json()
     const authorization = `Bearer ${loginBody.data.access_token}`
+    const employeeResponse = await handler(
+      new Request('http://api.local/api/v1/employees', {
+        method: 'POST',
+        headers: { authorization },
+        body: JSON.stringify({ name: 'Nguyen Van A', phone: '0900000000' }),
+      }),
+    )
+    const employeeBody = await employeeResponse.json()
 
     const createResponse = await handler(
       new Request('http://api.local/api/v1/finance/cashbook-vouchers', {
@@ -4008,8 +4016,8 @@ describe('createHttpHandler', () => {
           partner_debt_mode: 'no_partner_debt',
           is_business_accounted: false,
           counterparty_type: 'employee',
-          counterparty_id: 'user-dev-admin',
-          counterparty_name: 'Nguyen Van A',
+          counterparty_id: employeeBody.data.id,
+          counterparty_name: 'Text should be ignored',
           reason: 'Mua van phong pham',
         }),
       }),
@@ -4039,7 +4047,7 @@ describe('createHttpHandler', () => {
       amount_delta: -45000,
       is_business_accounted: false,
       note: 'Mua van phong pham',
-      counterparty: { id: 'user-dev-admin', type: 'employee', name: 'Admin', phone: null },
+      counterparty: { id: employeeBody.data.id, type: 'employee', name: 'Nguyen Van A', phone: '0900000000' },
       finance_account: { id: 'cash-main', account_type: 'cash' },
       created_at: '2026-07-12T04:12:00.000Z',
       created_by: { id: 'user-dev-admin', name: 'Admin' },

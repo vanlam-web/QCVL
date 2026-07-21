@@ -284,9 +284,11 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     listCashbookBalances: vi.fn(async () => ({ items: balances })),
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
-    listVoucherCounterparties: vi.fn(async (input) => input.type === 'employee'
-      ? [{ id: 'user-employee-1', code: 'nv-a', name: 'Nguyen Van A', phone: '0900000000' }]
-      : [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]),
+    listVoucherCounterparties: vi.fn(async (input) => {
+      if (input.type === 'employee') return [{ id: 'employee-1', code: 'NV000001', name: 'Nguyen Van A', phone: '0900000000' }]
+      if (input.type === 'delivery_partner') return [{ id: 'delivery-1', code: 'DVVC000001', name: 'Ship A', phone: '0911111111' }]
+      return [{ id: 'customer-2', code: 'KH000002', name: 'Nguyen Van A', phone: '0900000000' }]
+    }),
     createVoucherCustomer: vi.fn(async (input) => ({
       id: 'customer-created',
       code: 'KH000099',
@@ -296,6 +298,18 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
     createVoucherSupplier: vi.fn(async (input) => ({
       id: 'supplier-created',
       code: 'NCC000099',
+      name: input.name,
+      phone: input.phone ?? null,
+    })),
+    createVoucherEmployee: vi.fn(async (input) => ({
+      id: 'employee-created',
+      code: 'NV000099',
+      name: input.name,
+      phone: input.phone ?? null,
+    })),
+    createVoucherDeliveryPartner: vi.fn(async (input) => ({
+      id: 'delivery-created',
+      code: 'DVVC000099',
       name: input.name,
       phone: input.phone ?? null,
     })),
@@ -1085,7 +1099,7 @@ describe('FinancePage', () => {
       partner_debt_mode: 'no_partner_debt',
       is_business_accounted: false,
       counterparty_type: 'employee',
-      counterparty_id: 'user-employee-1',
+      counterparty_id: 'employee-1',
       counterparty_name: 'Nguyen Van A',
       counterparty_phone: '0900000000',
       reason: 'Mua văn phòng phẩm',
@@ -1154,7 +1168,7 @@ describe('FinancePage', () => {
     await userEvent.click(within(form).getByRole('button', { name: 'Tạo mới nhà cung cấp' }))
 
     const createDialog = await screen.findByRole('dialog', { name: 'Tạo nhanh nhà cung cấp' })
-    await userEvent.type(within(createDialog).getByLabelText('Tên NCC'), 'NCC tạo từ sổ quỹ')
+    await userEvent.type(within(createDialog).getByLabelText('Tên nhà cung cấp'), 'NCC tạo từ sổ quỹ')
     await userEvent.click(within(createDialog).getByRole('button', { name: 'Lưu' }))
 
     await waitFor(() => expect(service.createVoucherSupplier).toHaveBeenCalledWith({
@@ -1163,6 +1177,39 @@ describe('FinancePage', () => {
       code: undefined,
     }))
     expect(within(form).getByLabelText('Tên người nhận')).toHaveValue('NCC tạo từ sổ quỹ')
+  })
+
+  it('creates employees and delivery partners from voucher counterparty fields', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
+
+    await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'staff_salary')
+    await userEvent.click(within(form).getByRole('button', { name: 'Tạo mới nhân viên' }))
+    let createDialog = await screen.findByRole('dialog', { name: 'Tạo nhanh nhân viên' })
+    await userEvent.type(within(createDialog).getByLabelText('Tên nhân viên'), 'Thợ in A')
+    await userEvent.click(within(createDialog).getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(service.createVoucherEmployee).toHaveBeenCalledWith({
+      name: 'Thợ in A',
+      phone: null,
+      code: undefined,
+    }))
+    expect(within(form).getByLabelText('Tên người nhận')).toHaveValue('Thợ in A')
+
+    await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'shipping_expense')
+    await userEvent.click(within(form).getByRole('button', { name: 'Tạo mới đối tác giao hàng' }))
+    createDialog = await screen.findByRole('dialog', { name: 'Tạo nhanh đối tác giao hàng' })
+    await userEvent.type(within(createDialog).getByLabelText('Tên đối tác giao hàng'), 'Xe ôm A')
+    await userEvent.click(within(createDialog).getByRole('button', { name: 'Lưu' }))
+    await waitFor(() => expect(service.createVoucherDeliveryPartner).toHaveBeenCalledWith({
+      name: 'Xe ôm A',
+      phone: null,
+      code: undefined,
+    }))
+    expect(within(form).getByLabelText('Tên người nhận')).toHaveValue('Xe ôm A')
   })
 
   it('limits voucher counterparties by selected voucher type', async () => {

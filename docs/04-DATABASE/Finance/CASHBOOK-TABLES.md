@@ -123,7 +123,7 @@ Thu bán hàng và thu nợ khách không dùng `cashbook_vouchers`; nguồn chu
 - Nếu `counterparty_type = 'none'`, `counterparty_id`, `counterparty_name`, `counterparty_phone` phải null trừ khi dữ liệu legacy/import cần preserve text nguồn.
 - Với `customer`, `counterparty_id` tham chiếu `public.customers.id`.
 - Với `supplier`, `counterparty_id` tham chiếu `public.suppliers.id`.
-- Với `employee`, `counterparty_id` tham chiếu `public.profiles.id`.
+- Với `employee`, `counterparty_id` tham chiếu `public.employees.id`.
 - Với `delivery_partner`, `counterparty_id` tham chiếu `public.delivery_partners.id`.
 - `counterparty_name` và `counterparty_phone` luôn là snapshot lịch sử, không tự đổi khi master data đổi sau này.
 
@@ -136,7 +136,34 @@ Thu bán hàng và thu nợ khách không dùng `cashbook_vouchers`; nguồn chu
 
 ---
 
-## 4. Bảng `public.delivery_partners` — Đối tác giao hàng
+## 4. Bảng `public.employees` — Nhân viên không đăng nhập
+
+### Mục đích
+
+Lưu danh sách nhân viên vận hành không nhất thiết có tài khoản đăng nhập, dùng cho phiếu lương, hoa hồng, chi phí vận hành và các phiếu thu/chi cần chọn đúng người nhận/nộp.
+
+### Các cột
+
+| Tên cột | Kiểu dữ liệu | Nullable | Mô tả |
+|---|---|---|---|
+| `id` | `uuid` | ❌ | Khóa chính |
+| `organization_id` | `uuid` | ❌ | FK → `public.organizations.id` |
+| `code` | `text` | ❌ | Mã nhân viên, tự sinh `NV000001` nếu bỏ trống |
+| `name` | `text` | ❌ | Tên nhân viên |
+| `phone` | `text` | ✅ | Số điện thoại nếu có |
+| `note` | `text` | ✅ | Ghi chú |
+| `status` | `text` | ❌ | `active` hoặc `inactive` |
+| `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
+| `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật |
+
+### Ràng buộc
+
+- `code` duy nhất trong cùng organization theo `lower(code)`.
+- Không xóa vật lý nhân viên đã từng được voucher tham chiếu; chuyển `status = inactive` khi ngừng dùng.
+
+---
+
+## 5. Bảng `public.delivery_partners` — Đối tác giao hàng
 
 ### Mục đích
 
@@ -148,32 +175,26 @@ Lưu danh sách đối tác giao hàng dùng cho phiếu chi vận chuyển và 
 |---|---|---|---|
 | `id` | `uuid` | ❌ | Khóa chính |
 | `organization_id` | `uuid` | ❌ | FK → `public.organizations.id` |
+| `code` | `text` | ❌ | Mã đối tác giao hàng, tự sinh `DVVC000001` nếu bỏ trống |
 | `name` | `text` | ❌ | Tên đối tác giao hàng |
-| `normalized_name` | `text` | ❌ | Tên đã chuẩn hóa để tìm/chống trùng |
 | `phone` | `text` | ✅ | Số điện thoại nếu có |
-| `normalized_phone` | `text` | ✅ | Số điện thoại đã chuẩn hóa |
 | `note` | `text` | ✅ | Ghi chú |
-| `is_active` | `boolean` | ❌ | Còn dùng để gợi ý hay không |
-| `created_by` | `uuid` | ❌ | FK → `public.profiles.id` |
+| `status` | `text` | ❌ | `active` hoặc `inactive` |
 | `created_at` | `timestamptz` | ❌ | Thời điểm tạo |
 | `updated_at` | `timestamptz` | ❌ | Thời điểm cập nhật |
 
 ### Ràng buộc
 
-- `name` không rỗng sau trim.
-- Nếu có `normalized_phone`, chống trùng trong cùng organization theo `(organization_id, normalized_phone)`.
-- Nếu không có phone, chống trùng active theo `(organization_id, normalized_name)`.
-- Tạo nhanh từ phiếu thu/chi phải upsert/gộp theo `normalized_phone` nếu có; nếu không có phone thì theo `normalized_name`.
-- Không xóa vật lý đối tác đã từng được voucher tham chiếu; chỉ chuyển `is_active = false`.
+- `code` duy nhất trong cùng organization theo `lower(code)`.
+- Không xóa vật lý đối tác đã từng được voucher tham chiếu; chuyển `status = inactive` khi ngừng dùng.
 
 ### Index
 
-- `idx_delivery_partners_org_active_name` trên `(organization_id, is_active, normalized_name)`
-- `idx_delivery_partners_org_phone` trên `(organization_id, normalized_phone)` với điều kiện `normalized_phone IS NOT NULL`
+- `delivery_partners_org_status_name_idx` trên `(organization_id, status, name)`
 
 ---
 
-## 5. Bảng `public.cashbook_entries` — Dòng sổ quỹ chính thức
+## 6. Bảng `public.cashbook_entries` — Dòng sổ quỹ chính thức
 
 ### Mục đích
 

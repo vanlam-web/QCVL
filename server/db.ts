@@ -20,6 +20,8 @@ import type {
   CurrentUserData,
   CustomerDebtSummaryData,
   CustomerListData,
+  DeliveryPartnerListItemData,
+  EmployeeListItemData,
   FinanceAccountData,
   ProductGroupListData,
   ProductListData,
@@ -289,6 +291,120 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         return user
       } catch (error) {
         await pool.query('rollback')
+        throw error
+      }
+    },
+
+    async listEmployees(input) {
+      await ensureEmployeeTables(pool)
+      const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
+      const status = input.url.searchParams.get('status')
+      const params: unknown[] = [input.organizationId]
+      const filters = ['organization_id = $1']
+      if (status === 'active' || status === 'inactive') {
+        params.push(status)
+        filters.push(`status = $${params.length}`)
+      }
+      if (search) {
+        params.push(`%${search}%`)
+        filters.push(`(
+          ${accentInsensitiveSearchSql('name')} like $${params.length}
+          or ${accentInsensitiveSearchSql('code')} like $${params.length}
+          or ${accentInsensitiveSearchSql("coalesce(phone, '')")} like $${params.length}
+        )`)
+      }
+      const result = await pool.query(
+        `
+          select id::text, code, name, phone, note, status, created_at
+          from employees
+          where ${filters.join(' and ')}
+          order by created_at desc, name
+        `,
+        params,
+      )
+      return result.rows.map(employeeListItemFromRow)
+    },
+
+    async createEmployee(input) {
+      await ensureEmployeeTables(pool)
+      const code = input.code?.trim() || await nextEmployeeCode(pool, input.organizationId)
+      try {
+        const result = await pool.query(
+          `
+            insert into employees (id, organization_id, code, name, phone, note, status, created_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, now(), now())
+            returning id::text, code, name, phone, note, status, created_at
+          `,
+          [
+            randomUUID(),
+            input.organizationId,
+            code,
+            input.name.trim(),
+            input.phone?.trim() || null,
+            input.note?.trim() || null,
+            input.status ?? 'active',
+          ],
+        )
+        return employeeListItemFromRow(result.rows[0])
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new Error('EMPLOYEE_ALREADY_EXISTS')
+        throw error
+      }
+    },
+
+    async listDeliveryPartners(input) {
+      await ensureDeliveryPartnerTables(pool)
+      const search = normalizeSearchText(input.url.searchParams.get('search') ?? '')
+      const status = input.url.searchParams.get('status')
+      const params: unknown[] = [input.organizationId]
+      const filters = ['organization_id = $1']
+      if (status === 'active' || status === 'inactive') {
+        params.push(status)
+        filters.push(`status = $${params.length}`)
+      }
+      if (search) {
+        params.push(`%${search}%`)
+        filters.push(`(
+          ${accentInsensitiveSearchSql('name')} like $${params.length}
+          or ${accentInsensitiveSearchSql('code')} like $${params.length}
+          or ${accentInsensitiveSearchSql("coalesce(phone, '')")} like $${params.length}
+        )`)
+      }
+      const result = await pool.query(
+        `
+          select id::text, code, name, phone, note, status, created_at
+          from delivery_partners
+          where ${filters.join(' and ')}
+          order by created_at desc, name
+        `,
+        params,
+      )
+      return result.rows.map(deliveryPartnerListItemFromRow)
+    },
+
+    async createDeliveryPartner(input) {
+      await ensureDeliveryPartnerTables(pool)
+      const code = input.code?.trim() || await nextDeliveryPartnerCode(pool, input.organizationId)
+      try {
+        const result = await pool.query(
+          `
+            insert into delivery_partners (id, organization_id, code, name, phone, note, status, created_at, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, now(), now())
+            returning id::text, code, name, phone, note, status, created_at
+          `,
+          [
+            randomUUID(),
+            input.organizationId,
+            code,
+            input.name.trim(),
+            input.phone?.trim() || null,
+            input.note?.trim() || null,
+            input.status ?? 'active',
+          ],
+        )
+        return deliveryPartnerListItemFromRow(result.rows[0])
+      } catch (error) {
+        if (isUniqueViolation(error)) throw new Error('DELIVERY_PARTNER_ALREADY_EXISTS')
         throw error
       }
     },
@@ -8173,6 +8289,48 @@ async function ensureUserManagementColumns(pool: pg.Pool) {
   await pool.query('create index if not exists users_org_created_idx on users (organization_id, created_at desc)')
 }
 
+async function ensureEmployeeTables(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists employees (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      phone text,
+      note text,
+      status text not null default 'active',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `)
+  await pool.query(`
+    create unique index if not exists employees_org_code_uidx
+    on employees (organization_id, lower(code))
+  `)
+  await pool.query('create index if not exists employees_org_status_name_idx on employees (organization_id, status, name)')
+}
+
+async function ensureDeliveryPartnerTables(pool: pg.Pool) {
+  await pool.query(`
+    create table if not exists delivery_partners (
+      id uuid primary key,
+      organization_id uuid not null references organizations(id) on delete cascade,
+      code text not null,
+      name text not null,
+      phone text,
+      note text,
+      status text not null default 'active',
+      created_at timestamptz not null default now(),
+      updated_at timestamptz not null default now()
+    )
+  `)
+  await pool.query(`
+    create unique index if not exists delivery_partners_org_code_uidx
+    on delivery_partners (organization_id, lower(code))
+  `)
+  await pool.query('create index if not exists delivery_partners_org_status_name_idx on delivery_partners (organization_id, status, name)')
+}
+
 async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   await pool.query('alter table organizations add column if not exists shop_name text')
   await pool.query('alter table organizations add column if not exists shop_address text')
@@ -8325,6 +8483,30 @@ function userListItemFromRow(row: Record<string, unknown>): UserListItemData {
     permissions: Array.isArray(row.permissions)
       ? row.permissions.filter((permission): permission is `perm.${string}` => typeof permission === 'string' && permission.startsWith('perm.'))
       : [],
+  }
+}
+
+function employeeListItemFromRow(row: Record<string, unknown>): EmployeeListItemData {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    phone: nullableDbString(row.phone),
+    note: nullableDbString(row.note),
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+  }
+}
+
+function deliveryPartnerListItemFromRow(row: Record<string, unknown>): DeliveryPartnerListItemData {
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    phone: nullableDbString(row.phone),
+    note: nullableDbString(row.note),
+    status: row.status === 'inactive' ? 'inactive' : 'active',
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
   }
 }
 
@@ -8798,6 +8980,42 @@ async function nextManualSupplierCode(pool: pg.Pool, organizationId: string) {
   )
   const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
   return `NCC${String(nextNumber).padStart(6, '0')}`
+}
+
+async function nextEmployeeCode(pool: pg.Pool, organizationId: string) {
+  const result = await pool.query(
+    `
+      select max(
+        case
+          when code ~* '^nv[0-9]+$' then substring(code from '[0-9]+')::int
+          else null
+        end
+      ) as max_number
+      from employees
+      where organization_id = $1
+    `,
+    [organizationId],
+  )
+  const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
+  return `NV${String(nextNumber).padStart(6, '0')}`
+}
+
+async function nextDeliveryPartnerCode(pool: pg.Pool, organizationId: string) {
+  const result = await pool.query(
+    `
+      select max(
+        case
+          when code ~* '^dvvc[0-9]+$' then substring(code from '[0-9]+')::int
+          else null
+        end
+      ) as max_number
+      from delivery_partners
+      where organization_id = $1
+    `,
+    [organizationId],
+  )
+  const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
+  return `DVVC${String(nextNumber).padStart(6, '0')}`
 }
 
 function customerSnapshotMatches(url: URL, customer: CustomerListData) {

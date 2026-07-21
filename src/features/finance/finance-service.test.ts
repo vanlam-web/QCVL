@@ -156,12 +156,20 @@ describe('finance-service', () => {
     ])
   })
 
-  it('lists active users as voucher employee counterparties', async () => {
+  it('lists active employees and delivery partners as voucher counterparties', async () => {
     const request: FinanceApiRequester['request'] = async <T>(path: string) => {
-      expect(path).toBe('/api/v1/users?search=Lam&status=active')
+      if (path === '/api/v1/employees?search=Lam&status=active') {
+        return {
+          items: [
+            { id: 'employee-1', code: 'NV000001', phone: '0900000000', name: 'Văn Lâm', status: 'active' },
+          ],
+          total: 1,
+        } as T
+      }
+      expect(path).toBe('/api/v1/delivery-partners?search=Ship&status=active')
       return {
         items: [
-          { id: 'user-1', email: 'lam@example.test', username: 'lam', phone: '0900000000', display_name: 'Văn Lâm', status: 'active', permissions: [] },
+          { id: 'delivery-1', code: 'DVVC000001', phone: '0911111111', name: 'Ship A', status: 'active' },
         ],
         total: 1,
       } as T
@@ -169,18 +177,27 @@ describe('finance-service', () => {
     const service = createFinanceService({ request })
 
     await expect(service.listVoucherCounterparties({ type: 'employee', search: 'Lam' })).resolves.toEqual([
-      { id: 'user-1', code: 'lam', name: 'Văn Lâm', phone: '0900000000' },
+      { id: 'employee-1', code: 'NV000001', name: 'Văn Lâm', phone: '0900000000' },
+    ])
+    await expect(service.listVoucherCounterparties({ type: 'delivery_partner', search: 'Ship' })).resolves.toEqual([
+      { id: 'delivery-1', code: 'DVVC000001', name: 'Ship A', phone: '0911111111' },
     ])
   })
 
-  it('posts quick create customer and supplier for voucher counterparties', async () => {
+  it('posts quick create customer, supplier, employee, and delivery partner for voucher counterparties', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: FinanceApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
       calls.push([path, init])
       if (path === '/api/v1/customers') {
         return { id: 'customer-1', code: 'KH000010', name: 'Khách mới', phone: '0901111222' } as T
       }
-      return { id: 'supplier-1', code: 'NCC000010', name: 'NCC mới', phone: null } as T
+      if (path === '/api/v1/suppliers') {
+        return { id: 'supplier-1', code: 'NCC000010', name: 'NCC mới', phone: null } as T
+      }
+      if (path === '/api/v1/employees') {
+        return { id: 'employee-1', code: 'NV000010', name: 'Thợ in A', phone: null } as T
+      }
+      return { id: 'delivery-1', code: 'DVVC000010', name: 'Ship A', phone: null } as T
     }
     const service = createFinanceService({ request })
 
@@ -196,11 +213,27 @@ describe('finance-service', () => {
       name: 'NCC mới',
       phone: null,
     })
+    await expect(service.createVoucherEmployee({ name: 'Thợ in A' })).resolves.toEqual({
+      id: 'employee-1',
+      code: 'NV000010',
+      name: 'Thợ in A',
+      phone: null,
+    })
+    await expect(service.createVoucherDeliveryPartner({ name: 'Ship A' })).resolves.toEqual({
+      id: 'delivery-1',
+      code: 'DVVC000010',
+      name: 'Ship A',
+      phone: null,
+    })
 
     expect(calls[0]?.[0]).toBe('/api/v1/customers')
     expect(calls[0]?.[1]).toMatchObject({ method: 'POST' })
     expect(calls[1]?.[0]).toBe('/api/v1/suppliers')
     expect(calls[1]?.[1]).toMatchObject({ method: 'POST' })
+    expect(calls[2]?.[0]).toBe('/api/v1/employees')
+    expect(calls[2]?.[1]).toMatchObject({ method: 'POST' })
+    expect(calls[3]?.[0]).toBe('/api/v1/delivery-partners')
+    expect(calls[3]?.[1]).toMatchObject({ method: 'POST' })
   })
 
   it('posts manual cashbook voucher cancel', async () => {

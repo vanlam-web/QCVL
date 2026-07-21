@@ -355,7 +355,15 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       )
 
   useEffect(() => {
-    if (voucherMode === null || (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier' && voucherCounterpartyType !== 'employee')) {
+    if (
+      voucherMode === null
+      || (
+        voucherCounterpartyType !== 'customer'
+        && voucherCounterpartyType !== 'supplier'
+        && voucherCounterpartyType !== 'employee'
+        && voucherCounterpartyType !== 'delivery_partner'
+      )
+    ) {
       return undefined
     }
     let active = true
@@ -502,7 +510,12 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }
 
   function openVoucherCounterpartyCreate() {
-    if (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier') return
+    if (
+      voucherCounterpartyType !== 'customer'
+      && voucherCounterpartyType !== 'supplier'
+      && voucherCounterpartyType !== 'employee'
+      && voucherCounterpartyType !== 'delivery_partner'
+    ) return
     setVoucherCounterpartyCreateName(voucherCounterpartyName.trim())
     setVoucherCounterpartyCreatePhone(voucherCounterpartyPhone.trim())
     setVoucherCounterpartyCreateCode('')
@@ -519,10 +532,15 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
 
   async function createVoucherCounterparty(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (voucherCounterpartyType !== 'customer' && voucherCounterpartyType !== 'supplier') return
+    if (
+      voucherCounterpartyType !== 'customer'
+      && voucherCounterpartyType !== 'supplier'
+      && voucherCounterpartyType !== 'employee'
+      && voucherCounterpartyType !== 'delivery_partner'
+    ) return
     const name = voucherCounterpartyCreateName.trim()
     if (!name) {
-      setError(voucherCounterpartyType === 'customer' ? 'Nhập tên khách hàng.' : 'Nhập tên nhà cung cấp.')
+      setError(`Nhập tên ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}.`)
       return
     }
     setCreatingVoucherCounterparty(true)
@@ -534,11 +552,23 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
             phone: voucherCounterpartyCreatePhone.trim() || null,
             code: voucherCounterpartyCreateCode.trim() || undefined,
           })
-        : await service.createVoucherSupplier({
+        : voucherCounterpartyType === 'supplier'
+          ? await service.createVoucherSupplier({
             name,
             phone: voucherCounterpartyCreatePhone.trim() || null,
             code: voucherCounterpartyCreateCode.trim() || undefined,
           })
+          : voucherCounterpartyType === 'employee'
+            ? await service.createVoucherEmployee({
+                name,
+                phone: voucherCounterpartyCreatePhone.trim() || null,
+                code: voucherCounterpartyCreateCode.trim() || undefined,
+              })
+            : await service.createVoucherDeliveryPartner({
+                name,
+                phone: voucherCounterpartyCreatePhone.trim() || null,
+                code: voucherCounterpartyCreateCode.trim() || undefined,
+              })
       setVoucherCounterpartyOptions((current) => {
         if (current.some((item) => item.id === created.id)) return current
         return [created, ...current]
@@ -548,7 +578,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setVoucherCounterpartyPhone(created.phone ?? '')
       closeVoucherCounterpartyCreate()
     } catch (cause) {
-      setError(formatApiError(cause, voucherCounterpartyType === 'customer' ? 'Không tạo được khách hàng.' : 'Không tạo được nhà cung cấp.'))
+      setError(formatApiError(cause, `Không tạo được ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}.`))
     } finally {
       setCreatingVoucherCounterparty(false)
     }
@@ -1164,8 +1194,14 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setError('Nhập lý do cho phiếu thu chi.')
       return
     }
-    if (voucherCounterpartyType === 'employee' && voucherCounterpartyId.trim() === '') {
-      setError('Chọn nhân viên từ danh sách nhân viên đã lưu.')
+    if (
+      (voucherCounterpartyType === 'customer'
+        || voucherCounterpartyType === 'supplier'
+        || voucherCounterpartyType === 'employee'
+        || voucherCounterpartyType === 'delivery_partner')
+      && voucherCounterpartyId.trim() === ''
+    ) {
+      setError(`Chọn ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()} từ danh sách đã lưu.`)
       return
     }
     const issuedAt = parseManagementDateTimeInputText(voucherIssuedAt)
@@ -1673,9 +1709,12 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                 <div>
                   <span className="management-field-heading">
                     <label htmlFor="finance-voucher-counterparty-name">{voucherCounterpartyNameLabel}</label>
-                    {voucherCounterpartyType === 'customer' || voucherCounterpartyType === 'supplier' ? (
+                    {voucherCounterpartyType === 'customer'
+                    || voucherCounterpartyType === 'supplier'
+                    || voucherCounterpartyType === 'employee'
+                    || voucherCounterpartyType === 'delivery_partner' ? (
                       <button
-                        aria-label={voucherCounterpartyType === 'customer' ? 'Tạo mới khách hàng' : 'Tạo mới nhà cung cấp'}
+                        aria-label={`Tạo mới ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
                         className="management-field-link-action"
                         type="button"
                         onClick={openVoucherCounterpartyCreate}
@@ -1752,20 +1791,25 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         </div>
       ) : null}
 
-      {voucherCounterpartyCreateOpen && (voucherCounterpartyType === 'customer' || voucherCounterpartyType === 'supplier') ? (
+      {voucherCounterpartyCreateOpen && (
+        voucherCounterpartyType === 'customer'
+        || voucherCounterpartyType === 'supplier'
+        || voucherCounterpartyType === 'employee'
+        || voucherCounterpartyType === 'delivery_partner'
+      ) ? (
         <div className="management-modal-backdrop">
           <section
-            aria-label={voucherCounterpartyType === 'customer' ? 'Tạo nhanh khách hàng' : 'Tạo nhanh nhà cung cấp'}
+            aria-label={`Tạo nhanh ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
             aria-modal="true"
             className="management-modal-dialog management-modal-dialog-compact"
             role="dialog"
           >
             <header className="management-modal-header">
               <div>
-                <h2>{voucherCounterpartyType === 'customer' ? 'Tạo nhanh khách hàng' : 'Tạo nhanh nhà cung cấp'}</h2>
+                <h2>{`Tạo nhanh ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}</h2>
               </div>
               <button
-                aria-label={voucherCounterpartyType === 'customer' ? 'Đóng tạo nhanh khách hàng' : 'Đóng tạo nhanh nhà cung cấp'}
+                aria-label={`Đóng tạo nhanh ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
                 className="management-modal-close"
                 type="button"
                 onClick={closeVoucherCounterpartyCreate}
@@ -1774,13 +1818,13 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
               </button>
             </header>
             <form
-              aria-label={voucherCounterpartyType === 'customer' ? 'Thông tin tạo nhanh khách hàng' : 'Thông tin tạo nhanh nhà cung cấp'}
+              aria-label={`Thông tin tạo nhanh ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
               className="management-modal-form"
               onSubmit={createVoucherCounterparty}
             >
               <div className="management-modal-form-grid">
                 <label>
-                  {voucherCounterpartyType === 'customer' ? 'Tên khách hàng' : 'Tên NCC'}
+                  {`Tên ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
                   <input
                     autoFocus
                     required
@@ -1789,7 +1833,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                   />
                 </label>
                 <label>
-                  {voucherCounterpartyType === 'customer' ? 'Mã khách hàng' : 'Mã NCC'}
+                  {`Mã ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()}`}
                   <input
                     placeholder="Bỏ trống để tự sinh"
                     value={voucherCounterpartyCreateCode}

@@ -156,7 +156,7 @@ export interface CashbookBalanceListResponse {
 
 export interface CashbookCounterparty {
   id?: string | null
-  type: 'customer' | 'supplier' | 'employee' | 'other' | 'none'
+  type: 'customer' | 'supplier' | 'employee' | 'delivery_partner' | 'other' | 'none'
   name: string | null
   phone: string | null
 }

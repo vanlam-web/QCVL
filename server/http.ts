@@ -129,6 +129,26 @@ export interface UserListItemData {
   permissions: `perm.${string}`[]
 }
 
+export interface EmployeeListItemData {
+  id: string
+  code: string
+  name: string
+  phone: string | null
+  note: string | null
+  status: 'active' | 'inactive'
+  created_at: string
+}
+
+export interface DeliveryPartnerListItemData {
+  id: string
+  code: string
+  name: string
+  phone: string | null
+  note: string | null
+  status: 'active' | 'inactive'
+  created_at: string
+}
+
 export interface WorkstationData {
   id: string
   code: string
@@ -528,6 +548,24 @@ export interface ServerRepository {
     id: string
     permissions: `perm.${string}`[]
   }): Promise<UserListItemData | null>
+  listEmployees?(input: { organizationId: string; url: URL }): Promise<EmployeeListItemData[]>
+  createEmployee?(input: {
+    organizationId: string
+    code?: string
+    name: string
+    phone?: string | null
+    note?: string | null
+    status?: 'active' | 'inactive'
+  }): Promise<EmployeeListItemData>
+  listDeliveryPartners?(input: { organizationId: string; url: URL }): Promise<DeliveryPartnerListItemData[]>
+  createDeliveryPartner?(input: {
+    organizationId: string
+    code?: string
+    name: string
+    phone?: string | null
+    note?: string | null
+    status?: 'active' | 'inactive'
+  }): Promise<DeliveryPartnerListItemData>
   createSession(input: { token: string; userId: string; expiresAt: Date }): Promise<void>
   deleteSession(token: string): Promise<void>
   getSessionUser(token: string, workstationId?: string | null): Promise<CurrentUserData | null>
@@ -3081,6 +3119,41 @@ async function getDevApiResponse(
     return { found: true, data: updated ?? { ...toUserListItem(currentUser), permissions: normalizePermissions(body.permissions) } }
   }
 
+  if (method === 'GET' && path === '/api/v1/employees') {
+    const items = await repository.listEmployees?.({ organizationId: currentUser.organization.id, url }) ?? []
+    return { found: true, data: { items, total: items.length } }
+  }
+  if (method === 'POST' && path === '/api/v1/employees') {
+    const body = await readJson(request)
+    const created = await repository.createEmployee?.({
+      organizationId: currentUser.organization.id,
+      code: typeof body.code === 'string' ? body.code : undefined,
+      name: requiredString(body.name, 'name'),
+      phone: nullableString(body.phone),
+      note: nullableString(body.note),
+      status: body.status === 'inactive' ? 'inactive' : 'active',
+    })
+    if (!created) throw new HttpError(501, 'NOT_IMPLEMENTED', 'Employee repository is not available.')
+    return { found: true, data: created, status: 201 }
+  }
+  if (method === 'GET' && path === '/api/v1/delivery-partners') {
+    const items = await repository.listDeliveryPartners?.({ organizationId: currentUser.organization.id, url }) ?? []
+    return { found: true, data: { items, total: items.length } }
+  }
+  if (method === 'POST' && path === '/api/v1/delivery-partners') {
+    const body = await readJson(request)
+    const created = await repository.createDeliveryPartner?.({
+      organizationId: currentUser.organization.id,
+      code: typeof body.code === 'string' ? body.code : undefined,
+      name: requiredString(body.name, 'name'),
+      phone: nullableString(body.phone),
+      note: nullableString(body.note),
+      status: body.status === 'inactive' ? 'inactive' : 'active',
+    })
+    if (!created) throw new HttpError(501, 'NOT_IMPLEMENTED', 'Delivery partner repository is not available.')
+    return { found: true, data: created, status: 201 }
+  }
+
   const catalogRoute = await handleCatalogRoute(
     { request, url, currentUser, repository },
     {
@@ -4544,16 +4617,49 @@ async function getDevApiResponse(
       if (!account) {
         throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.', { finance_account_id: ['finance_account_id is invalid.'] })
       }
-      if (voucherRequest.counterpartyType === 'employee') {
-        const users = repository.listUsers
-          ? await repository.listUsers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/users?status=active') })
+      if (voucherRequest.counterpartyType === 'customer') {
+        const customers = repository.listCustomers
+          ? await repository.listCustomers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/customers?status=active&page=1&page_size=10000') })
           : []
-        const employee = users.find((item) => item.id === voucherRequest.counterpartyId)
+        const customer = customers.find((item) => item.id === voucherRequest.counterpartyId)
+        if (!customer) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active customer.'] })
+        }
+        voucherRequest.counterpartyName = customer.name
+        voucherRequest.counterpartyPhone = customer.phone ?? null
+      }
+      if (voucherRequest.counterpartyType === 'supplier') {
+        const suppliers = repository.listSuppliers
+          ? await repository.listSuppliers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') })
+          : []
+        const supplier = suppliers.find((item) => item.id === voucherRequest.counterpartyId)
+        if (!supplier) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active supplier.'] })
+        }
+        voucherRequest.counterpartyName = supplier.name
+        voucherRequest.counterpartyPhone = supplier.phone ?? null
+      }
+      if (voucherRequest.counterpartyType === 'employee') {
+        const employees = repository.listEmployees
+          ? await repository.listEmployees({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/employees?status=active') })
+          : []
+        const employee = employees.find((item) => item.id === voucherRequest.counterpartyId)
         if (!employee) {
           throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active employee.'] })
         }
-        voucherRequest.counterpartyName = employee.display_name
+        voucherRequest.counterpartyName = employee.name
         voucherRequest.counterpartyPhone = employee.phone ?? null
+      }
+      if (voucherRequest.counterpartyType === 'delivery_partner') {
+        const deliveryPartners = repository.listDeliveryPartners
+          ? await repository.listDeliveryPartners({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/delivery-partners?status=active') })
+          : []
+        const deliveryPartner = deliveryPartners.find((item) => item.id === voucherRequest.counterpartyId)
+        if (!deliveryPartner) {
+          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active delivery partner.'] })
+        }
+        voucherRequest.counterpartyName = deliveryPartner.name
+        voucherRequest.counterpartyPhone = deliveryPartner.phone ?? null
       }
         const entriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
         const existingEntries = repository.listCashbookEntries

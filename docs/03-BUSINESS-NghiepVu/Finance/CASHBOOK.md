@@ -187,7 +187,7 @@ Nguồn danh sách:
 |---|---|
 | Khách hàng | Danh sách khách hàng hiện có |
 | Nhà cung cấp | Danh sách nhà cung cấp hiện có |
-| Nhân viên | Danh sách tài khoản/nhân viên |
+| Nhân viên | Danh sách nhân viên riêng, không phải tài khoản đăng nhập |
 | Đối tác giao hàng | Danh sách đối tác giao hàng đã lưu; nếu chưa có thì tạo nhanh trước khi lưu phiếu |
 | Khác | Nhập tự do |
 
@@ -201,7 +201,7 @@ Không dùng một bảng đối tượng chung cho tất cả nhóm. Mỗi nhó
 |---|---|---|
 | Khách hàng | Chọn khách cũ thì lưu `customer_id`; tạo mới thì lưu vào master khách hàng; không lưu text tạm. | Màn khách hàng. |
 | Nhà cung cấp | Chọn NCC cũ thì lưu `supplier_id`; tạo mới thì lưu vào master NCC; không lưu text tạm. | Màn nhà cung cấp. |
-| Nhân viên | Chỉ chọn từ danh sách nhân viên/tài khoản đã có. | Màn nhân viên/tài khoản. |
+| Nhân viên | Chọn bản ghi cũ hoặc tạo nhanh bản ghi mới; không lưu text tạm. | Giai đoạn đầu quản lý nhẹ qua combobox/tạo nhanh; màn quản lý riêng là slice sau. |
 | Đối tác giao hàng | Chọn bản ghi cũ hoặc tạo nhanh bản ghi mới; lưu/gộp theo quy tắc chống trùng. | Giai đoạn đầu quản lý nhẹ qua combobox/tạo nhanh; màn quản lý riêng là slice sau. |
 | Khác | Chỉ lưu text trên phiếu, không tạo master data. | Không có màn quản lý. |
 
