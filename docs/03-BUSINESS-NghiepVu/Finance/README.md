@@ -43,8 +43,10 @@
 
 ## 3. Hướng dài / chưa làm
 
+> Owner 2026-07-21: nâng cấp sâu đóng băng cùng P4 chung — **trước khi code** cần chốt SoT nợ (âm đối soát vs “không trả trước”) trong mục dưới.
+
 - Đối soát cuối ngày / chuyển quỹ sâu nếu chưa đủ
-- Làm sạch doc debt: số âm đối soát vs rule “không trả trước” — một SoT
+- **Chốt SoT debt trước khi code:** số âm trên báo cáo đối soát **được phép hiển thị** để đối chiếu lịch sử; rule nghiệp vụ “không trả trước / không âm vận hành” vẫn áp khi thu nợ live — không gộp hai nghĩa
 - Báo cáo tài chính nâng cao
 - Không xếp “import So quỹ KV nữa” vào queue
 

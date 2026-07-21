@@ -34,9 +34,11 @@ Quote (`order_type = quote`) → `saveSalesDocumentStockMovements` **không** gh
 
 ---
 
-## 3. Runtime theo path
+## 3. Runtime theo path *(tại thời điểm rà — trước khi sửa trên `main`)*
 
-### 3.1 Postgres POS live — **LỆCH SoT (nặng)**
+> Sau #7 / sync: Postgres POS đã skip parent combo; BOM KV `active`. Xem [Sales README](./README.md). Các mục 3–4 dưới đây là **ảnh chụp lúc rà**, không phải trạng thái hiện tại.
+
+### 3.1 Postgres POS live — **LỆCH SoT (nặng)** *(đã sửa)*
 
 File: `server/db.ts` → `saveSalesDocumentStockMovements`
 
@@ -69,15 +71,15 @@ Test có: `deducts trusted KiotViet BOM components from POS invoices` — chỉ 
 
 ---
 
-## 4. Điểm liên quan (ngoài trừ kho dòng)
+## 4. Điểm liên quan *(lúc rà — một phần đã sửa)*
 
-| Hạng mục | Kết quả rà |
-|---|---|
-| Cart validate | Không chặn thiếu tồn (đúng MVP cảnh báo/tồn âm) |
-| BOM API get/save trên product | Stub `http.ts` — UI BOM có thể không load BOM import thật |
-| Import BOM status | Vẫn `draft` + note Review… (SoT = `active`) |
-| Revision hóa đơn | Gọi lại `saveSalesDocumentStockMovements` — cùng bug parent nếu Postgres |
-| Báo giá | Không trừ kho — OK |
+| Hạng mục | Kết quả rà | Sau `main` 2026-07-21 |
+|---|---|---|
+| Cart validate | Không chặn thiếu tồn (đúng MVP) | Giữ |
+| BOM API get/save | Stub | **Đã nối** GET/POST/PUT |
+| Import BOM status | `draft` + Review… | **`active`** + migrate `0008` |
+| Revision hóa đơn | Cùng bug parent Postgres | Cùng rule skip parent |
+| Báo giá | Không trừ kho | Giữ |
 
 ---
 

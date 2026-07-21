@@ -50,6 +50,8 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 
 ### 3. Hướng dài / chưa làm
 
+> Owner 2026-07-21: **P4 đóng băng** — không mở code các mục dưới đến khi Owner bảo. Slice combo phẳng cấp 1 đã khớp trên `main`.
+
 - Snapshot BOM trên chứng từ; deep-scan nhiều cấp
 - POS `Không lưu` / `Lưu Combo mới` đầy đủ
 - Trừ kho object cuộn/tấm khi bán thành phần roll/sheet

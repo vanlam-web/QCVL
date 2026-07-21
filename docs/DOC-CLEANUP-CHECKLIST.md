@@ -56,8 +56,12 @@
 
 - [x] Banner **Historical plan** trên `docs/superpowers/plans/2026-07-*.md` · PR #5
 - [x] `03-MVP-SCOPE.md` + `DEVELOPMENT-PLAN.md` trỏ checklist · PR #5
-- [ ] Mojibake / encoding PHASE-CHECKLIST, INVENTORY-API — sửa khi đụng file (không bắt buộc một lần)
-- [ ] Rút trùng SoT còn sót khi rà thêm (backlog)
+- [x] Đồng bộ stale “chưa sửa / runtime draft / stub `/bom`” sau khi code lên `main` · 2026-07-21 (PHASE, BOM-API, BOM-TABLES, audit, queue A/B)
+- [x] Tách AC BOM-RULES: slice KV done vs P4 đóng băng
+- [x] Freeze note Purchase/Finance/Sales mục hướng dài + queue PHASE A (V1) / B (P4)
+- [ ] Mojibake / encoding PHASE-CHECKLIST header, INVENTORY-API — sửa khi đụng file (không bắt buộc một lần)
+- [ ] Chốt SoT debt “âm đối soát vs không trả trước” thành một rule Owner trước khi code Finance sâu
+- [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
 
 ---
 
