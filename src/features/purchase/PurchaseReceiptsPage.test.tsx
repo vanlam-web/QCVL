@@ -406,6 +406,34 @@ it('filters purchase receipts by search status and dates', async () => {
   })
 })
 
+it('keeps current receipt filters when changing page size', async () => {
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({
+      items: [receipt],
+      page: 1,
+      page_size: 15,
+      total: 30,
+      summary: { payable_amount: 730000, remaining_amount: 0 },
+    })),
+  })
+
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await screen.findByText('PN000673')
+  const footer = screen.getByLabelText('Phân trang phiếu nhập')
+  await userEvent.selectOptions(within(footer).getByRole('combobox'), '30')
+
+  expect(service.listReceipts).toHaveBeenLastCalledWith({
+    search: undefined,
+    status: 'posted',
+    date_from: undefined,
+    date_to: undefined,
+    created_by: undefined,
+    page: 1,
+    page_size: 30,
+  })
+})
+
 it('filters matching purchase receipts while typing without opening a suggestion dropdown', async () => {
   const suggestedReceipt = {
     ...receipt,

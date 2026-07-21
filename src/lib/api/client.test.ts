@@ -17,6 +17,7 @@ it('sends bearer token and request id without workstation coupling', async () =>
   await expect(client.request('/api/v1/me')).resolves.toEqual({ ok: true })
   const request = calls[0][1] as RequestInit
   const headers = request.headers as Headers
+  expect(request.cache).toBe('no-store')
   expect(headers.get('authorization')).toBe('Bearer token-123')
   expect(headers.has('x-workstation-id')).toBe(false)
   expect(headers.get('x-request-id')).toMatch(/[0-9a-f-]{36}/)

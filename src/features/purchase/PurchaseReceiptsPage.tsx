@@ -797,6 +797,12 @@ export function PurchaseReceiptsPage({
       page_size: pageSize,
     },
   ) {
+    const hasInput = (key: keyof typeof input) => Object.prototype.hasOwnProperty.call(input, key)
+    const nextSearch = hasInput('search') ? input.search : search.trim() || undefined
+    const nextStatus = hasInput('status') ? input.status : status
+    const nextDateFrom = hasInput('date_from') ? input.date_from : dateFrom || undefined
+    const nextDateTo = hasInput('date_to') ? input.date_to : dateTo || undefined
+    const nextCreatedBy = hasInput('created_by') ? input.created_by : createdBy === 'all' ? undefined : createdBy
     const nextPage = input.page ?? page
     const nextPageSize = input.page_size ?? pageSize
     const nextSortState = input.sortStateValue ?? receiptSortState
@@ -804,6 +810,11 @@ export function PurchaseReceiptsPage({
     try {
       const result = await service.listReceipts({
         ...input,
+        search: nextSearch,
+        status: nextStatus,
+        date_from: nextDateFrom,
+        date_to: nextDateTo,
+        created_by: nextCreatedBy,
         page: nextPage,
         page_size: nextPageSize,
         ...(nextSortState === null || managementSortStatesEqual(nextSortState, defaultPurchaseReceiptSortState) ? {} : { sort_key: nextSortState.key, sort_direction: nextSortState.direction }),
@@ -1122,7 +1133,15 @@ export function PurchaseReceiptsPage({
       setDateTo('')
       setCreatedBy('all')
       setActivePreset(null)
-      return loadReceipts({ search: nextSearch.trim(), status: 'all', page: 1, page_size: pageSize })
+      return loadReceipts({
+        search: nextSearch.trim(),
+        status: 'all',
+        date_from: undefined,
+        date_to: undefined,
+        created_by: undefined,
+        page: 1,
+        page_size: pageSize,
+      })
     }
     return loadReceipts({
       search: nextSearch.trim() || undefined,

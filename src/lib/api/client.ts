@@ -83,7 +83,7 @@ async function executeRequest<T>(
 
   let response: Response
   try {
-    response = await fetcher(`${baseUrl}${path}`, { ...init, headers })
+    response = await fetcher(`${baseUrl}${path}`, { ...init, cache: init.cache ?? 'no-store', headers })
   } catch (cause) {
     if (cause instanceof ApiError) throw cause
     throw new ApiError(0, 'INTERNAL_ERROR', 'Không kết nối được máy chủ.', traceId)
