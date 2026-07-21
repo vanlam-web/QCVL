@@ -2152,6 +2152,12 @@ td:has(.money-text) {
     padding: 0;
   }
 
+  .bill-template-k80 .quote-print-page {
+    width: 72mm;
+    max-width: 72mm;
+    margin: 0;
+  }
+
   .quote-print-lines thead {
     display: table-header-group;
   }

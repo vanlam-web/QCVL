@@ -3,6 +3,10 @@ import userEvent from '@testing-library/user-event'
 import { InvoicePrintPage } from './InvoicePrintPage'
 import type { SalesDocumentDetail, SalesDocumentService } from './sales-document-service'
 
+beforeEach(() => {
+  window.localStorage.clear()
+})
+
 const invoiceDetail: SalesDocumentDetail = {
   id: 'invoice-1',
   code: 'HD010991',
@@ -133,4 +137,38 @@ it('shows change returned when the invoice has surplus', async () => {
   expect(await screen.findByText('Tiền thừa')).toBeInTheDocument()
   expect(screen.getByText('50 000')).toBeInTheDocument()
   expect(screen.queryByText('Còn nợ')).not.toBeInTheDocument()
+})
+
+it('uses saved shop header and switches between A4 and K80 templates', async () => {
+  window.localStorage.setItem(
+    'qcvl.organizationBillSettings',
+    JSON.stringify({
+      shop_name: 'In ảnh Văn Lâm',
+      shop_address: '12 Nguyễn Trãi',
+      shop_phone: '0909111222',
+      default_bill_template: 'a4',
+    }),
+  )
+
+  const { container } = render(
+    <InvoicePrintPage documentId="invoice-1" service={makeService()} onClose={vi.fn()} />,
+  )
+
+  expect(await screen.findByText('In ảnh Văn Lâm')).toBeInTheDocument()
+  expect(screen.getByText('12 Nguyễn Trãi')).toBeInTheDocument()
+  expect(screen.getByText('ĐT: 0909111222')).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-a4')
+
+  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Mẫu in' }), 'k80')
+  expect(container.querySelector('main')).toHaveClass('bill-template-k80')
+})
+
+it('honors initialTemplate when opening the bill', async () => {
+  const { container } = render(
+    <InvoicePrintPage documentId="invoice-1" service={makeService()} onClose={vi.fn()} initialTemplate="k80" />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-k80')
+  expect(screen.getByRole('combobox', { name: 'Mẫu in' })).toHaveValue('k80')
 })
