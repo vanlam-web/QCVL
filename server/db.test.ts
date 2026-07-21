@@ -593,6 +593,7 @@ describe('createPgRepository product units', () => {
         }
       }
       if (sql.includes('from purchase_receipt_snapshots') && sql.includes('supplier_id') && sql.includes('remaining_amount')) {
+        if (!sql.includes("pr.data->>'supplier_id' = s.id")) return { rows: [], rowCount: 0 }
         return {
           rows: [{
             id: 'receipt-1',
@@ -636,6 +637,7 @@ describe('createPgRepository product units', () => {
     expect(totals?.get('customer-kv-kh000384')?.total_debt_amount).toBe(510000)
     const canonicalSql = String(pgMock.query.mock.calls.find(([sql]) => String(sql).includes('with live_invoice_debt'))?.[0])
     expect(canonicalSql).toContain('linked_supplier_debt')
+    expect(canonicalSql).toContain("pr.data->>'supplier_id' = s.id")
   })
 
   test('does not net linked supplier payable in the in-memory customer debt formula', async () => {
@@ -663,10 +665,36 @@ describe('createPgRepository product units', () => {
     expect(debt.total_debt).toBe(1000000)
   })
 
+  test('keeps old KiotViet cashbook customer code after customer code changes in memory formula', async () => {
+    const { computeCustomerDebtTotal } = await import('./modules/finance/customer-debt')
+    const debt = computeCustomerDebtTotal({
+      customerId: 'customer-kv-kh000129',
+      customerCode: 'HLo',
+      customerName: 'Hoàng Lợi',
+      invoices: [],
+      adjustments: [],
+      cashbookEntries: [{
+        code: 'TT001234',
+        created_at: '2026-07-14T10:00:00.000Z',
+        status: 'posted',
+        source_type: 'kiotviet_cashbook',
+        direction: 'in',
+        amount_delta: 500000,
+        source: { counterparty_code: 'KH000129' },
+      }],
+      linkedSupplierReceipts: [],
+      resolveInvoiceCustomerId: (invoice) => invoice.customer.id,
+    })
+
+    expect(debt.total_debt).toBe(-500000)
+    expect(debt.ledger_rows.map((row) => row.code)).toEqual(['TT001234'])
+  })
+
   test('returns customer-debt cashbook rows with the debt detail payload', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string) => {
       if (sql.includes('select') && sql.includes('cbe.id') && sql.includes('from cashbook_entries cbe')) {
+        if (!sql.includes('cs.id = $2')) return { rows: [], rowCount: 0 }
         return {
           rows: [{
             id: 'cashbook-tt001838',
@@ -679,9 +707,9 @@ describe('createPgRepository product units', () => {
             source_type: 'kiotviet_cashbook',
             created_at: new Date('2026-07-15T10:00:00.000Z'),
             note: 'Khách trả nợ',
-            counterparty: { type: 'customer', name: 'Út Tèo', phone: null },
+            counterparty: { type: 'customer', name: 'Hoàng Lợi', phone: null },
             created_by: null,
-            source: { type: 'kiotviet_cashbook', counterparty_code: 'UT' },
+            source: { type: 'kiotviet_cashbook', counterparty_code: 'KH000129' },
             allocations: [],
           }],
           rowCount: 1,
@@ -690,9 +718,9 @@ describe('createPgRepository product units', () => {
       if (sql.includes('with live_invoice_debt')) {
         return {
           rows: [{
-            customer_id: 'customer-kv-ut',
-            customer_code: 'UT',
-            customer_name: 'Út Tèo',
+            customer_id: 'customer-kv-kh000129',
+            customer_code: 'HLo',
+            customer_name: 'Hoàng Lợi',
             total_debt: '20714394',
             open_invoice_count: 1,
             oldest_order_code: 'HD011163',
@@ -726,7 +754,7 @@ describe('createPgRepository product units', () => {
     const repository = createPgRepository('postgres://unit-test')
     const debt = await repository.getCustomerDebt?.({
       organizationId: '11111111-1111-1111-1111-111111111111',
-      customerId: 'customer-kv-ut',
+      customerId: 'customer-kv-kh000129',
     })
 
     expect(debt?.cashbook_entries).toEqual([
@@ -737,6 +765,12 @@ describe('createPgRepository product units', () => {
         source_type: 'kiotviet_cashbook',
       }),
     ])
+    const cashbookSql = String(pgMock.query.mock.calls.find(([sql]) => (
+      String(sql).includes('select')
+      && String(sql).includes('cbe.id')
+      && String(sql).includes('from cashbook_entries cbe')
+    ))?.[0])
+    expect(cashbookSql).toContain('cs.id = $2')
   })
 
   test('keeps list, detail and customer totals on the same canonical value including negative balances', async () => {

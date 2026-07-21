@@ -4469,7 +4469,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             from purchase_receipt_snapshots pr
             join supplier_snapshots s
               on s.organization_id = pr.organization_id
-             and lower(s.code) = lower(pr.data->'supplier'->>'code')
+             and (
+               pr.data->>'supplier_id' = s.id
+               or pr.data->'supplier'->>'id' = s.id
+               or lower(s.code) = lower(pr.data->'supplier'->>'code')
+               or s.id = 'supplier-kv-' || lower(regexp_replace(coalesce(pr.data->'supplier'->>'code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+             )
              and s.data->>'linked_customer_id' = $2
             where pr.organization_id = $1
               and pr.data->>'status' = 'posted'
@@ -4503,6 +4508,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               left join orders o
                 on o.organization_id = cbe.organization_id
                and o.code = cbe.source->>'order_code'
+              left join customer_snapshots cs
+                on cs.organization_id = cbe.organization_id
+               and (
+                 lower(cs.code) = lower(cbe.source->>'counterparty_code')
+                 or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+               )
               where cbe.organization_id = $1
                 and cbe.status = 'posted'
                 and (
@@ -4517,7 +4528,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                     cbe.source_type = 'kiotviet_cashbook'
                     and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
                     and (
-                      cbe.source->>'counterparty_code' = $3
+                      cbe.source->>'customer_id' = $2
+                      or cs.id = $2
+                      or cbe.source->>'counterparty_code' = $3
                       or (o.id is not null and o.customer_id = $2 and o.status <> 'cancelled')
                     )
                   )

@@ -79,7 +79,10 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
        and o.status <> 'cancelled'
       left join customer_snapshots cs
         on cs.organization_id = cbe.organization_id
-       and lower(cs.code) = lower(cbe.source->>'counterparty_code')
+       and (
+         lower(cs.code) = lower(cbe.source->>'counterparty_code')
+         or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+       )
       where cbe.organization_id = $1
         and cbe.status = 'posted'
         and (
@@ -106,6 +109,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
          pr.data->>'supplier_id' = s.id
          or pr.data->'supplier'->>'id' = s.id
          or lower(pr.data->'supplier'->>'code') = lower(s.code)
+         or s.id = 'supplier-kv-' || lower(regexp_replace(coalesce(pr.data->'supplier'->>'code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
        )
       left join customer_snapshots cs
         on cs.organization_id = s.organization_id
@@ -257,7 +261,9 @@ export function computeCustomerDebtTotal(input: {
     }
     if (entry.source_type === 'kiotviet_cashbook') {
       const codeOk = new RegExp(KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN, 'i').test(entry.code)
-      const counterpartyOk = (entry.source?.counterparty_code ?? '') === input.customerCode
+      const counterpartyCode = entry.source?.counterparty_code ?? ''
+      const counterpartyOk = counterpartyCode === input.customerCode
+        || snapshotImportId('customer', counterpartyCode) === input.customerId
       if (!codeOk || !counterpartyOk) continue
       documents.push({
         id: entry.code,
@@ -306,5 +312,13 @@ export function computeCustomerDebtTotal(input: {
       .filter((adjustment) => adjustment.customer_id === input.customerId)
       .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)),
   }
+}
+
+function snapshotImportId(prefix: 'customer' | 'supplier', code: string) {
+  return `${prefix}-kv-${baseKiotVietImportCode(code).toLowerCase()}`
+}
+
+function baseKiotVietImportCode(value: string) {
+  return value.trim().replace(/\{DEL\d*\}$/i, '')
 }
 
