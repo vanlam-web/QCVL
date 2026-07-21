@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CashbookEntry } from '../finance/types'
-import { buildCustomerDebtLedgerRows } from './customer-debt-ledger'
+import { buildCustomerDebtLedgerRows, customerDebtLedgerRowsFromBackend } from './customer-debt-ledger'
 
 const financeAccount = {
   id: 'bank-1',
@@ -27,6 +27,46 @@ function kvCashbook(code: string): CashbookEntry {
 }
 
 describe('customer debt ledger', () => {
+  it('uses backend ledger rows with backend running balances', () => {
+    const rows = customerDebtLedgerRowsFromBackend({
+      ledger_rows: [
+        {
+          id: 'order-hd000001',
+          code: 'HD000001',
+          created_at: '2026-07-01T01:00:00.000Z',
+          amount_delta: 100000,
+          balance_after: 100000,
+          source_type: 'invoice',
+          source_id: 'order-hd000001',
+        },
+        {
+          id: 'cashbook-tt000001',
+          code: 'TT000001',
+          created_at: '2026-07-02T01:00:00.000Z',
+          amount_delta: -40000,
+          balance_after: 60000,
+          source_type: 'payment',
+          source_id: 'cashbook-tt000001',
+        },
+        {
+          id: 'adjustment-cb000001',
+          code: 'CB000001',
+          created_at: '2026-07-03T01:00:00.000Z',
+          amount_delta: -5000,
+          balance_after: 55000,
+          source_type: 'adjustment',
+          source_id: 'adjustment-cb000001',
+        },
+      ],
+    })
+
+    expect(rows.map((row) => [row.code, row.value_delta, row.running_debt])).toEqual([
+      ['CB000001', -5000, 55000],
+      ['TT000001', -40000, 60000],
+      ['HD000001', 100000, 100000],
+    ])
+  })
+
   it('includes KiotViet customer-debt receipts beyond TT/TTHD codes', () => {
     const rows = buildCustomerDebtLedgerRows(
       [{

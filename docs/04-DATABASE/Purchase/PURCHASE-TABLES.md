@@ -45,6 +45,15 @@
 | `created_by`, `posted_by`, `cancelled_by` | Audit |
 | `created_at`, `posted_at`, `cancelled_at` | Audit |
 
+Quy tắc cấp mã `code`:
+
+- Mã phiếu nhập chuẩn là `PN` + 6 số, ví dụ `PN000689`.
+- KV import không tạo mốc riêng; phiếu import và phiếu QCVL tạo mới cùng nằm trong một dãy `PN`.
+- Khi tạo phiếu mới, backend/DB lấy max tất cả mã `PN######` hiện có trong organization, gồm `source_type=kiotviet_import` và `source_type=manual`, rồi cấp `max + 1`.
+- DB phải giữ lock theo organization trong lúc cấp mã và insert để 2 máy cùng tạo phiếu không trùng mã.
+- Nếu API gửi mã đã stale do máy khác vừa tạo trước, DB phải cấp lại mã kế tiếp trước khi insert, không overwrite phiếu đã có cùng `code`.
+- Mã revision dạng `PN000001.01` giữ liên kết với phiếu gốc; phần `.01` không làm tăng dãy chính.
+
 ### `purchase_receipt_items`
 
 | Cột | Ghi chú |

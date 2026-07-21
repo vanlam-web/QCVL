@@ -572,12 +572,10 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     if (detail.direction !== 'in') return detail
     const documentCode = cashbookLinkedDocumentCode(detail)
     if (documentCode === null || !documentCode.startsWith('HD')) return detail
-    const needsAllocationHydration = detail.allocations.length === 0
     const needsCounterpartyHydration = !cashbookCounterpartyHasName(detail.counterparty)
-    if (!needsAllocationHydration && !needsCounterpartyHydration) return detail
+    if (!needsCounterpartyHydration) return detail
     const salesDocument = await service.getSalesDocumentByCode(documentCode)
     if (salesDocument === null) return detail
-    const allocatedAmount = Math.abs(detail.amount_delta)
     const salesDocumentCustomer = salesDocument.customer?.name.trim()
       ? {
           type: 'customer' as const,
@@ -591,16 +589,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         ? salesDocumentCustomer
         : detail.counterparty,
       source: { ...detail.source, order_code: salesDocument.code },
-      allocations: needsAllocationHydration
-        ? [{
-            order_id: salesDocument.id,
-            order_code: salesDocument.code,
-            order_total_amount: salesDocument.total_amount,
-            collected_before: Math.max(salesDocument.paid_amount - allocatedAmount, 0),
-            allocated_amount: allocatedAmount,
-            remaining_after: Math.max(salesDocument.debt_amount, 0),
-          }]
-        : detail.allocations,
     }
   }, [service])
 

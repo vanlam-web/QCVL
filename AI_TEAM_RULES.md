@@ -67,7 +67,9 @@ Every worker must:
 
 - Keep `3202` and `3200` aligned.
 - Build/test on `3202` first.
-- Deploy to `3200` only through `npm run deploy:nas`.
+- outside-LAN worker must not deploy NAS, copy files to NAS paths, run `db:migrate` against NAS, or restart/reset `qcvl-app`. outside-LAN worker pushes Git only, then asks inside-LAN worker to pull and deploy.
+- inside-LAN worker owns all NAS deploy/copy/migrate/restart/health/smoke work.
+- Deploy to `3200` only through `npm run deploy:nas` from the inside-LAN worker.
 - If `3200` fails but `3202` works, check migration/schema/data parity before UI workaround.
 - If `3202` points to NAS PostgreSQL, writes on `3202` also affect `3200`.
 - `logs/dev-memory-state.json` is local test state only. Do not copy it to NAS.

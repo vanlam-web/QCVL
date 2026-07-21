@@ -18,6 +18,7 @@
 | Nguồn | File |
 |---|---|
 | Business Finance | [../../03-BUSINESS-NghiepVu/Finance/README.md](../../03-BUSINESS-NghiepVu/Finance/README.md) |
+| Business Debt Formula | [../../03-BUSINESS-NghiepVu/Finance/CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Finance/CUSTOMER-DEBT.md) |
 | Business Debt | [../../03-BUSINESS-NghiepVu/Sales/POS-CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Sales/POS-CUSTOMER-DEBT.md) |
 | Database Finance | [../../04-DATABASE/Finance/README.md](../../04-DATABASE/Finance/README.md) |
 | Backend Finance | [../../05-BACKEND-MayChu/Finance/README.md](../../05-BACKEND-MayChu/Finance/README.md) |

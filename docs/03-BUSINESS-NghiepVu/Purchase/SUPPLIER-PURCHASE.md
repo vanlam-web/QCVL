@@ -198,6 +198,8 @@ Quyết định Owner 2026-07-02:
 
 ### BR-PUR-10: Công nợ NCC phát sinh từ phiếu nhập chưa trả đủ
 
+Runtime status: code đã chuyển recompute NCC sang canonical partner debt ledger cho `PN...` và `PCPN.../PC...`; `purchase_receipt_snapshots.remaining_amount` chỉ còn là dữ liệu chứng từ/đối soát, không còn là công thức tổng duy nhất. Tab Nợ NCC đọc `debt_ledger_rows` khi backend có dữ liệu.
+
 Khi phiếu nhập posted:
 
 ```text
@@ -206,7 +208,59 @@ Còn phải trả = Cần trả NCC - Đã trả ngay
 
 Nếu `Còn phải trả > 0`, hệ thống ghi nhận công nợ cần trả NCC.
 
-Nếu `Còn phải trả < 0`, MVP cho phép ghi nhận số âm như trạng thái NCC đang nợ lại mình/trả thừa để đối soát. Không tự cấn trừ với công nợ khách hàng liên kết nếu Owner chưa chốt luồng cấn trừ riêng.
+Nếu `Còn phải trả < 0`, MVP cho phép ghi nhận số âm để đối soát. Với đối tác KH-NCC liên kết, số âm/dương hiển thị theo view đảo dấu ở BR-PUR-10B; không tự cộng chồng thành hai khoản độc lập.
+
+### BR-PUR-10A: Quy ước mã phiếu công nợ NCC thuần
+
+Nguồn đối chiếu là file KiotViet đã xuất:
+
+- `DanhSachChiTietNhapHang_KV*.xlsx`: mã nhập hàng, mã nhà cung cấp, cần trả NCC, tiền đã trả NCC, trạng thái.
+- `SoQuy_KV*.xlsx`: mã phiếu, loại thu chi, mã người nộp/nhận, giá trị, trạng thái.
+
+Quy tắc đọc là:
+
+```text
+mã phiếu + loại giao dịch + NCC liên kết + trạng thái hiệu lực
+```
+
+Không dùng mã phiếu của khách hàng để tính công nợ NCC.
+
+| Mã phiếu | Nguồn KV đã thấy | Điều kiện thuộc NCC | Tác động nợ NCC | Ghi chú |
+|---|---|---|---:|---|
+| `PN...` | Chi tiết nhập hàng | phiếu nhập thuộc NCC, trạng thái `Đã nhập hàng`/`posted` | `+` | Tăng nợ NCC theo số còn phải trả |
+| `PCPN...` | Sổ quỹ | `Loại thu chi = Phiếu chi Tiền trả NCC`, mã người nhận là NCC | `-` | Trả NCC gắn trực tiếp `PN...` cùng mã số |
+| `PC...` | Sổ quỹ | `Loại thu chi = Phiếu chi Tiền trả NCC`, mã người nhận là NCC | `-` | Trả NCC không gắn một-một bằng prefix; có thể phân bổ nhiều `PN...` |
+| `CB...` | Báo cáo công nợ NCC / điều chỉnh | chứng từ điều chỉnh thuộc NCC | `+/-` | Điều chỉnh tăng/giảm theo dấu tiền nguồn đã chuẩn hóa |
+| `CTM...`, `CNH...` | Sổ quỹ | chi vật tư/vận chuyển/máy móc/chi phí khác | `0` | Chi phí trực tiếp/sổ quỹ, không phải trả nợ NCC |
+| `HD...`, `HDO...`, `TTHD...`, `TT...`, `TTM...`, `TTMHD...`, `TNH...`, `TNHHD...`, `CKKH...` | Công nợ khách/Sổ quỹ | thuộc sổ khách hàng | `0` | Không tính vào nợ NCC thuần |
+| `TTD_*`, `CTD_*`, `CVDT`, `TVDT` | Sổ quỹ | chuyển/rút quỹ | `0` | Không công nợ NCC |
+
+Trạng thái:
+
+- Chỉ tính phiếu `posted`/đã thanh toán/đang hiệu lực.
+- Không tính `PN...` đã hủy hoặc phiếu chi đã hủy.
+- `TTM...` có mã người nộp/nhận dạng `NCC...` nhưng loại là khách trả nợ là dữ liệu cần đối soát riêng; không tự tính vào nợ NCC thuần.
+
+### BR-PUR-10B: NCC liên kết khách hàng
+
+NCC và khách hàng liên kết vẫn là hai vai trò nghiệp vụ riêng. Mã `HDO` trong công nợ khách là chữ `O`, không phải số `0`; `TTHDO` xử lý cùng nhóm thanh toán hóa đơn như `TTHD`.
+
+KiotViet hiển thị đối tác liên kết theo hai view đảo dấu. Khách `UT - Út Tèo` và NCC `NCC000035 - Út Tèo` đã kiểm trên trình duyệt: số hiện tại ở KH là `+16,021,746`, ở NCC là `-16,021,746`; `HD...` tăng ở KH thì giảm ở NCC, `TT...` giảm ở KH thì tăng ở NCC.
+
+Quy tắc chốt cho đối tác liên kết:
+
+| Mã phiếu / nghiệp vụ | Sổ KH liên kết | Sổ NCC liên kết | Ghi chú |
+|---|---:|---:|---|
+| `HD...`, `HDO...` bán cho khách | `+` | `-` | Phải thu khách, đảo dấu ở view NCC |
+| `TT...`, `TTHD...`, `TTHDO...`, `TTM...`, `TTMHD...`, `TNH...`, `TNHHD...` khách trả tiền | `-` | `+` | Thu tiền khách, đảo dấu ở view NCC |
+| `CKKH...` chiết khấu thanh toán cho khách | `-` | `+` | Giảm nợ KH, không phải tiền thu |
+| `CB...` điều chỉnh/cân bằng | `+/-` theo phiếu | đảo dấu | Phiếu điều chỉnh cân bằng phải đảo chiều dấu giữa hai view |
+| `PN...` nhập hàng từ NCC liên kết | `-` | `+` | Tăng phải trả NCC, đảo dấu ở view KH |
+| `PCPN...`, `PC...` trả NCC liên kết | `+` | `-` | Giảm phải trả NCC, đảo dấu ở view KH |
+
+Không được tính một chứng từ thành hai khoản độc lập. Ledger quan hệ liên kết ghi một lần; view KH và view NCC đảo dấu để hiển thị.
+
+Plan sửa runtime đã chốt: [2026-07-21 Partner Debt Ledger Rebuild](../../superpowers/plans/2026-07-21-partner-debt-ledger-rebuild.md).
 
 ### BR-PUR-11: Trả tiền NCC ghi vào sổ quỹ
 
@@ -226,15 +280,20 @@ Quyết định Owner 2026-07-02:
 
 ### BR-PUR-12: Phân bổ trả nợ NCC
 
-Mặc định đề xuất cũ là tiền trả NCC được phân bổ vào phiếu nhập nợ cũ nhất trước. Quyết định Owner 2026-07-02 cho P5 đã merge: khi trả tiền NCC sau phiếu nhập, người dùng chọn phiếu nhập cụ thể để trả, không tự phân bổ cứng vào phiếu cũ nhất.
+Trả nợ NCC đi theo chứng từ.
 
-Quy tắc này đi cùng hướng công nợ khách đã chốt: trả nợ theo chứng từ. UI có thể gợi ý chứng từ cũ nhất để dễ đối soát, nhưng người dùng vẫn chọn phiếu cụ thể.
+Nếu người dùng nhập phân bổ cụ thể theo phiếu nhập, phân bổ tay thắng.
+
+Nếu người dùng chỉ nhập số tiền, hệ thống tự phân bổ vào các `PN...` còn nợ cũ nhất trước. Quy tắc này dùng chung hướng với công nợ khách hàng, giúp một số tiền trả luôn cấn được vào chứng từ nguồn và kiểm tra lại được.
+
+UI vẫn có thể gợi ý/cho chọn phiếu nhập cụ thể để dễ đối soát; phần không nhập cụ thể sẽ chạy oldest-first.
 
 Quyết định Owner 2026-07-02 cho P5:
 
 - P5 đã merge sau P3.
 - Cho phép trả một phần công nợ NCC.
 - Không cho trả thừa trong luồng trả NCC sau phiếu nhập. Số âm ở P3 chỉ dùng cho tình huống đối tác vừa là NCC vừa là khách hàng và cần đối soát; P5 không mở workflow trả trước/trả thừa NCC.
+- Nếu thiếu phân bổ từ KiotViet/detail/API, hệ thống phân bổ tạm vào `PN...` cũ nhất trước; khi có phân bổ thật thì phân bổ thật thay thế.
 - Một lần trả NCC dùng một phương thức: tiền mặt hoặc chuyển khoản.
 - Nếu chuyển khoản, người dùng chọn được nhiều tài khoản ngân hàng đang có, nhưng mỗi lần trả chỉ chọn một tài khoản.
 
@@ -248,7 +307,7 @@ Tham khảo KiotViet 2026-07-02:
 Quyết định QC-OMS cho P5:
 
 - Mã chứng từ trả NCC dùng prefix `PCPN` để bám sát KiotViet và dễ đối chiếu với `PN...`.
-- UI P5 nên hỗ trợ thao tác từ chi tiết NCC và từ chi tiết phiếu nhập posted còn nợ. Cả hai đường đều mở cùng một form trả NCC và bắt buộc chọn phiếu nhập cụ thể.
+- UI P5 nên hỗ trợ thao tác từ chi tiết NCC và từ chi tiết phiếu nhập posted còn nợ. Cả hai đường đều mở cùng một form trả NCC; nếu người dùng không chọn phân bổ cụ thể, hệ thống tự phân bổ vào `PN...` cũ nhất trước.
 - Chi tiết phiếu nhập posted cần có lịch sử thanh toán NCC để xem các `PCPN...` đã chi cho phiếu đó. Nếu chưa có thanh toán, không hiện tab `Lịch sử thanh toán`; action `Thanh toán NCC` nằm ở footer tab `Thông tin`.
 - Với phiếu nhập KiotViet đã có `Tiền đã trả NCC` nhưng không có dòng `supplier_payments` riêng, UI được phép dựng một dòng lịch sử đọc-only mã `PC` + mã phiếu nhập để đối chiếu, ví dụ `PCPN000684`.
 
@@ -338,6 +397,9 @@ Không gồm:
 Acceptance:
 
 - draft không tạo stock movement, cashbook, payable
+- mã phiếu nhập QCVL là `PN` + 6 số; phiếu mới sau import KV phải lấy max toàn bộ `PN######` đang có, gồm cả import và manual, rồi cộng 1
+- DB phải giữ lock khi cấp mã `PN` cho phiếu nhập mới để 2 máy cùng tạo không trùng mã; nếu API gửi mã stale, DB cấp lại mã kế tiếp trước khi insert
+- mã revision dạng `PN000001.01` chỉ dùng cho luồng sửa/phiên bản, không làm reset dãy chính; khi cấp mã mới chỉ lấy phần 6 số chính để tính max
 - tìm exact mã `PN...` không bị mất do filter tháng hiện tại
 - tính tổng tiền hàng/giảm giá/tổng nợ hoặc còn phải trả từ dòng hàng
 - không cho lưu phiếu nhập khi chưa có dòng hàng
@@ -419,7 +481,7 @@ P4 acceptance khi làm:
 Runtime có đường repository Postgres cho `paySupplier`, nhưng cần nghiệm thu thêm UI trả NCC theo nhiều case. Đối soát trả trên PN import có thể hiện row đọc-only. Phạm vi mục tiêu:
 
 - trả tiền NCC sau phiếu nhập
-- người dùng chọn phiếu nhập cụ thể để trả
+- người dùng có thể chọn phiếu nhập cụ thể để trả; nếu không chọn, hệ thống phân bổ vào `PN...` cũ nhất trước
 - cho trả một phần
 - không cho trả thừa trong P5
 - ghi cashbook outflow theo tiền mặt hoặc chuyển khoản một tài khoản

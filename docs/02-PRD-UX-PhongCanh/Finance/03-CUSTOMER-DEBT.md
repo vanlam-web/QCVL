@@ -9,6 +9,8 @@ Màn Công nợ giúp nhân viên xem nợ theo khách hàng và thu nợ ngoài
 
 QC-OMS quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo một số tổng.
 
+Số tổng công nợ hiển thị chính phải lấy từ công thức canonical ở [Business Finance CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Finance/CUSTOMER-DEBT.md). Không tự cộng riêng hóa đơn mở trong frontend.
+
 `khachle - Khách lẻ` là hồ sơ khách mặc định của tổ chức. Hóa đơn POS chưa chọn khách nhưng còn nợ vẫn được ghi vào khách mã `khachle`; ghi chú khách lẻ nếu có dùng để nhận diện người nợ, không tạo bucket công nợ `customer_id = null`.
 
 ---
@@ -44,6 +46,8 @@ Chi tiết khách gồm:
 - danh sách hóa đơn còn nợ, sắp xếp cũ nhất trước
 - lịch sử phát sinh nợ/trả nợ
 - các phiếu thu liên quan
+
+Với dữ liệu import KiotViet, các hóa đơn/phiếu thu/điều chỉnh/chiết khấu import vẫn là chứng từ trong công nợ QCVL. Người dùng có thể thu, sửa hoặc hủy theo quyền/audit; import không phải mốc khóa công thức.
 
 ```text
 ┌────────────────────────────────────────────────────────────────────────────┐
@@ -105,6 +109,7 @@ Nếu sau này chuyển một khoản nợ từ `khachle` sang hồ sơ khách c
 3. Thu nợ hiển thị preview phân bổ vào hóa đơn cũ nhất trước.
 4. Không cho nhập số tiền thu vượt tổng nợ trong MVP.
 5. Khách lẻ nợ thuộc `khachle`, có ghi chú nhận diện khi cần và không bị rơi vào bucket không khách.
+6. Danh sách khách, detail khách, Finance công nợ và POS cùng hiển thị một số tổng canonical cho cùng khách.
 
 ---
 

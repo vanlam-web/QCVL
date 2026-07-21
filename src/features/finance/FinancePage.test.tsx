@@ -1551,7 +1551,7 @@ describe('FinancePage', () => {
     expect(within(detail).getByText('Ứng lần 2')).toBeInTheDocument()
   })
 
-  it('shows a note-inferred linked invoice when a receipt references a checkout invoice', async () => {
+  it('does not synthesize a linked invoice table when a receipt only references a checkout invoice in its note', async () => {
     const service = makeService({
       getCashbookEntry: vi.fn(async () => noteLinkedReceiptDetail),
       listCashbookEntries: vi.fn(async () => ({
@@ -1567,17 +1567,11 @@ describe('FinancePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PT000015' }))
 
     const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT000015' })
-    expect(within(detail).getByText('Hoàn tất')).toHaveClass('status-chip', 'status-chip-success')
+    expect(within(detail).getByText('Đã thanh toán')).toHaveClass('status-chip', 'status-chip-success')
     expect(within(detail).queryByText('Không có chứng từ liên kết.')).not.toBeInTheDocument()
     expect(within(detail).queryByText('Không có kết quả phù hợp')).not.toBeInTheDocument()
-    expect(within(detail).getByText('Phiếu thu tự động được gắn với hóa đơn HD000015.')).toBeInTheDocument()
-    expect(within(detail).getAllByText('HD000015').length).toBeGreaterThan(0)
-    const linkedDocuments = within(detail).getByRole('table', { name: 'Chứng từ liên kết' })
-    const row = within(linkedDocuments).getByText('HD000015').closest('tr')
-    expect(row).not.toBeNull()
-    expect(within(linkedDocuments).queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
-    expect(within(row as HTMLTableRowElement).queryByText('Hoàn tất')).not.toBeInTheDocument()
-    expect(within(row as HTMLTableRowElement).queryByText('Đã thanh toán')).not.toBeInTheDocument()
+    expect(within(detail).queryByText('Phiếu thu tự động được gắn với hóa đơn HD000015.')).not.toBeInTheDocument()
+    expect(within(detail).queryByRole('table', { name: 'Chứng từ liên kết' })).not.toBeInTheDocument()
     expect(within(detail).queryByText('Checkout HD000015')).not.toBeInTheDocument()
     expect(within(detail).queryByText('Chưa có ghi chú')).not.toBeInTheDocument()
   })
@@ -1611,7 +1605,7 @@ describe('FinancePage', () => {
     expect(within(row as HTMLTableRowElement).queryByText('Thanh toán 1 phần')).not.toBeInTheDocument()
   })
 
-  it('hydrates missing linked invoice allocation from the sales document', async () => {
+  it('does not synthesize missing invoice allocation from the sales document', async () => {
     const service = makeService({
       getCashbookEntry: vi.fn(async () => stalePartialCheckoutReceiptDetail),
       getSalesDocumentByCode: vi.fn(async () => ({
@@ -1635,14 +1629,10 @@ describe('FinancePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mở chi tiết PT000020' }))
 
     const detail = await screen.findByRole('region', { name: 'Chi tiết sổ quỹ PT000020' })
-    expect(within(detail).getByText('Thanh toán 1 phần')).toHaveClass('status-chip', 'status-chip-warning')
-    const linkedDocuments = within(detail).getByRole('table', { name: 'Chứng từ liên kết' })
-    const row = within(linkedDocuments).getByText('HD000020').closest('tr')
-    expect(row).not.toBeNull()
-    expect(within(row as HTMLTableRowElement).getByText('600 000')).toBeInTheDocument()
-    expect(within(row as HTMLTableRowElement).getByText('500 000')).toBeInTheDocument()
-    expect(within(row as HTMLTableRowElement).getByText('100 000')).toBeInTheDocument()
-    expect(service.getSalesDocumentByCode).toHaveBeenCalledWith('HD000020')
+    expect(within(detail).getByText('Đã thanh toán')).toHaveClass('status-chip', 'status-chip-success')
+    expect(within(detail).queryByText('Thanh toán 1 phần')).not.toBeInTheDocument()
+    expect(within(detail).queryByRole('table', { name: 'Chứng từ liên kết' })).not.toBeInTheDocument()
+    expect(service.getSalesDocumentByCode).not.toHaveBeenCalled()
   })
 
   it('hydrates missing receipt counterparty from the linked sales document customer', async () => {

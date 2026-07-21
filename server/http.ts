@@ -318,6 +318,15 @@ export interface SupplierListData {
   status: string
   current_payable_amount: number
   total_purchase_amount: number
+  debt_ledger_rows?: Array<{
+    id: string
+    code: string
+    created_at: string
+    amount_delta: number
+    balance_after: number
+    source_type?: string
+    source_id?: string | null
+  }>
   created_at?: string
   source_creator_name?: string | null
   source_created_at?: string | null
@@ -402,6 +411,15 @@ export type CustomerDebtDetailData = {
   adjustments: NonNullable<CustomerDebtItem['adjustments']>
   linked_supplier_receipts: LinkedSupplierReceiptDebtData[]
   cashbook_entries: CashbookEntryData[]
+  ledger_rows: Array<{
+    id: string
+    code: string
+    created_at: string
+    amount_delta: number
+    balance_after: number
+    source_type?: string
+    source_id?: string | null
+  }>
 }
 export interface StocktakeListData {
   id: string
@@ -2761,7 +2779,7 @@ type LinkedSupplierReceiptDebtData = {
 function makeCustomerDebtDetail(customerId: string): CustomerDebtDetailData {
   const linkedSupplierReceipts: LinkedSupplierReceiptDebtData[] = []
   const debt = customerDebtItems.find((item) => item.customer_id === customerId)
-  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts, cashbook_entries: [] }
+  if (!debt) return { customer_id: customerId, total_debt: 0, invoices: [], adjustments: [], linked_supplier_receipts: linkedSupplierReceipts, cashbook_entries: [], ledger_rows: [] }
   return {
     customer_id: customerId,
     total_debt: debt.total_debt,
@@ -2769,6 +2787,7 @@ function makeCustomerDebtDetail(customerId: string): CustomerDebtDetailData {
     adjustments: debt.adjustments ?? [],
     linked_supplier_receipts: linkedSupplierReceipts,
     cashbook_entries: [],
+    ledger_rows: [],
   }
 }
 

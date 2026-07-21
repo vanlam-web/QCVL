@@ -1,7 +1,7 @@
 ﻿# FINANCE-API — API công nợ, sổ quỹ và đối soát
 
 > **Base path:** `/api/v1`
-> **Business:** [CASHBOOK.md](../../03-BUSINESS-NghiepVu/Finance/CASHBOOK.md), [POS-CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Sales/POS-CUSTOMER-DEBT.md)
+> **Business:** [CASHBOOK.md](../../03-BUSINESS-NghiepVu/Finance/CASHBOOK.md), [CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Finance/CUSTOMER-DEBT.md), [POS-CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Sales/POS-CUSTOMER-DEBT.md)
 > **Database:** [PAYMENT-DEBT-TABLES.md](../../04-DATABASE/Finance/PAYMENT-DEBT-TABLES.md), [CASHBOOK-TABLES.md](../../04-DATABASE/Finance/CASHBOOK-TABLES.md)
 
 ---
@@ -136,7 +136,7 @@ Danh sách khách hàng đang có nợ.
 
 `search` phải tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất để phục vụ lọc trực tiếp ở header tài chính.
 
-Response tổng hợp từ `customer_debt_entries`, không dùng một số tổng không truy vết được.
+Response tổng hợp từ công thức canonical `server/modules/finance/customer-debt.ts`. Không dùng `customer_snapshots.total_debt_amount`; dữ liệu import KiotViet phải được chuẩn hóa thành chứng từ công nợ có thể thu/sửa/hủy, không làm mốc khóa công thức.
 
 ### `GET /finance/customers/{customer_id}/debt`
 
@@ -150,6 +150,8 @@ Response phải gồm:
 - danh sách hóa đơn còn nợ, sắp xếp cũ nhất trước
 - lịch sử `customer_debt_entries`
 - các lần phân bổ `customer_debt_allocations`
+
+`total_debt` phải là số canonical giống `GET /finance/customer-debts` và danh sách khách hàng. Với chứng từ import KiotViet, API phải tính theo số còn hiệu lực của chứng từ sau thu/sửa/hủy, không theo snapshot import.
 
 ### `GET /finance/retail-debts`
 
@@ -476,7 +478,8 @@ Validation:
 
 - `cancel_reason` bắt buộc.
 - Không hủy rời phiếu sinh từ POS/thu nợ/hóa đơn/nhập hàng.
-- Không hủy rời phiếu import KiotViet bằng endpoint này.
+- Không xóa/hủy raw import row KiotViet bằng endpoint này.
+- Chứng từ QCVL đã chuẩn hóa từ import KiotViet vẫn được sửa/hủy qua đúng endpoint nghiệp vụ của loại chứng từ đó, có quyền, lý do và audit/revision; không sửa đè hoặc xóa mất dấu nguồn import.
 - Với chuyển/rút đã có cặp đối ứng, hủy phải chạy cùng transaction cho cả hai phiếu và hai dòng sổ quỹ.
 
 ### `GET /finance/cashbook-vouchers/{id}/print`
@@ -639,6 +642,7 @@ Import the previewed file.
 
 Rules:
 
+- Runtime status: code đã chuyển sang canonical partner debt ledger. `balance_after` KV chỉ còn là metadata đối soát, không tham gia công thức tổng.
 - Use `Ma phieu` as source key.
 - Upsert bank accounts by normalized `(Ten tai khoan, So tai khoan)`.
 - Upsert one default cash account for `Loai so quy = Tien mat`.
@@ -649,8 +653,10 @@ Rules:
 - KiotViet cashbook Excel does not include linked invoice/purchase receipt allocation, and that is normal: payment of invoice/purchase receipt creates the cashbook row. The allocation belongs to payment/source-document detail, not to the flat cashbook export.
 - Full KiotViet cashbook export columns currently seen: `Ma phieu`, `Thoi gian`, `Thoi gian tao`, `Nguoi tao`, `Nhan vien`, `Loai thu chi`, `Ten tai khoan`, `So tai khoan`, `Ma nguoi nop/nhan`, `Nguoi nop/nhan`, `So dien thoai`, `Dia chi`, `Gia tri`, `Noi dung chuyen khoan`, `Ghi chu`, `Loai so quy`, `Trang thai`. Import must preserve `Thoi gian tao`, `Dia chi`, `Noi dung chuyen khoan`, and `Ghi chu`.
 - `CB...` does not come from `SoQuy_KV*.xlsx`. It comes from `BaoCaoCongNoTheoKhachHang_KV*.xlsx` as a customer-debt balancing/adjustment voucher. Store and show it as a debt adjustment document with its original `CB...` code, not as a generic import row, not as a sales invoice, and not as a cashbook voucher.
+- `CKKH...` is payment discount. Store it as a debt-reduction document for the customer; it is not cash received and must not create a cashbook receipt.
 - KiotViet sales/purchase exports contain `Khach da tra`, `Tien mat`, `Chuyen khoan`, and `Tien da tra NCC`, but those values are paid totals at export time and may already include later cashbook debt payments. When rebuilding cashbook/debt relations, imported KiotViet invoices and purchase receipts must be reset to original payable/debt first, then cashbook rows rebuild `paid_amount`, `debt_amount`, and `remaining_amount`. Never add the export paid totals again after cashbook allocations, because that double-counts payments.
 - Direct allocations are safe by code pattern: `TTHD...`/`TTHDO...` allocate to `HD...`; `PCPN...` allocates to `PN...`. Only hydrate full allocation amounts from QCVL sales/purchase data when that source document already exists. Do not infer links from amount, customer name, or time alone.
+- Linked customer-supplier debt uses one relationship ledger with opposite signs per view. Customer view: `HD/HDO +`, customer payments `-`, `CKKH -`, `CB +/-`, linked `PN -`, linked `PC/PCPN +`. Supplier view shows the inverse signs. Do not create two independent balances for the same linked voucher.
 - If cashbook for a day has been imported but sales/purchase documents for the same day have not, cashbook totals may be right while document relationships are incomplete. Do not delete those rows unless the delete scope is explicitly confirmed; prefer importing the missing source documents first.
 
 KiotViet cashbook source-code prefixes seen in the `2026-07-13` full exports, de-duplicated by `Ma phieu`: `TTHD`, `TT`, `CTM`, `PCPN`, `CNH`, `TTM`, `TTD_CTM`, `PC`, `TTD_CNH`, `CTD_TTM`, `TNH`, `TTMHD`, `CTD_TNH`, `TNHHD`, `CVDT`, `TTD_CVDT`, `TTHDO`, `CTD_TVDT`, `TVDT`.

@@ -503,6 +503,50 @@ it('shows history and debt only for the current supplier', async () => {
   expect(within(debtPanel).queryByText('PN999999')).not.toBeInTheDocument()
 })
 
+it('renders supplier debt ledger rows from backend when available', async () => {
+  const supplierWithLedger = {
+    ...supplier,
+    current_payable_amount: 2206581,
+    total_purchase_amount: 3206581,
+    debt_ledger_rows: [
+      {
+        id: 'receipt-pn000566',
+        code: 'PN000566',
+        created_at: '2026-07-01T00:00:00.000Z',
+        amount_delta: 3206581,
+        balance_after: 3206581,
+        source_type: 'purchase_receipt',
+        source_id: 'receipt-pn000566',
+      },
+      {
+        id: 'cashbook-pcpn000566',
+        code: 'PCPN000566',
+        created_at: '2026-07-02T00:00:00.000Z',
+        amount_delta: -1000000,
+        balance_after: 2206581,
+        source_type: 'supplier_payment',
+        source_id: 'cashbook-pcpn000566',
+      },
+    ],
+  }
+  const service = makeService({
+    listSuppliers: vi.fn(async () => ({ items: [supplierWithLedger], page: 1, page_size: 15, total: 1 })),
+    getSupplier: vi.fn(async () => supplierWithLedger),
+  })
+
+  render(<SuppliersPage service={service} onOpenDashboard={vi.fn()} />)
+
+  await openSupplierDetail()
+  const detail = await screen.findByRole('region', { name: 'Hồ sơ và thanh toán nhà cung cấp' })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Nợ' }))
+  const debtPanel = within(detail).getByRole('tabpanel', { name: 'Nợ cần trả của NCC này' })
+  const debtTable = within(debtPanel).getByRole('table', { name: 'Lịch sử công nợ NCC' })
+
+  expect(within(debtTable).getByRole('row', { name: /^PN000566 / })).toHaveTextContent('3 206 581')
+  expect(within(debtTable).getByRole('row', { name: /PCPN000566/ })).toHaveTextContent('-1 000 000')
+  expect(within(debtTable).getByRole('row', { name: /PCPN000566/ })).toHaveTextContent('2 206 581')
+})
+
 it('clears stale supplier edit detail when switching rows fails', async () => {
   const service = makeService({
     listSuppliers: vi.fn(async () => ({ items: [supplier, inactiveSupplier], page: 1, page_size: 15, total: 2 })),

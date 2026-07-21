@@ -7,6 +7,7 @@ import {
   mapCustomerDebtTotalsRow,
   type CustomerDebtTotalsRow,
 } from './modules/finance/customer-debt.js'
+import { buildPartnerDebtLedger, type PartnerDebtDocumentInput } from './modules/finance/partner-debt-ledger.js'
 import {
   invoicePaymentStatus,
   rebuildKiotVietCashbookAllocations,
@@ -1671,24 +1672,59 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async savePurchaseReceipt(input) {
       await ensureImportedSnapshotTables(pool)
-      await pool.query(
-        `
-          insert into purchase_receipt_snapshots (id, organization_id, code, data, source_type, created_at, updated_at)
-          values ($1, $2, $3, $4::jsonb, $5, coalesce($6::timestamptz, now()), now())
-          on conflict (organization_id, code)
-          do update set data = excluded.data, source_type = excluded.source_type, updated_at = now()
-        `,
-        [
-          input.receipt.id,
-          input.organizationId,
-          input.receipt.code,
-          JSON.stringify(input.receipt),
-          input.sourceType,
-          input.receipt.created_at,
-        ],
-      )
-      await recomputeSupplierPurchaseTotals(pool, input.organizationId, input.receipt.supplier_id)
-      return input.receipt
+      await pool.query('begin')
+      try {
+        await pool.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipts:${input.organizationId}`])
+        const existing = await pool.query(
+          `
+            select id
+            from purchase_receipt_snapshots
+            where organization_id = $1 and id = $2
+            limit 1
+          `,
+          [input.organizationId, input.receipt.id],
+        )
+        const receipt = existing.rows[0]
+          ? input.receipt
+          : await purchaseReceiptWithSafeCode(pool, input.organizationId, input.receipt, input.sourceType)
+        if (existing.rows[0]) {
+          await pool.query(
+            `
+              update purchase_receipt_snapshots
+              set code = $3, data = $4::jsonb, source_type = $5, updated_at = now()
+              where organization_id = $1 and id = $2
+            `,
+            [
+              input.organizationId,
+              receipt.id,
+              receipt.code,
+              JSON.stringify(receipt),
+              input.sourceType,
+            ],
+          )
+        } else {
+          await pool.query(
+            `
+              insert into purchase_receipt_snapshots (id, organization_id, code, data, source_type, created_at, updated_at)
+              values ($1, $2, $3, $4::jsonb, $5, coalesce($6::timestamptz, now()), now())
+            `,
+            [
+              receipt.id,
+              input.organizationId,
+              receipt.code,
+              JSON.stringify(receipt),
+              input.sourceType,
+              receipt.created_at,
+            ],
+          )
+        }
+        await pool.query('commit')
+        await recomputeSupplierPurchaseTotals(pool, input.organizationId, receipt.supplier_id)
+        return receipt
+      } catch (error) {
+        await pool.query('rollback')
+        throw error
+      }
     },
 
     async postPurchaseReceipt(input) {
@@ -4181,7 +4217,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async getCustomerDebt(input) {
       await ensureSalesFinanceTables(pool)
-      const [totalsResult, result, adjustmentResult, linkedSupplierReceiptResult] = await Promise.all([
+      await ensureImportedSnapshotTables(pool)
+      const [totalsResult, result, ledgerInvoiceResult, adjustmentResult, linkedSupplierReceiptResult] = await Promise.all([
         pool.query<CustomerDebtTotalsRow>(
           customerDebtTotalsSql({ singleCustomer: true }),
           [input.organizationId, input.customerId],
@@ -4209,6 +4246,22 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
               and o.status <> 'cancelled'
               and coalesce(cde.remaining_debt, o.debt_amount) > 0
             order by debt_updated_at desc, o.created_at desc
+          `,
+          [input.organizationId, input.customerId],
+        ),
+        pool.query(
+          `
+            select
+              o.id,
+              o.code,
+              o.created_at,
+              o.total_amount as ledger_total_amount
+            from orders o
+            where o.organization_id = $1
+              and o.customer_id = $2
+              and o.order_type = 'invoice'
+              and o.status <> 'cancelled'
+            order by o.created_at asc, o.code asc
           `,
           [input.organizationId, input.customerId],
         ),
@@ -4342,18 +4395,94 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         .map(mapCashbookRow)
         .map((entry) => hydrateCashbookEntryUserSnapshot(entry, userDisplayNames))
         .map((entry) => hydrateCashbookEntryFinanceAccount(entry, accounts))
+      const ledgerInvoices = ledgerInvoiceResult.rows.length > 0
+        ? ledgerInvoiceResult.rows.map((row) => ({
+            order_id: row.id,
+            order_code: row.code,
+            created_at: row.created_at.toISOString(),
+            total_amount: Number(row.ledger_total_amount),
+          }))
+        : invoices
+      const ledgerDocuments: PartnerDebtDocumentInput[] = [
+        ...ledgerInvoices.map((invoice) => ({
+          id: String(invoice.order_id),
+          code: invoice.order_code,
+          time: invoice.created_at,
+          amount: invoice.total_amount,
+          status: 'posted',
+          sourceType: 'invoice',
+          sourceId: String(invoice.order_id),
+        })),
+        ...cashbookEntries.map((entry) => ({
+          id: entry.id,
+          code: entry.code,
+          time: entry.created_at,
+          amount: Math.abs(entry.amount_delta),
+          status: entry.status,
+          sourceType: 'payment',
+          sourceId: entry.id,
+        })),
+        ...adjustments.map((adjustment) => ({
+          id: adjustment.id,
+          code: adjustment.source_code,
+          time: adjustment.created_at,
+          amount: Math.abs(adjustment.amount_delta),
+          normalizedAmountDelta: adjustment.amount_delta,
+          status: 'posted',
+          sourceType: 'adjustment',
+          sourceId: adjustment.id,
+        })),
+        ...linkedSupplierReceipts.flatMap((receipt) => {
+          const rows: PartnerDebtDocumentInput[] = [{
+            id: receipt.id,
+            code: receipt.code,
+            time: receipt.created_at,
+            amount: receipt.payable_amount,
+            status: 'posted',
+            sourceType: 'linked_supplier_receipt',
+            sourceId: receipt.id,
+          }]
+          if (receipt.paid_amount > 0) {
+            rows.push({
+              id: `${receipt.id}:paid`,
+              code: nextPurchaseSupplierPaymentCode(receipt.code, ''),
+              time: receipt.created_at,
+              amount: receipt.paid_amount,
+              status: 'posted',
+              sourceType: 'linked_supplier_payment',
+              sourceId: receipt.id,
+            })
+          }
+          return rows
+        }),
+      ]
+      const ledger = buildPartnerDebtLedger({
+        view: 'customer',
+        linked: linkedSupplierReceipts.length > 0,
+        documents: ledgerDocuments,
+      })
       return {
         customer_id: input.customerId,
-        total_debt: totalsRow ? mapCustomerDebtTotalsRow(totalsRow).total_debt : 0,
+        total_debt: ledger.totalDebt,
         invoices,
         adjustments,
         linked_supplier_receipts: linkedSupplierReceipts,
         cashbook_entries: cashbookEntries,
+        ledger_rows: ledger.rows.map((row) => ({
+          id: row.id,
+          code: row.code,
+          created_at: row.time,
+          amount_delta: row.amountDelta,
+          balance_after: row.balanceAfter,
+          source_type: row.sourceType,
+          source_id: row.sourceId,
+        })),
       }
     },
 
     async listCustomerDebts(input) {
       await ensureSalesFinanceTables(pool)
+      await ensureImportedSnapshotTables(pool)
       const result = await pool.query<CustomerDebtTotalsRow>(customerDebtTotalsSql(), [input.organizationId])
       const debts = result.rows
         .map((row) => {
@@ -5146,6 +5275,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async getCustomerFinancialTotals(organizationId) {
       await ensureSalesFinanceTables(pool)
+      await ensureImportedSnapshotTables(pool)
       const sales = await pool.query(
         `
           select customer_id, sum(total_amount) as total_sales_amount, max(updated_at) as last_activity_at
@@ -5791,6 +5921,30 @@ async function loadPurchaseReceiptSnapshot(pool: pg.Pool, organizationId: string
   return result.rows[0]?.data as PurchaseReceiptData | null ?? null
 }
 
+async function purchaseReceiptWithSafeCode(
+  pool: pg.Pool,
+  organizationId: string,
+  receipt: PurchaseReceiptData,
+  sourceType: 'manual' | 'kiotviet_import',
+) {
+  if (sourceType !== 'manual' || !/^PN\d{6}(?:\.\d+)?$/i.test(receipt.code.trim())) return receipt
+
+  const result = await pool.query(
+    `
+      select max((substring(upper(code) from '^PN([0-9]{6})(?:\\.[0-9]+)?$'))::integer) as max_number
+      from purchase_receipt_snapshots
+      where organization_id = $1
+        and upper(code) ~ '^PN[0-9]{6}(\\.[0-9]+)?$'
+    `,
+    [organizationId],
+  )
+  const currentNumber = Number(result.rows[0]?.max_number ?? 0)
+  const requestedNumber = Number(receipt.code.trim().toUpperCase().match(/^PN(\d{6})/)?.[1] ?? 0)
+  const nextNumber = Math.max(currentNumber + 1, requestedNumber)
+  const code = `PN${String(nextNumber).padStart(6, '0')}`
+  return code === receipt.code ? receipt : { ...receipt, code }
+}
+
 async function purchaseSupplierCashbookEntry(
   pool: pg.Pool,
   input: {
@@ -5890,6 +6044,11 @@ function nextPurchaseSupplierPaymentCode(receiptCode: string, suffix: string) {
   return `PCPN${suffix ? `-${suffix}` : ''}`
 }
 
+function purchaseReceiptCodeFromSupplierPaymentCode(code: string) {
+  const match = code.trim().toUpperCase().match(/^PCPN(\d{6}(?:\.\d+)?)/)
+  return match ? `PN${match[1]}` : ''
+}
+
 async function recomputeSupplierPurchaseTotals(pool: pg.Pool, organizationId: string, supplierId?: string | null) {
   await ensureImportedSnapshotTables(pool)
   const supplierResult = await pool.query(
@@ -5910,26 +6069,117 @@ async function recomputeSupplierPurchaseTotals(pool: pg.Pool, organizationId: st
     `,
     [organizationId, supplierId ?? null],
   )
-  const totals = new Map<string, { total_purchase_amount: number; current_payable_amount: number }>()
+  const cashbookResult = await pool.query(
+    `
+      select id, code, status, amount_delta, created_at, source
+      from cashbook_entries
+      where organization_id = $1
+        and status = 'posted'
+        and (
+          source_type = 'purchase_supplier_payment'
+          or (
+            source_type in ('cashbook_voucher', 'kiotviet_cashbook')
+            and code ~* '^(PCPN|PC)[0-9]'
+          )
+        )
+    `,
+    [organizationId],
+  )
+  const totals = new Map<string, {
+    total_purchase_amount: number
+    current_payable_amount: number
+    debt_ledger_rows: NonNullable<SupplierListData['debt_ledger_rows']>
+  }>()
+  const receiptByCode = new Map<string, PurchaseReceiptData>()
+  const documentsBySupplier = new Map<string, PartnerDebtDocumentInput[]>()
+  const paymentTotalByReceiptCode = new Map<string, number>()
   for (const row of receiptResult.rows) {
     const receipt = row.data as PurchaseReceiptData
     if (receipt.status !== 'posted') continue
     const supplierKey = receipt.supplier?.id ?? receipt.supplier_id
     if (!supplierKey) continue
-    const current = totals.get(supplierKey) ?? { total_purchase_amount: 0, current_payable_amount: 0 }
-    current.total_purchase_amount += Number(receipt.payable_amount || 0)
-    current.current_payable_amount += Number(receipt.remaining_amount || 0)
-    totals.set(supplierKey, current)
+    receiptByCode.set(receipt.code.trim().toUpperCase(), receipt)
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: receipt.id,
+      code: receipt.code,
+      time: receipt.received_at || receipt.created_at,
+      amount: Number(receipt.payable_amount || 0),
+      status: 'posted',
+      sourceType: 'purchase_receipt',
+      sourceId: receipt.id,
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
+  for (const row of cashbookResult.rows) {
+    const code = String(row.code ?? '').trim().toUpperCase()
+    const orderCode = String(row.source?.order_code ?? '').trim().toUpperCase()
+    const matchedReceiptCode = orderCode || purchaseReceiptCodeFromSupplierPaymentCode(code)
+    const receipt = matchedReceiptCode ? receiptByCode.get(matchedReceiptCode) : null
+    if (!receipt) continue
+    const supplierKey = receipt.supplier?.id ?? receipt.supplier_id
+    if (!supplierKey) continue
+    const amount = Math.abs(Number(row.amount_delta || 0))
+    paymentTotalByReceiptCode.set(receipt.code.trim().toUpperCase(), (paymentTotalByReceiptCode.get(receipt.code.trim().toUpperCase()) ?? 0) + amount)
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: String(row.id),
+      code: code || nextPurchaseSupplierPaymentCode(receipt.code, ''),
+      time: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      amount,
+      status: 'posted',
+      sourceType: 'supplier_payment',
+      sourceId: String(row.id),
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
+  for (const receipt of receiptByCode.values()) {
+    const receiptCode = receipt.code.trim().toUpperCase()
+    if ((paymentTotalByReceiptCode.get(receiptCode) ?? 0) > 0) continue
+    const paidAmount = Math.max(Number(receipt.paid_amount || 0), Number(receipt.payable_amount || 0) - Number(receipt.remaining_amount || 0), 0)
+    if (paidAmount <= 0) continue
+    const supplierKey = receipt.supplier?.id ?? receipt.supplier_id
+    if (!supplierKey) continue
+    const documents = documentsBySupplier.get(supplierKey) ?? []
+    documents.push({
+      id: `${receipt.id}:paid`,
+      code: nextPurchaseSupplierPaymentCode(receipt.code, ''),
+      time: receipt.received_at || receipt.created_at,
+      amount: paidAmount,
+      status: 'posted',
+      sourceType: 'supplier_payment',
+      sourceId: receipt.id,
+    })
+    documentsBySupplier.set(supplierKey, documents)
+  }
+  for (const [supplierKey, documents] of documentsBySupplier) {
+    const ledger = buildPartnerDebtLedger({ view: 'supplier', linked: false, documents })
+    totals.set(supplierKey, {
+      total_purchase_amount: documents
+        .filter((document) => /^PN\d/i.test(document.code))
+        .reduce((sum, document) => sum + Math.abs(Number(document.amount || 0)), 0),
+      current_payable_amount: ledger.totalDebt,
+      debt_ledger_rows: ledger.rows.map((row) => ({
+        id: row.id,
+        code: row.code,
+        created_at: row.time,
+        amount_delta: row.amountDelta,
+        balance_after: row.balanceAfter,
+        source_type: row.sourceType,
+        source_id: row.sourceId,
+      })),
+    })
   }
   await pool.query('begin')
   try {
     for (const row of supplierResult.rows) {
       const current = row.data as SupplierListData
-      const total = totals.get(current.id) ?? { total_purchase_amount: 0, current_payable_amount: 0 }
+      const total = totals.get(current.id) ?? { total_purchase_amount: 0, current_payable_amount: 0, debt_ledger_rows: [] }
       const next = {
         ...current,
         total_purchase_amount: total.total_purchase_amount,
         current_payable_amount: total.current_payable_amount,
+        debt_ledger_rows: total.debt_ledger_rows,
       } satisfies SupplierListData
       await pool.query(
         `

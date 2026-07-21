@@ -64,6 +64,7 @@ import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType 
 import {
   buildCustomerDebtLedgerRows,
   customerDebtHasLiveLedger,
+  customerDebtLedgerRowsFromBackend,
   type CustomerDebtAdjustment,
   type CustomerDebtLedgerRow,
 } from './customer-debt-ledger'
@@ -1457,13 +1458,15 @@ function CustomerDebtPanel({
         status: 'completed' as const,
         seller: { id: '', name: '' },
       }))
-  const ledgerRows = buildCustomerDebtLedgerRows(
-    invoiceRows,
-    debtLedger.cashbookHistory,
-    debtLedger.debt.adjustments ?? [],
-    debtLedger.debt.linked_supplier_receipts ?? [],
-    { currentTotal: totalDebt },
-  )
+  const ledgerRows = (debtLedger.debt.ledger_rows?.length ?? 0) > 0
+    ? customerDebtLedgerRowsFromBackend(debtLedger.debt)
+    : buildCustomerDebtLedgerRows(
+        invoiceRows,
+        debtLedger.cashbookHistory,
+        debtLedger.debt.adjustments ?? [],
+        debtLedger.debt.linked_supplier_receipts ?? [],
+        { currentTotal: totalDebt },
+      )
   const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
   const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
   const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
@@ -1772,13 +1775,15 @@ function CustomerDebtPaymentDialog({
         }))
     : []
   const ledgerRows = typeof debt === 'object'
-    ? buildCustomerDebtLedgerRows(
-        invoiceRows,
-        debt.cashbookHistory,
-        debt.debt.adjustments ?? [],
-        debt.debt.linked_supplier_receipts ?? [],
-        { currentTotal: currentDebt },
-      )
+    ? (debt.debt.ledger_rows?.length ?? 0) > 0
+      ? customerDebtLedgerRowsFromBackend(debt.debt)
+      : buildCustomerDebtLedgerRows(
+          invoiceRows,
+          debt.cashbookHistory,
+          debt.debt.adjustments ?? [],
+          debt.debt.linked_supplier_receipts ?? [],
+          { currentTotal: currentDebt },
+        )
     : []
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
   const hasManualInvoicePayments = Object.values(form.invoicePayments).some((value) => parseMoneyInput(value) > 0)

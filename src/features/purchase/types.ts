@@ -25,6 +25,15 @@ export interface Supplier {
   status: SupplierStatus
   current_payable_amount: number
   total_purchase_amount: number
+  debt_ledger_rows?: Array<{
+    id: string
+    code: string
+    created_at: string
+    amount_delta: number
+    balance_after: number
+    source_type?: string
+    source_id?: string | null
+  }>
   created_by?: { id: string; name: string } | null
   created_at?: string | null
   source_creator_name?: string | null
