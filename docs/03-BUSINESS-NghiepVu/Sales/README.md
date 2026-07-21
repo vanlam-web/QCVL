@@ -80,7 +80,7 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 | Báo giá → `BG…` | **Có** | Qua POS |
 | Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
 | Tạo nhanh KH/NCC từ phiếu thu/chi | **Có** (UI) | Nút `Tạo mới` → `POST /customers` / `POST /suppliers` |
-| Bill Preview / in HD | **Có** (A4 + K80 + chỉnh mẫu) | Thiết lập → **Quản lý mẫu in**: tiêu đề, chân bill, cột, logo; shop info; mẫu mặc định; lưu Postgres — chưa editor HTML KV / Zalo |
+| Bill Preview / in HD | **Có** (A4 + K80 + chỉnh mẫu) | Thiết lập → **Quản lý mẫu in**; mẫu mặc định org; **nhớ A4/K80 theo khách** (không áp dụng khách lẻ); chưa editor HTML KV / Zalo |
 | Phiếu nhập → `PN…` | **Có** (hàng thường) | Draft/post Postgres; P4 object cuộn/tấm vẫn đóng băng — [Purchase README](../Purchase/README.md) |
 | Tạo NCC mới | **Có** | `POST /suppliers` persist `supplier_snapshots` manual; mã trống → `NCC…`; trùng → 409 |
 | Tạo hàng hóa mới | **Có** | `POST /products` persist Postgres/dev-memory; trùng mã → 409; combo/service ép `track_inventory=false` theo KV |

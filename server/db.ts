@@ -1313,6 +1313,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       )
       const current = existing.rows[0]?.data as CustomerListData | undefined
       if (!current) return null
+      if (
+        (current.code ?? '').trim().toLowerCase() === 'khachle'
+        && input.patch.preferred_bill_template !== undefined
+      ) {
+        throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })
+      }
       const group = input.patch.customer_group_id === undefined
         ? current.customer_group
         : input.patch.customer_group_id === null
@@ -1321,7 +1327,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const data: CustomerListData = {
         ...current,
         code: input.patch.code ?? current.code,
-        name: input.patch.name,
+        name: input.patch.name ?? current.name,
         phone: input.patch.phone === undefined ? current.phone : input.patch.phone,
         tax_code: input.patch.tax_code === undefined ? current.tax_code : input.patch.tax_code,
         address: input.patch.address === undefined ? current.address : input.patch.address,
@@ -1330,6 +1336,10 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         customer_group: group,
         customer_type: input.patch.customer_type === undefined ? current.customer_type : input.patch.customer_type,
         company_name: input.patch.company_name === undefined ? current.company_name : input.patch.company_name,
+        preferred_bill_template:
+          input.patch.preferred_bill_template !== undefined
+            ? input.patch.preferred_bill_template
+            : current.preferred_bill_template ?? null,
       }
       await pool.query(
         `
@@ -4273,7 +4283,20 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
       const document = hydrateSalesDocumentUserSnapshot(mapOrderRow(result.rows[0]), userDisplayNames)
       const paymentReceipts = await listSalesDocumentPaymentReceipts(pool, input.organizationId, document, userDisplayNames)
-      return { ...document, payment_receipts: paymentReceipts }
+      const preferredBillTemplate = await loadCustomerPreferredBillTemplate(
+        pool,
+        input.organizationId,
+        document.customer.id,
+        document.customer.code,
+      )
+      return {
+        ...document,
+        customer: {
+          ...document.customer,
+          preferred_bill_template: preferredBillTemplate,
+        },
+        payment_receipts: paymentReceipts,
+      }
     },
 
     async cancelSalesDocument(input) {
@@ -6474,6 +6497,31 @@ async function snapshotByCode<T>(pool: pg.Pool, tableName: 'customer_snapshots' 
     [organizationId, baseKiotVietImportCode(code)],
   )
   return result.rows[0]?.data as T | null ?? null
+}
+
+async function loadCustomerPreferredBillTemplate(
+  pool: pg.Pool,
+  organizationId: string,
+  customerId: string | null | undefined,
+  customerCode: string | null | undefined,
+) {
+  if ((customerCode ?? '').trim().toLowerCase() === 'khachle') return null
+  await ensureImportedSnapshotTables(pool)
+  const result = await pool.query(
+    `
+      select data
+      from customer_snapshots
+      where organization_id = $1
+        and (
+          ($2::text is not null and id = $2)
+          or ($3::text is not null and lower(code) = lower($3))
+        )
+      limit 1
+    `,
+    [organizationId, customerId ?? null, customerCode ?? null],
+  )
+  const preferred = (result.rows[0]?.data as CustomerListData | undefined)?.preferred_bill_template
+  return preferred === 'a4' || preferred === 'k80' ? preferred : null
 }
 
 function purchaseReceiptDataFromImportRows(

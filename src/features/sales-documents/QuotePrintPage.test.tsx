@@ -123,3 +123,34 @@ it('blocks invoice documents from the quote print route', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Chỉ in báo giá BG... trong màn này')
   expect(screen.queryByRole('button', { name: 'In' })).not.toBeInTheDocument()
 })
+
+it('uses customer preferred bill template on quote print', async () => {
+  const preferred = {
+    ...quoteDetail,
+    customer: { ...quoteDetail.customer, preferred_bill_template: 'k80' as const },
+  }
+  const { container } = render(
+    <QuotePrintPage documentId="quote-1" service={makeService(preferred)} onClose={vi.fn()} />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'BÁO GIÁ' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-k80')
+})
+
+it('saves quote customer preference when template changes', async () => {
+  const saveCustomerBillPreference = vi.fn(async () => undefined)
+
+  render(
+    <QuotePrintPage
+      documentId="quote-1"
+      service={makeService()}
+      onClose={vi.fn()}
+      saveCustomerBillPreference={saveCustomerBillPreference}
+    />,
+  )
+
+  await userEvent.click(await screen.findByRole('radio', { name: /K80 \(nhiệt\)/ }))
+
+  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'k80')
+  expect(await screen.findByRole('status')).toHaveTextContent('Đã nhớ mẫu cho khách')
+})

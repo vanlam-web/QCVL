@@ -5,7 +5,9 @@ import { BillPrintToolbar } from './BillPrintToolbar'
 import {
   invoiceFooterText,
   isBillTemplateId,
+  isWalkInCustomerCode,
   readOrganizationBillSettingsCache,
+  resolveBillTemplate,
   writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
@@ -25,12 +27,14 @@ export function InvoicePrintPage({
   onClose,
   initialTemplate,
   loadBillSettings,
+  saveCustomerBillPreference,
 }: {
   documentId: string
   service: SalesDocumentService
   onClose: () => void
   initialTemplate?: string | null
   loadBillSettings?: () => Promise<OrganizationBillSettings>
+  saveCustomerBillPreference?: (customerId: string, template: BillTemplateId) => Promise<void>
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -38,12 +42,14 @@ export function InvoicePrintPage({
   const [template, setTemplate] = useState<BillTemplateId>(() =>
     isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettingsCache().default_bill_template,
   )
+  const [preferenceStatus, setPreferenceStatus] = useState<string | null>(null)
 
   useEffect(() => {
     let active = true
 
     async function loadDocument() {
       setError(null)
+      setPreferenceStatus(null)
       try {
         const [result, remoteSettings] = await Promise.all([
           service.getSalesDocument(documentId),
@@ -51,13 +57,20 @@ export function InvoicePrintPage({
         ])
         if (!active) return
         setDocument(result)
+        let orgDefault = readOrganizationBillSettingsCache().default_bill_template
         if (remoteSettings) {
           const saved = writeOrganizationBillSettingsCache(remoteSettings)
           setSettings(saved)
-          if (!isBillTemplateId(initialTemplate)) {
-            setTemplate(saved.default_bill_template)
-          }
+          orgDefault = saved.default_bill_template
         }
+        setTemplate(
+          resolveBillTemplate({
+            queryTemplate: initialTemplate,
+            customerCode: result.customer.code,
+            preferredTemplate: result.customer.preferred_bill_template,
+            orgDefault,
+          }),
+        )
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được hóa đơn.'))
       }
@@ -69,6 +82,19 @@ export function InvoicePrintPage({
       active = false
     }
   }, [documentId, initialTemplate, loadBillSettings, service])
+
+  async function handleTemplateChange(next: BillTemplateId) {
+    setTemplate(next)
+    setPreferenceStatus(null)
+    const customer = document?.customer
+    if (!customer?.id || isWalkInCustomerCode(customer.code) || !saveCustomerBillPreference) return
+    try {
+      await saveCustomerBillPreference(customer.id, next)
+      setPreferenceStatus('Đã nhớ mẫu cho khách')
+    } catch {
+      setPreferenceStatus('Không lưu được mẫu cho khách')
+    }
+  }
 
   if (error) {
     return (
@@ -107,9 +133,10 @@ export function InvoicePrintPage({
     <main className={`quote-print-shell bill-template-${template}`}>
       <BillPrintToolbar
         template={template}
-        onTemplateChange={setTemplate}
+        onTemplateChange={handleTemplateChange}
         onPrint={() => window.print()}
         onClose={onClose}
+        preferenceStatus={preferenceStatus}
       />
 
       <article className="quote-print-page" aria-label={`Hóa đơn ${document.code}`}>

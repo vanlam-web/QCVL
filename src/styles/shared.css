@@ -3730,6 +3730,12 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   margin: 0 auto 1rem;
 }
 
+.quote-print-preference-status {
+  margin: 0;
+  color: #374151;
+  font-size: 0.8125rem;
+}
+
 .bill-template-picker {
   display: flex;
   align-items: center;

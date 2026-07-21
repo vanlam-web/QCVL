@@ -430,6 +430,7 @@ function QuotePrintRoute() {
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
+  const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -448,6 +449,9 @@ function QuotePrintRoute() {
       service={service}
       initialTemplate={initialTemplate}
       loadBillSettings={foundationService.getOrganizationBillSettings}
+      saveCustomerBillPreference={(customerId, template) =>
+        catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
+      }
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
@@ -461,6 +465,7 @@ function InvoicePrintRoute() {
   const { id } = useParams()
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
+  const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -479,6 +484,9 @@ function InvoicePrintRoute() {
       service={service}
       initialTemplate={initialTemplate}
       loadBillSettings={foundationService.getOrganizationBillSettings}
+      saveCustomerBillPreference={(customerId, template) =>
+        catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
+      }
       onClose={() => navigate(printReturnPath(location.search))}
     />
   )
