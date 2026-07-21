@@ -1,27 +1,30 @@
-import { BillTemplatePicker } from './BillTemplatePicker'
-import type { BillTemplateId } from './bill-settings'
+import { BillNamedTemplatePicker } from './BillNamedTemplatePicker'
+import type { BillPrintTemplate } from './bill-settings'
 
 export function BillPrintToolbar({
-  template,
-  onTemplateChange,
+  templates,
+  selectedTemplateId,
+  onTemplateSelect,
   onPrint,
   onClose,
   preferenceStatus,
 }: {
-  template: BillTemplateId
-  onTemplateChange: (template: BillTemplateId) => void
+  templates: BillPrintTemplate[]
+  selectedTemplateId: string
+  onTemplateSelect: (templateId: string) => void
   onPrint: () => void
   onClose: () => void
   preferenceStatus?: string | null
 }) {
   return (
     <div className="quote-print-toolbar">
-      <BillTemplatePicker
+      <BillNamedTemplatePicker
         compact
-        legend="Mẫu in"
-        name="print_bill_template"
-        value={template}
-        onChange={onTemplateChange}
+        legend="Chọn mẫu in"
+        name="print_named_bill_template"
+        templates={templates}
+        value={selectedTemplateId}
+        onChange={onTemplateSelect}
       />
       {preferenceStatus ? (
         <p className="quote-print-preference-status" role="status">

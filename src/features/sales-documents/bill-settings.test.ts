@@ -1,14 +1,17 @@
 import {
   billTemplateDescription,
   billTemplateLabel,
+  billTemplateSlotCode,
   defaultOrganizationBillSettings,
   invoiceFooterText,
   isBillTemplateId,
   isWalkInCustomerCode,
+  listBillTemplatesForDocument,
   normalizeOrganizationBillSettings,
   quoteFooterText,
   readOrganizationBillSettings,
   resolveBillTemplate,
+  resolveNamedPrintTemplate,
   resolvePrintTemplateContent,
   writeOrganizationBillSettings,
 } from './bill-settings'
@@ -104,5 +107,21 @@ describe('organization bill settings', () => {
     expect(settings.default_bill_template).toBe('k80')
     expect(settings.invoice_title).toBe('PHIẾU BÁN')
     expect(resolvePrintTemplateContent(settings, 'invoice', 'k80').title).toBe('PHIẾU BÁN')
+  })
+
+  it('lists templates and resolves named print selection like KV A/B/C slots', () => {
+    const settings = normalizeOrganizationBillSettings({
+      default_bill_template: 'a4',
+      invoice_title: 'HÓA ĐƠN BÁN HÀNG',
+    })
+    const invoices = listBillTemplatesForDocument(settings, 'invoice')
+    expect(invoices.map((item) => item.paper_size)).toEqual(['a4', 'k80'])
+    expect(billTemplateSlotCode(0)).toBe('A')
+    expect(billTemplateSlotCode(1)).toBe('B')
+    expect(billTemplateSlotCode(2)).toBe('C')
+
+    expect(resolveNamedPrintTemplate(settings, 'invoice', { paper: 'k80' }).id).toBe('tpl-invoice-k80')
+    expect(resolveNamedPrintTemplate(settings, 'invoice', { templateId: 'tpl-invoice-a4' }).paper_size).toBe('a4')
+    expect(resolveNamedPrintTemplate(settings, 'invoice', {}).is_default).toBe(true)
   })
 })

@@ -334,6 +334,35 @@ export function resolveBillTemplate(input: {
   return input.orgDefault
 }
 
+export function billTemplateSlotCode(index: number) {
+  if (index < 0) return '?'
+  if (index < 26) return String.fromCharCode(65 + index)
+  return String(index + 1)
+}
+
+export function listBillTemplatesForDocument(
+  settings: OrganizationBillSettings,
+  documentType: BillDocumentType,
+): BillPrintTemplate[] {
+  return normalizeBillTemplates(settings).filter((item) => item.document_type === documentType)
+}
+
+export function resolveNamedPrintTemplate(
+  settings: OrganizationBillSettings,
+  documentType: BillDocumentType,
+  input: { templateId?: string | null; paper?: string | null } = {},
+): BillPrintTemplate {
+  const list = listBillTemplatesForDocument(settings, documentType)
+  if (input.templateId) {
+    const byId = list.find((item) => item.id === input.templateId)
+    if (byId) return byId
+  }
+  if (isBillTemplateId(input.paper)) {
+    return resolvePrintTemplateContent(settings, documentType, input.paper)
+  }
+  return list.find((item) => item.is_default) ?? list[0] ?? seedBillTemplatesFromFlat(settings).find((item) => item.document_type === documentType)!
+}
+
 export function resolvePrintTemplateContent(
   settings: OrganizationBillSettings,
   documentType: BillDocumentType,

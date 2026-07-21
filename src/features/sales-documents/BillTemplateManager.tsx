@@ -4,6 +4,7 @@ import { BillTemplatePicker } from './BillTemplatePicker'
 import {
   billDocumentTypeLabel,
   billTemplateLabel,
+  billTemplateSlotCode,
   createBlankBillTemplate,
   maxBillTemplatesPerDocumentType,
   readImageFileAsDataUrl,
@@ -65,6 +66,7 @@ export function BillTemplateManager({
   function removeSelected() {
     if (!selected) return
     if (visibleTemplates.length <= 1) return
+    if (!window.confirm(`Xóa mẫu "${selected.name}"? Không thể hoàn tác sau khi lưu.`)) return
     const remaining = templates.filter((item) => item.id !== selected.id)
     const stillHasDefault = remaining.some((item) => item.document_type === documentType && item.is_default)
     const next = stillHasDefault
@@ -123,21 +125,29 @@ export function BillTemplateManager({
             </button>
           </div>
           <ul className="bill-template-manager-list">
-            {visibleTemplates.map((item) => (
-              <li key={item.id}>
-                <button
-                  className={item.id === selected?.id ? 'is-selected' : undefined}
-                  type="button"
-                  onClick={() => setSelectedId(item.id)}
-                >
-                  <span className="bill-template-manager-list-name">{item.name}</span>
-                  <span className="bill-template-manager-list-meta">
-                    {billTemplateLabel(item.paper_size)}
-                    {item.is_default ? ' · Mặc định' : ''}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {visibleTemplates.map((item, index) => {
+              const slot = billTemplateSlotCode(index)
+              return (
+                <li key={item.id}>
+                  <button
+                    className={item.id === selected?.id ? 'is-selected' : undefined}
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                  >
+                    <span className="bill-template-manager-list-row">
+                      <span className="bill-template-manager-slot" aria-hidden="true">{slot}</span>
+                      <span className="bill-template-manager-list-text">
+                        <span className="bill-template-manager-list-name">{item.name}</span>
+                        <span className="bill-template-manager-list-meta">
+                          {billTemplateLabel(item.paper_size)}
+                          {item.is_default ? ' · Mặc định' : ''}
+                        </span>
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
           </ul>
           <p className="admin-settings-field-hint">
             Tối đa {maxBillTemplatesPerDocumentType} mẫu / loại. Sửa sâu nội dung bên phải — chưa gồm editor HTML.
@@ -155,7 +165,7 @@ export function BillTemplateManager({
               />
             </label>
             <BillTemplatePicker
-              legend="Khổ giấy"
+              legend="Mẫu in gợi ý"
               value={selected.paper_size}
               onChange={(paper_size) => updateSelected({ paper_size })}
             />

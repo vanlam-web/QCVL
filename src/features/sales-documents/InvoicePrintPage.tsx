@@ -6,9 +6,10 @@ import {
   invoiceFooterText,
   isBillTemplateId,
   isWalkInCustomerCode,
+  listBillTemplatesForDocument,
   readOrganizationBillSettingsCache,
   resolveBillTemplate,
-  resolvePrintTemplateContent,
+  resolveNamedPrintTemplate,
   writeOrganizationBillSettingsCache,
   type BillTemplateId,
   type OrganizationBillSettings,
@@ -40,9 +41,11 @@ export function InvoicePrintPage({
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettingsCache())
-  const [template, setTemplate] = useState<BillTemplateId>(() =>
-    isBillTemplateId(initialTemplate) ? initialTemplate : readOrganizationBillSettingsCache().default_bill_template,
-  )
+  const [templateId, setTemplateId] = useState<string>(() => {
+    const cached = readOrganizationBillSettingsCache()
+    const paper = isBillTemplateId(initialTemplate) ? initialTemplate : cached.default_bill_template
+    return resolveNamedPrintTemplate(cached, 'invoice', { paper }).id
+  })
   const [preferenceStatus, setPreferenceStatus] = useState<string | null>(null)
 
   useEffect(() => {
@@ -58,20 +61,18 @@ export function InvoicePrintPage({
         ])
         if (!active) return
         setDocument(result)
-        let orgDefault = readOrganizationBillSettingsCache().default_bill_template
+        let nextSettings = readOrganizationBillSettingsCache()
         if (remoteSettings) {
-          const saved = writeOrganizationBillSettingsCache(remoteSettings)
-          setSettings(saved)
-          orgDefault = saved.default_bill_template
+          nextSettings = writeOrganizationBillSettingsCache(remoteSettings)
+          setSettings(nextSettings)
         }
-        setTemplate(
-          resolveBillTemplate({
-            queryTemplate: initialTemplate,
-            customerCode: result.customer.code,
-            preferredTemplate: result.customer.preferred_bill_template,
-            orgDefault,
-          }),
-        )
+        const paper = resolveBillTemplate({
+          queryTemplate: initialTemplate,
+          customerCode: result.customer.code,
+          preferredTemplate: result.customer.preferred_bill_template,
+          orgDefault: nextSettings.default_bill_template,
+        })
+        setTemplateId(resolveNamedPrintTemplate(nextSettings, 'invoice', { paper }).id)
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được hóa đơn.'))
       }
@@ -84,13 +85,14 @@ export function InvoicePrintPage({
     }
   }, [documentId, initialTemplate, loadBillSettings, service])
 
-  async function handleTemplateChange(next: BillTemplateId) {
-    setTemplate(next)
+  async function handleTemplateSelect(nextId: string) {
+    setTemplateId(nextId)
     setPreferenceStatus(null)
+    const named = resolveNamedPrintTemplate(settings, 'invoice', { templateId: nextId })
     const customer = document?.customer
     if (!customer?.id || isWalkInCustomerCode(customer.code) || !saveCustomerBillPreference) return
     try {
-      await saveCustomerBillPreference(customer.id, next)
+      await saveCustomerBillPreference(customer.id, named.paper_size)
       setPreferenceStatus('Đã nhớ mẫu cho khách')
     } catch {
       setPreferenceStatus('Không lưu được mẫu cho khách')
@@ -127,15 +129,18 @@ export function InvoicePrintPage({
     )
   }
 
-  const surplus = document.change_returned_amount > 0 ? document.change_returned_amount : 0
-  const remainingDebt = document.debt_amount > 0 ? document.debt_amount : 0
-  const printContent = resolvePrintTemplateContent(settings, 'invoice', template)
+  const invoiceTemplates = listBillTemplatesForDocument(settings, 'invoice')
+  const printContent = resolveNamedPrintTemplate(settings, 'invoice', { templateId })
+  const template = printContent.paper_size
+  const remainingDebt = Math.max(0, document.total_amount - document.paid_amount)
+  const surplus = Math.max(0, document.paid_amount - document.total_amount)
 
   return (
     <main className={`quote-print-shell bill-template-${template}`}>
       <BillPrintToolbar
-        template={template}
-        onTemplateChange={handleTemplateChange}
+        templates={invoiceTemplates}
+        selectedTemplateId={printContent.id}
+        onTemplateSelect={handleTemplateSelect}
         onPrint={() => window.print()}
         onClose={onClose}
         preferenceStatus={preferenceStatus}
