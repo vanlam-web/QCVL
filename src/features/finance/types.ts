@@ -215,6 +215,7 @@ export interface PaymentReceiptAllocation {
   collected_before: number
   allocated_amount: number
   remaining_after: number
+  order_created_at?: string
 }
 
 export interface FinanceSalesDocumentSummary {

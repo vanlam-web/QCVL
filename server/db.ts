@@ -4995,6 +4995,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 cde.remaining_debt,
                 o.id as order_id,
                 o.code as order_code,
+                o.created_at as order_created_at,
                 o.total_amount,
                 o.paid_amount,
                 o.debt_amount,
@@ -5017,6 +5018,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
                 o.debt_amount as remaining_debt,
                 o.id as order_id,
                 o.code as order_code,
+                o.created_at as order_created_at,
                 o.total_amount,
                 o.paid_amount,
                 o.debt_amount,
@@ -5087,6 +5089,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           collected_before: number
           allocated_amount: number
           remaining_after: number
+          order_created_at?: string
         }> = []
         const debtRowsByOrderId = new Set(debtRows.rows.map((row) => row.order_id))
         const openDebtRows = [
@@ -5139,6 +5142,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             collected_before: Number(row.paid_amount),
             allocated_amount: allocated,
             remaining_after: nextDebt,
+            order_created_at: row.order_created_at?.toISOString(),
           })
           remainingPayment -= allocated
         }
@@ -8493,13 +8497,14 @@ function cashbookEntrySalesDocumentPaymentReceipt(
 }
 
 async function hydrateCashbookEntryLink(pool: pg.Pool, organizationId: string, entry: CashbookEntryData) {
-  if (entry.direction !== 'in' || cashbookEntryHasLinkedOrder(entry)) return entry
+  if (entry.direction !== 'in') return entry
+  if (cashbookEntryHasLinkedOrder(entry)) return hydrateCashbookEntryAllocationTimes(pool, organizationId, entry)
   const orderCode = cashbookNoteOrderCode(entry.note)
   if (orderCode === null) return entry
 
   const order = await pool.query(
     `
-      select id, code, total_amount, paid_amount, debt_amount
+      select id, code, created_at, total_amount, paid_amount, debt_amount
       from orders
       where organization_id = $1
         and code = $2
@@ -8522,7 +8527,35 @@ async function hydrateCashbookEntryLink(pool: pg.Pool, organizationId: string, e
       collected_before: Math.max(paidAmount - allocatedAmount, 0),
       allocated_amount: allocatedAmount,
       remaining_after: Number(row.debt_amount),
+      order_created_at: row.created_at.toISOString(),
     }],
+  }
+}
+
+async function hydrateCashbookEntryAllocationTimes(pool: pg.Pool, organizationId: string, entry: CashbookEntryData) {
+  const allocations = entry.allocations ?? []
+  if (allocations.length === 0 || allocations.every((allocation) => allocation.order_created_at)) return entry
+
+  const orderIds = allocations.map((allocation) => allocation.order_id).filter(Boolean)
+  const orderCodes = allocations.map((allocation) => allocation.order_code).filter(Boolean)
+  const result = await pool.query(
+    `
+      select id::text, code, created_at
+      from orders
+      where organization_id = $1
+        and (id::text = any($2::text[]) or code = any($3::text[]))
+    `,
+    [organizationId, orderIds, orderCodes],
+  )
+  const createdAtById = new Map(result.rows.map((row) => [String(row.id), row.created_at.toISOString()]))
+  const createdAtByCode = new Map(result.rows.map((row) => [String(row.code), row.created_at.toISOString()]))
+
+  return {
+    ...entry,
+    allocations: allocations.map((allocation) => ({
+      ...allocation,
+      order_created_at: allocation.order_created_at ?? createdAtById.get(allocation.order_id) ?? createdAtByCode.get(allocation.order_code),
+    })),
   }
 }
 

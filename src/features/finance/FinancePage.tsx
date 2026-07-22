@@ -454,7 +454,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       ? voucherDetail.source.category_name
       : direction === 'in' ? 'other_income' : 'operating_expense') as CashbookVoucherType)
     setVoucherAmount(formatVoucherAmountInput(String(voucher.amount)))
-    setVoucherIssuedAt(dateTimeInputText(voucherDetail ? new Date(voucherDetail.created_at) : currentSystemDate()))
+    setVoucherIssuedAt(voucherDetail ? dateTimeInputText(voucherDetail.created_at) : dateTimeInputText(currentSystemDate()))
     setVoucherPaymentMethod(revisionPaymentMethod)
     setVoucherPartnerDebtMode(voucherDetail?.source?.transfer_content === 'affects_partner_debt'
       || voucherDetail?.source?.transfer_content === 'not_affect_partner_debt'

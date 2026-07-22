@@ -128,6 +128,7 @@ describe('finance presenter', () => {
       {
         id: 'order-1',
         code: 'HD0001',
+        createdAt: undefined,
         totalAmount: 600000,
         settledBefore: 0,
         allocatedAmount: 300000,
@@ -135,6 +136,21 @@ describe('finance presenter', () => {
         status: 'Thanh toán 1 phần',
       },
     ])
+  })
+
+  it('keeps linked invoice time separate from cashbook collection time', () => {
+    expect(cashbookLinkedDocumentRows({
+      ...receiptEntry,
+      created_at: '2026-07-21T00:42:00.000Z',
+      allocations: [{
+        ...receiptEntry.allocations[0],
+        order_created_at: '2026-07-20T17:42:00.000Z',
+      }],
+    })[0]).toMatchObject({
+      code: 'HD0001',
+      createdAt: '2026-07-20T17:42:00.000Z',
+      allocatedAmount: 300000,
+    })
   })
 
   it('infers linked KiotViet invoice and purchase receipt codes from cashbook voucher codes', () => {

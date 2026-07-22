@@ -1,5 +1,5 @@
 import { quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
-import { formatKvDateTime } from '../../lib/date-format'
+import { formatKvDateTime, type DateInput } from '../../lib/date-format'
 import { formatMoney } from '../../lib/number-format'
 import { normalizeManagementSearchText } from '../../components/ui-shell/management-search'
 import type { CashbookDirection, CashbookEntry, CashbookStatus } from './types'
@@ -72,8 +72,8 @@ export function statusFilterFromSelection(selection: CashbookStatus[]): Cashbook
   return selection.length === 1 ? selection[0] : 'all'
 }
 
-export function dateTimeInputText(date: Date) {
-  return formatKvDateTime(date)
+export function dateTimeInputText(value: DateInput) {
+  return formatKvDateTime(value)
 }
 
 export function formatVoucherAmountInput(value: string) {

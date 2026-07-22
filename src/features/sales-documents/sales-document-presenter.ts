@@ -1,5 +1,5 @@
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
-import { formatKvDate, formatKvDateTime } from '../../lib/date-format'
+import { formatKvDate, formatKvDateTime, parseKvDateTimeInputToIso } from '../../lib/date-format'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
 import type { SalesDocumentDetail } from './types'
 import type { PaymentMethodFilter, PaymentStatusValue, SalesDocumentStatusFilter, SalesDocumentTypeFilter } from './sales-document-filters'
@@ -90,20 +90,7 @@ export function salesDocumentDateTimeInputText(value: string | null | undefined)
 }
 
 export function parseSalesDocumentDateTimeInputText(value: string | null | undefined) {
-  const normalized = value?.trim()
-  if (!normalized) return null
-  const match = normalized.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
-  if (!match) return null
-  const [, day, month, year, hour, minute] = match
-  const dayNumber = Number(day)
-  const monthNumber = Number(month)
-  const hourNumber = Number(hour)
-  const minuteNumber = Number(minute)
-  if (monthNumber < 1 || monthNumber > 12) return null
-  if (dayNumber < 1 || dayNumber > 31) return null
-  if (hourNumber < 0 || hourNumber > 23) return null
-  if (minuteNumber < 0 || minuteNumber > 59) return null
-  return `${year}-${month}-${day}T${String(hourNumber).padStart(2, '0')}:${minute}:00.000Z`
+  return parseKvDateTimeInputToIso(value)
 }
 
 export function salesDocumentCreatedDateTimeText(document: Pick<SalesDocumentDetail, 'created_at'>): string {

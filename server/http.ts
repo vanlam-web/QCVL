@@ -218,6 +218,7 @@ export interface SalesDocumentPaymentReceiptData {
     order_code: string
     allocated_amount: number
     remaining_after: number
+    order_created_at?: string
   }>
 }
 export type PurchaseReceiptData = ReturnType<typeof makePurchaseReceipt>
@@ -433,6 +434,7 @@ export interface CashbookEntryData {
     collected_before: number
     allocated_amount: number
     remaining_after: number
+    order_created_at?: string
   }>
   payment_method?: string
 }
@@ -2614,6 +2616,7 @@ async function collectCustomerDebt(request: Request) {
     collected_before: number
     allocated_amount: number
     remaining_after: number
+    order_created_at?: string
   }> = []
   let remainingPayment = Math.min(requestedAmount, debt.total_debt)
   const invoices = requestedAllocations.length > 0
@@ -2648,6 +2651,7 @@ async function collectCustomerDebt(request: Request) {
       collected_before: collectedBefore,
       allocated_amount: allocated,
       remaining_after: invoice.remaining_debt,
+      order_created_at: document?.created_at ?? invoice.created_at,
     })
     remainingPayment -= allocated
   }

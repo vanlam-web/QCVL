@@ -79,6 +79,7 @@ const cashbookDetail: CashbookEntryDetail = {
       collected_before: 200000,
       allocated_amount: 500000,
       remaining_after: 0,
+      order_created_at: '2026-07-05T02:00:00Z',
     },
   ],
 }
@@ -1320,6 +1321,7 @@ describe('FinancePage', () => {
       'href',
       '/sales-documents?open=HD0001&type=invoice',
     )
+    expect(within(linkedDocumentsTable).getByText('05/07/2026 02:00')).toBeInTheDocument()
     expect(within(detail).getByText('Thu nợ')).toBeInTheDocument()
     expect(within(detail).getByText('Hoàn tất')).toHaveClass('status-chip', 'status-chip-success')
     expect(within(detail).getByRole('button', { name: 'Xóa phiếu PT0001' })).toBeEnabled()
@@ -1511,7 +1513,7 @@ describe('FinancePage', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PCTM000004' }))
 
     const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PCTM000004' })
-    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(new Date(manualVoucherDetail.created_at)))
+    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(manualVoucherDetail.created_at))
     expect(within(editDialog).getByRole('combobox', { name: 'Phương thức TT' })).toHaveValue('cash')
     expect(within(editDialog).getByLabelText('Ghi chú')).toHaveValue('Hoa, trái cây ông địa')
     expect(within(editDialog).queryByRole('button', { name: 'Số tài khoản' })).not.toBeInTheDocument()

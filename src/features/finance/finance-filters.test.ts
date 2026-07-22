@@ -54,6 +54,7 @@ describe('finance filters', () => {
     expect(parseVoucherAmountInput('1.200.000')).toBe(1200000)
     expect(cashbookQuickTimeRange('today')).toEqual({ from: '2026-07-09', to: '2026-07-09' })
     expect(dateTimeInputText(new Date('2026-07-09T10:30:00+07:00'))).toMatch(/09\/07\/2026/)
+    expect(dateTimeInputText('2026-07-12T04:20:00Z')).toBe('12/07/2026 04:20')
 
     vi.useRealTimers()
   })

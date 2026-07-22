@@ -228,6 +228,7 @@ export function cashbookLinkedDocumentRows(entry: CashbookEntryDetail) {
     return entry.allocations.map((allocation) => ({
       id: allocation.order_id,
       code: allocation.order_code,
+      createdAt: allocation.order_created_at,
       totalAmount: allocation.order_total_amount,
       settledBefore: allocation.collected_before,
       allocatedAmount: allocation.allocated_amount,
