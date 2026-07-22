@@ -121,7 +121,6 @@ type CustomerSortKey = 'code' | 'created_at' | 'name' | 'phone' | 'group' | 'tot
 const defaultCustomerSortState: NonNullable<ManagementSortState<CustomerSortKey>> = { key: 'created_at', direction: 'desc' }
 const customerHistoryPageSize = 10
 const customerDebtLedgerPageSize = 10
-const customerDebtLedgerFetchPageSize = 1000
 type CustomerCreatedDateFilter = QuickDateRangePreset | 'custom'
 type CustomerStatusFilter = 'active' | 'inactive' | 'all'
 const customerCreatedDateGroups: Array<{ title: string; presets: Array<Exclude<CustomerCreatedDateFilter, 'custom'>> }> = [
@@ -567,22 +566,14 @@ export function CustomersPage({
     customerDebtLedgerRequestsRef.current.add(customer.id)
     setCustomerDebts((debts) => ({ ...debts, [customer.id]: 'loading' }))
     setCustomerDebtLedgers((ledgers) => ({ ...ledgers, [customer.id]: 'loading' }))
-    Promise.all([
-      orderService.getCustomerDebt(customer.id),
-      salesDocumentService?.listSalesDocuments({
-        customer_id: customer.id,
-        type: 'invoice',
-        page: 1,
-        page_size: customerDebtLedgerFetchPageSize,
-      }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
-    ])
-      .then(([debt, invoiceHistory]) => {
+    orderService.getCustomerDebt(customer.id)
+      .then((debt) => {
         setCustomerDebts((debts) => ({ ...debts, [customer.id]: debt }))
         setCustomerDebtLedgers((ledgers) => ({
           ...ledgers,
           [customer.id]: {
             debt,
-            invoiceHistory: invoiceHistory.items,
+            invoiceHistory: [],
             cashbookHistory: debt.cashbook_entries ?? [],
           },
         }))

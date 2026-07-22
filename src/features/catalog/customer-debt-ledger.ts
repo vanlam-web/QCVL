@@ -19,7 +19,8 @@ export interface CustomerDebtLedgerRow {
   related_code?: string
 }
 
-export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail, 'ledger_rows'>): CustomerDebtLedgerRow[] {
+export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail, 'ledger_rows' | 'adjustments'>): CustomerDebtLedgerRow[] {
+  const adjustmentsByCode = new Map((debt.adjustments ?? []).map((adjustment) => [adjustment.source_code, adjustment]))
   return [...(debt.ledger_rows ?? [])]
     .reverse()
     .map((row) => ({
@@ -30,6 +31,7 @@ export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail,
       value_delta: row.amount_delta,
       running_debt: row.balance_after,
       href: backendCustomerDebtLedgerRowHref(row),
+      adjustment: adjustmentsByCode.get(row.code),
       related_code: row.code,
     }))
 }

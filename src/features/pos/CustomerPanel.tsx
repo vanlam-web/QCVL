@@ -38,7 +38,6 @@ type CustomerDetailForm = {
   note: string
 }
 type CustomerDetailDropdownKey = 'group' | 'type' | null
-const customerDebtLedgerFetchPageSize = 1000
 const hiddenPosCustomerGroupNames = new Set(['khach le', 'khach si'])
 export function CustomerPanel({
   service,
@@ -120,21 +119,13 @@ export function CustomerPanel({
     })
 
     if (orderService) {
-      Promise.all([
-        orderService.getCustomerDebt(selectedCustomer.id),
-        salesDocumentService?.listSalesDocuments({
-          customer_id: selectedCustomer.id,
-          type: 'invoice',
-          page: 1,
-          page_size: customerDebtLedgerFetchPageSize,
-        }) ?? Promise.resolve({ items: [], page: 1, page_size: customerDebtLedgerFetchPageSize, total: 0 }),
-      ])
-        .then(([debt, invoiceHistory]) => {
+      orderService.getCustomerDebt(selectedCustomer.id)
+        .then((debt) => {
           if (detailRequestId.current !== requestId) return
           setDetailDebt(debt)
           setDetailDebtLedger({
             debt,
-            invoiceHistory: invoiceHistory.items,
+            invoiceHistory: [],
             cashbookHistory: debt.cashbook_entries ?? [],
           })
         })
