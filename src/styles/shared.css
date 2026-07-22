@@ -3908,6 +3908,163 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
 }
 
+.bill-template-a4 .bill-print-sheet {
+  font-family: "Times New Roman", "Noto Serif", Georgia, serif;
+}
+
+.bill-print-header {
+  display: grid;
+  gap: 0.75rem;
+  border-bottom: 2px solid #111827;
+  padding-bottom: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.bill-print-shop {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.bill-print-shop-text strong {
+  display: block;
+  font-size: 1.05rem;
+}
+
+.bill-print-shop-text p {
+  margin: 0.15rem 0 0;
+  font-size: 0.92rem;
+}
+
+.bill-print-title-block {
+  text-align: center;
+}
+
+.bill-print-title-block h1 {
+  margin: 0;
+  font-size: 1.85rem;
+  letter-spacing: 0.02em;
+}
+
+.bill-print-doc-code {
+  margin: 0.35rem 0 0;
+  font-weight: 700;
+}
+
+.bill-print-customer {
+  margin: 0 0 0.85rem;
+}
+
+.bill-print-customer p {
+  margin: 0.2rem 0;
+}
+
+.bill-print-customer span {
+  font-weight: 700;
+  margin-right: 0.35rem;
+}
+
+.bill-print-customer-meta {
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.bill-print-lines th,
+.bill-print-lines td {
+  border: 1px solid #111827;
+  padding: 0.35rem 0.4rem;
+}
+
+.bill-print-lines th {
+  background: #f3f4f6;
+  text-align: center;
+}
+
+.bill-print-lines td:nth-last-child(-n + 3) {
+  text-align: right;
+}
+
+.bill-print-summary {
+  display: grid;
+  grid-template-columns: minmax(10rem, 1fr) minmax(14rem, 16rem);
+  gap: 1rem;
+  align-items: start;
+  margin-top: 0.85rem;
+}
+
+.bill-print-payment {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}
+
+.bill-print-payment p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.bill-print-qr {
+  width: 7.5rem;
+  height: 7.5rem;
+  object-fit: contain;
+  border: 1px solid #d1d5db;
+  background: white;
+}
+
+.bill-print-totals {
+  margin: 0;
+}
+
+.bill-print-totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.15rem 0;
+}
+
+.bill-print-totals dt {
+  font-weight: 600;
+}
+
+.bill-print-totals dd {
+  margin: 0;
+  font-weight: 700;
+  text-align: right;
+}
+
+.bill-print-words,
+.bill-print-note {
+  margin: 0.75rem 0 0;
+  font-style: italic;
+}
+
+.bill-print-footer {
+  margin-top: 1.25rem;
+}
+
+.bill-print-place-date {
+  margin: 0;
+  text-align: right;
+  font-style: italic;
+}
+
+.bill-print-seller-name {
+  margin: 1.5rem 0 0;
+  text-align: right;
+  font-style: italic;
+}
+
+.bill-print-signatures {
+  margin-top: 1rem;
+}
+
+.bill-print-signatures strong {
+  display: block;
+  margin-top: 2.25rem;
+  font-style: italic;
+  font-weight: 600;
+}
+
 .bill-template-k80 .quote-print-toolbar {
   max-width: 20rem;
 }
@@ -3917,6 +4074,26 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   min-height: auto;
   padding: 0.75rem;
   font-size: 0.8125rem;
+  font-family: inherit;
+}
+
+.bill-template-k80 .bill-print-summary {
+  grid-template-columns: 1fr;
+}
+
+.bill-template-k80 .bill-print-qr {
+  width: 5.5rem;
+  height: 5.5rem;
+}
+
+.bill-template-k80 .bill-print-title-block h1 {
+  font-size: 1.15rem;
+}
+
+.bill-template-k80 .bill-print-shop {
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
 }
 
 .bill-template-k80 .quote-print-heading {

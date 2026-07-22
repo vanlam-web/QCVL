@@ -91,21 +91,23 @@ it('renders invoice bill preview from saved snapshot data', async () => {
 
   expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
   expect(screen.getByText('QCVL')).toBeInTheDocument()
-  expect(screen.getByText('HD010991')).toBeInTheDocument()
+  expect(screen.getByText(/Số hóa đơn:\s*HD010991/)).toBeInTheDocument()
   expect(screen.getByText('Công ty Phong Cảnh')).toBeInTheDocument()
-  expect(screen.getByText('Admin')).toBeInTheDocument()
-  expect(screen.getByText('Giao trong ngày')).toBeInTheDocument()
+  expect(screen.getByText(/NV:\s*Admin/)).toBeInTheDocument()
+  expect(screen.getByText(/Ghi chú:\s*Giao trong ngày/)).toBeInTheDocument()
 
   const lines = screen.getByRole('table', { name: 'Dòng hàng hóa đơn' })
   expect(within(lines).getByText('DECAL-PP')).toBeInTheDocument()
+  expect(within(lines).getByText('Decal PP')).toBeInTheDocument()
   expect(within(lines).getByText('1.2m x 0.5m x 1')).toBeInTheDocument()
   expect(within(lines).getByText('FORMEX-5')).toBeInTheDocument()
-  expect(within(lines).getByText('Cắt theo mẫu')).toBeInTheDocument()
+  expect(within(lines).getByText(/Cắt theo mẫu/)).toBeInTheDocument()
 
-  expect(screen.getByText('Khách cần trả')).toBeInTheDocument()
-  expect(screen.getByText('Khách đã trả')).toBeInTheDocument()
-  expect(screen.getByText('Còn nợ')).toBeInTheDocument()
-  expect(screen.getByText('100 000')).toBeInTheDocument()
+  expect(screen.getByText('Tổng toa')).toBeInTheDocument()
+  expect(screen.getByText('Khách hàng thanh toán')).toBeInTheDocument()
+  expect(screen.getByText('Còn lại')).toBeInTheDocument()
+  expect(screen.getByText(/Một trăm nghìn đồng chẵn/)).toBeInTheDocument()
+  expect(screen.getByText(/Tổng thanh toán bằng chữ:/)).toBeInTheDocument()
 })
 
 it('calls browser print from the invoice print action', async () => {
@@ -136,7 +138,7 @@ it('shows change returned when the invoice has surplus', async () => {
 
   expect(await screen.findByText('Tiền thừa')).toBeInTheDocument()
   expect(screen.getByText('50 000')).toBeInTheDocument()
-  expect(screen.queryByText('Còn nợ')).not.toBeInTheDocument()
+  expect(screen.getByText('Còn lại')).toBeInTheDocument()
 })
 
 it('uses saved shop header and switches between A4 and K80 templates', async () => {
@@ -155,8 +157,8 @@ it('uses saved shop header and switches between A4 and K80 templates', async () 
   )
 
   expect(await screen.findByText('In ảnh Văn Lâm')).toBeInTheDocument()
-  expect(screen.getByText('12 Nguyễn Trãi')).toBeInTheDocument()
-  expect(screen.getByText('ĐT: 0909111222')).toBeInTheDocument()
+  expect(screen.getByText(/Địa chỉ:\s*12 Nguyễn Trãi/)).toBeInTheDocument()
+  expect(screen.getByText(/Điện thoại:\s*0909111222/)).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-a4')
 
   await userEvent.click(screen.getByRole('radio', { name: /Hóa đơn K80/ }))

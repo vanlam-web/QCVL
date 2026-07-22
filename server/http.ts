@@ -163,7 +163,15 @@ export interface SalesDocumentData {
   order_type: 'invoice' | 'quote'
   status: string
   created_at: string
-  customer: { id: string; code: string; name: string; phone: string | null; preferred_bill_template?: string | null }
+  customer: {
+    id: string
+    code: string
+    name: string
+    phone: string | null
+    preferred_bill_template?: string | null
+    address?: string | null
+    total_debt_amount?: number | null
+  }
   seller: { id: string; name: string }
   subtotal_amount: number
   discount_amount: number
