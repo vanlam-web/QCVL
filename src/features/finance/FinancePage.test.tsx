@@ -1101,6 +1101,8 @@ describe('FinancePage', () => {
     await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nhận'), 'employee')
     await userEvent.type(within(form).getByLabelText('Tên người nhận'), 'Nguyen Van A')
     await waitFor(() => expect(service.listVoucherCounterparties).toHaveBeenLastCalledWith({ type: 'employee', search: 'Nguyen Van A' }))
+    await userEvent.clear(within(form).getByLabelText('Thời gian'))
+    await userEvent.type(within(form).getByLabelText('Thời gian'), '15/07/2026 09:25')
     await userEvent.click(within(form).getByLabelText('Hạch toán kết quả kinh doanh'))
     await userEvent.type(within(form).getByLabelText('Ghi chú'), 'Mua văn phòng phẩm')
     expect(within(form).getByRole('button', { name: 'Bỏ qua' })).toBeInTheDocument()
@@ -1111,7 +1113,7 @@ describe('FinancePage', () => {
       voucher_direction: 'out',
       voucher_type: 'staff_salary',
       finance_account_id: 'cash-1',
-      created_at: expect.any(String),
+      created_at: '2026-07-15T09:25:00.000Z',
       amount: 45000,
       partner_debt_mode: 'no_partner_debt',
       is_business_accounted: false,

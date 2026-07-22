@@ -1521,7 +1521,7 @@ it('submits edited customer debt payment time to the finance service', async () 
   await waitFor(() => expect(collectCustomerDebt).toHaveBeenCalled())
   expect(collectCustomerDebt).toHaveBeenCalledWith(expect.objectContaining({
     amount: 100000,
-    created_at: '2026-07-18T01:20:00.000Z',
+    created_at: '2026-07-18T08:20:00.000Z',
   }))
 })
 
