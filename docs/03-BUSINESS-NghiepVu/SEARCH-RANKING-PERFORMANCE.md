@@ -158,6 +158,41 @@ Index tối thiểu:
 5. Thêm index/normalized search nếu đo thấy chậm.
 6. Đo lại bằng browser và API timing trên dữ liệu NAS.
 
+### 6.5. Hướng fix tiếp cho POS chọn khách
+
+Hiện tượng đã đo ngày `2026-07-22`:
+
+- POS tìm hàng cảm giác nhanh hơn POS chọn khách dù dữ liệu hàng hóa nhiều hơn.
+- Lý do chính: POS đã preload danh sách hàng nhanh vào RAM, nên khi gõ có thể lọc ngay trên dữ liệu sẵn có; API hàng chỉ bổ sung kết quả.
+- POS chọn khách không preload danh sách khách; mỗi lần gõ phải gọi API.
+- API chọn khách đang đọc `customer_snapshots.data` dạng JSON, normalize tiếng Việt, lọc mã/tên/phone/MST/địa chỉ/ghi chú và rank theo lịch sử chọn.
+- Máy ngoài LAN gọi API local nhưng DB ở NAS qua mạng, nên quick-pick khách sau warm-up vẫn khoảng `0.8s`; có thể spike cao hơn nếu request cũ còn pending hoặc DB/mạng chậm.
+
+Hướng fix tạm thời đã chốt:
+
+1. Giữ UI loading rõ ràng: khi request khách đang chờ, dropdown hiển thị `Đang tìm...`, không hiển thị `Không có kết quả phù hợp` giả.
+2. Bỏ các tải nặng khỏi quick-pick khách: không load tổng công nợ, user list, NCC liên kết, supplier snapshots trong request chọn khách.
+3. Quick-pick khách chỉ trả `page_size` nhỏ, thường `8`, và lọc active-only.
+
+Hướng fix tiếp theo khi cần nhanh như hàng hóa:
+
+1. Tạo dữ liệu tìm kiếm khách đã chuẩn hóa ở DB, không tìm trực tiếp trên JSON snapshot mỗi request.
+   - Có thể dùng bảng/column search cache như `customer_search_index`.
+   - Cột tối thiểu: `organization_id`, `customer_id`, `code`, `name`, `phone`, `status`, `normalized_code`, `normalized_name`, `normalized_haystack`, `updated_at`.
+   - Index tối thiểu: `(organization_id, status, normalized_code)`, `(organization_id, status, normalized_name)`, và nếu cần tìm chứa giữa chuỗi thì thêm trigram cho `normalized_haystack`.
+2. POS preload/cache nhóm khách hay dùng:
+   - Lấy `8-20` khách hay chọn gần đây của user khi mở POS.
+   - Khi gõ, lọc ngay trên cache trước để có phản hồi tức thì.
+   - Vẫn gọi API nền để bổ sung kết quả chính xác.
+3. Frontend hủy hoặc bỏ qua request cũ mạnh hơn:
+   - Mỗi từ khóa chỉ nhận kết quả request mới nhất.
+   - Nếu request cũ trả chậm, không làm dropdown quay lại trạng thái cũ.
+4. Đo bằng cùng một checklist:
+   - API direct qua `3100`.
+   - Browser `3202` đang mở.
+   - Từ khóa chuẩn: `hlo`, `kl2`, `KH000384`.
+   - Mục tiêu quick-pick khách sau cache/index: dưới `200ms` cảm nhận UI, API dưới `300ms` trong LAN.
+
 ## 7. Acceptance
 
 Một search đạt chuẩn khi:
