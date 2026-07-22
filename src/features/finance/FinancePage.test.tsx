@@ -1333,6 +1333,10 @@ describe('FinancePage', () => {
     expect(within(editDialog).queryByLabelText('Mã phiếu')).not.toBeInTheDocument()
     expect(within(editDialog).getByText((_, node) => node?.textContent === 'Người tạo Văn Viết Phương Lâm')).toBeInTheDocument()
     expect(within(editDialog).getByText((_, node) => node?.textContent === 'Khách hàng Anh Nam, 0900000000')).toBeInTheDocument()
+    expect(within(editDialog).getByRole('link', { name: 'HD0001' })).toHaveAttribute(
+      'href',
+      '/sales-documents?open=HD0001&type=invoice',
+    )
     const createdAtInput = within(editDialog).getByLabelText('Sửa thời gian phiếu')
     await userEvent.click(within(editDialog).getByRole('button', { name: 'Chọn ngày phiếu' }))
     expect(within(editDialog).getByRole('region', { name: 'Lịch chọn ngày phiếu' })).toBeInTheDocument()

@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useRef, useState, type FormEvent, typ
 import { CalendarDays, ChevronDown, ChevronRight, Edit3, Info, Pin, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
-import { EmptyState, MetricCard, MetricGrid, MoneyText, StatusChip } from '../../components/ui-shell/primitives'
+import { EmptyState, ManagementRecordLink, MetricCard, MetricGrid, MoneyText, StatusChip, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import {
   ManagementDateRangeInputs,
   ManagementConfirmDialog,
@@ -94,6 +94,7 @@ import {
 import { FinanceFiltersPanel } from './FinanceFiltersPanel'
 import { FinanceDetailPanel } from './FinanceDetailPanel'
 import { CashbookImportDialog } from './CashbookImportDialog'
+import { appRoutes } from '../../app/routes'
 
 const showAuxiliaryFinanceSections = false
 const defaultCashbookColumns: CashbookColumnKey[] = [
@@ -119,6 +120,12 @@ const cashbookColumnDefinitions: Array<{ key: CashbookColumnKey; label: string }
   { key: 'is_business_accounted', label: 'Hạch toán KQKD' },
 ]
 type VoucherCounterpartyType = NonNullable<CreateCashbookVoucherInput['counterparty_type']>
+
+function cashbookEditAllocationHref(code: string) {
+  if (code.startsWith('HD')) return managementRecordOpenHref('/sales-documents', code, { type: 'invoice' })
+  if (code.startsWith('PN')) return managementRecordOpenHref(appRoutes.purchaseReceipts, code)
+  return null
+}
 
 const voucherCounterpartyLabels: Record<Exclude<VoucherCounterpartyType, 'none'>, string> = {
   customer: 'Khách hàng',
@@ -2386,16 +2393,23 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                         </tr>
                       </thead>
                       <tbody>
-                        {cashbookEditPreview.allocations.map((allocation) => (
-                          <tr key={allocation.order_id || allocation.order_code}>
-                            <td>{allocation.order_code}</td>
-                            <td>{dateText(cashbookEditPreview.created_at)}</td>
-                            <td><MoneyText value={allocation.order_total_amount} /></td>
-                            <td><MoneyText value={allocation.collected_before} /></td>
-                            <td><MoneyText value={allocation.allocated_amount} /></td>
-                            <td><StatusChip tone={allocation.remaining_after <= 0 ? 'success' : 'warning'}>{allocation.remaining_after <= 0 ? 'Đã thanh toán' : 'Thanh toán 1 phần'}</StatusChip></td>
-                          </tr>
-                        ))}
+                        {cashbookEditPreview.allocations.map((allocation) => {
+                          const allocationHref = cashbookEditAllocationHref(allocation.order_code)
+                          return (
+                            <tr key={allocation.order_id || allocation.order_code}>
+                              <td>
+                                {allocationHref
+                                  ? <ManagementRecordLink href={allocationHref}>{allocation.order_code}</ManagementRecordLink>
+                                  : allocation.order_code}
+                              </td>
+                              <td>{dateText(cashbookEditPreview.created_at)}</td>
+                              <td><MoneyText value={allocation.order_total_amount} /></td>
+                              <td><MoneyText value={allocation.collected_before} /></td>
+                              <td><MoneyText value={allocation.allocated_amount} /></td>
+                              <td><StatusChip tone={allocation.remaining_after <= 0 ? 'success' : 'warning'}>{allocation.remaining_after <= 0 ? 'Đã thanh toán' : 'Thanh toán 1 phần'}</StatusChip></td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </ManagementTableViewport>
