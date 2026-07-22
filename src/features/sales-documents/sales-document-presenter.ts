@@ -1,5 +1,5 @@
 import { paymentSettlementStatusLabel, paymentSettlementStatusTone, type PaymentSettlementStatus } from '../../components/ui-shell/payment-status'
-import { formatKvDate, formatKvDateTime, parseKvDateTimeInputToIso } from '../../lib/date-format'
+import { formatQcvDate, formatQcvDateTime, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
 import type { SalesDocumentDetail } from './types'
 import type { PaymentMethodFilter, PaymentStatusValue, SalesDocumentStatusFilter, SalesDocumentTypeFilter } from './sales-document-filters'
@@ -82,15 +82,15 @@ export function salesDocumentLineSellPrice(item: Pick<SalesDocumentDetail['items
 }
 
 export function salesDocumentDateTimeText(value: string | null | undefined, fallback?: string | null): string {
-  return formatKvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '')
+  return formatQcvDateTime(value, fallback ? salesDocumentDateTimeText(fallback) : '')
 }
 
 export function salesDocumentDateTimeInputText(value: string | null | undefined): string {
-  return formatKvDateTime(value)
+  return formatQcvDateTime(value)
 }
 
 export function parseSalesDocumentDateTimeInputText(value: string | null | undefined) {
-  return parseKvDateTimeInputToIso(value)
+  return parseQcvDateTimeInputToStoredIso(value)
 }
 
 export function salesDocumentCreatedDateTimeText(document: Pick<SalesDocumentDetail, 'created_at'>): string {
@@ -137,7 +137,7 @@ export function salesDocumentUnitNameText(value: string | null | undefined) {
 }
 
 export function salesDocumentQuoteDateText(value: string) {
-  return formatKvDate(value)
+  return formatQcvDate(value)
 }
 
 export function salesDocumentQuoteLineDimensionText(item: Pick<SalesDocumentDetail['items'][number], 'width_m' | 'height_m' | 'linear_m' | 'product'>) {

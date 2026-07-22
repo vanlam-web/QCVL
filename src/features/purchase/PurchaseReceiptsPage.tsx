@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, Copy, ExternalLink, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { dateTimeLocalInputValue, formatKvDateTime, parseKvDateTimeInputToIso } from '../../lib/date-format'
+import { dateTimeLocalInputValue, formatQcvDateTime, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { parseMoneyInput } from '../../lib/number-format'
 import { currentSystemDate } from '../../lib/system-clock'
 import type {
@@ -94,33 +94,13 @@ function blankForm(): PurchaseReceiptInput {
 }
 
 function formatReceiptDateTimeInput(value: string) {
-  return formatKvDateTime(value, '')
+  return formatQcvDateTime(value, '')
 }
 
 function parseReceiptDateTimeInput(value: string) {
   const trimmed = value.trim()
   if (trimmed === '') return ''
-  const kvIso = parseKvDateTimeInputToIso(trimmed)
-  if (kvIso) return kvIso
-  const kvMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/)
-  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
-  const year = kvMatch?.[3] ?? isoMatch?.[1]
-  const month = kvMatch?.[2] ?? isoMatch?.[2]
-  const day = kvMatch?.[1] ?? isoMatch?.[3]
-  const hour = kvMatch?.[4] ?? isoMatch?.[4]
-  const minute = kvMatch?.[5] ?? isoMatch?.[5]
-  if (!year || !month || !day || !hour || !minute) return null
-  const localDate = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
-  if (
-    localDate.getFullYear() !== Number(year)
-    || localDate.getMonth() !== Number(month) - 1
-    || localDate.getDate() !== Number(day)
-    || localDate.getHours() !== Number(hour)
-    || localDate.getMinutes() !== Number(minute)
-  ) {
-    return null
-  }
-  return `${year}-${month}-${day}T${hour}:${minute}:00.000Z`
+  return parseQcvDateTimeInputToStoredIso(trimmed)
 }
 
 function supplierDocumentNoText(value: string | null | undefined) {
@@ -858,7 +838,7 @@ export function PurchaseReceiptsPage({
           ['Mã nhập hàng', 'Thời gian', 'Nhà cung cấp', 'Số lượng', 'Thành tiền', 'Cần trả', 'Đã trả', 'Còn phải trả', 'Người tạo', 'Ghi chú'],
           ...result.items.map((receipt) => [
             receipt.code,
-            formatKvDateTime(receipt.received_at),
+            formatQcvDateTime(receipt.received_at),
             receipt.supplier.name,
             receiptTotalQuantity(receipt),
             receipt.subtotal_amount,
@@ -880,7 +860,7 @@ export function PurchaseReceiptsPage({
       filename: `${receipt.code}.csv`,
       rows: [
         ['Mã phiếu', receipt.code],
-        ['Ngày nhập', formatKvDateTime(receipt.received_at)],
+        ['Ngày nhập', formatQcvDateTime(receipt.received_at)],
         ['Nhà cung cấp', receipt.supplier.name],
         ['Số chứng từ NCC', supplierDocumentNoText(receipt.supplier_document_no)],
         ['Người tạo', receipt.created_by.name],
@@ -1992,7 +1972,7 @@ export function PurchaseReceiptsPage({
                 metaAriaLabel="Thông tin tạo phiếu nhập"
                 metaItems={[
                   { label: 'Người tạo:', value: selectedReceipt.created_by.name },
-                  { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
+                  { label: 'Ngày nhập:', value: formatQcvDateTime(selectedReceipt.received_at) },
                 ]}
                 title={(
                   <>
@@ -2145,7 +2125,7 @@ export function PurchaseReceiptsPage({
                             {payment.code}
                           </ManagementRecordLink>
                         </td>
-                        <td>{formatKvDateTime(payment.paid_at)}</td>
+                        <td>{formatQcvDateTime(payment.paid_at)}</td>
                         <td>{payment.created_by}</td>
                         <td>{supplierPaymentMethodText(payment.payment_method)}</td>
                         <td>
@@ -2265,7 +2245,7 @@ export function PurchaseReceiptsPage({
                 metaAriaLabel="Thông tin tạo phiếu nhập"
                 metaItems={[
                   { label: 'Người tạo:', value: selectedReceipt.created_by.name },
-                  { label: 'Ngày nhập:', value: formatKvDateTime(selectedReceipt.received_at) },
+                  { label: 'Ngày nhập:', value: formatQcvDateTime(selectedReceipt.received_at) },
                   { label: 'Trạng thái:', value: detailStatus },
                 ]}
                 title={(
@@ -2631,7 +2611,7 @@ export function PurchaseReceiptsPage({
                           {payment.code}
                         </ManagementRecordLink>
                       </td>
-                      <td>{formatKvDateTime(payment.paid_at)}</td>
+                      <td>{formatQcvDateTime(payment.paid_at)}</td>
                       <td>{payment.created_by}</td>
                       <td>{supplierPaymentMethodText(payment.payment_method)}</td>
                       <td>

@@ -15,7 +15,7 @@ import type {
 } from '../orders/order-service'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { formatApiError } from '../../lib/api/error-message'
-import { formatKvDateTime } from '../../lib/date-format'
+import { formatQcvDateTime, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { currentSystemDate, currentSystemISOString } from '../../lib/system-clock'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { BillNamedTemplatePicker } from '../sales-documents/BillNamedTemplatePicker'
@@ -878,7 +878,7 @@ function MoneyInput({
 }
 
 function formatCheckoutDateTime(value: string | undefined) {
-  const formatted = formatKvDateTime(value ?? currentSystemDate(), '')
+  const formatted = formatQcvDateTime(value ?? currentSystemDate(), '')
   if (!formatted) {
     return { date: '', time: '' }
   }
@@ -902,10 +902,10 @@ function checkoutCalendarMonth(value: string | undefined) {
 
 function checkoutCreatedAt(orderCreatedAt: string | undefined, invoiceDate: string, invoiceTime: string) {
   const source = orderCreatedAt ?? currentSystemISOString()
-  const date = parseCheckoutDateInput(invoiceDate)
   const time = parseCheckoutTimeInput(invoiceTime)
-  if (!date || !time) return source
-  return `${date}T${time}:00.000Z`
+  const createdAt = parseQcvDateTimeInputToStoredIso(`${invoiceDate} ${invoiceTime}`)
+  if (!time || !createdAt) return source
+  return createdAt
 }
 
 function parseCheckoutDateInput(value: string) {

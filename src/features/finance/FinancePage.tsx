@@ -18,9 +18,9 @@ import {
 import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
-import { ManagementDateTimeInput, parseManagementDateTimeInputText } from '../../components/ui-shell/management-date-time-input'
+import { ManagementDateTimeInput } from '../../components/ui-shell/management-date-time-input'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
-import { dateTimeIsoFromLocalClock } from '../../lib/date-format'
+import { parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { formatMoney } from '../../lib/number-format'
 import type {
   CashbookBusinessAccountedFilter,
@@ -1153,7 +1153,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       setError(`Chọn ${voucherCounterpartyLabels[voucherCounterpartyType].toLowerCase()} từ danh sách đã lưu.`)
       return
     }
-    const issuedAt = parseManagementDateTimeInputText(voucherIssuedAt)
+    const issuedAt = parseQcvDateTimeInputToStoredIso(voucherIssuedAt)
     if (issuedAt === null) {
       setError('Thời gian phiếu không hợp lệ.')
       return
@@ -1166,7 +1166,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         voucher_direction: voucherMode,
         voucher_type: voucherType,
         finance_account_id: voucherAccountId,
-        created_at: dateTimeIsoFromLocalClock(issuedAt),
+        created_at: issuedAt,
         amount,
         partner_debt_mode: voucherPartnerDebtMode,
         is_business_accounted: voucherBusinessAccounted,
@@ -1240,7 +1240,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   async function saveCashbookEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!cashbookEditPreview) return
-    const createdAt = parseManagementDateTimeInputText(cashbookEditForm.createdAt)
+    const createdAt = parseQcvDateTimeInputToStoredIso(cashbookEditForm.createdAt)
     if (!createdAt) {
       setError('Thời gian không đúng định dạng dd/mm/yyyy hh:mm.')
       return
@@ -1253,7 +1253,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         ? undefined
         : cashbookEditForm.financeAccountId
       const saved = await hydrateCashbookDetail(await service.updateCashbookEntry(cashbookEditPreview.id, {
-        created_at: dateTimeIsoFromLocalClock(createdAt),
+        created_at: createdAt,
         ...(financeAccountId !== undefined ? { finance_account_id: financeAccountId } : {}),
         note: cashbookEditForm.note.trim() || null,
       }))

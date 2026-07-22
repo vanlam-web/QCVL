@@ -643,6 +643,7 @@ Import the previewed file.
 Rules:
 
 - Runtime status: code đã chuyển sang canonical partner debt ledger. `balance_after` KV chỉ còn là metadata đối soát, không tham gia công thức tổng.
+- Thời gian nghiệp vụ QCVL/KiotViet là wall-clock đã nhập. Client gửi các field `created_at`/`received_at`/`paid_at`/`adjusted_at` theo shape `YYYY-MM-DDTHH:mm:00.000Z` nhưng backend không được hiểu đây là UTC để cộng/trừ 7 giờ khi hiển thị. UI/API phải dùng helper chung trong `src/lib/date-format.ts`: parse input bằng `parseQcvDateTimeInputToStoredIso`, hiển thị bằng `formatQcvDateTime`. Không tự `Date.toISOString()` cho thời gian chứng từ live.
 - Use `Ma phieu` as source key.
 - Upsert bank accounts by normalized `(Ten tai khoan, So tai khoan)`.
 - Upsert one default cash account for `Loai so quy = Tien mat`.

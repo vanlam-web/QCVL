@@ -27,6 +27,7 @@
 | E | Owner 2026-07-20: **đã import hết** So quỹ KV cần dùng — không mở đợt import mới |
 | F | Owner 2026-07-21: **được hiển thị số âm** trên báo cáo/đối soát/lịch sử (đối chiếu import KV) |
 | G | Owner 2026-07-21: **thu nợ live** không cho trả nhiều hơn nợ còn lại (không tạo trả trước / âm vận hành mới) — [POS-CUSTOMER-DEBT](../Sales/POS-CUSTOMER-DEBT.md) |
+| H | Owner 2026-07-22: thời gian chứng từ live là wall-clock QCVL/KiotViet. Nếu bán hàng thu tiền ngay, hóa đơn, phiếu thu và sổ quỹ phải cùng thời gian. Nếu bán nợ rồi thu tiền sau, phiếu thu/sổ quỹ dùng thời gian thu thật và có thể khác hóa đơn. Code phải dùng helper thời gian chung, không tự `toISOString()` ở page. |
 
 ---
 

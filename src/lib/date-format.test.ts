@@ -1,14 +1,23 @@
 import { describe, expect, it } from 'vitest'
-import { dateTimeIsoFromLocalClock, dateTimeLocalInputValue, displayDateKey, formatKvDate, formatKvDateTime, parseDateTimeValue, parseKvDateTimeInputToIso } from './date-format'
+import {
+  dateTimeStoredIsoFromLocalClock,
+  dateTimeLocalInputValue,
+  displayDateKey,
+  formatQcvDate,
+  formatQcvDateTime,
+  parseDateTimeValue,
+  parseQcvDateTimeInputToLocalDate,
+  parseQcvDateTimeInputToStoredIso,
+} from './date-format'
 
 describe('date format', () => {
   it('formats date time like KiotViet without shifting the source clock', () => {
-    expect(formatKvDateTime('2026-06-05T07:52:12.640Z')).toBe('05/06/2026 07:52')
-    expect(formatKvDateTime('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
+    expect(formatQcvDateTime('2026-06-05T07:52:12.640Z')).toBe('05/06/2026 07:52')
+    expect(formatQcvDateTime('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
   })
 
   it('formats date only like KiotViet without shifting the source day', () => {
-    expect(formatKvDate('2026-06-30T17:08:00Z')).toBe('30/06/2026')
+    expect(formatQcvDate('2026-06-30T17:08:00Z')).toBe('30/06/2026')
   })
 
   it('extracts displayed date keys without applying browser timezone', () => {
@@ -17,13 +26,13 @@ describe('date format', () => {
   })
 
   it('formats Date objects from the local clock for live POS timestamps', () => {
-    expect(formatKvDateTime(new Date('2026-07-09T03:00:00Z'))).toBe('09/07/2026 10:00')
+    expect(formatQcvDateTime(new Date('2026-07-09T03:00:00Z'))).toBe('09/07/2026 10:00')
   })
 
   it('uses fallback for empty or invalid values', () => {
-    expect(formatKvDateTime(null)).toBe('')
-    expect(formatKvDateTime('bad-date', '-')).toBe('-')
-    expect(formatKvDate('bad-date', '-')).toBe('-')
+    expect(formatQcvDateTime(null)).toBe('')
+    expect(formatQcvDateTime('bad-date', '-')).toBe('-')
+    expect(formatQcvDate('bad-date', '-')).toBe('-')
   })
 
   it('formats datetime-local values with the same local clock parts', () => {
@@ -31,7 +40,7 @@ describe('date format', () => {
   })
 
   it('stores local clock datetime text without timezone shifting it', () => {
-    expect(dateTimeIsoFromLocalClock(new Date(2026, 6, 15, 9, 25))).toBe('2026-07-15T09:25:00.000Z')
+    expect(dateTimeStoredIsoFromLocalClock(new Date(2026, 6, 15, 9, 25))).toBe('2026-07-15T09:25:00.000Z')
   })
 
   it('parses ISO and KV datetime strings to the same timestamp basis', () => {
@@ -40,8 +49,19 @@ describe('date format', () => {
   })
 
   it('parses KV datetime input to the stored timestamp shape without timezone math', () => {
-    expect(parseKvDateTimeInputToIso('18/07/2026 4:15')).toBe('2026-07-18T04:15:00.000Z')
-    expect(parseKvDateTimeInputToIso('18/07/2026 04:15')).toBe('2026-07-18T04:15:00.000Z')
-    expect(parseKvDateTimeInputToIso('bad-date')).toBeNull()
+    expect(parseQcvDateTimeInputToStoredIso('18/07/2026 4:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseQcvDateTimeInputToStoredIso('18/07/2026 04:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseQcvDateTimeInputToStoredIso('2026-07-18T04:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseQcvDateTimeInputToStoredIso('31/02/2026 04:15')).toBeNull()
+    expect(parseQcvDateTimeInputToStoredIso('bad-date')).toBeNull()
+  })
+
+  it('parses QCVL datetime input to a local Date for date pickers', () => {
+    const parsed = parseQcvDateTimeInputToLocalDate('18/07/2026 04:15')
+    expect(parsed?.getFullYear()).toBe(2026)
+    expect(parsed?.getMonth()).toBe(6)
+    expect(parsed?.getDate()).toBe(18)
+    expect(parsed?.getHours()).toBe(4)
+    expect(parsed?.getMinutes()).toBe(15)
   })
 })

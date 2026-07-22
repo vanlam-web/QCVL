@@ -4,6 +4,11 @@ function padDatePart(value: number) {
   return String(value).padStart(2, '0')
 }
 
+function isValidCivilDate(year: number, month: number, day: number) {
+  const local = new Date(year, month - 1, day)
+  return local.getFullYear() === year && local.getMonth() === month - 1 && local.getDate() === day
+}
+
 export function displayDateKey(value: DateInput) {
   if (!value) return ''
   if (value instanceof Date) {
@@ -72,18 +77,34 @@ export function parseDateTimeValue(value: DateInput) {
 export function parseKvDateTimeInputToIso(value: string | null | undefined) {
   const normalized = value?.trim()
   if (!normalized) return null
-  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
-  if (!match) return null
-  const [, day, month, year, hour, minute] = match
+  const kvMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+  const localInputMatch = normalized.match(/^(\d{4})-(\d{1,2})-(\d{1,2})[T ](\d{1,2}):(\d{2})$/)
+  if (!kvMatch && !localInputMatch) return null
+  const day = kvMatch?.[1] ?? localInputMatch?.[3] ?? ''
+  const month = kvMatch?.[2] ?? localInputMatch?.[2] ?? ''
+  const year = kvMatch?.[3] ?? localInputMatch?.[1] ?? ''
+  const hour = kvMatch?.[4] ?? localInputMatch?.[4] ?? ''
+  const minute = kvMatch?.[5] ?? localInputMatch?.[5] ?? ''
   const dayNumber = Number(day)
   const monthNumber = Number(month)
+  const yearNumber = Number(year)
   const hourNumber = Number(hour)
   const minuteNumber = Number(minute)
   if (monthNumber < 1 || monthNumber > 12) return null
   if (dayNumber < 1 || dayNumber > 31) return null
   if (hourNumber < 0 || hourNumber > 23) return null
   if (minuteNumber < 0 || minuteNumber > 59) return null
+  if (!isValidCivilDate(yearNumber, monthNumber, dayNumber)) return null
   return `${year}-${padDatePart(monthNumber)}-${padDatePart(dayNumber)}T${padDatePart(hourNumber)}:${minute}:00.000Z`
+}
+
+export function parseQcvDateTimeInputToLocalDate(value: string | null | undefined) {
+  const storedIso = parseKvDateTimeInputToIso(value)
+  if (!storedIso) return null
+  const match = storedIso.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (!match) return null
+  const [, year, month, day, hour, minute] = match
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute))
 }
 
 function dateParts(value: DateInput) {
@@ -154,3 +175,8 @@ export function dateTimeIsoFromLocalClock(value: Date) {
     ':00.000Z',
   ].join('')
 }
+
+export const formatQcvDateTime = formatKvDateTime
+export const formatQcvDate = formatKvDate
+export const parseQcvDateTimeInputToStoredIso = parseKvDateTimeInputToIso
+export const dateTimeStoredIsoFromLocalClock = dateTimeIsoFromLocalClock

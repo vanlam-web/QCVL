@@ -22,7 +22,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { currentSystemDate } from '../../lib/system-clock'
-import { dateTimeIsoFromLocalClock, parseDateTimeValue } from '../../lib/date-format'
+import { dateTimeStoredIsoFromLocalClock, parseDateTimeValue, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -657,11 +657,11 @@ export function CustomersPage({
     setSavingDebtPayment(true)
     setDebtPaymentError(null)
     try {
-      const paidAt = parseCustomerDebtAdjustmentDateTime(form.paidAt)
+      const paidAt = parseQcvDateTimeInputToStoredIso(form.paidAt)
       const result = await financeService.collectCustomerDebt({
         customer_id: customer.id,
         amount,
-        ...(paidAt ? { created_at: dateTimeIsoFromLocalClock(paidAt) } : {}),
+        ...(paidAt ? { created_at: paidAt } : {}),
         allocations: paymentRows
           .filter((row) => row.payment_amount > 0)
           .map((row) => ({
@@ -701,7 +701,7 @@ export function CustomersPage({
 
   async function saveCustomerDebtAdjustment(customer: Customer, form: CustomerDebtAdjustmentForm) {
     if (!financeService?.updateCustomerDebtAdjustment) return
-    const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
+    const selectedAdjustmentDateTime = parseQcvDateTimeInputToStoredIso(form.adjustedAt)
     if (!form.adjustmentId || selectedAdjustmentDateTime === null) {
       setDebtAdjustmentError('Thời gian điều chỉnh không hợp lệ.')
       return
@@ -716,7 +716,7 @@ export function CustomersPage({
     try {
       const formattedIso = form.adjustedAtIso && form.adjustedAt === dateTime(form.adjustedAtIso)
         ? form.adjustedAtIso
-        : dateTimeIsoFromLocalClock(selectedAdjustmentDateTime)
+        : selectedAdjustmentDateTime
       await financeService.updateCustomerDebtAdjustment(form.adjustmentId, {
         adjusted_at: formattedIso,
         amount_delta: amount,
@@ -2025,14 +2025,14 @@ function CustomerDebtAdjustmentDialog({
   const selectAdjustmentDate = (date: Date) => {
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeIsoFromLocalClock(next) })
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeStoredIsoFromLocalClock(next) })
     setPickerOpen(null)
   }
   const selectAdjustmentTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number)
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeIsoFromLocalClock(next) })
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeStoredIsoFromLocalClock(next) })
     setPickerOpen(null)
   }
 
