@@ -171,7 +171,10 @@ export function CustomerPanel({
     if (!suggestionsOpen || query.length === 0 || showsSelectedCustomer) {
       searchRequestId.current += 1
       lastSuggestionQuery.current = null
-      if (query.length === 0 || showsSelectedCustomer) setResults([])
+      if (query.length === 0 || showsSelectedCustomer) {
+        const clearId = window.setTimeout(() => setResults([]), 0)
+        return () => window.clearTimeout(clearId)
+      }
       return undefined
     }
     if (lastSuggestionQuery.current === query) return undefined
