@@ -1051,6 +1051,7 @@ export function SalesDocumentsPage({
               onFirst={() => void goToPage(1)}
               onLast={() => void goToPage(totalPages)}
               onNext={() => void goToPage(page + 1)}
+              onPageChange={(nextPage) => void goToPage(nextPage)}
               onPageSizeChange={(nextPageSize) => void loadDocuments({ page: 1, page_size: nextPageSize })}
               onPrevious={() => void goToPage(page - 1)}
             />

@@ -1267,6 +1267,7 @@ export function CustomersPage({
               onFirst={() => void goToPage(1)}
               onLast={() => void goToPage(totalPages)}
               onNext={() => void goToPage(page + 1)}
+              onPageChange={(nextPage) => void goToPage(nextPage)}
               onPageSizeChange={(nextPageSize) => void load({ page: 1, page_size: nextPageSize })}
               onPrevious={() => void goToPage(page - 1)}
             />
@@ -1518,6 +1519,7 @@ function CustomerDebtPanel({
               onPrevious={() => setSummaryPage(Math.max(1, safeSummaryPage - 1))}
               onNext={() => setSummaryPage(Math.min(summaryTotalPages, safeSummaryPage + 1))}
               onLast={() => setSummaryPage(summaryTotalPages)}
+              onPageChange={(nextPage) => setSummaryPage(nextPage)}
             />
           </>
         ) : <ManagementDetailInlineNote>Không có hóa đơn chưa thanh toán.</ManagementDetailInlineNote>
@@ -1559,20 +1561,21 @@ function CustomerDebtPanel({
               </tbody>
             </table>
           </ManagementTableViewport>
-          <ManagementTableFooter
-            ariaLabel="Phân trang công nợ"
-            entityLabel="dòng công nợ"
-            page={safeLedgerPage}
-            pageSize={ledgerPageSize}
-            pageSizeOptions={[ledgerPageSize]}
-            total={ledgerRows.length}
-            canGoPrevious={safeLedgerPage > 1}
-            canGoNext={safeLedgerPage < totalPages}
-            onFirst={() => onLedgerPageChange(1)}
-            onPrevious={() => onLedgerPageChange(Math.max(1, safeLedgerPage - 1))}
-            onNext={() => onLedgerPageChange(Math.min(totalPages, safeLedgerPage + 1))}
-            onLast={() => onLedgerPageChange(totalPages)}
-          />
+            <ManagementTableFooter
+              ariaLabel="Phân trang công nợ"
+              entityLabel="dòng công nợ"
+              page={safeLedgerPage}
+              pageSize={ledgerPageSize}
+              pageSizeOptions={[ledgerPageSize]}
+              total={ledgerRows.length}
+              canGoPrevious={safeLedgerPage > 1}
+              canGoNext={safeLedgerPage < totalPages}
+              onFirst={() => onLedgerPageChange(1)}
+              onPrevious={() => onLedgerPageChange(Math.max(1, safeLedgerPage - 1))}
+              onNext={() => onLedgerPageChange(Math.min(totalPages, safeLedgerPage + 1))}
+              onLast={() => onLedgerPageChange(totalPages)}
+              onPageChange={(nextPage) => onLedgerPageChange(nextPage)}
+            />
         </>
       ) : <ManagementDetailInlineNote>Chưa có lịch sử công nợ.</ManagementDetailInlineNote>}
     </section>
@@ -1642,20 +1645,21 @@ function CustomerHistoryPanel({
               </tbody>
             </table>
           </ManagementTableViewport>
-          <ManagementTableFooter
-            ariaLabel={`Phân trang lịch sử ${historyEntityLabel}`}
-            entityLabel={historyEntityLabel}
-            page={safeHistoryPage}
-            pageSize={historyPageSize}
-            pageSizeOptions={[historyPageSize]}
-            total={historyTotal}
-            canGoPrevious={safeHistoryPage > 1}
-            canGoNext={safeHistoryPage < totalPages}
-            onFirst={() => onHistoryPageChange(1)}
-            onPrevious={() => onHistoryPageChange(Math.max(1, safeHistoryPage - 1))}
-            onNext={() => onHistoryPageChange(Math.min(totalPages, safeHistoryPage + 1))}
-            onLast={() => onHistoryPageChange(totalPages)}
-          />
+            <ManagementTableFooter
+              ariaLabel={`Phân trang lịch sử ${historyEntityLabel}`}
+              entityLabel={historyEntityLabel}
+              page={safeHistoryPage}
+              pageSize={historyPageSize}
+              pageSizeOptions={[historyPageSize]}
+              total={historyTotal}
+              canGoPrevious={safeHistoryPage > 1}
+              canGoNext={safeHistoryPage < totalPages}
+              onFirst={() => onHistoryPageChange(1)}
+              onPrevious={() => onHistoryPageChange(Math.max(1, safeHistoryPage - 1))}
+              onNext={() => onHistoryPageChange(Math.min(totalPages, safeHistoryPage + 1))}
+              onLast={() => onHistoryPageChange(totalPages)}
+              onPageChange={(nextPage) => onHistoryPageChange(nextPage)}
+            />
         </>
       ) : null}
     </section>

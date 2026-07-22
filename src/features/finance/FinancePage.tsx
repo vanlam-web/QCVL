@@ -2049,6 +2049,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
               total={cashbookTotal}
               canGoPrevious={cashbookPage > 1}
               canGoNext={cashbookPage * cashbookPageSize < cashbookTotal}
+              onPageChange={(nextPage) => void loadCashbook({ page: nextPage })}
               onPageSizeChange={(nextPageSize) => void loadCashbook({ page: 1, page_size: nextPageSize })}
               onFirst={() => void loadCashbook({ page: 1 })}
               onPrevious={() => void loadCashbook({ page: Math.max(1, cashbookPage - 1) })}

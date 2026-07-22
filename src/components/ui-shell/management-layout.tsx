@@ -708,6 +708,7 @@ export function ManagementTableFooter({
   canGoPrevious,
   canGoNext,
   pageSizeOptions = managementPageSizeOptions,
+  onPageChange,
   onPageSizeChange,
   onFirst,
   onPrevious,
@@ -723,6 +724,7 @@ export function ManagementTableFooter({
   canGoPrevious: boolean
   canGoNext: boolean
   pageSizeOptions?: readonly number[]
+  onPageChange?: (page: number) => void
   onPageSizeChange?: (pageSize: number) => void
   onFirst?: () => void
   onPrevious: () => void
@@ -731,6 +733,24 @@ export function ManagementTableFooter({
 }) {
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1
   const rangeEnd = Math.min(page * pageSize, total)
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+  const [pageInput, setPageInput] = useState(String(page))
+
+  useEffect(() => {
+    setPageInput(String(page))
+  }, [page])
+
+  function submitPageChange() {
+    if (!onPageChange) return
+    const nextPage = Number(pageInput)
+    if (!Number.isFinite(nextPage)) {
+      setPageInput(String(page))
+      return
+    }
+    const safePage = Math.min(totalPages, Math.max(1, Math.trunc(nextPage)))
+    setPageInput(String(safePage))
+    onPageChange(safePage)
+  }
 
   return (
     <nav aria-label={ariaLabel} className="management-table-footer">
@@ -761,9 +781,17 @@ export function ManagementTableFooter({
         </button>
         <input
           aria-label="Trang hiện tại"
-          inputMode="numeric"
-          readOnly
-          value={page}
+          inputMode={onPageChange ? 'numeric' : undefined}
+          readOnly={onPageChange === undefined}
+          value={pageInput}
+          onChange={onPageChange ? (event) => setPageInput(event.target.value.replace(/[^\d]/g, '')) : undefined}
+          onBlur={onPageChange ? submitPageChange : undefined}
+          onKeyDown={onPageChange ? (event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault()
+              submitPageChange()
+            }
+          } : undefined}
         />
         <button aria-label="Trang sau" disabled={!canGoNext} title="Trang sau" type="button" onClick={onNext}>
           <ChevronRight aria-hidden="true" size={18} />

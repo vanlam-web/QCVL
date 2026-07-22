@@ -2089,7 +2089,7 @@
 }
 
 .management-table-footer-actions input {
-  width: 2.75rem;
+  width: 3.5rem;
   min-height: 1.875rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);

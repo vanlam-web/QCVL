@@ -1156,6 +1156,7 @@ export function SuppliersPage({
                 onFirst={() => void goToPage(1)}
                 onLast={() => void goToPage(totalPages)}
                 onNext={() => void goToPage(page + 1)}
+                onPageChange={(nextPage) => void goToPage(nextPage)}
                 onPageSizeChange={(nextPageSize) => void loadSuppliers({ page: 1, page_size: nextPageSize })}
                 onPrevious={() => void goToPage(page - 1)}
               />
