@@ -191,4 +191,3 @@ Kiểm browser:
 | Tab lịch sử thiếu dữ liệu | Có phân trang/xem thêm rõ |
 | Checkout phân bổ thiếu hóa đơn khi nhiều bill | Backend phân bổ theo amount hoặc trả `has_more` |
 | Dashboard thiếu số liệu top | Tạo API summary trả đúng chỉ số đang dùng |
-
