@@ -1164,6 +1164,12 @@ describe('createPgRepository product units', () => {
           rowCount: 1,
         }
       }
+      if (sql.includes('from customer_snapshots') && sql.includes('id::text = $2')) {
+        return {
+          rows: [{ data: { id: 'customer-kv-kh000384', code: 'KH000384', name: 'Anh Nam', phone: '0900000000' } }],
+          rowCount: 1,
+        }
+      }
       if (sql.includes('limit 1') && sql.includes('balance_after') && sql.includes('for update')) {
         return {
           rows: [{
@@ -1198,6 +1204,12 @@ describe('createPgRepository product units', () => {
     const receiptInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into payment_receipts'))
     expect(receiptInsert?.[1]?.[4]).toBeNull()
     expect(receiptInsert?.[1]?.[7]).toBe('2026-07-20T08:15:00.000Z')
+    const cashbookInsert = pgMock.query.mock.calls.find(([sql]) => String(sql).includes('insert into cashbook_entries'))
+    expect(JSON.parse(String(cashbookInsert?.[1]?.[7]))).toEqual({
+      type: 'customer',
+      name: 'Anh Nam',
+      phone: '0900000000',
+    })
   })
 
   test('links requested customer debt payment allocations to invoices even when debt entry rows are missing', async () => {

@@ -5080,6 +5080,16 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             [input.organizationId, input.customerId],
           ),
         ])
+        const customerSnapshotResult = await pool.query(
+          `
+            select data
+            from customer_snapshots
+            where organization_id = $1
+              and id::text = $2
+            limit 1
+          `,
+          [input.organizationId, input.customerId],
+        )
 
         const requestedAllocations = (input.allocations ?? [])
           .map((allocation) => ({
@@ -5236,7 +5246,10 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         const receiptCodeSeq = Number(receiptCodeRow.rows[0]?.max_seq ?? 0) + 1
         const receiptCode = `TT${String(receiptCodeSeq).padStart(6, '0')}`
         const createdAt = input.createdAt ?? new Date().toISOString()
-        const firstCustomer = debtRows.rows[0]?.customer_snapshot ?? adjustmentRows.rows[0]?.customer_snapshot ?? { name: 'Khach hang', phone: null }
+        const firstCustomer = customerSnapshotResult.rows[0]?.data as CustomerListData | undefined
+          ?? debtRows.rows[0]?.customer_snapshot
+          ?? adjustmentRows.rows[0]?.customer_snapshot
+          ?? { name: 'Khach hang', phone: null }
         const allocationCodes = allocations.map((allocation) => allocation.order_code).join(', ')
         const note = input.note?.trim() ? `${input.note.trim()} - ${allocationCodes}` : `Thu no ${allocationCodes}`
         const receiptOrderId = allocations.find((allocation) => allocation.order_code.startsWith('HD'))?.order_id ?? null

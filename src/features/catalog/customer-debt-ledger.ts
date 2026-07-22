@@ -19,6 +19,26 @@ export interface CustomerDebtLedgerRow {
   related_code?: string
 }
 
+export type CustomerDebtSummaryRow = {
+  id: string
+  code: string
+  created_at: string
+  total_amount: number
+  remaining_debt: number
+  running_debt: number
+}
+
+export type CustomerDebtPaymentRow = CustomerDebtSummaryRow & {
+  paid_before: number
+  payment_amount: number
+}
+
+export type CustomerDebtLedgerBundle = {
+  debt: CustomerDebtDetail
+  invoiceHistory: Array<{ id: string; code: string; created_at: string; total_amount: number; status?: SalesDocumentListItem['status'] }>
+  cashbookHistory: CashbookEntry[]
+}
+
 export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail, 'ledger_rows' | 'adjustments'>): CustomerDebtLedgerRow[] {
   const adjustmentsByCode = new Map((debt.adjustments ?? []).map((adjustment) => [adjustment.source_code, adjustment]))
   return [...(debt.ledger_rows ?? [])]
@@ -34,6 +54,99 @@ export function customerDebtLedgerRowsFromBackend(debt: Pick<CustomerDebtDetail,
       adjustment: adjustmentsByCode.get(row.code),
       related_code: row.code,
     }))
+}
+
+export function buildCustomerDebtSummaryRows(
+  invoices: Array<{
+    id: string
+    code: string
+    created_at: string
+    total_amount: number
+    paid_amount?: number
+    debt_amount?: number
+    payment_status?: string
+    status?: SalesDocumentListItem['status']
+  }>,
+  _ledgerRows: CustomerDebtLedgerRow[],
+  currentDebt: number,
+): CustomerDebtSummaryRow[] {
+  const openRows = invoices
+    .filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
+    .map((invoice) => {
+      const remainingDebt = typeof invoice.debt_amount === 'number'
+        ? invoice.debt_amount
+        : invoice.total_amount - (invoice.paid_amount ?? 0)
+      return {
+        id: invoice.id,
+        code: invoice.code,
+        created_at: invoice.created_at,
+        total_amount: invoice.total_amount,
+        remaining_debt: remainingDebt,
+        running_debt: remainingDebt,
+      }
+    })
+    .filter((invoice) => invoice.remaining_debt > 0)
+
+  const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
+  let alreadySettled = Math.max(openDebtTotal - currentDebt, 0)
+  const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
+  const oldestRows = [...openRows].sort((left, right) => {
+    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
+    if (timeDiff !== 0) return timeDiff
+    return left.code.localeCompare(right.code)
+  })
+  for (const invoice of oldestRows) {
+    if (alreadySettled <= 0) break
+    const remainingDebt = remainingDebtById.get(invoice.id) ?? 0
+    const settled = Math.min(remainingDebt, alreadySettled)
+    remainingDebtById.set(invoice.id, remainingDebt - settled)
+    alreadySettled -= settled
+  }
+
+  const summaryRows = openRows
+    .map((invoice) => ({
+      ...invoice,
+      remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt,
+    }))
+    .filter((invoice) => invoice.remaining_debt > 0)
+    .sort((left, right) => {
+      const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
+      if (timeDiff !== 0) return timeDiff
+      return right.code.localeCompare(left.code)
+    })
+
+  let runningDebt = currentDebt
+  return summaryRows.map((invoice) => {
+    const row = { ...invoice, running_debt: runningDebt }
+    runningDebt -= invoice.remaining_debt
+    return row
+  })
+}
+
+export function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {
+  let remainingPayment = Math.max(paymentAmount, 0)
+  const paymentById = new Map<string, number>()
+  const oldestRows = [...summaryRows].sort((left, right) => {
+    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
+    if (timeDiff !== 0) return timeDiff
+    return left.code.localeCompare(right.code)
+  })
+  for (const row of oldestRows) {
+    const paymentAmountForRow = Math.min(row.remaining_debt, remainingPayment)
+    paymentById.set(row.id, paymentAmountForRow)
+    remainingPayment -= paymentAmountForRow
+    if (remainingPayment <= 0) break
+  }
+  return summaryRows.map((row) => ({
+    ...row,
+    paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
+    payment_amount: paymentById.get(row.id) ?? 0,
+  }))
+}
+
+export function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerBundle | undefined | 'loading' | 'error', fallbackDebt: number) {
+  if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
+  return customerDebtHasLiveLedger(debtLedger.debt) ? debtLedger.debt.total_debt : fallbackDebt
 }
 
 type CustomerDebtLedgerSortableRow = Omit<CustomerDebtLedgerRow, 'running_debt'> & {

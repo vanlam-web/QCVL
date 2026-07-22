@@ -13,7 +13,6 @@ import type { CurrentUserData } from '../../lib/api/types'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { FinanceService } from '../finance/finance-service'
 import type { Product, ResolvedPrice, SellMethod } from '../catalog/types'
-import { customerDateTime } from '../catalog/customer-presenter'
 import type { InventoryService } from '../inventory/inventory-service'
 import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShortageMaterial, PosShortagePreview } from '../inventory/types'
 import type { CheckoutCartLine, InvoiceRevisionHandoffPayload, OrderService, RecentPriceList } from '../orders/order-service'
@@ -27,12 +26,15 @@ import { formatApiError } from '../../lib/api/error-message'
 import { dateTimeStoredIsoFromLocalClock } from '../../lib/date-format'
 import { currentSystemDate } from '../../lib/system-clock'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
-import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
 import { ProductGrid } from './ProductGrid'
 import { PosCartPanel } from './PosCartPanel'
 import { PosPaymentPanel } from './PosPaymentPanel'
 import { PosTopbar } from './PosTopbar'
 import { ProductionQueuePanel } from './ProductionQueuePanel'
+import { RecentInvoicesDialog } from './RecentInvoicesDialog'
+import { recentInvoicePageSize } from './recent-invoices'
+import { usePosProductSearch } from './pos-product-search'
+import { PosManualMaterialOpeningDialog, PosQuickMaterialOpeningDialog } from './PosMaterialOpeningDialogs'
 import { consumeInvoiceRevisionHandoffPayload } from './invoice-revision-handoff'
 import { consumeQuoteReopenPayload } from './quote-draft-handoff'
 import { permissions } from '../users/permissions'
@@ -56,11 +58,8 @@ import {
   maxInvoiceTabs,
   nextInvoiceNumber,
   normalizeMeasureInputText,
-  normalizeSearch,
   persistInvoiceTabs,
-  quickProductLoadSize,
   quoteBlockedReason,
-  readNonNegativeNumber,
   readPositiveMoney,
   readPositiveNumber,
   removeCompletedInvoiceTab,
@@ -76,37 +75,6 @@ const sellMethodLabels: Record<SellMethod, string> = {
   linear_m: 'Theo mét dài',
   sheet: 'Theo tấm',
   combo: 'Combo',
-}
-
-const productSearchPageSize = 20
-const recentInvoicePageSize = 10
-
-function productMatchesSearch(product: Product, query: string) {
-  const normalizedText = normalizeSearch(`${product.code} ${product.name}`)
-  if (normalizedText.includes(query)) return true
-  return normalizedText.split(/\s+/).some((part) => part.includes(query))
-}
-
-function productSearchRank(product: Product, query: string) {
-  const code = normalizeSearch(product.code)
-  const name = normalizeSearch(product.name)
-  const combined = normalizeSearch(`${product.code} ${product.name}`)
-  if (code === query || name === query) return 0
-  if (code.startsWith(query) || name.startsWith(query)) return 1
-  if (name.split(/\s+/).some((part) => part.startsWith(query))) return 2
-  if (combined.split(/\s+/).some((part) => part.startsWith(query))) return 3
-  if (name.includes(query)) return 4
-  if (combined.includes(query)) return 5
-  return 6
-}
-
-function uniqueProductsById(products: Product[]) {
-  const seen = new Set<string>()
-  return products.filter((product) => {
-    if (seen.has(product.id)) return false
-    seen.add(product.id)
-    return true
-  })
 }
 
 function salesDocumentToRevisionPayload(document: SalesDocumentDetail): InvoiceRevisionHandoffPayload {
@@ -186,7 +154,6 @@ export function PosShell({
         throw new Error('Sales document service unavailable')
       },
     } as unknown as SalesDocumentService)
-  const [products, setProducts] = useState<Product[]>([])
   const [prices, setPrices] = useState<Record<string, ResolvedPrice>>({})
   const [initialRevisionPayload] = useState(() => consumeInvoiceRevisionHandoffPayload())
   const [initialQuotePayload] = useState(() => consumeQuoteReopenPayload())
@@ -197,14 +164,17 @@ export function PosShell({
   )
   const [tabs, setTabs] = useState<PosInvoiceTab[]>(initialTabs)
   const [activeTabId, setActiveTabId] = useState(initialTabs[0]?.id ?? makeInvoiceTab(1).id)
-  const [loadingProducts, setLoadingProducts] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [productSearch, setProductSearch] = useState('')
-  const debouncedProductSearch = useDebouncedValue(productSearch, quickPickSearchDebounceMs)
-  const [catalogSearchResult, setCatalogSearchResult] = useState<{ search: string; products: Product[] }>({
-    search: '',
-    products: [],
-  })
+  const setPosProductSearchError = useCallback((message: string) => setError(message), [])
+  const {
+    addQuickProduct,
+    loadingProducts,
+    products,
+    productSearch,
+    productSearchRef,
+    productSearchResults,
+    setProductSearch,
+  } = usePosProductSearch({ catalogService, onError: setPosProductSearchError })
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const checkoutDrawerRef = useRef<HTMLElement | null>(null)
   const [productCreateOpen, setProductCreateOpen] = useState(false)
@@ -237,7 +207,6 @@ export function PosShell({
   const [recentInvoicesError, setRecentInvoicesError] = useState<string | null>(null)
   const [recentInvoices, setRecentInvoices] = useState<SalesDocumentListItem[]>([])
   const [recentInvoicesPage, setRecentInvoicesPage] = useState(1)
-  const recentInvoicesPageInputRef = useRef<HTMLInputElement | null>(null)
   const [recentInvoicesTotal, setRecentInvoicesTotal] = useState(0)
   const [recentInvoiceSelectingId, setRecentInvoiceSelectingId] = useState<string | null>(null)
   const [manualOpeningOpen, setManualOpeningOpen] = useState(false)
@@ -247,7 +216,6 @@ export function PosShell({
   const [manualOpeningOldRemaining, setManualOpeningOldRemaining] = useState(0)
   const [pendingFocusLineId, setPendingFocusLineId] = useState<string | null>(null)
   const [lineInputDrafts, setLineInputDrafts] = useState<Record<string, string>>({})
-  const productSearchRef = useRef<HTMLInputElement>(null)
   const primaryLineInputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
   const autoFocusedCartLineIds = useRef<Set<string>>(new Set())
   const valueInputMouseUpSelectRefs = useRef<Set<HTMLInputElement>>(new Set())
@@ -313,17 +281,6 @@ export function PosShell({
     setRecentInvoicesOpen(true)
     loadRecentInvoices(1)
   }, [loadRecentInvoices])
-  function submitRecentInvoicesPage() {
-    const nextPage = Number(recentInvoicesPageInputRef.current?.value ?? recentInvoicesPage)
-    if (!Number.isFinite(nextPage)) {
-      if (recentInvoicesPageInputRef.current) recentInvoicesPageInputRef.current.value = String(recentInvoicesPage)
-      return
-    }
-    const totalPages = Math.max(1, Math.ceil(recentInvoicesTotal / recentInvoicePageSize))
-    const safePage = Math.min(totalPages, Math.max(1, Math.trunc(nextPage)))
-    if (recentInvoicesPageInputRef.current) recentInvoicesPageInputRef.current.value = String(safePage)
-    loadRecentInvoices(safePage)
-  }
   const openRecentInvoice = useCallback(async (document: SalesDocumentListItem) => {
     setRecentInvoiceSelectingId(document.id)
     setRecentInvoicesError(null)
@@ -351,80 +308,6 @@ export function PosShell({
       setRecentInvoiceSelectingId(null)
     }
   }, [customerSalesDocumentService])
-  const productSearchResults = useMemo(() => {
-    const search = debouncedProductSearch.trim()
-    const query = normalizeSearch(productSearch)
-    if (query.length === 0) return []
-    const searchProducts = catalogSearchResult.search === search ? catalogSearchResult.products : []
-    return uniqueProductsById([...searchProducts, ...products])
-      .filter((product) => productMatchesSearch(product, query))
-      .sort((left, right) => {
-        const rankDelta = productSearchRank(left, query) - productSearchRank(right, query)
-        if (rankDelta !== 0) return rankDelta
-        return left.name.localeCompare(right.name, 'vi')
-      })
-      .slice(0, 7)
-  }, [catalogSearchResult, productSearch, products])
-
-  useEffect(() => {
-    let active = true
-
-    async function loadProducts() {
-      setLoadingProducts(true)
-      setError(null)
-      try {
-        const productResult = await catalogService.listProducts({
-          status: 'active',
-          page: 1,
-          page_size: quickProductLoadSize,
-          sort: 'pos_usage',
-        })
-        if (!active) return
-        setProducts(productResult.items)
-      } catch (cause) {
-        if (active) setError(formatApiError(cause, 'Không tải được sản phẩm POS.'))
-      } finally {
-        if (active) setLoadingProducts(false)
-      }
-    }
-
-    void loadProducts()
-
-    return () => {
-      active = false
-    }
-  }, [catalogService])
-
-  useEffect(() => {
-    const search = productSearch.trim()
-    if (search.length === 0) return
-    let active = true
-
-    async function searchProducts() {
-      try {
-        const productResult = await catalogService.listProducts({
-          status: 'active',
-          page: 1,
-          page_size: productSearchPageSize,
-          search,
-          search_context: 'quick_pick',
-        })
-        if (active) setCatalogSearchResult({ search, products: productResult.items })
-      } catch (cause) {
-        if (active) {
-          setCatalogSearchResult({ search, products: [] })
-          setError(formatApiError(cause, 'KhÃ´ng tÃ¬m Ä‘Æ°á»£c hÃ ng hÃ³a POS.'))
-        }
-      }
-    }
-
-    void searchProducts()
-
-    return () => {
-      active = false
-    }
-  }, [catalogService, debouncedProductSearch])
-
   useEffect(() => {
     let active = true
 
@@ -495,18 +378,6 @@ export function PosShell({
       active = false
     }
   }, [catalogService, productSearchResults, selectedCustomerGroupId, selectedCustomerId])
-
-  useEffect(() => {
-    function handleShortcut(event: KeyboardEvent) {
-      if (event.key !== 'F3') return
-      event.preventDefault()
-      productSearchRef.current?.focus()
-      productSearchRef.current?.select()
-    }
-
-    window.addEventListener('keydown', handleShortcut)
-    return () => window.removeEventListener('keydown', handleShortcut)
-  }, [])
 
   useEffect(() => {
     persistInvoiceTabs(tabs)
@@ -662,7 +533,7 @@ export function PosShell({
         unit_name: productCreateForm.unitName.trim(),
         sell_method: productCreateForm.sellMethod,
       })
-      setProducts((current) => [created, ...current].slice(0, 12))
+      addQuickProduct(created)
       setPrices((current) => ({ ...current, [created.id]: current[created.id] ?? {
         product_id: created.id,
         unit_price: 0,
@@ -1593,126 +1464,17 @@ export function PosShell({
         onAddToDraft={handleProductionQueueDraft}
       />
       {recentInvoicesOpen ? (
-        <div
-          className="management-modal-backdrop pos-recent-invoices-backdrop"
-          onMouseDown={() => setRecentInvoicesOpen(false)}
-        >
-          <section
-            aria-label="Lịch sử 10 đơn gần nhất"
-            aria-modal="true"
-            className="management-modal-dialog pos-recent-invoices-dialog"
-            role="dialog"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <header className="pos-recent-invoices-header">
-              <button
-                aria-label="Đóng lịch sử 10 đơn gần nhất"
-                className="management-icon-button"
-                type="button"
-                onClick={() => setRecentInvoicesOpen(false)}
-              >
-                ×
-              </button>
-            </header>
-            {recentInvoicesError ? <p role="alert">{recentInvoicesError}</p> : null}
-            {recentInvoicesLoading ? (
-              <p>Đang tải lịch sử hóa đơn...</p>
-            ) : recentInvoices.length === 0 ? (
-              <p>Chưa có hóa đơn gần đây.</p>
-            ) : (
-              <>
-                <div className="pos-recent-invoices-table-wrap">
-                  <table className="pos-recent-invoices-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Mã hóa đơn</th>
-                        <th scope="col">Thời gian</th>
-                        <th scope="col">Nhân viên</th>
-                        <th scope="col">Khách hàng</th>
-                        <th scope="col">Tổng cộng</th>
-                        <th scope="col" aria-label="Thao tác" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {recentInvoices.map((document) => (
-                        <tr key={document.id}>
-                          <td>
-                            <a
-                              className="pos-recent-invoices-code-link"
-                              href={`/sales-documents?open=${document.id}`}
-                              onClick={(event) => {
-                                event.preventDefault()
-                                void openRecentInvoice(document)
-                              }}
-                            >
-                              {document.code}
-                            </a>
-                          </td>
-                          <td>{customerDateTime(document.created_at)}</td>
-                          <td>{document.seller.name}</td>
-                          <td>{document.customer.name}</td>
-                          <td>{formatMoney(document.total_amount)}</td>
-                          <td>
-                            <button
-                              aria-label={`Chọn ${document.code}`}
-                              className="button button-secondary pos-recent-invoices-select"
-                              disabled={recentInvoiceSelectingId === document.id}
-                              type="button"
-                              onClick={() => void openRecentInvoice(document)}
-                            >
-                              Chọn
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <footer aria-label="Phân trang lịch sử hóa đơn" className="management-table-footer pos-recent-invoices-footer" role="navigation">
-                  <span className="management-table-footer-size" aria-hidden="true" />
-                  <div className="management-table-footer-actions pos-recent-invoices-footer-actions">
-                    <button
-                      aria-label="Trang trước"
-                      disabled={recentInvoicesPage <= 1}
-                      type="button"
-                      onClick={() => loadRecentInvoices(recentInvoicesPage - 1)}
-                    >
-                      ‹
-                    </button>
-                    <input
-                      aria-label="Trang hiện tại"
-                      key={recentInvoicesPage}
-                      ref={recentInvoicesPageInputRef}
-                      inputMode="numeric"
-                      defaultValue={String(recentInvoicesPage)}
-                      onBlur={submitRecentInvoicesPage}
-                      onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/[^\d]/g, '') }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
-                          submitRecentInvoicesPage()
-                        }
-                      }}
-                    />
-                    <button
-                      aria-label="Trang sau"
-                      disabled={recentInvoicesPage * recentInvoicePageSize >= recentInvoicesTotal}
-                      type="button"
-                      onClick={() => loadRecentInvoices(recentInvoicesPage + 1)}
-                    >
-                      ›
-                    </button>
-                  </div>
-                  <span className="management-table-footer-summary">
-                    {recentInvoicesTotal > 0
-                      ? `${Math.min((recentInvoicesPage - 1) * recentInvoicePageSize + 1, recentInvoicesTotal)} - ${Math.min(recentInvoicesPage * recentInvoicePageSize, recentInvoicesTotal)} trong ${recentInvoicesTotal}`
-                      : ''}
-                  </span>
-                </footer>
-              </>
-            )}
-          </section>
-        </div>
+        <RecentInvoicesDialog
+          invoices={recentInvoices}
+          loading={recentInvoicesLoading}
+          error={recentInvoicesError}
+          page={recentInvoicesPage}
+          total={recentInvoicesTotal}
+          selectingId={recentInvoiceSelectingId}
+          onClose={() => setRecentInvoicesOpen(false)}
+          onPageChange={loadRecentInvoices}
+          onOpenInvoice={(document) => void openRecentInvoice(document)}
+        />
       ) : null}
       {productCreateOpen ? (
         <aside aria-label="Tạo hàng hóa" className="pos-product-create-popover">
@@ -1774,159 +1536,39 @@ export function PosShell({
         </aside>
       ) : null}
       {quickOpeningLine !== null ? (
-        <aside aria-label="Khui vật tư nhanh" aria-modal="true" className="pos-material-opening-dialog" role="dialog">
-          <form onSubmit={(event) => void submitQuickMaterialOpening(event)}>
-            <header>
-              <h2>Khui vật tư nhanh</h2>
-              <button
-                aria-label="Đóng khui vật tư nhanh"
-                className="management-icon-button"
-                type="button"
-                onClick={() => setQuickOpeningLineId(null)}
-              >
-                ×
-              </button>
-            </header>
-            <p>{quickOpeningLine.product.name}</p>
-            {materialOpeningError ? <p role="alert">{materialOpeningError}</p> : null}
-            <div className="pos-material-opening-list">
-              {quickOpeningShortages.map((shortage) => {
-                const options = materialOpeningOptions[shortage.product_id]
-                const conversions = options?.conversions ?? shortage.conversion_options
-                return (
-                  <section key={shortage.product_id} className="pos-material-opening-item">
-                    <label>
-                      <input
-                        aria-label={`Chọn ${shortage.name}`}
-                        checked={quickOpeningSelectedIds[shortage.product_id] ?? false}
-                        type="checkbox"
-                        onChange={(event) =>
-                          setQuickOpeningSelectedIds((current) => ({
-                            ...current,
-                            [shortage.product_id]: event.target.checked,
-                          }))
-                        }
-                      />
-                      <strong>{shortage.code} {shortage.name}</strong>
-                    </label>
-                    <span>Thiếu {formatMeasure(shortage.shortage_qty)} {shortage.stock_unit.name}</span>
-                    <label>
-                      Số lượng khui {shortage.name}
-                      <input
-                        aria-label={`Số lượng khui ${shortage.name}`}
-                        min="0.001"
-                        step="0.001"
-                        type="number"
-                        value={quickOpeningQtyByProduct[shortage.product_id] ?? 1}
-                        onChange={(event) =>
-                          setQuickOpeningQtyByProduct((current) => ({
-                            ...current,
-                            [shortage.product_id]: readPositiveNumber(event.target.value) || 1,
-                          }))
-                        }
-                      />
-                    </label>
-                    <label>
-                      Đơn vị khui {shortage.name}
-                      <select
-                        aria-label={`Đơn vị khui ${shortage.name}`}
-                        value={quickOpeningUnitByProduct[shortage.product_id] ?? conversions[0]?.unit_id ?? ''}
-                        onChange={(event) =>
-                          setQuickOpeningUnitByProduct((current) => ({
-                            ...current,
-                            [shortage.product_id]: event.target.value,
-                          }))
-                        }
-                      >
-                        {conversions.map((conversion) => (
-                          <option key={conversion.unit_id} value={conversion.unit_id}>
-                            {conversion.name} ({formatMeasure(conversion.stock_qty_per_unit)} {shortage.stock_unit.name})
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </section>
-                )
-              })}
-            </div>
-            <button className="button button-primary" disabled={materialOpeningSaving} type="submit">
-              Xác nhận khui
-            </button>
-          </form>
-        </aside>
+        <PosQuickMaterialOpeningDialog
+          error={materialOpeningError}
+          line={quickOpeningLine}
+          optionsByProduct={materialOpeningOptions}
+          qtyByProduct={quickOpeningQtyByProduct}
+          saving={materialOpeningSaving}
+          selectedIds={quickOpeningSelectedIds}
+          shortages={quickOpeningShortages}
+          unitByProduct={quickOpeningUnitByProduct}
+          onClose={() => setQuickOpeningLineId(null)}
+          onQtyChange={(productId, qty) => setQuickOpeningQtyByProduct((current) => ({ ...current, [productId]: qty }))}
+          onSelectedChange={(productId, selected) => setQuickOpeningSelectedIds((current) => ({ ...current, [productId]: selected }))}
+          onSubmit={(event) => void submitQuickMaterialOpening(event)}
+          onUnitChange={(productId, unitId) => setQuickOpeningUnitByProduct((current) => ({ ...current, [productId]: unitId }))}
+        />
       ) : null}
       {manualOpeningOpen ? (
-        <aside aria-label="Khui vật tư thủ công" aria-modal="true" className="pos-material-opening-dialog" role="dialog">
-          <form onSubmit={(event) => void submitManualMaterialOpening(event)}>
-            <header>
-              <h2>Khui vật tư thủ công</h2>
-              <button
-                aria-label="Đóng khui vật tư thủ công"
-                className="management-icon-button"
-                type="button"
-                onClick={closeManualMaterialOpening}
-              >
-                ×
-              </button>
-            </header>
-            {materialOpeningError ? <p role="alert">{materialOpeningError}</p> : null}
-            <label>
-              Vật tư
-              <select
-                aria-label="Vật tư khui thủ công"
-                value={manualOpeningProductId}
-                onChange={(event) => void selectManualMaterialOpeningProduct(event.target.value)}
-              >
-                <option value="">Chọn vật tư</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.code} {product.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Số lượng khui
-              <input
-                aria-label="Số lượng khui thủ công"
-                min="0.001"
-                step="0.001"
-                type="number"
-                value={manualOpeningQty}
-                onChange={(event) => setManualOpeningQty(readPositiveNumber(event.target.value))}
-              />
-            </label>
-            <label>
-              Đơn vị khui
-              <select
-                aria-label="Đơn vị khui thủ công"
-                value={manualOpeningUnitId}
-                onChange={(event) => setManualOpeningUnitId(event.target.value)}
-              >
-                <option value="">Chọn đơn vị</option>
-                {(materialOpeningOptions[manualOpeningProductId]?.conversions ?? []).map((conversion) => (
-                  <option key={conversion.unit_id} value={conversion.unit_id}>
-                    {conversion.name} ({formatMeasure(conversion.stock_qty_per_unit)} {materialOpeningOptions[manualOpeningProductId]?.product.stock_unit.name})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Phần cũ còn lại
-              <input
-                aria-label="Phần cũ còn lại thủ công"
-                min="0"
-                step="0.001"
-                type="number"
-                value={manualOpeningOldRemaining}
-                onChange={(event) => setManualOpeningOldRemaining(readNonNegativeNumber(event.target.value))}
-              />
-            </label>
-            <button className="button button-primary" disabled={materialOpeningSaving} type="submit">
-              Xác nhận khui
-            </button>
-          </form>
-        </aside>
+        <PosManualMaterialOpeningDialog
+          error={materialOpeningError}
+          oldRemaining={manualOpeningOldRemaining}
+          options={materialOpeningOptions[manualOpeningProductId]}
+          productId={manualOpeningProductId}
+          products={products}
+          qty={manualOpeningQty}
+          saving={materialOpeningSaving}
+          unitId={manualOpeningUnitId}
+          onClose={closeManualMaterialOpening}
+          onOldRemainingChange={setManualOpeningOldRemaining}
+          onProductChange={(productId) => void selectManualMaterialOpeningProduct(productId)}
+          onQtyChange={setManualOpeningQty}
+          onSubmit={(event) => void submitManualMaterialOpening(event)}
+          onUnitChange={setManualOpeningUnitId}
+        />
       ) : null}
     </main>
   )

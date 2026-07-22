@@ -639,7 +639,7 @@ it('opens purchase receipt create workspace from the plus action', async () => {
   expect(sideTopRow).not.toHaveTextContent('Tài khoản')
   expect(sideTopRow).not.toHaveTextContent('Thời gian nhập')
   expect(within(form).getByLabelText('Mã phiếu nhập')).toHaveAttribute('placeholder', 'Mã phiếu tự động')
-  expect(within(form).getByLabelText('Mã đặt hàng nhập')).toHaveValue('')
+  expect(within(form).queryByLabelText('Mã đặt hàng nhập')).not.toBeInTheDocument()
   expect(within(form).getByLabelText('Trạng thái phiếu nhập')).toHaveValue('Phiếu tạm')
   expect(within(form).getByLabelText('Số hóa đơn đầu vào')).toBeInTheDocument()
   expect(within(form).getByText('Tổng tiền hàng')).toBeInTheDocument()

@@ -1525,6 +1525,42 @@ it('submits edited customer debt payment time to the finance service', async () 
   }))
 })
 
+it('submits customer debt bank payments with the selected finance account', async () => {
+  const collectCustomerDebt = vi.fn(async () => ({ payment_receipt_id: 'TT000003', allocated_amount: 100000 }))
+  const financeService = makeFinanceService({
+    collectCustomerDebt,
+    listAccounts: vi.fn(async () => ({
+      items: [
+        { id: 'cash-main', code: 'TM', name: 'Tiền mặt', account_type: 'cash' as const, is_default_cash: true, is_active: true },
+        { id: 'bank-mb', code: 'MB', name: 'MB Bank', account_type: 'bank' as const, is_default_cash: false, is_active: true, account_number: '0771000598653' },
+      ],
+    })),
+  })
+  render(<CustomersPage service={makeService()} orderService={makeOrderService()} salesDocumentService={makeSalesDocumentService()} financeService={financeService} />)
+
+  await userEvent.click(await screen.findByText('KH000123'))
+  const detail = screen.getByRole('region', { name: 'Chi tiết khách hàng KH000123' })
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Công nợ' }))
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán' }))
+  const paymentDialog = screen.getByRole('dialog', { name: 'Thanh toán công nợ KH000123' })
+
+  await userEvent.selectOptions(within(paymentDialog).getByLabelText('Phương thức TT'), 'bank_transfer')
+  await waitFor(() => expect(financeService.listAccounts).toHaveBeenCalledWith({ is_active: true }))
+  await userEvent.selectOptions(within(paymentDialog).getByLabelText('Tài khoản ngân hàng'), 'bank-mb')
+  await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '100000')
+  await userEvent.click(within(paymentDialog).getByRole('button', { name: 'Tạo phiếu thu' }))
+
+  await waitFor(() => expect(collectCustomerDebt).toHaveBeenCalled())
+  expect(collectCustomerDebt).toHaveBeenCalledWith(expect.objectContaining({
+    amount: 100000,
+    payment_method: expect.objectContaining({
+      cash_amount: 0,
+      bank_amount: 100000,
+      bank_account_id: 'bank-mb',
+    }),
+  }))
+})
+
 it('shows the current imported debt balance in the customer debt summary when it is above invoice debt', async () => {
   const salesDocumentService = makeSalesDocumentService({
     listSalesDocuments: vi.fn(async () => ({

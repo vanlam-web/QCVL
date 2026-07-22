@@ -3519,6 +3519,7 @@ describe('createDevMemoryRepository persistence', () => {
     })
     const receiptEntry = cashbook?.find((entry) => entry.code === collected?.payment_receipt_id)
     expect(receiptEntry).toMatchObject({ direction: 'in', amount_delta: 150000, source_type: 'payment_receipt_method', created_at: '2026-07-20T08:15:00.000Z' })
+    expect(receiptEntry?.counterparty).toMatchObject({ type: 'customer', name: 'Khach cong no' })
     expect(receiptEntry?.allocations?.map((allocation) => [allocation.order_code, allocation.allocated_amount])).toEqual([
       ['HD020001', 100000],
       ['HD020002', 50000],

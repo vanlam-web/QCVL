@@ -674,7 +674,7 @@ describe('FinancePage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu thu chi' }))
     const voucherDialog = await screen.findByRole('dialog', { name: 'Tạo phiếu thu' })
-    expect(within(voucherDialog).getByLabelText('Tài khoản nhận')).toHaveValue('bank-1')
+    expect(within(voucherDialog).getByRole('button', { name: 'Tài khoản nhận' })).toHaveTextContent('MB01: 0947900909')
   })
 
   it('soft deletes bank accounts while keeping historical cashbook rows visible', async () => {
@@ -1144,9 +1144,12 @@ describe('FinancePage', () => {
     expect(within(form).getByLabelText('Đối tượng nộp')).not.toHaveTextContent('Không chọn')
 
     await userEvent.selectOptions(within(form).getByLabelText('Phương thức TT'), 'bank_transfer')
-    const accountSelect = await within(form).findByLabelText('Tài khoản nhận')
-    expect(accountSelect).toBeInTheDocument()
-    expect(within(accountSelect).queryByRole('option', { name: 'Tiền mặt' })).not.toBeInTheDocument()
+    const accountPicker = await within(form).findByRole('button', { name: 'Tài khoản nhận' })
+    expect(accountPicker).toHaveTextContent('MB Bank: MB01')
+    await userEvent.click(accountPicker)
+    const accountMenu = within(form).getByRole('listbox', { name: 'Chọn tài khoản nhận' })
+    expect(within(accountMenu).getByRole('option', { name: 'MB Bank: MB01' })).toBeInTheDocument()
+    expect(within(accountMenu).queryByRole('option', { name: 'Tiền mặt' })).not.toBeInTheDocument()
   })
 
   it('creates a customer from Tạo mới and fills the voucher counterparty fields', async () => {

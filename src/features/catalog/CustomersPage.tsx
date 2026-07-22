@@ -1,17 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   BarChart3,
-  CalendarDays,
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
-  Clock3,
   Edit3,
   FileDown,
-  Info,
   Lock,
   Network,
-  Pencil,
   Percent,
   Search,
   StickyNote,
@@ -22,7 +18,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { currentSystemDate } from '../../lib/system-clock'
-import { dateTimeStoredIsoFromLocalClock, formatQcvDateTime, parseDateTimeValue, parseQcvDateTimeInputToLocalDate, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
+import { parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -48,7 +44,6 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { managementDateTimeCalendarDays, managementDateTimeTimeOptions } from '../../components/ui-shell/management-date-time-picker'
 import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
@@ -58,18 +53,11 @@ import { useManagementSearch } from '../../lib/use-management-search'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
 import type { Customer, CustomerGroup } from './types'
-import type { CustomerDebtDetail, OrderService } from '../orders/order-service'
+import type { OrderService } from '../orders/order-service'
 import type { FinanceService } from '../finance/finance-service'
-import type { CashbookEntry } from '../finance/types'
+import type { FinanceAccount } from '../finance/types'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { buildCustomerListFilters, customerHistoryKey, type CustomerHistoryType } from './customer-filters'
-import {
-  buildCustomerDebtLedgerRows,
-  customerDebtHasLiveLedger,
-  customerDebtLedgerRowsFromBackend,
-  type CustomerDebtAdjustment,
-  type CustomerDebtLedgerRow,
-} from './customer-debt-ledger'
 import {
   customerDate,
   customerDateTime as dateTime,
@@ -78,6 +66,18 @@ import {
 } from './customer-presenter'
 import { CustomerCreateDialog, createCustomerFormDefaults } from './CustomerCreateDialog'
 import { CustomerImportDialog } from './CustomerImportDialog'
+import { CustomerDebtPanel, type CustomerDebtState } from './CustomerDebtPanel'
+import { CustomerDebtAdjustmentDialog } from './CustomerDebtAdjustmentDialog'
+import { formatCustomerDebtAdjustmentDateTime, type CustomerDebtAdjustmentForm } from './customer-debt-adjustment-form'
+import {
+  customerDebtCurrentAmount,
+  type CustomerDebtPaymentRow,
+} from './customer-debt-ledger'
+import {
+  CustomerDebtPaymentDialog,
+  type CustomerDebtLedgerState,
+  type CustomerDebtPaymentForm,
+} from './CustomerDebtPaymentDialog'
 
 interface CustomerState {
   customers: Customer[]
@@ -90,35 +90,8 @@ interface CustomerState {
   }
 }
 
-type CustomerDebtState = CustomerDebtDetail | 'loading' | 'error'
-type CustomerDebtLedgerState = {
-  debt: CustomerDebtDetail
-  invoiceHistory: SalesDocumentListItem[]
-  cashbookHistory: CashbookEntry[]
-} | 'loading' | 'error'
 type CustomerHistoryState = { items: SalesDocumentListItem[]; page: number; pageSize: number; total: number } | 'loading' | 'error'
 type CustomerDetailTab = 'info' | 'debt' | 'history'
-type CustomerDebtView = 'summary' | 'detail'
-type CustomerDebtSummaryRow = {
-  id: string
-  code: string
-  created_at: string
-  total_amount: number
-  remaining_debt: number
-  running_debt: number
-}
-type CustomerDebtPaymentForm = {
-  paidAt: string
-  method: 'cash' | 'bank_transfer'
-  amount: string
-  note: string
-  allocateToInvoices: boolean
-  invoicePayments: Record<string, string>
-}
-type CustomerDebtPaymentRow = CustomerDebtSummaryRow & {
-  paid_before: number
-  payment_amount: number
-}
 type CustomerSortKey = 'code' | 'created_at' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
 const defaultCustomerSortState: NonNullable<ManagementSortState<CustomerSortKey>> = { key: 'created_at', direction: 'desc' }
 const customerHistoryPageSize = 10
@@ -238,11 +211,13 @@ export function CustomersPage({
   const [debtPaymentForm, setDebtPaymentForm] = useState<CustomerDebtPaymentForm>(() => ({
     paidAt: formatCustomerDebtAdjustmentDateTime(currentSystemDate()),
     method: 'cash',
+    bankAccountId: '',
     amount: '',
     note: '',
     allocateToInvoices: true,
     invoicePayments: {},
   }))
+  const [financeAccounts, setFinanceAccounts] = useState<FinanceAccount[]>([])
   const [savingDebtPayment, setSavingDebtPayment] = useState(false)
   const [debtPaymentError, setDebtPaymentError] = useState<string | null>(null)
   const customerDebtLedgerRequestsRef = useRef(new Set<string>())
@@ -643,11 +618,15 @@ export function CustomersPage({
     setDebtPaymentForm({
       paidAt: formatCustomerDebtAdjustmentDateTime(currentSystemDate()),
       method: 'cash',
+      bankAccountId: '',
       amount: '',
       note: '',
       allocateToInvoices: true,
       invoicePayments: {},
     })
+    financeService?.listAccounts?.({ is_active: true })
+      .then((result) => setFinanceAccounts(result.items))
+      .catch(() => setFinanceAccounts([]))
     loadCustomerDebtLedger(customer, { force: true })
   }
 
@@ -660,6 +639,10 @@ export function CustomersPage({
     }
     if (amount > currentDebt) {
       setDebtPaymentError('Số tiền thu không được lớn hơn công nợ hiện tại.')
+      return
+    }
+    if (form.method === 'bank_transfer' && form.bankAccountId.trim() === '') {
+      setDebtPaymentError('Chọn tài khoản ngân hàng khi thu chuyển khoản.')
       return
     }
     setSavingDebtPayment(true)
@@ -680,6 +663,7 @@ export function CustomersPage({
         payment_method: {
           cash_amount: form.method === 'cash' ? amount : 0,
           bank_amount: form.method === 'bank_transfer' ? amount : 0,
+          ...(form.method === 'bank_transfer' ? { bank_account_id: form.bankAccountId } : {}),
         },
         ...(form.note.trim() ? { note: form.note.trim() } : {}),
       })
@@ -1305,6 +1289,7 @@ export function CustomersPage({
           debt={customerDebtLedgers[debtPaymentCustomer.id]}
           fallbackDebt={debtPaymentCustomer.total_debt_amount ?? 0}
           form={debtPaymentForm}
+          financeAccounts={financeAccounts}
           saving={savingDebtPayment}
           error={debtPaymentError}
           canSave={Boolean(financeService?.collectCustomerDebt)}
@@ -1326,269 +1311,6 @@ export function CustomersPage({
   )
 }
 
-
-function buildCustomerDebtSummaryRows(
-  invoices: Array<{
-    id: string
-    code: string
-    created_at: string
-    total_amount: number
-    paid_amount?: number
-    debt_amount?: number
-    payment_status?: string
-    status?: SalesDocumentListItem['status']
-  }>,
-  _ledgerRows: CustomerDebtLedgerRow[],
-  currentDebt: number,
-): CustomerDebtSummaryRow[] {
-  const openRows = invoices
-    .filter((invoice) => invoice.status !== 'cancelled' && invoice.payment_status !== 'paid')
-    .map((invoice) => {
-      const remainingDebt = typeof invoice.debt_amount === 'number'
-        ? invoice.debt_amount
-        : invoice.total_amount - (invoice.paid_amount ?? 0)
-      return {
-        id: invoice.id,
-        code: invoice.code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        remaining_debt: remainingDebt,
-        running_debt: remainingDebt,
-      }
-    })
-    .filter((invoice) => invoice.remaining_debt > 0)
-
-  const openDebtTotal = openRows.reduce((sum, invoice) => sum + invoice.remaining_debt, 0)
-  let alreadySettled = Math.max(openDebtTotal - currentDebt, 0)
-  const remainingDebtById = new Map(openRows.map((invoice) => [invoice.id, invoice.remaining_debt]))
-  const oldestRows = [...openRows].sort((left, right) => {
-    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
-    if (timeDiff !== 0) return timeDiff
-    return left.code.localeCompare(right.code)
-  })
-  for (const invoice of oldestRows) {
-    if (alreadySettled <= 0) break
-    const remainingDebt = remainingDebtById.get(invoice.id) ?? 0
-    const settled = Math.min(remainingDebt, alreadySettled)
-    remainingDebtById.set(invoice.id, remainingDebt - settled)
-    alreadySettled -= settled
-  }
-
-  const summaryRows = openRows
-    .map((invoice) => ({
-      ...invoice,
-      remaining_debt: remainingDebtById.get(invoice.id) ?? invoice.remaining_debt,
-    }))
-    .filter((invoice) => invoice.remaining_debt > 0)
-    .sort((left, right) => {
-      const timeDiff = (parseDateTimeValue(right.created_at) ?? 0) - (parseDateTimeValue(left.created_at) ?? 0)
-      if (timeDiff !== 0) return timeDiff
-      return right.code.localeCompare(left.code)
-    })
-
-  let runningDebt = currentDebt
-  return summaryRows.map((invoice) => {
-    const row = { ...invoice, running_debt: runningDebt }
-    runningDebt -= invoice.remaining_debt
-    return row
-  })
-}
-
-function buildCustomerDebtPaymentRows(summaryRows: CustomerDebtSummaryRow[], paymentAmount: number): CustomerDebtPaymentRow[] {
-  let remainingPayment = Math.max(paymentAmount, 0)
-  const paymentById = new Map<string, number>()
-  const oldestRows = [...summaryRows].sort((left, right) => {
-    const timeDiff = (parseDateTimeValue(left.created_at) ?? 0) - (parseDateTimeValue(right.created_at) ?? 0)
-    if (timeDiff !== 0) return timeDiff
-    return left.code.localeCompare(right.code)
-  })
-  for (const row of oldestRows) {
-    const paymentAmountForRow = Math.min(row.remaining_debt, remainingPayment)
-    paymentById.set(row.id, paymentAmountForRow)
-    remainingPayment -= paymentAmountForRow
-    if (remainingPayment <= 0) break
-  }
-  return summaryRows.map((row) => {
-    return {
-      ...row,
-      paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
-      payment_amount: paymentById.get(row.id) ?? 0,
-    }
-  })
-}
-
-function customerDebtCurrentAmount(debtLedger: CustomerDebtLedgerState | undefined, fallbackDebt: number) {
-  if (debtLedger === undefined || debtLedger === 'loading' || debtLedger === 'error') return fallbackDebt
-  return customerDebtHasLiveLedger(debtLedger.debt) ? debtLedger.debt.total_debt : fallbackDebt
-}
-
-function CustomerDebtPanel({
-  debt,
-  debtLedger,
-  fallbackDebt,
-  ledgerPage,
-  ledgerPageSize,
-  onOpenAdjustment,
-  onLedgerPageChange,
-}: {
-  debt: CustomerDebtState | undefined
-  debtLedger: CustomerDebtLedgerState | undefined
-  fallbackDebt: number
-  ledgerPage: number
-  ledgerPageSize: number
-  onOpenAdjustment: (adjustment: CustomerDebtAdjustment) => void
-  onLedgerPageChange: (page: number) => void
-}) {
-  const [debtView, setDebtView] = useState<CustomerDebtView>('summary')
-  const [summaryPage, setSummaryPage] = useState(1)
-  if (debt === undefined || debt === 'loading' || debtLedger === undefined || debtLedger === 'loading') return <p>Đang tải công nợ...</p>
-  if (debt === 'error' || debtLedger === 'error') return <p role="alert">Không tải được công nợ.</p>
-  const hasLiveDebtLedger = customerDebtHasLiveLedger(debtLedger.debt)
-  const totalDebt = hasLiveDebtLedger ? debtLedger.debt.total_debt : fallbackDebt
-  const invoiceRows = debtLedger.invoiceHistory.length > 0
-    ? debtLedger.invoiceHistory
-    : debtLedger.debt.invoices.map((invoice) => ({
-        id: invoice.order_id,
-        code: invoice.order_code,
-        created_at: invoice.created_at,
-        total_amount: invoice.total_amount,
-        paid_amount: invoice.paid_amount,
-        debt_amount: invoice.remaining_debt,
-        payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-        status: 'completed' as const,
-        seller: { id: '', name: '' },
-      }))
-  const ledgerRows = (debtLedger.debt.ledger_rows?.length ?? 0) > 0
-    ? customerDebtLedgerRowsFromBackend(debtLedger.debt)
-    : buildCustomerDebtLedgerRows(
-        invoiceRows,
-        debtLedger.cashbookHistory,
-        debtLedger.debt.adjustments ?? [],
-        debtLedger.debt.linked_supplier_receipts ?? [],
-        { currentTotal: totalDebt },
-      )
-  const totalPages = Math.max(1, Math.ceil(ledgerRows.length / ledgerPageSize))
-  const safeLedgerPage = Math.min(Math.max(ledgerPage, 1), totalPages)
-  const visibleLedgerRows = ledgerRows.slice((safeLedgerPage - 1) * ledgerPageSize, safeLedgerPage * ledgerPageSize)
-  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, totalDebt)
-  const summaryTotalPages = Math.max(1, Math.ceil(summaryRows.length / ledgerPageSize))
-  const safeSummaryPage = Math.min(Math.max(summaryPage, 1), summaryTotalPages)
-  const visibleSummaryRows = summaryRows.slice((safeSummaryPage - 1) * ledgerPageSize, safeSummaryPage * ledgerPageSize)
-
-  return (
-    <section aria-label="Công nợ" className="customer-debt-panel">
-      <div aria-label="Loại công nợ" className="customer-debt-view-toggle customer-history-type-toggle">
-        <button aria-pressed={debtView === 'summary'} type="button" onClick={() => setDebtView('summary')}>
-          Tóm tắt
-        </button>
-        <button aria-pressed={debtView === 'detail'} type="button" onClick={() => setDebtView('detail')}>
-          Chi tiết
-        </button>
-      </div>
-      {debtView === 'summary' ? (
-        summaryRows.length > 0 ? (
-          <>
-            <ManagementTableViewport>
-              <table aria-label="Tóm tắt công nợ" className="customer-debt-summary-table">
-                <thead>
-                  <tr>
-                    <th>Mã hóa đơn</th>
-                    <th>Thời gian</th>
-                    <th>Còn nợ</th>
-                    <th>Công nợ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleSummaryRows.map((invoice) => (
-                    <tr key={invoice.id}>
-                      <td>
-                        <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', invoice.code, { type: 'invoice' })}>
-                          {invoice.code}
-                        </ManagementRecordLink>
-                      </td>
-                      <td>{dateTime(invoice.created_at)}</td>
-                      <td><MoneyText value={invoice.remaining_debt} /></td>
-                      <td><MoneyText value={invoice.running_debt} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ManagementTableViewport>
-            <ManagementTableFooter
-              ariaLabel="Phân trang tóm tắt công nợ"
-              entityLabel="hóa đơn mở"
-              page={safeSummaryPage}
-              pageSize={ledgerPageSize}
-              pageSizeOptions={[ledgerPageSize]}
-              total={summaryRows.length}
-              canGoPrevious={safeSummaryPage > 1}
-              canGoNext={safeSummaryPage < summaryTotalPages}
-              onFirst={() => setSummaryPage(1)}
-              onPrevious={() => setSummaryPage(Math.max(1, safeSummaryPage - 1))}
-              onNext={() => setSummaryPage(Math.min(summaryTotalPages, safeSummaryPage + 1))}
-              onLast={() => setSummaryPage(summaryTotalPages)}
-              onPageChange={(nextPage) => setSummaryPage(nextPage)}
-            />
-          </>
-        ) : <ManagementDetailInlineNote>Không có hóa đơn chưa thanh toán.</ManagementDetailInlineNote>
-      ) : ledgerRows.length > 0 ? (
-        <>
-          <ManagementTableViewport>
-            <table aria-label="Lịch sử công nợ" className="management-detail-table management-detail-linked-table">
-              <thead>
-                <tr>
-                  <th>Mã phiếu</th>
-                  <th>Thời gian</th>
-                  <th>Loại</th>
-                  <th>Giá trị</th>
-                  <th>Công nợ</th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleLedgerRows.map((row) => (
-                  <tr key={row.id}>
-                    <td>
-                      {'adjustment' in row && row.adjustment && /^CB/i.test(row.code) ? (
-                        <button className="management-record-link customer-debt-record-button" type="button" onClick={() => {
-                          if (row.adjustment) onOpenAdjustment(row.adjustment)
-                        }}>
-                          {row.code}
-                        </button>
-                      ) : row.href ? (
-                        <ManagementRecordLink href={row.href}>
-                          {row.code}
-                        </ManagementRecordLink>
-                      ) : <strong>{row.code}</strong>}
-                    </td>
-                    <td>{dateTime(row.created_at)}</td>
-                    <td>{row.type}</td>
-                    <td><MoneyText value={row.value_delta} /></td>
-                    <td><MoneyText value={row.running_debt} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ManagementTableViewport>
-            <ManagementTableFooter
-              ariaLabel="Phân trang công nợ"
-              entityLabel="dòng công nợ"
-              page={safeLedgerPage}
-              pageSize={ledgerPageSize}
-              pageSizeOptions={[ledgerPageSize]}
-              total={ledgerRows.length}
-              canGoPrevious={safeLedgerPage > 1}
-              canGoNext={safeLedgerPage < totalPages}
-              onFirst={() => onLedgerPageChange(1)}
-              onPrevious={() => onLedgerPageChange(Math.max(1, safeLedgerPage - 1))}
-              onNext={() => onLedgerPageChange(Math.min(totalPages, safeLedgerPage + 1))}
-              onLast={() => onLedgerPageChange(totalPages)}
-              onPageChange={(nextPage) => onLedgerPageChange(nextPage)}
-            />
-        </>
-      ) : <ManagementDetailInlineNote>Chưa có lịch sử công nợ.</ManagementDetailInlineNote>}
-    </section>
-  )
-}
 
 function CustomerHistoryPanel({
   history,
@@ -1671,474 +1393,6 @@ function CustomerHistoryPanel({
         </>
       ) : null}
     </section>
-  )
-}
-
-type CustomerDebtAdjustmentForm = {
-  adjustmentId: string
-  adjustedAt: string
-  adjustedAtIso: string | null
-  amount: string
-  note: string
-}
-
-function parseCustomerDebtAdjustmentDateTime(value: string) {
-  return parseQcvDateTimeInputToLocalDate(value)
-}
-
-function formatCustomerDebtAdjustmentDateTime(value: Date) {
-  return formatQcvDateTime(value)
-}
-
-function CustomerDebtPaymentDialog({
-  customer,
-  collectorName,
-  debt,
-  fallbackDebt,
-  form,
-  saving,
-  error,
-  canSave,
-  onChange,
-  onClose,
-  onSubmit,
-}: {
-  customer: Customer
-  collectorName: string
-  debt: CustomerDebtLedgerState | undefined
-  fallbackDebt: number
-  form: CustomerDebtPaymentForm
-  saving: boolean
-  error: string | null
-  canSave: boolean
-  onChange: (form: CustomerDebtPaymentForm) => void
-  onClose: () => void
-  onSubmit: (form: CustomerDebtPaymentForm, currentDebt: number, paymentRows: CustomerDebtPaymentRow[]) => void
-}) {
-  const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = currentSystemDate()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
-  const selectedPaidDateTime = parseCustomerDebtAdjustmentDateTime(form.paidAt)
-  const calendarDays = managementDateTimeCalendarDays(calendarMonth)
-  const updateField = (field: keyof CustomerDebtPaymentForm, value: string | boolean | Record<string, string>) => {
-    onChange({ ...form, [field]: value })
-  }
-  const selectPaidDate = (date: Date) => {
-    const base = selectedPaidDateTime ?? currentSystemDate()
-    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
-    updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
-    setPickerOpen(null)
-  }
-  const selectPaidTime = (time: string) => {
-    const [hour, minute] = time.split(':').map(Number)
-    const base = selectedPaidDateTime ?? currentSystemDate()
-    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
-    updateField('paidAt', formatCustomerDebtAdjustmentDateTime(next))
-    setPickerOpen(null)
-  }
-  const currentDebt = customerDebtCurrentAmount(debt, fallbackDebt)
-  const invoiceRows = typeof debt === 'object'
-    ? debt.invoiceHistory.length > 0
-      ? debt.invoiceHistory
-      : debt.debt.invoices.map((invoice) => ({
-          id: invoice.order_id,
-          code: invoice.order_code,
-          created_at: invoice.created_at,
-          total_amount: invoice.total_amount,
-          paid_amount: invoice.paid_amount,
-          debt_amount: invoice.remaining_debt,
-          payment_status: invoice.remaining_debt > 0 ? 'unpaid' : 'paid',
-          status: 'completed' as const,
-          seller: { id: '', name: '' },
-        }))
-    : []
-  const ledgerRows = typeof debt === 'object'
-    ? (debt.debt.ledger_rows?.length ?? 0) > 0
-      ? customerDebtLedgerRowsFromBackend(debt.debt)
-      : buildCustomerDebtLedgerRows(
-          invoiceRows,
-          debt.cashbookHistory,
-          debt.debt.adjustments ?? [],
-          debt.debt.linked_supplier_receipts ?? [],
-          { currentTotal: currentDebt },
-        )
-    : []
-  const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
-  const hasManualInvoicePayments = Object.values(form.invoicePayments).some((value) => parseMoneyInput(value) > 0)
-  const manualPaymentAmount = summaryRows.reduce((sum, row) => sum + Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt), 0)
-  const paymentAmount = hasManualInvoicePayments ? manualPaymentAmount : parseMoneyInput(form.amount)
-  const paymentRows = hasManualInvoicePayments
-    ? summaryRows.map((row) => ({
-        ...row,
-        paid_before: Math.max(row.total_amount - row.remaining_debt, 0),
-        payment_amount: Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt),
-      }))
-    : buildCustomerDebtPaymentRows(summaryRows, paymentAmount)
-  const allocatedAmount = paymentRows.reduce((sum, row) => sum + row.payment_amount, 0)
-  const unallocatedAmount = Math.max(paymentAmount - allocatedAmount, 0)
-  const collectorLabel = collectorName.trim() || customer.created_by?.name || 'Chưa xác định'
-  const updateAmount = (value: string) => {
-    const digits = value.replace(/\D/g, '')
-    onChange({ ...form, amount: digits === '' ? '' : formatMoney(Number(digits)), invoicePayments: {} })
-  }
-  const updateInvoicePayment = (row: CustomerDebtPaymentRow, value: string) => {
-    const digits = value.replace(/\D/g, '')
-    const nextAmount = digits === '' ? 0 : Math.min(Number(digits), row.remaining_debt)
-    const nextInvoicePayments = {
-      ...form.invoicePayments,
-      [row.id]: nextAmount > 0 ? formatMoney(nextAmount) : '',
-    }
-    const nextTotal = summaryRows.reduce((sum, summaryRow) => {
-      const rawValue = summaryRow.id === row.id ? nextInvoicePayments[summaryRow.id] : form.invoicePayments[summaryRow.id] ?? ''
-      return sum + Math.min(parseMoneyInput(rawValue), summaryRow.remaining_debt)
-    }, 0)
-    onChange({ ...form, amount: nextTotal > 0 ? formatMoney(nextTotal) : '', invoicePayments: nextInvoicePayments })
-  }
-  const canSubmit = canSave
-    && !saving
-    && paymentAmount > 0
-    && paymentAmount <= currentDebt
-    && debt !== undefined
-    && debt !== 'loading'
-    && debt !== 'error'
-    && summaryRows.length > 0
-
-  return (
-    <div className="management-modal-backdrop">
-      <section aria-label={`Thanh toán công nợ ${customer.code}`} aria-modal="true" className="management-modal-dialog customer-debt-payment-dialog" role="dialog">
-        <header className="management-modal-header">
-          <div>
-            <h2>Thanh toán</h2>
-            <p>{customer.name} · Nợ hiện tại: {formatMoney(currentDebt)} · Người thu: {collectorLabel}</p>
-          </div>
-          <button aria-label="Đóng thanh toán công nợ" className="management-icon-button" type="button" onClick={onClose}>
-            ×
-          </button>
-        </header>
-        <form
-          aria-label="Thanh toán công nợ"
-          className="management-modal-form customer-debt-payment-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            onSubmit(form, currentDebt, paymentRows)
-          }}
-        >
-          {error ? <p role="alert" className="form-error">{error}</p> : null}
-          {debt === undefined || debt === 'loading' ? <p>Đang tải hóa đơn công nợ...</p> : null}
-          {debt === 'error' ? <p role="alert">Không tải được hóa đơn công nợ.</p> : null}
-          <div className="customer-debt-payment-grid">
-            <label>
-              <span>Thời gian</span>
-              <span className="customer-debt-adjustment-input-shell">
-                <input
-                  placeholder="dd/mm/yyyy hh:mm"
-                  value={form.paidAt}
-                  onChange={(event) => updateField('paidAt', event.target.value)}
-                />
-                <button aria-expanded={pickerOpen === 'date'} aria-label="Chọn ngày thanh toán" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-date" type="button" onClick={() => setPickerOpen((current) => current === 'date' ? null : 'date')}>
-                  <CalendarDays size={15} />
-                </button>
-                <button aria-expanded={pickerOpen === 'time'} aria-label="Chọn giờ thanh toán" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-time" type="button" onClick={() => setPickerOpen((current) => current === 'time' ? null : 'time')}>
-                  <Clock3 size={15} />
-                </button>
-                {pickerOpen === 'date' ? (
-                  <section aria-label="Lịch chọn ngày thanh toán" className="management-date-time-picker management-date-time-date-picker customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
-                    <header>
-                      <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
-                        ‹
-                      </button>
-                      <strong>Tháng {calendarMonth.getMonth() + 1} {calendarMonth.getFullYear()}</strong>
-                      <button aria-label="Tháng sau" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
-                        ›
-                      </button>
-                    </header>
-                    <div className="management-date-time-weekdays customer-debt-adjustment-weekdays" aria-hidden="true">
-                      {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
-                    </div>
-                    <div className="management-date-time-calendar-grid customer-debt-adjustment-calendar-grid">
-                      {calendarDays.map((date) => {
-                        const selected = selectedPaidDateTime ? date.toDateString() === selectedPaidDateTime.toDateString() : false
-                        return (
-                          <button
-                            aria-pressed={selected}
-                            className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'management-date-time-muted-day customer-debt-adjustment-muted-day'}
-                            key={date.toISOString()}
-                            type="button"
-                            onClick={() => selectPaidDate(date)}
-                          >
-                            {date.getDate()}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </section>
-                ) : null}
-                {pickerOpen === 'time' ? (
-                  <section aria-label="Chọn giờ thanh toán" className="management-date-time-picker management-date-time-time-picker customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
-                    {managementDateTimeTimeOptions.map((time) => (
-                      <button key={time} type="button" onClick={() => selectPaidTime(time)}>
-                        {time}
-                      </button>
-                    ))}
-                  </section>
-                ) : null}
-              </span>
-            </label>
-            <label>
-              <span>Phương thức TT</span>
-              <select value={form.method} onChange={(event) => updateField('method', event.target.value)}>
-                <option value="cash">Tiền mặt</option>
-                <option value="bank_transfer">Chuyển khoản</option>
-              </select>
-            </label>
-          </div>
-          <label className="customer-debt-payment-full">
-            <span>Số tiền</span>
-            <input
-              aria-label="Số tiền"
-              autoFocus
-              inputMode="numeric"
-              value={form.amount}
-              onChange={(event) => updateAmount(event.target.value)}
-            />
-            <small>Nợ còn: {formatMoney(currentDebt - paymentAmount)}</small>
-          </label>
-          <label className="customer-debt-payment-full">
-            <span>Ghi chú</span>
-            <input placeholder="Nhập ghi chú" value={form.note} onChange={(event) => updateField('note', event.target.value)} />
-          </label>
-          <label className="customer-debt-payment-checkbox">
-            <input checked={form.allocateToInvoices} type="checkbox" onChange={(event) => updateField('allocateToInvoices', event.target.checked)} />
-            <span>Phân bổ vào hóa đơn</span>
-          </label>
-          {form.allocateToInvoices ? (
-            <section aria-label="Phân bổ hóa đơn công nợ" className="customer-debt-payment-allocation">
-              <ManagementTableViewport>
-                <table aria-label="Danh sách phân bổ hóa đơn công nợ" className="customer-debt-payment-table">
-                  <thead>
-                    <tr>
-                      <th>Mã hóa đơn</th>
-                      <th>Thời gian</th>
-                      <th>Giá trị hóa đơn</th>
-                      <th>Đã thu trước</th>
-                      <th>Còn cần thu</th>
-                      <th>Tiền thu</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {paymentRows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <ManagementRecordLink href={managementRecordOpenHref('/sales-documents', row.code, { type: 'invoice' })}>
-                            {row.code}
-                          </ManagementRecordLink>
-                        </td>
-                        <td>{dateTime(row.created_at)}</td>
-                        <td><MoneyText value={row.total_amount} /></td>
-                        <td><MoneyText value={row.paid_before} /></td>
-                        <td><MoneyText value={row.remaining_debt} /></td>
-                        <td>
-                          <input
-                            aria-label={`Tiền thu ${row.code}`}
-                            inputMode="numeric"
-                            value={row.payment_amount > 0 ? formatMoney(row.payment_amount) : ''}
-                            onChange={(event) => updateInvoicePayment(row, event.target.value)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </ManagementTableViewport>
-              <div className="customer-debt-payment-unallocated">
-                <span>Tiền chưa phân bổ:</span>
-                <strong>{formatMoney(unallocatedAmount)}</strong>
-              </div>
-            </section>
-          ) : null}
-          <footer className="management-modal-footer">
-            <button className="button button-secondary" type="button" onClick={onClose}>
-              Bỏ qua
-            </button>
-            <button className="button button-secondary" disabled={!canSubmit} type="submit">
-              Tạo phiếu thu & In
-            </button>
-            <button className="button button-primary" disabled={!canSubmit} type="submit">
-              Tạo phiếu thu
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
-  )
-}
-
-function CustomerDebtAdjustmentDialog({
-  customer,
-  currentDebt,
-  form,
-  onChange,
-  onClose,
-  saving,
-  error,
-  canSave,
-  onSubmit,
-}: {
-  customer: Customer
-  currentDebt: number
-  form: CustomerDebtAdjustmentForm
-  onChange: (form: CustomerDebtAdjustmentForm) => void
-  onClose: () => void
-  saving: boolean
-  error: string | null
-  canSave: boolean
-  onSubmit: (form: CustomerDebtAdjustmentForm) => void
-}) {
-  const selectedAdjustmentDateTime = parseCustomerDebtAdjustmentDateTime(form.adjustedAt)
-  const [pickerOpen, setPickerOpen] = useState<'date' | 'time' | null>(null)
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const now = currentSystemDate()
-    return new Date(now.getFullYear(), now.getMonth(), 1)
-  })
-  const calendarDays = managementDateTimeCalendarDays(calendarMonth)
-  const canSubmit = canSave && !saving && form.adjustmentId.trim() !== '' && selectedAdjustmentDateTime !== null && parseMoneyInput(form.amount) > 0
-  const updateField = (field: keyof CustomerDebtAdjustmentForm, value: string) => {
-    onChange({ ...form, [field]: value })
-  }
-  const selectAdjustmentDate = (date: Date) => {
-    const base = selectedAdjustmentDateTime ?? currentSystemDate()
-    const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeStoredIsoFromLocalClock(next) })
-    setPickerOpen(null)
-  }
-  const selectAdjustmentTime = (time: string) => {
-    const [hour, minute] = time.split(':').map(Number)
-    const base = selectedAdjustmentDateTime ?? currentSystemDate()
-    const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeStoredIsoFromLocalClock(next) })
-    setPickerOpen(null)
-  }
-
-  return (
-    <div className="management-modal-backdrop">
-      <section aria-label={`Điều chỉnh công nợ ${customer.code}`} aria-modal="true" className="management-modal-dialog management-modal-dialog-compact customer-debt-adjustment-dialog" role="dialog">
-        <header className="management-modal-header">
-          <h2>
-            Điều chỉnh
-            <span aria-label="Thông tin điều chỉnh công nợ" className="customer-debt-adjustment-info">
-              <Info aria-hidden="true" size={13} />
-            </span>
-          </h2>
-          <button aria-label="Đóng điều chỉnh công nợ" className="management-icon-button" type="button" onClick={onClose}>
-            ×
-          </button>
-        </header>
-        <form
-          aria-label="Điều chỉnh công nợ"
-          className="management-modal-form customer-debt-adjustment-form"
-          onSubmit={(event) => {
-            event.preventDefault()
-            if (canSubmit) onSubmit(form)
-          }}
-        >
-          {error ? <p role="alert" className="form-error">{error}</p> : null}
-          <div className="customer-debt-adjustment-row">
-            <span>Nợ cần thu hiện tại</span>
-            <strong>{formatMoney(currentDebt)}</strong>
-          </div>
-          <label>
-            <span>Ngày điều chỉnh</span>
-            <span className="customer-debt-adjustment-input-shell">
-              <input
-                placeholder="dd/mm/yyyy hh:mm"
-                value={form.adjustedAt}
-                onChange={(event) => updateField('adjustedAt', event.target.value)}
-              />
-              <button aria-expanded={pickerOpen === 'date'} aria-label="Chọn ngày điều chỉnh" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-date" type="button" onClick={() => setPickerOpen((current) => current === 'date' ? null : 'date')}>
-                <CalendarDays size={15} />
-              </button>
-              <button aria-expanded={pickerOpen === 'time'} aria-label="Chọn giờ điều chỉnh" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-time" type="button" onClick={() => setPickerOpen((current) => current === 'time' ? null : 'time')}>
-                <Clock3 size={15} />
-              </button>
-              {pickerOpen === 'date' ? (
-                <section aria-label="Lịch chọn ngày điều chỉnh" className="management-date-time-picker management-date-time-date-picker customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
-                  <header>
-                    <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
-                      ‹
-                    </button>
-                    <strong>Tháng {calendarMonth.getMonth() + 1} {calendarMonth.getFullYear()}</strong>
-                    <button aria-label="Tháng sau" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}>
-                      ›
-                    </button>
-                  </header>
-                  <div className="management-date-time-weekdays customer-debt-adjustment-weekdays" aria-hidden="true">
-                    {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
-                  </div>
-                  <div className="management-date-time-calendar-grid customer-debt-adjustment-calendar-grid">
-                    {calendarDays.map((date) => {
-                      const selected = selectedAdjustmentDateTime
-                        ? date.toDateString() === selectedAdjustmentDateTime.toDateString()
-                        : false
-                      return (
-                        <button
-                          aria-pressed={selected}
-                          className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'management-date-time-muted-day customer-debt-adjustment-muted-day'}
-                          key={date.toISOString()}
-                          type="button"
-                          onClick={() => selectAdjustmentDate(date)}
-                        >
-                          {date.getDate()}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </section>
-              ) : null}
-              {pickerOpen === 'time' ? (
-                <section aria-label="Chọn giờ điều chỉnh" className="management-date-time-picker management-date-time-time-picker customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
-                  {managementDateTimeTimeOptions.map((time) => (
-                    <button key={time} type="button" onClick={() => selectAdjustmentTime(time)}>
-                      {time}
-                    </button>
-                  ))}
-                </section>
-              ) : null}
-            </span>
-          </label>
-          <label>
-            <span>Giá trị nợ điều chỉnh</span>
-            <input
-              autoFocus
-              inputMode="numeric"
-              value={form.amount}
-              onChange={(event) => updateField('amount', event.target.value)}
-            />
-          </label>
-          <label>
-            <span>Mô tả</span>
-            <span className="customer-debt-adjustment-input-shell">
-              <input
-                value={form.note}
-                onChange={(event) => updateField('note', event.target.value)}
-              />
-              <span aria-hidden="true" className="customer-debt-adjustment-input-button customer-debt-adjustment-input-button-left">
-                <Pencil size={15} />
-              </span>
-            </span>
-          </label>
-          <footer className="management-modal-footer">
-            <button className="button button-secondary" type="button" onClick={onClose}>
-              Bỏ qua
-            </button>
-            <button className="button button-primary" disabled={!canSubmit} type="submit">
-              {saving ? 'Đang lưu...' : 'Cập nhật'}
-            </button>
-          </footer>
-        </form>
-      </section>
-    </div>
   )
 }
 

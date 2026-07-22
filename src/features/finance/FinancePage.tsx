@@ -7,6 +7,7 @@ import {
   ManagementDateRangeInputs,
   ManagementConfirmDialog,
   ManagementDetailRow,
+  ManagementDropdownField,
   ManagementFilterGroup,
   ManagementFilterSidebar,
   ManagementListSurface,
@@ -1480,13 +1481,19 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                   </select>
                 </label>
                 {voucherPaymentMethod === 'bank_transfer' ? (
-                  <label>
-                    {voucherAccountLabel}                    <select value={voucherAccountId} onChange={(event) => chooseVoucherAccount(event.target.value)}>
-                      <option value="">Chọn tài khoản</option>
-                      {activeBankAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>{financeAccountChoiceLabel(account)}</option>
-                      ))}                    </select>
-                  </label>
+                  <ManagementDropdownField
+                    label={voucherAccountLabel}
+                    menuLabel={`Chọn ${voucherAccountLabel.toLocaleLowerCase('vi')}`}
+                    options={[
+                      { value: '', label: 'Chọn tài khoản' },
+                      ...activeBankAccounts.map((account) => ({
+                        value: account.id,
+                        label: financeAccountChoiceLabel(account),
+                      })),
+                    ]}
+                    value={voucherAccountId}
+                    onChange={chooseVoucherAccount}
+                  />
                 ) : null}                <label className="management-modal-field-wide">
                   Số tiền
                   <input
