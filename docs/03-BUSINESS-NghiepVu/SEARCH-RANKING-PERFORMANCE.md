@@ -24,6 +24,13 @@ Chuẩn chung:
 
 Nút `Xóa tìm kiếm` luôn reset ngay, không cần bấm `Enter`.
 
+### 2.1. Chuẩn code bắt buộc
+
+- Quick-pick search phải đi qua `useQuickPickSearch`.
+- Search danh sách quản trị phải đi qua `useManagementSearch`.
+- Không tự viết debounce/request-id/clear-state riêng ở từng page nếu chưa có ngoại lệ ghi rõ trong doc này.
+- Search quản trị chỉ áp dụng khi bấm `Enter` hoặc submit form; gõ ký tự chỉ đổi draft.
+
 ## 3. Quy tắc lọc trạng thái
 
 | Ngữ cảnh | Dữ liệu được hiện | Dữ liệu không được hiện |

@@ -23,13 +23,14 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { ManagementRecordLink, managementRecordOpenHref } from '../../components/ui-shell/primitives'
 import { appRoutes } from '../../app/routes'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import type { CatalogService } from './catalog-service'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
 import { ProductGroupTreeSelect } from './ProductGroupTreeSelect'
@@ -222,7 +223,8 @@ export function CatalogPage({
   const [stockAdjustForms, setStockAdjustForms] = useState<Record<string, StockAdjustForm>>({})
   const [stocktakeNotices, setStocktakeNotices] = useState<Record<string, StocktakeNotice>>({})
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
-  const [search, setSearch] = useState(routeSearch)
+  const catalogManagementSearch = useManagementSearch({ initialSearch: routeSearch })
+  const search = catalogManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState(routeSearch)
   const [status, setStatus] = useState<ProductStatusFilter>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
@@ -412,7 +414,11 @@ export function CatalogPage({
   }, [productCreatedQuickTimeOpen])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyProductSearch(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      catalogManagementSearch.applySearch(nextSearch)
+      return applyProductSearch(nextSearch)
+    })
   }
 
   function applyProductSearch(nextSearch: string) {
@@ -430,14 +436,13 @@ export function CatalogPage({
   }
 
   function changeProductSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      resetSelection: () => {
-        setSelectedProductId(null)
-        setSelectedDetailTab('info')
-      },
-      load: applyProductSearch,
-    })
+    catalogManagementSearch.changeSearch(nextSearch)
+    setSelectedProductId(null)
+    setSelectedDetailTab('info')
+    if (nextSearch.trim().length === 0) {
+      catalogManagementSearch.applySearch('')
+      void applyProductSearch('')
+    }
   }
 
   async function applySidebarFilters(nextFilters: Partial<{

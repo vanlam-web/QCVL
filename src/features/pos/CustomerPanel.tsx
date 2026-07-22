@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronDown, Search, UserRound, X } from 'lucide-react'
 import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
-import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
+import { quickPickCustomerPageSize, quickPickDefaultPage, quickPickSearchContext } from '../../lib/search-contract'
+import { useQuickPickSearch } from '../../lib/use-quick-pick-search'
 import { CustomerCreateDialog, createCustomerFormDefaults, type CustomerCreateForm } from '../catalog/CustomerCreateDialog'
 import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/customer-presenter'
 import {
@@ -53,9 +54,6 @@ export function CustomerPanel({
   selectedCustomer: Customer | null
   onSelectCustomer: (customer: Customer | null) => void
 }) {
-  const [search, setSearch] = useState(() => selectedCustomer?.name ?? '')
-  const [results, setResults] = useState<Customer[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<CustomerDetailTab>('info')
@@ -68,15 +66,33 @@ export function CustomerPanel({
   const [detailDropdownOpen, setDetailDropdownOpen] = useState<CustomerDetailDropdownKey>(null)
   const [form, setForm] = useState<CustomerCreateForm>(createCustomerFormDefaults)
   const [error, setError] = useState<string | null>(null)
-  const searchRequestId = useRef(0)
-  const lastSuggestionQuery = useRef<string | null>(null)
   const detailRequestId = useRef(0)
   const searchPanelRef = useRef<HTMLElement | null>(null)
-  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
+  const searchCustomersForQuickPick = useCallback((query: string) => service.listCustomers({
+    search: query,
+    status: 'active',
+    page: quickPickDefaultPage,
+    page_size: quickPickCustomerPageSize,
+    search_context: quickPickSearchContext,
+  }), [service])
+  const formatCustomerSearchError = useCallback((cause: unknown) => formatApiError(cause, 'Không tìm được khách hàng.'), [])
+  const shouldSearchCustomer = useCallback(
+    (query: string) => !(selectedCustomer !== null && query === selectedCustomerSearchText),
+    [selectedCustomer, selectedCustomerSearchText],
+  )
+  const customerSearch = useQuickPickSearch<Customer>({
+    search: searchCustomersForQuickPick,
+    formatError: formatCustomerSearchError,
+    shouldSearch: shouldSearchCustomer,
+  })
+  const search = customerSearch.query
+  const results = customerSearch.results
+  const searchLoading = customerSearch.loading
+  const suggestionsOpen = customerSearch.suggestionsOpen
   const searchQuery = search.trim()
-  const debouncedSearch = useDebouncedValue(search, quickPickSearchDebounceMs)
   const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
+  const visibleError = error ?? customerSearch.error
   const hasSelectedCustomerDebtLedger =
     selectedCustomer !== null
     && detailDebt !== undefined
@@ -101,12 +117,12 @@ export function CustomerPanel({
     function closeOnOutsidePointer(event: PointerEvent) {
       const target = event.target
       if (target instanceof Node && searchPanelRef.current?.contains(target)) return
-      setSuggestionsOpen(false)
+      customerSearch.setSuggestionsOpen(false)
     }
 
     window.addEventListener('pointerdown', closeOnOutsidePointer)
     return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
-  }, [suggestionsOpen])
+  }, [customerSearch, suggestionsOpen])
 
   useEffect(() => {
     if (selectedCustomer === null) return
@@ -157,90 +173,20 @@ export function CustomerPanel({
       .catch(() => setCustomerGroups([]))
   }, [createOpen, detailOpen, selectedCustomer, service])
 
-  useEffect(() => {
-    const query = debouncedSearch.trim()
-    const showsSelectedCustomer = selectedCustomer !== null && query === selectedCustomerSearchText
-    if (!suggestionsOpen || query.length === 0 || showsSelectedCustomer) {
-      searchRequestId.current += 1
-      lastSuggestionQuery.current = null
-      setSearchLoading(false)
-      if (query.length === 0 || showsSelectedCustomer) {
-        const clearId = window.setTimeout(() => setResults([]), 0)
-        return () => window.clearTimeout(clearId)
-      }
-      return undefined
-    }
-    if (lastSuggestionQuery.current === query) return undefined
-
-    const requestId = searchRequestId.current + 1
-    searchRequestId.current = requestId
-    setError(null)
-    setSearchLoading(true)
-
-    service
-      .listCustomers({ search: query, status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
-      .then((response) => {
-        if (searchRequestId.current !== requestId) return
-        lastSuggestionQuery.current = query
-        setResults(response.items)
-        setSearchLoading(false)
-      })
-      .catch((cause) => {
-        if (searchRequestId.current !== requestId) return
-        lastSuggestionQuery.current = query
-        setResults([])
-        setSearchLoading(false)
-        setError(formatApiError(cause, 'Không tìm được khách hàng.'))
-      })
-
-    return undefined
-  }, [debouncedSearch, selectedCustomer, selectedCustomerSearchText, service, suggestionsOpen])
-
-  async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError(null)
-    const query = search.trim()
-    const requestId = searchRequestId.current + 1
-    searchRequestId.current = requestId
-    lastSuggestionQuery.current = query || null
-    setSearchLoading(true)
-    try {
-      const response = await service.listCustomers({ search: query || undefined, status: 'active', search_context: 'quick_pick' })
-      if (searchRequestId.current !== requestId) return
-      setResults(response.items)
-      setSearchLoading(false)
-    } catch (cause) {
-      if (searchRequestId.current !== requestId) return
-      setSearchLoading(false)
-      setError(formatApiError(cause, 'Không tìm được khách hàng.'))
-    }
-  }
-
   function suggestCustomers(nextSearch: string) {
-    setSearch(nextSearch)
-    const query = nextSearch.trim()
-    setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
-    if (query.length === 0 || (selectedCustomer !== null && query === selectedCustomerSearchText)) {
-      searchRequestId.current += 1
-      lastSuggestionQuery.current = null
-      setResults([])
-      setSearchLoading(false)
-    }
+    customerSearch.changeQuery(nextSearch)
   }
 
   function selectCustomer(customer: Customer) {
     void Promise.resolve(service.recordSearchSelection({ entity_type: 'customer', entity_id: customer.id })).catch(() => undefined)
-    setSearch(customer.name)
-    setResults([])
-    setSuggestionsOpen(false)
+    customerSearch.setQuery(customer.name)
+    customerSearch.setResults([])
+    customerSearch.setSuggestionsOpen(false)
     onSelectCustomer(customer)
   }
 
   function clearSelectedCustomer() {
-    setSearch('')
-    setResults([])
-    setSearchLoading(false)
-    setSuggestionsOpen(false)
+    customerSearch.clear()
     setDetailOpen(false)
     setDetailTab('info')
     setDetailDebt(undefined)
@@ -277,7 +223,7 @@ export function CustomerPanel({
         note: nullableFormText(detailForm.note),
       })
       onSelectCustomer(updated)
-      setSearch(updated.name)
+      customerSearch.setQuery(updated.name)
       setDetailDropdownOpen(null)
       setDetailOpen(false)
     } catch (cause) {
@@ -304,9 +250,9 @@ export function CustomerPanel({
         company_name: form.customerType === 'company' ? form.companyName.trim() || null : null,
       })
       onSelectCustomer(created)
-      setResults([])
-      setSearch(created.name)
-      setSuggestionsOpen(false)
+      customerSearch.setResults([])
+      customerSearch.setQuery(created.name)
+      customerSearch.setSuggestionsOpen(false)
       setForm(createCustomerFormDefaults())
       setCreateOpen(false)
     } catch (cause) {
@@ -318,7 +264,7 @@ export function CustomerPanel({
 
   return (
     <section ref={searchPanelRef} aria-label="Khách hàng" className="customer-panel">
-      {error ? <p role="alert">{error}</p> : null}
+      {visibleError ? <p role="alert">{visibleError}</p> : null}
 
       {selectedCustomer ? (
         <div aria-label="Khách đã chọn" className="customer-selected" role="group">
@@ -382,17 +328,14 @@ export function CustomerPanel({
           ) : null}
         </div>
       ) : (
-        <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={searchCustomers}>
+        <form aria-label="Tìm khách hàng" className="customer-search" onSubmit={(event) => void customerSearch.submitSearch(event)}>
           <ManagementCompactSearch
             label="Tìm khách"
             placeholder="Tìm khách hàng (F4)"
             value={search}
             leadingIcon={<Search aria-hidden="true" size={16} />}
             trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo khách nhanh" onClick={openCreateCustomer} />}
-            onFocus={() => {
-              const query = search.trim()
-              setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
-            }}
+            onFocus={() => customerSearch.changeQuery(search)}
             suggestions={
               suggestionsOpen && searchQuery.length > 0 && !searchShowsSelectedCustomer
                 ? results.map((customer) => ({

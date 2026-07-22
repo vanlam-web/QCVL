@@ -99,7 +99,7 @@ describe('CustomerPanel', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', search_context: 'quick_pick' })
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
     expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'customer', entity_id: customer.id })
     expect(onSelectCustomer).toHaveBeenCalledWith(customer)
   })

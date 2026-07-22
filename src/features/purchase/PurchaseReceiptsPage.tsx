@@ -59,12 +59,14 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { normalizeManagementSearchText, preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { normalizeManagementSearchText, preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
-import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
+import { quickPickDefaultPage, quickPickDefaultPageSize, quickPickSearchContext } from '../../lib/search-contract'
+import { useManagementSearch } from '../../lib/use-management-search'
+import { useQuickPickSearch } from '../../lib/use-quick-pick-search'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
@@ -126,11 +128,19 @@ function supplierDocumentNoText(value: string | null | undefined) {
   return text.toUpperCase().startsWith('CODEX-') ? '' : text
 }
 
-const receiptProductSearchPageSize = 20
-const receiptSupplierSearchPageSize = 20
+const receiptProductSearchPageSize = quickPickDefaultPageSize
+const receiptSupplierSearchPageSize = quickPickDefaultPageSize
 const receiptCreateDraftStorageKey = 'qc-oms.purchase-receipt-create-draft.v1'
 const receiptCreateDraftWindowNamePrefix = 'qc-oms.purchase-receipt-create-draft='
 const receiptCreateDraftHistoryStateKey = 'qc_oms_purchase_receipt_create_draft_v1'
+
+function formatReceiptProductSearchError(cause: unknown) {
+  return formatApiError(cause, 'Không tìm được hàng hóa.')
+}
+
+function formatReceiptSupplierSearchError(cause: unknown) {
+  return formatApiError(cause, 'Không tìm được nhà cung cấp.')
+}
 
 interface PurchaseReceiptCreateDraft {
   form: PurchaseReceiptInput
@@ -477,7 +487,8 @@ export function PurchaseReceiptsPage({
   const [routeFilters] = useState(initialPurchaseReceiptRouteFilters)
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [search, setSearch] = useState(routeFilters.search)
+  const receiptManagementSearch = useManagementSearch({ initialSearch: routeFilters.search })
+  const search = receiptManagementSearch.draftSearch
   const [status, setStatus] = useState<PurchaseReceiptStatus | 'all'>(routeFilters.status)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -493,11 +504,6 @@ export function PurchaseReceiptsPage({
   const [receiptDetailTab, setReceiptDetailTab] = useState<ReceiptDetailTab>('info')
   const [form, setForm] = useState<PurchaseReceiptInput>(() => blankForm())
   const [receiptReceivedAtText, setReceiptReceivedAtText] = useState(() => formatReceiptDateTimeInput(blankForm().received_at))
-  const [receiptProductSearch, setReceiptProductSearch] = useState('')
-  const [receiptSupplierSearch, setReceiptSupplierSearch] = useState('')
-  const debouncedReceiptProductSearch = useDebouncedValue(receiptProductSearch, quickPickSearchDebounceMs)
-  const debouncedReceiptSupplierSearch = useDebouncedValue(receiptSupplierSearch, quickPickSearchDebounceMs)
-  const [receiptSupplierSuggestionsOpen, setReceiptSupplierSuggestionsOpen] = useState(false)
   const [receiptSupplierSearchActive, setReceiptSupplierSearchActive] = useState(false)
   const [receiptSupplierCreateOpen, setReceiptSupplierCreateOpen] = useState(false)
   const [receiptSupplierCreateSaving, setReceiptSupplierCreateSaving] = useState(false)
@@ -526,20 +532,6 @@ export function PurchaseReceiptsPage({
     unitName: '',
     sellMethod: 'quantity' as PurchaseReceiptProduct['sell_method'],
   })
-  const [receiptProductCatalogSearchResult, setReceiptProductCatalogSearchResult] = useState<{
-    search: string
-    products: PurchaseReceiptProduct[]
-  }>({
-    search: '',
-    products: [],
-  })
-  const [receiptSupplierCatalogSearchResult, setReceiptSupplierCatalogSearchResult] = useState<{
-    search: string
-    suppliers: Supplier[]
-  }>({
-    search: '',
-    suppliers: [],
-  })
   const [error, setError] = useState<string | null>(null)
   const receiptProductSearchRef = useRef<HTMLInputElement | null>(null)
   const receiptProductSearchToolbarRef = useRef<HTMLDivElement | null>(null)
@@ -549,6 +541,40 @@ export function PurchaseReceiptsPage({
   const receiptCreateDraftRestoredRef = useRef(false)
   const skipReceiptCreateDraftPersistRef = useRef(false)
   const receiptSortInitialRender = useRef(true)
+  const searchReceiptProducts = useCallback(async (query: string) => {
+    const productResult = await service.listProducts({
+      status: 'active',
+      search: query,
+      page: quickPickDefaultPage,
+      page_size: receiptProductSearchPageSize,
+      search_context: quickPickSearchContext,
+    })
+    return {
+      items: productResult.items.filter((product) => product.status === 'active' && isReceiptPurchaseSearchableProduct(product)),
+    }
+  }, [service])
+  const searchReceiptSuppliers = useCallback(async (query: string) => {
+    const supplierResult = await service.listSuppliers({
+      status: 'active',
+      search: query,
+      page: quickPickDefaultPage,
+      page_size: receiptSupplierSearchPageSize,
+      search_context: quickPickSearchContext,
+    })
+    return {
+      items: supplierResult.items.filter((supplier) => supplier.status === 'active'),
+    }
+  }, [service])
+  const receiptProductQuickPick = useQuickPickSearch<PurchaseReceiptProduct>({
+    search: searchReceiptProducts,
+    formatError: formatReceiptProductSearchError,
+  })
+  const receiptSupplierQuickPick = useQuickPickSearch<Supplier>({
+    search: searchReceiptSuppliers,
+    formatError: formatReceiptSupplierSearchError,
+  })
+  const receiptProductSearch = receiptProductQuickPick.query
+  const receiptSupplierSearch = receiptSupplierQuickPick.query
   const totals = useMemo(() => {
     return purchaseReceiptTotals(form)
   }, [form])
@@ -578,20 +604,14 @@ export function PurchaseReceiptsPage({
   }, [form.supplier_id, suppliers])
   const receiptSupplierSearchQuery = normalizeManagementSearchText(receiptSupplierSearch)
   const receiptSupplierSearchResults = useMemo(() => {
-    const search = receiptSupplierSearch.trim()
-    const remoteSuppliers =
-      search.length === 0
-        ? []
-        : receiptSupplierCatalogSearchResult.search === search
-          ? receiptSupplierCatalogSearchResult.suppliers
-          : []
-    return uniqueReceiptSuppliersById([...remoteSuppliers, ...suppliers])
+    if (receiptSupplierSearchQuery.length === 0) return []
+    return uniqueReceiptSuppliersById([...receiptSupplierQuickPick.results, ...suppliers])
       .filter((supplier) => supplier.status === 'active')
       .filter((supplier) => supplierMatchesReceiptSearch(supplier, receiptSupplierSearchQuery))
       .sort((left, right) => left.name.localeCompare(right.name, 'vi'))
-  }, [receiptSupplierCatalogSearchResult, receiptSupplierSearch, receiptSupplierSearchQuery, suppliers])
+  }, [receiptSupplierQuickPick.results, receiptSupplierSearchQuery, suppliers])
   const receiptSupplierSuggestions = useMemo(() => {
-    if (!isCreatingReceipt || !receiptSupplierSearchActive || !receiptSupplierSuggestionsOpen) return undefined
+    if (!isCreatingReceipt || !receiptSupplierSearchActive || !receiptSupplierQuickPick.suggestionsOpen) return undefined
     return receiptSupplierSearchResults
       .slice(0, 8)
       .map((supplier) => ({
@@ -601,13 +621,11 @@ export function PurchaseReceiptsPage({
         meta: supplier.phone ? `ĐT: ${supplier.phone}` : undefined,
         ariaLabel: `Chọn nhà cung cấp ${supplier.code} ${supplier.name}`,
       }))
-  }, [isCreatingReceipt, receiptSupplierSearchActive, receiptSupplierSearchResults, receiptSupplierSuggestionsOpen])
+  }, [isCreatingReceipt, receiptSupplierQuickPick.suggestionsOpen, receiptSupplierSearchActive, receiptSupplierSearchResults])
   const receiptProductSearchResults = useMemo(() => {
-    const search = debouncedReceiptProductSearch.trim()
     const query = normalizeManagementSearchText(receiptProductSearch)
     if (!isCreatingReceipt || query.length === 0) return []
-    const searchProducts = receiptProductCatalogSearchResult.search === search ? receiptProductCatalogSearchResult.products : []
-    return uniqueReceiptProductsById([...searchProducts, ...products])
+    return uniqueReceiptProductsById([...receiptProductQuickPick.results, ...products])
       .filter(isReceiptPurchaseSearchableProduct)
       .filter((product) => receiptProductMatchesSearch(product, query))
       .sort((left, right) => {
@@ -615,7 +633,7 @@ export function PurchaseReceiptsPage({
         if (rankDelta !== 0) return rankDelta
         return left.name.localeCompare(right.name, 'vi')
       })
-  }, [isCreatingReceipt, products, receiptProductCatalogSearchResult, receiptProductSearch])
+  }, [isCreatingReceipt, products, receiptProductQuickPick.results, receiptProductSearch])
   const receiptProductSuggestions = useMemo(() => {
     return receiptProductSearchResults.slice(0, 8).map((product) => ({
       id: product.id,
@@ -667,7 +685,7 @@ export function PurchaseReceiptsPage({
       if (event.key === 'F4') {
         event.preventDefault()
         setReceiptSupplierSearchActive(true)
-        setReceiptSupplierSuggestionsOpen(true)
+        receiptSupplierQuickPick.setSuggestionsOpen(true)
         queueMicrotask(() => {
           receiptSupplierSearchInputRef.current?.focus()
           receiptSupplierSearchInputRef.current?.select()
@@ -698,8 +716,7 @@ export function PurchaseReceiptsPage({
       const target = event.target
       if (!(target instanceof Node)) return
       if (receiptProductSearchToolbarRef.current?.contains(target)) return
-      setReceiptProductSearch('')
-      setReceiptProductCatalogSearchResult({ search: '', products: [] })
+      receiptProductQuickPick.clear()
     }
 
     document.addEventListener('pointerdown', closeReceiptProductSearchOnOutsidePointer, true)
@@ -707,80 +724,18 @@ export function PurchaseReceiptsPage({
   }, [isCreatingReceipt, receiptProductSearch])
 
   useEffect(() => {
-    if (!isCreatingReceipt) return undefined
-
-    const search = receiptProductSearch.trim()
-    if (search.length === 0) {
-      return undefined
-    }
-
-    let active = true
-
-    async function searchProducts() {
-      try {
-        const productResult = await service.listProducts({
-          status: 'active',
-          search,
-          page: 1,
-          page_size: receiptProductSearchPageSize,
-          search_context: 'quick_pick',
-        })
-        if (!active) return
-        setReceiptProductCatalogSearchResult({
-          search,
-          products: productResult.items.filter((product) => product.status === 'active' && isReceiptPurchaseSearchableProduct(product)),
-        })
-      } catch (cause) {
-        if (!active) return
-        setReceiptProductCatalogSearchResult({ search, products: [] })
-        setError(formatApiError(cause, 'Không tìm được hàng hóa.'))
-      }
-    }
-
-    void searchProducts()
-
-    return () => {
-      active = false
-    }
-  }, [debouncedReceiptProductSearch, isCreatingReceipt, service])
+    if (receiptProductQuickPick.error) setError(receiptProductQuickPick.error)
+  }, [receiptProductQuickPick.error])
 
   useEffect(() => {
-    if (!isCreatingReceipt || !receiptSupplierSearchActive) return undefined
+    if (receiptSupplierQuickPick.error) setError(receiptSupplierQuickPick.error)
+  }, [receiptSupplierQuickPick.error])
 
-    const search = debouncedReceiptSupplierSearch.trim()
-    if (search.length === 0) {
-      return undefined
-    }
-
-    let active = true
-
-    async function searchSuppliers() {
-      try {
-        const supplierResult = await service.listSuppliers({
-          status: 'active',
-          search,
-          page: 1,
-          page_size: receiptSupplierSearchPageSize,
-          search_context: 'quick_pick',
-        })
-        if (!active) return
-        const activeSuppliers = supplierResult.items.filter((supplier) => supplier.status === 'active')
-        setReceiptSupplierCatalogSearchResult({ search, suppliers: activeSuppliers })
-        setSuppliers((current) => uniqueReceiptSuppliersById([...activeSuppliers, ...current]))
-        setSuppliersLoaded(true)
-      } catch (cause) {
-        if (!active) return
-        setReceiptSupplierCatalogSearchResult({ search, suppliers: [] })
-        setError(formatApiError(cause, 'Không tìm được nhà cung cấp.'))
-      }
-    }
-
-    void searchSuppliers()
-
-    return () => {
-      active = false
-    }
-  }, [debouncedReceiptSupplierSearch, isCreatingReceipt, receiptSupplierSearchActive, service])
+  useEffect(() => {
+    if (!isCreatingReceipt || receiptSupplierQuickPick.results.length === 0) return
+    setSuppliers((current) => uniqueReceiptSuppliersById([...receiptSupplierQuickPick.results, ...current]))
+    setSuppliersLoaded(true)
+  }, [isCreatingReceipt, receiptSupplierQuickPick.results])
 
   async function loadReceipts(
     input: {
@@ -1088,23 +1043,23 @@ export function PurchaseReceiptsPage({
     const supplier = suppliers.find((candidate) => candidate.id === form.supplier_id)
     const nextSearch = supplier ? supplierSearchText(supplier) : ''
     const frame = window.setTimeout(() => {
-      setReceiptSupplierSearch(nextSearch)
+      receiptSupplierQuickPick.setQuery(nextSearch)
     }, 0)
     return () => window.clearTimeout(frame)
   }, [form.supplier_id, isCreatingReceipt, receiptSupplierSearchActive, suppliers])
 
   useEffect(() => {
-    if (!receiptSupplierSuggestionsOpen) return undefined
+    if (!receiptSupplierQuickPick.suggestionsOpen) return undefined
 
     function closeOnOutsidePointer(event: PointerEvent) {
       const target = event.target
       if (target instanceof Node && receiptSupplierSearchRef.current?.contains(target)) return
-      setReceiptSupplierSuggestionsOpen(false)
+      receiptSupplierQuickPick.setSuggestionsOpen(false)
     }
 
     window.addEventListener('pointerdown', closeOnOutsidePointer)
     return () => window.removeEventListener('pointerdown', closeOnOutsidePointer)
-  }, [receiptSupplierSuggestionsOpen])
+  }, [receiptSupplierQuickPick.suggestionsOpen])
 
   function clearReceiptCreateDraft() {
     skipReceiptCreateDraftPersistRef.current = true
@@ -1127,7 +1082,11 @@ export function PurchaseReceiptsPage({
   }
 
   async function filterReceipts(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyReceiptSearch(search, { exactCodePriority: true }))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      receiptManagementSearch.applySearch(nextSearch)
+      return applyReceiptSearch(nextSearch, { exactCodePriority: true })
+    })
   }
 
   function applyReceiptSearch(nextSearch: string, options: { exactCodePriority?: boolean } = {}) {
@@ -1160,16 +1119,15 @@ export function PurchaseReceiptsPage({
   }
 
   function changeReceiptSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      resetSelection: () => {
-        setSelectedReceipt(null)
-        setDetailOpen(false)
-        setEditingId(null)
-        setReceiptDetailTab('info')
-      },
-      load: (query) => applyReceiptSearch(query),
-    })
+    receiptManagementSearch.changeSearch(nextSearch)
+    setSelectedReceipt(null)
+    setDetailOpen(false)
+    setEditingId(null)
+    setReceiptDetailTab('info')
+    if (nextSearch.trim().length === 0) {
+      receiptManagementSearch.applySearch('')
+      void applyReceiptSearch('')
+    }
   }
 
   async function applyReceiptFilters(next: {
@@ -1185,7 +1143,7 @@ export function PurchaseReceiptsPage({
     const nextDateFrom = next.dateFrom ?? dateFrom
     const nextDateTo = next.dateTo ?? dateTo
     const nextCreatedBy = next.createdBy ?? createdBy
-    setSearch(nextSearch)
+    receiptManagementSearch.applySearch(nextSearch)
     setStatus(nextStatus)
     setDateFrom(nextDateFrom)
     setDateTo(nextDateTo)
@@ -1464,7 +1422,7 @@ export function PurchaseReceiptsPage({
     if (!product) return
     void Promise.resolve(service.recordSearchSelection({ entity_type: 'product', entity_id: product.id })).catch(() => undefined)
 
-    const relatedProducts = receiptProductCatalogSearchResult.products.filter((candidate) => (
+    const relatedProducts = receiptProductQuickPick.results.filter((candidate) => (
       candidate.status === 'active'
       && isReceiptPurchaseSearchableProduct(candidate)
       && normalizeManagementSearchText(candidate.name) === normalizeManagementSearchText(product.name)
@@ -1482,8 +1440,7 @@ export function PurchaseReceiptsPage({
       else delete next[lineIndex]
       return next
     })
-    setReceiptProductSearch('')
-    setReceiptProductCatalogSearchResult({ search: '', products: [] })
+    receiptProductQuickPick.clear()
     void loadReceiptProductFamily(product)
   }
 
@@ -1564,7 +1521,7 @@ export function PurchaseReceiptsPage({
         track_inventory: true,
       })
       setProducts((current) => [created, ...current].slice(0, 12))
-      setReceiptProductSearch(created.code)
+      receiptProductQuickPick.changeQuery(created.code)
       setProductCreateForm({ code: '', name: '', unitName: '', sellMethod: 'quantity' })
       setProductCreateOpen(false)
     } catch (cause) {
@@ -1648,15 +1605,12 @@ export function PurchaseReceiptsPage({
     setSupplierPaymentMethod('cash')
     setSupplierPaymentFinanceAccountId('')
     setRollLengthTexts({})
-    setReceiptProductSearch('')
-    setReceiptSupplierSearch('')
-    setReceiptSupplierSuggestionsOpen(false)
+    receiptProductQuickPick.clear()
+    receiptSupplierQuickPick.clear()
     setReceiptSupplierSearchActive(false)
     setReceiptSupplierCreateOpen(false)
     setReceiptSupplierCreateSaving(false)
     setReceiptSupplierCreateForm(blankSupplierForm())
-    setReceiptProductCatalogSearchResult({ search: '', products: [] })
-    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
   }
 
   async function openCreateReceipt() {
@@ -1695,15 +1649,12 @@ export function PurchaseReceiptsPage({
     setSupplierPaymentMethod('cash')
     setSupplierPaymentFinanceAccountId('')
     setRollLengthTexts({})
-    setReceiptProductSearch('')
-    setReceiptSupplierSearch('')
-    setReceiptSupplierSuggestionsOpen(false)
+    receiptProductQuickPick.clear()
+    receiptSupplierQuickPick.clear()
     setReceiptSupplierSearchActive(false)
     setReceiptSupplierCreateOpen(false)
     setReceiptSupplierCreateSaving(false)
     setReceiptSupplierCreateForm(blankSupplierForm())
-    setReceiptProductCatalogSearchResult({ search: '', products: [] })
-    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
   }
 
   function openSupplierPaymentForReceipt() {
@@ -1740,14 +1691,13 @@ export function PurchaseReceiptsPage({
   function chooseReceiptSupplier(supplier: Supplier) {
     void Promise.resolve(service.recordSearchSelection({ entity_type: 'supplier', entity_id: supplier.id })).catch(() => undefined)
     setForm((current) => ({ ...current, supplier_id: supplier.id }))
-    setReceiptSupplierSearch(supplierSearchText(supplier))
-    setReceiptSupplierSuggestionsOpen(false)
+    receiptSupplierQuickPick.setQuery(supplierSearchText(supplier))
+    receiptSupplierQuickPick.setSuggestionsOpen(false)
     setReceiptSupplierSearchActive(false)
   }
 
   function changeReceiptSupplierSearch(nextSearch: string) {
-    setReceiptSupplierSearch(nextSearch)
-    setReceiptSupplierSuggestionsOpen(true)
+    receiptSupplierQuickPick.changeQuery(nextSearch)
     setReceiptSupplierSearchActive(true)
     if (form.supplier_id) {
       setForm((current) => ({ ...current, supplier_id: '' }))
@@ -1756,10 +1706,8 @@ export function PurchaseReceiptsPage({
 
   function clearReceiptSupplier() {
     setForm((current) => ({ ...current, supplier_id: '' }))
-    setReceiptSupplierSearch('')
-    setReceiptSupplierCatalogSearchResult({ search: '', suppliers: [] })
+    receiptSupplierQuickPick.clear()
     setReceiptSupplierSearchActive(true)
-    setReceiptSupplierSuggestionsOpen(false)
     queueMicrotask(() => receiptSupplierSearchInputRef.current?.focus())
   }
 
@@ -1769,7 +1717,7 @@ export function PurchaseReceiptsPage({
       name: receiptSupplierSearch.trim() || current.name,
     }))
     setReceiptSupplierCreateOpen(true)
-    setReceiptSupplierSuggestionsOpen(false)
+    receiptSupplierQuickPick.setSuggestionsOpen(false)
   }
 
   async function createReceiptSupplier(event: FormEvent<HTMLFormElement>) {
@@ -1795,10 +1743,6 @@ export function PurchaseReceiptsPage({
         status: 'active',
       })
       setSuppliers((current) => [...current.filter((supplier) => supplier.id !== created.id), created])
-      setReceiptSupplierCatalogSearchResult((current) => ({
-        ...current,
-        suppliers: uniqueReceiptSuppliersById([created, ...current.suppliers]),
-      }))
       setSuppliersLoaded(true)
       chooseReceiptSupplier(created)
       setReceiptSupplierCreateOpen(false)
@@ -3022,7 +2966,7 @@ export function PurchaseReceiptsPage({
                       selectFirstSuggestionOnEnter
                       onFocus={() => {
                         setReceiptSupplierSearchActive(true)
-                        setReceiptSupplierSuggestionsOpen(true)
+                        receiptSupplierQuickPick.setSuggestionsOpen(true)
                       }}
                       onChange={changeReceiptSupplierSearch}
                       onSuggestionSelect={(suggestion) => {
@@ -3289,10 +3233,10 @@ export function PurchaseReceiptsPage({
               ref={receiptProductSearchRef}
               value={receiptProductSearch}
               placeholder="Tìm hàng hóa theo mã hoặc tên"
-              onChange={(event) => setReceiptProductSearch(event.target.value)}
+              onChange={(event) => receiptProductQuickPick.changeQuery(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Escape') {
-                  setReceiptProductSearch('')
+                  receiptProductQuickPick.clear()
                   return
                 }
                 if (event.key !== 'Enter') return
@@ -3310,7 +3254,7 @@ export function PurchaseReceiptsPage({
                 type="button"
                 onClick={() => {
                   if (receiptProductSearch.trim().length > 0) {
-                    setReceiptProductSearch('')
+                    receiptProductQuickPick.clear()
                     return
                   }
                   setProductCreateOpen(true)

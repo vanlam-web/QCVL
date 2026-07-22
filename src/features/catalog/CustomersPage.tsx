@@ -48,11 +48,12 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, nextManagementSortState, type ManagementSortState } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import type { CatalogService, CustomerListFilters } from './catalog-service'
 import type { Customer, CustomerGroup } from './types'
@@ -246,7 +247,8 @@ export function CustomersPage({
   const customerDebtLedgerRequestsRef = useRef(new Set<string>())
   const customerHistoryRequestsRef = useRef(new Set<string>())
   const [showFilters, setShowFilters] = useState(true)
-  const [search, setSearch] = useState(routeSearch)
+  const customerManagementSearch = useManagementSearch({ initialSearch: routeSearch })
+  const search = customerManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState(routeSearch)
   const [customerGroupId, setCustomerGroupId] = useState('all')
   const [status, setStatus] = useState<CustomerStatusFilter>('active')
@@ -437,7 +439,11 @@ export function CustomersPage({
   }, [service])
 
   async function filterCustomers(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyCustomerSearch(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      customerManagementSearch.applySearch(nextSearch)
+      return applyCustomerSearch(nextSearch)
+    })
   }
 
   function applyCustomerSearch(nextSearch: string) {
@@ -458,11 +464,12 @@ export function CustomersPage({
   }
 
   function changeCustomerSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      resetSelection: () => setSelectedCustomerId(null),
-      load: applyCustomerSearch,
-    })
+    customerManagementSearch.changeSearch(nextSearch)
+    setSelectedCustomerId(null)
+    if (nextSearch.trim().length === 0) {
+      customerManagementSearch.applySearch('')
+      void applyCustomerSearch('')
+    }
   }
 
   async function applySidebarFilters(nextFilters: Partial<{

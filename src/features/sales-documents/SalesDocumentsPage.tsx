@@ -18,7 +18,7 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
@@ -72,6 +72,7 @@ import {
 } from './sales-document-presenter'
 import { SalesDocumentImportDialog } from './SalesDocumentImportDialog'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import { invoicePrintPath, quotePrintPath } from '../../app/routes'
 
 function initialSalesDocumentRouteFilters() {
@@ -160,7 +161,8 @@ export function SalesDocumentsPage({
   const [state, setState] = useState<SalesDocumentsState | null>(null)
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [routeFilters] = useState(initialSalesDocumentRouteFilters)
-  const [search, setSearch] = useState(routeFilters.search)
+  const documentManagementSearch = useManagementSearch({ initialSearch: routeFilters.search })
+  const search = documentManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState(routeFilters.search)
   const [typeFilter, setTypeFilter] = useState<SalesDocumentTypeFilter[]>(routeFilters.type)
   const [statusFilter, setStatusFilter] = useState<SalesDocumentStatusFilter[]>(defaultStatusFilters)
@@ -481,7 +483,11 @@ export function SalesDocumentsPage({
   }, [catalogService, userService])
 
   async function searchDocuments(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyDocumentSearch(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      documentManagementSearch.applySearch(nextSearch)
+      return applyDocumentSearch(nextSearch)
+    })
   }
 
   function applyDocumentSearch(nextSearch: string) {
@@ -496,16 +502,15 @@ export function SalesDocumentsPage({
   }
 
   function changeDocumentSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      resetSelection: () => {
-        setSelected(null)
-        setLoadingDocumentId(null)
-        setDetailError(null)
-        setDetailErrorDocumentId(null)
-      },
-      load: applyDocumentSearch,
-    })
+    documentManagementSearch.changeSearch(nextSearch)
+    setSelected(null)
+    setLoadingDocumentId(null)
+    setDetailError(null)
+    setDetailErrorDocumentId(null)
+    if (nextSearch.trim().length === 0) {
+      documentManagementSearch.applySearch('')
+      void applyDocumentSearch('')
+    }
   }
 
   async function applyTypeFilter(nextType: SalesDocumentTypeFilter[]) {
