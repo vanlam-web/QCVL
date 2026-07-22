@@ -475,6 +475,7 @@ it('loads route-open invoice detail by code without waiting for the list id look
       search: 'HD010985',
       type: 'invoice',
     }))
+    expect(screen.getByLabelText('Tìm chứng từ')).toHaveValue('HD010985')
     expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
     resolveList({
       items: [],

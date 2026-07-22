@@ -81,11 +81,12 @@ function initialSalesDocumentRouteFilters() {
   const routeType = params.get('type')
   const type: SalesDocumentTypeFilter[] = routeType === 'invoice' || routeType === 'quote' ? [routeType] : allTypeFilters
   const monthRange = currentMonthRange()
-  const hasSearch = search.length > 0
+  const routeSearch = search || open
+  const hasSearch = routeSearch.length > 0
   const hasOpen = open.length > 0
 
   return {
-    search,
+    search: routeSearch,
     open,
     type,
     time: (hasSearch || hasOpen ? 'all' : 'month') as TimeFilter,
