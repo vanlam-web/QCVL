@@ -36,12 +36,15 @@ export function useQuickPickSearch<T>({
     if (!suggestionsOpen || !canSearch(trimmed)) {
       requestId.current += 1
       lastSearchQuery.current = null
-      setLoading(false)
+      const stopLoadingId = window.setTimeout(() => setLoading(false), 0)
       if (trimmed.length === 0 || !canSearch(trimmed)) {
         const clearId = window.setTimeout(() => setResults([]), 0)
-        return () => window.clearTimeout(clearId)
+        return () => {
+          window.clearTimeout(stopLoadingId)
+          window.clearTimeout(clearId)
+        }
       }
-      return undefined
+      return () => window.clearTimeout(stopLoadingId)
     }
     if (lastSearchQuery.current === trimmed) return undefined
 

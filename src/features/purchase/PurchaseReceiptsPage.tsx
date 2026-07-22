@@ -706,17 +706,24 @@ export function PurchaseReceiptsPage({
   }, [isCreatingReceipt, receiptProductSearch])
 
   useEffect(() => {
-    if (receiptProductQuickPick.error) setError(receiptProductQuickPick.error)
+    if (!receiptProductQuickPick.error) return undefined
+    const id = window.setTimeout(() => setError(receiptProductQuickPick.error), 0)
+    return () => window.clearTimeout(id)
   }, [receiptProductQuickPick.error])
 
   useEffect(() => {
-    if (receiptSupplierQuickPick.error) setError(receiptSupplierQuickPick.error)
+    if (!receiptSupplierQuickPick.error) return undefined
+    const id = window.setTimeout(() => setError(receiptSupplierQuickPick.error), 0)
+    return () => window.clearTimeout(id)
   }, [receiptSupplierQuickPick.error])
 
   useEffect(() => {
-    if (!isCreatingReceipt || receiptSupplierQuickPick.results.length === 0) return
-    setSuppliers((current) => uniqueReceiptSuppliersById([...receiptSupplierQuickPick.results, ...current]))
-    setSuppliersLoaded(true)
+    if (!isCreatingReceipt || receiptSupplierQuickPick.results.length === 0) return undefined
+    const id = window.setTimeout(() => {
+      setSuppliers((current) => uniqueReceiptSuppliersById([...receiptSupplierQuickPick.results, ...current]))
+      setSuppliersLoaded(true)
+    }, 0)
+    return () => window.clearTimeout(id)
   }, [isCreatingReceipt, receiptSupplierQuickPick.results])
 
   async function loadReceipts(
