@@ -11,6 +11,10 @@ export function statusText(status: PurchaseReceiptStatus) {
   return 'Đã hủy'
 }
 
+export function quantityText(value: number) {
+  return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
+}
+
 export function supplierPaymentStatusText(status: 'posted' | 'cancelled') {
   return status === 'posted' ? 'Đã thanh toán' : 'Đã hủy'
 }

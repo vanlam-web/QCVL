@@ -54,6 +54,7 @@
 ## 3. Purchase: Giam `PurchaseReceiptsPage.tsx`
 
 - [ ] Tach list/detail/action footer.
+  - Da tach `PurchaseReceiptList` ra component rieng, gom bang danh sach + empty state + pagination + favorite/select/sort.
 - [ ] Tach create/edit form.
 - [ ] Tach payment panel.
   - Da tach `PurchaseReceiptPaymentHistory` ra component rieng, dung chung cho 2 tab thanh toan NCC.

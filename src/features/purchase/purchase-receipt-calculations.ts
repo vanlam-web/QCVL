@@ -72,6 +72,10 @@ export function purchaseReceiptListSummary(receipts: Array<{ payable_amount: num
   }
 }
 
+export function receiptTotalQuantity(receipt: { items: Array<{ quantity: number }> }) {
+  return receipt.items.reduce((total, item) => total + Number(item.quantity || 0), 0)
+}
+
 export function supplierPaymentsTotal(payments: Array<{ amount: number }>) {
   return payments.reduce((sum, payment) => sum + payment.amount, 0)
 }
