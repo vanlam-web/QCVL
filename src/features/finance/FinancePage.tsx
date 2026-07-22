@@ -1290,16 +1290,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }
 
   function openCashbookDetailEdit(detail: CashbookEntryDetail) {
-    if (detail.source.type === 'manual_voucher' && detail.status === 'posted') {
-      openVoucherRevision({
-        id: detail.source.id,
-        code: detail.source.code || detail.code,
-        source_type: 'manual_voucher',
-        status: detail.status,
-        amount: Math.abs(detail.amount_delta),
-      }, detail)
-      return
-    }
     setCashbookEditPreview(detail)
     setCashbookEditForm({
       createdAt: dateText(detail.created_at),
