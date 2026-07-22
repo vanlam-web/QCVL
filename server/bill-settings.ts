@@ -61,6 +61,76 @@ export function normalizeBillPreferenceValue(value: unknown): string | null {
   return value.trim()
 }
 
+/** Danh sách mẫu bill theo khách (SoT §4). Tối đa 5 id; legacy string đơn → mảng 1 phần tử. */
+export function normalizeBillPreferenceList(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? value.split(/[,|]/).map((part) => part.trim())
+      : []
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const item of raw) {
+    const normalized = normalizeBillPreferenceValue(item)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+    if (result.length >= maxBillTemplatesPerDocumentType) break
+  }
+  return result
+}
+
+export function resolveCustomerBillPreferenceIds(input: {
+  preferred_bill_templates?: unknown
+  preferred_bill_template?: unknown
+}): string[] {
+  const list = normalizeBillPreferenceList(input.preferred_bill_templates)
+  if (list.length > 0) return list
+  const one = normalizeBillPreferenceValue(input.preferred_bill_template ?? null)
+  return one ? [one] : []
+}
+
+/** Đồng bộ primary + list khi PATCH khách. */
+export function syncCustomerBillPreferencePatch(input: {
+  preferred_bill_template?: string | null
+  preferred_bill_templates?: string[] | null
+  currentTemplate?: string | null
+  currentTemplates?: string[] | null
+}): { preferred_bill_template: string | null; preferred_bill_templates: string[] } {
+  const hasList = input.preferred_bill_templates !== undefined
+  const hasPrimary = input.preferred_bill_template !== undefined
+  let list = hasList
+    ? normalizeBillPreferenceList(input.preferred_bill_templates)
+    : resolveCustomerBillPreferenceIds({
+        preferred_bill_templates: input.currentTemplates,
+        preferred_bill_template: input.currentTemplate,
+      })
+  let primary = hasPrimary
+    ? normalizeBillPreferenceValue(input.preferred_bill_template)
+    : normalizeBillPreferenceValue(input.currentTemplate ?? null)
+
+  if (hasList && !hasPrimary) {
+    primary = list[0] ?? null
+  }
+  if (hasPrimary && !hasList) {
+    if (primary) {
+      list = list.includes(primary) ? list : [primary, ...list].slice(0, maxBillTemplatesPerDocumentType)
+    } else {
+      list = []
+    }
+  }
+  if (primary && !list.includes(primary)) {
+    list = [primary, ...list].slice(0, maxBillTemplatesPerDocumentType)
+  }
+  if (!primary && list.length > 0) {
+    primary = list[0]!
+  }
+  if (list.length === 0) {
+    primary = null
+  }
+  return { preferred_bill_template: primary, preferred_bill_templates: list }
+}
+
 function isBillDocumentType(value: unknown): value is BillDocumentType {
   return value === 'invoice' || value === 'quote'
 }
