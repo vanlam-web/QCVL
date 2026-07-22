@@ -41,6 +41,8 @@ import {
   normalizeOrganizationBillSettingsData,
   type OrganizationBillSettingsData,
   normalizeBillPreferenceValue,
+  resolveCustomerBillPreferenceIds,
+  syncCustomerBillPreferencePatch,
 } from './bill-settings.js'
 
 const { Pool } = pg
@@ -1458,7 +1460,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       if (!current) return null
       if (
         (current.code ?? '').trim().toLowerCase() === 'khachle'
-        && input.patch.preferred_bill_template !== undefined
+        && (input.patch.preferred_bill_template !== undefined || input.patch.preferred_bill_templates !== undefined)
       ) {
         throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })
       }
@@ -1467,6 +1469,15 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         : input.patch.customer_group_id === null
           ? null
           : await findCustomerGroupSnapshot(pool, input.organizationId, input.patch.customer_group_id)
+      const billPreference =
+        input.patch.preferred_bill_template !== undefined || input.patch.preferred_bill_templates !== undefined
+          ? syncCustomerBillPreferencePatch({
+              preferred_bill_template: input.patch.preferred_bill_template,
+              preferred_bill_templates: input.patch.preferred_bill_templates,
+              currentTemplate: current.preferred_bill_template ?? null,
+              currentTemplates: current.preferred_bill_templates ?? null,
+            })
+          : null
       const data: CustomerListData = {
         ...current,
         code: input.patch.code ?? current.code,
@@ -1479,10 +1490,12 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         customer_group: group,
         customer_type: input.patch.customer_type === undefined ? current.customer_type : input.patch.customer_type,
         company_name: input.patch.company_name === undefined ? current.company_name : input.patch.company_name,
-        preferred_bill_template:
-          input.patch.preferred_bill_template !== undefined
-            ? input.patch.preferred_bill_template
-            : current.preferred_bill_template ?? null,
+        preferred_bill_template: billPreference
+          ? billPreference.preferred_bill_template
+          : current.preferred_bill_template ?? null,
+        preferred_bill_templates: billPreference
+          ? billPreference.preferred_bill_templates
+          : current.preferred_bill_templates ?? null,
       }
       await pool.query(
         `
@@ -4448,6 +4461,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         customer: {
           ...document.customer,
           preferred_bill_template: billCustomer.preferred_bill_template,
+          preferred_bill_templates: billCustomer.preferred_bill_templates,
           address: billCustomer.address,
           total_debt_amount: billCustomer.total_debt_amount,
         },
@@ -6805,7 +6819,12 @@ async function loadCustomerBillPrintExtras(
   customerCode: string | null | undefined,
 ) {
   if ((customerCode ?? '').trim().toLowerCase() === 'khachle') {
-    return { preferred_bill_template: null, address: null, total_debt_amount: null }
+    return {
+      preferred_bill_template: null,
+      preferred_bill_templates: [] as string[],
+      address: null,
+      total_debt_amount: null,
+    }
   }
   await ensureImportedSnapshotTables(pool)
   const result = await pool.query(
@@ -6823,8 +6842,13 @@ async function loadCustomerBillPrintExtras(
   )
   const data = result.rows[0]?.data as CustomerListData | undefined
   const debtRaw = data?.total_debt_amount
+  const preferredIds = resolveCustomerBillPreferenceIds({
+    preferred_bill_templates: data?.preferred_bill_templates,
+    preferred_bill_template: data?.preferred_bill_template,
+  })
   return {
-    preferred_bill_template: normalizeBillPreferenceValue(data?.preferred_bill_template ?? null),
+    preferred_bill_template: normalizeBillPreferenceValue(data?.preferred_bill_template ?? null) ?? preferredIds[0] ?? null,
+    preferred_bill_templates: preferredIds,
     address: typeof data?.address === 'string' && data.address.trim() ? data.address.trim() : null,
     total_debt_amount: typeof debtRaw === 'number' && Number.isFinite(debtRaw) ? debtRaw : null,
   }
