@@ -24,7 +24,7 @@ import type { SalesDocumentDetail, SalesDocumentListItem, SalesDocumentService }
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
 import { formatApiError } from '../../lib/api/error-message'
-import { dateTimeLocalInputValue } from '../../lib/date-format'
+import { dateTimeStoredIsoFromLocalClock } from '../../lib/date-format'
 import { currentSystemDate } from '../../lib/system-clock'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
 import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
@@ -2071,5 +2071,5 @@ function columnWidthRem(widthCh: number) {
 }
 
 function systemInvoiceCreatedAt() {
-  return `${dateTimeLocalInputValue(currentSystemDate())}:00.000Z`
+  return dateTimeStoredIsoFromLocalClock(currentSystemDate())
 }
