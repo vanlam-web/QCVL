@@ -19,12 +19,26 @@ export const appRoutes = {
   forbidden: '/forbidden',
 } as const
 
-export function quotePrintPath(documentId: string) {
-  return `${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/quote-print`
+export type PrintPathOptions = {
+  returnTo?: 'pos' | 'sales-documents'
+  /** Named template id or paper size (`a4` | `k80`). */
+  template?: string | null
 }
 
-export function invoicePrintPath(documentId: string, options?: { returnTo?: 'pos' | 'sales-documents' }) {
-  const path = `${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/invoice-print`
-  if (options?.returnTo === 'pos') return `${path}?returnTo=pos`
-  return path
+function withPrintQuery(path: string, options?: PrintPathOptions) {
+  const params = new URLSearchParams()
+  if (options?.returnTo === 'pos') params.set('returnTo', 'pos')
+  if (options?.returnTo === 'sales-documents') params.set('returnTo', 'sales-documents')
+  const template = options?.template?.trim()
+  if (template) params.set('template', template)
+  const query = params.toString()
+  return query ? `${path}?${query}` : path
+}
+
+export function quotePrintPath(documentId: string, options?: PrintPathOptions) {
+  return withPrintQuery(`${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/quote-print`, options)
+}
+
+export function invoicePrintPath(documentId: string, options?: PrintPathOptions) {
+  return withPrintQuery(`${appRoutes.salesDocuments}/${encodeURIComponent(documentId)}/invoice-print`, options)
 }

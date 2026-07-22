@@ -171,6 +171,7 @@ function PosRoute() {
   const orderService = useMemo(() => createBrowserOrderService(getAccessToken), [getAccessToken])
   const financeService = useMemo(() => createBrowserFinanceService(getAccessToken), [getAccessToken])
   const salesDocumentService = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
+  const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
   const productionQueueService = useMemo(
     () => createBrowserProductionQueueService(getAccessToken),
     [getAccessToken],
@@ -190,8 +191,13 @@ function PosRoute() {
       onSignOut={() => void signOut()}
       onOpenAdmin={() => navigate(appRoutes.admin)}
       onOpenDashboard={() => navigate(appRoutes.dashboard)}
-      onOpenInvoicePrint={(documentId) => navigate(invoicePrintPath(documentId, { returnTo: 'pos' }))}
-      onOpenQuotePrint={(documentId) => navigate(`${quotePrintPath(documentId)}?returnTo=pos`)}
+      loadBillSettings={foundationService.getOrganizationBillSettings}
+      onOpenInvoicePrint={(documentId, templateId) =>
+        navigate(invoicePrintPath(documentId, { returnTo: 'pos', template: templateId }))
+      }
+      onOpenQuotePrint={(documentId, templateId) =>
+        navigate(quotePrintPath(documentId, { returnTo: 'pos', template: templateId }))
+      }
     />
   )
 }

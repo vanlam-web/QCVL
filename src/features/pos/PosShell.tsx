@@ -19,6 +19,7 @@ import type { MaterialOpeningConversionOption, MaterialOpeningOptions, PosShorta
 import type { CheckoutCartLine, InvoiceRevisionHandoffPayload, OrderService, RecentPriceList } from '../orders/order-service'
 import type { ProductionQueueService } from '../production-queue/production-queue-service'
 import type { ProductionQueueDraftPayload } from '../production-queue/types'
+import type { OrganizationBillSettings } from '../sales-documents/bill-settings'
 import type { SalesDocumentDetail, SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
 import { CheckoutPanel } from './CheckoutPanel'
 import { CustomerPanel } from './CustomerPanel'
@@ -160,6 +161,7 @@ export function PosShell({
   onOpenDashboard,
   onOpenInvoicePrint,
   onOpenQuotePrint,
+  loadBillSettings,
 }: {
   catalogService: CatalogService
   inventoryService: InventoryService
@@ -171,8 +173,9 @@ export function PosShell({
   onSignOut: () => void
   onOpenAdmin: () => void
   onOpenDashboard: () => void
-  onOpenInvoicePrint?: (documentId: string) => void
-  onOpenQuotePrint?: (documentId: string) => void
+  onOpenInvoicePrint?: (documentId: string, templateId?: string) => void
+  onOpenQuotePrint?: (documentId: string, templateId?: string) => void
+  loadBillSettings?: () => Promise<OrganizationBillSettings>
 }) {
   const customerSalesDocumentService =
     salesDocumentService ??
@@ -1555,6 +1558,7 @@ export function PosShell({
             orderCreatedAt={activeTab.createdAt}
             revisionSource={activeTab.sourceRevision}
             quoteBlockedReason={quoteBlockedReason(cartLines)}
+            loadBillSettings={loadBillSettings}
             onCheckoutSuccess={(payload) => {
               setCheckoutOpen(false)
               setTabs((current) => {
@@ -1562,8 +1566,8 @@ export function PosShell({
                 setActiveTabId(result.activeTabId)
                 return result.tabs
               })
-              if (payload.kind === 'invoice') onOpenInvoicePrint?.(payload.documentId)
-              else onOpenQuotePrint?.(payload.documentId)
+              if (payload.kind === 'invoice') onOpenInvoicePrint?.(payload.documentId, payload.templateId)
+              else onOpenQuotePrint?.(payload.documentId, payload.templateId)
             }}
           />
         }

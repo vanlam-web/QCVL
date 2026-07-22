@@ -45,6 +45,20 @@ function isBillTemplateId(value: unknown): value is BillTemplateId {
   return value === 'a4' || value === 'k80'
 }
 
+export function isBillPreferenceValue(value: unknown): value is string {
+  if (typeof value !== 'string') return false
+  const trimmed = value.trim()
+  if (!trimmed || trimmed.length > 80) return false
+  if (isBillTemplateId(trimmed)) return true
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(trimmed)
+}
+
+export function normalizeBillPreferenceValue(value: unknown): string | null {
+  if (value === null || value === '') return null
+  if (!isBillPreferenceValue(value)) return null
+  return value.trim()
+}
+
 function isBillDocumentType(value: unknown): value is BillDocumentType {
   return value === 'invoice' || value === 'quote'
 }

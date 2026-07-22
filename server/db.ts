@@ -40,6 +40,7 @@ import {
   mergeOrganizationBillSettingsPatch,
   normalizeOrganizationBillSettingsData,
   type OrganizationBillSettingsData,
+  normalizeBillPreferenceValue,
 } from './bill-settings.js'
 
 const { Pool } = pg
@@ -6764,7 +6765,7 @@ async function loadCustomerPreferredBillTemplate(
     [organizationId, customerId ?? null, customerCode ?? null],
   )
   const preferred = (result.rows[0]?.data as CustomerListData | undefined)?.preferred_bill_template
-  return preferred === 'a4' || preferred === 'k80' ? preferred : null
+  return normalizeBillPreferenceValue(preferred ?? null)
 }
 
 function purchaseReceiptDataFromImportRows(

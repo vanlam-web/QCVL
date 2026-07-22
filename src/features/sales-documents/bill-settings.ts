@@ -356,6 +356,13 @@ export function isWalkInCustomerCode(code: string | null | undefined) {
   return (code ?? '').trim().toLowerCase() === 'khachle'
 }
 
+export function isBillPreferenceValue(value: string | null | undefined): value is string {
+  const trimmed = (value ?? '').trim()
+  if (!trimmed || trimmed.length > 80) return false
+  if (isBillTemplateId(trimmed)) return true
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(trimmed)
+}
+
 export function resolveBillTemplate(input: {
   queryTemplate?: string | null
   customerCode?: string | null
@@ -367,6 +374,36 @@ export function resolveBillTemplate(input: {
     return input.preferredTemplate
   }
   return input.orgDefault
+}
+
+/** Resolve named template: query (?template=id|a4) → customer preference (id|paper) → org default. */
+export function resolvePreferredNamedTemplate(input: {
+  settings: OrganizationBillSettings
+  documentType: BillDocumentType
+  queryTemplate?: string | null
+  customerCode?: string | null
+  preferredTemplate?: string | null
+}): BillPrintTemplate {
+  const query = input.queryTemplate?.trim() || null
+  if (query && isBillPreferenceValue(query)) {
+    return resolveNamedPrintTemplate(input.settings, input.documentType, {
+      templateId: query,
+      paper: isBillTemplateId(query) ? query : null,
+    })
+  }
+  const preferred =
+    !isWalkInCustomerCode(input.customerCode) && isBillPreferenceValue(input.preferredTemplate)
+      ? input.preferredTemplate.trim()
+      : null
+  if (preferred) {
+    return resolveNamedPrintTemplate(input.settings, input.documentType, {
+      templateId: preferred,
+      paper: isBillTemplateId(preferred) ? preferred : null,
+    })
+  }
+  return resolveNamedPrintTemplate(input.settings, input.documentType, {
+    paper: input.settings.default_bill_template,
+  })
 }
 
 export function billTemplateSlotCode(index: number) {

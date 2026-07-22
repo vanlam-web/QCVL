@@ -4,6 +4,7 @@ import {
   billTemplateSlotCode,
   defaultOrganizationBillSettings,
   invoiceFooterText,
+  isBillPreferenceValue,
   isBillTemplateId,
   isWalkInCustomerCode,
   listBillTemplatesForDocument,
@@ -12,6 +13,7 @@ import {
   readOrganizationBillSettings,
   resolveBillTemplate,
   resolveNamedPrintTemplate,
+  resolvePreferredNamedTemplate,
   resolvePrintTemplateContent,
   writeOrganizationBillSettings,
 } from './bill-settings'
@@ -123,6 +125,36 @@ describe('organization bill settings', () => {
     expect(resolveNamedPrintTemplate(settings, 'invoice', { paper: 'k80' }).id).toBe('tpl-invoice-k80')
     expect(resolveNamedPrintTemplate(settings, 'invoice', { templateId: 'tpl-invoice-a4' }).paper_size).toBe('a4')
     expect(resolveNamedPrintTemplate(settings, 'invoice', {}).is_default).toBe(true)
+  })
+
+  it('resolves preferred named template by query id then customer preference', () => {
+    const settings = normalizeOrganizationBillSettings({ default_bill_template: 'a4' })
+    expect(isBillPreferenceValue('tpl-invoice-k80')).toBe(true)
+    expect(
+      resolvePreferredNamedTemplate({
+        settings,
+        documentType: 'invoice',
+        queryTemplate: 'tpl-invoice-k80',
+        preferredTemplate: 'a4',
+        customerCode: 'KH001',
+      }).id,
+    ).toBe('tpl-invoice-k80')
+    expect(
+      resolvePreferredNamedTemplate({
+        settings,
+        documentType: 'invoice',
+        preferredTemplate: 'tpl-invoice-k80',
+        customerCode: 'KH001',
+      }).id,
+    ).toBe('tpl-invoice-k80')
+    expect(
+      resolvePreferredNamedTemplate({
+        settings,
+        documentType: 'invoice',
+        preferredTemplate: 'k80',
+        customerCode: 'KH001',
+      }).paper_size,
+    ).toBe('k80')
   })
 
   it('fills deeper layout toggles when older templates omit them', () => {

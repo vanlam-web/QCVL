@@ -18,6 +18,15 @@ import { formatApiError } from '../../lib/api/error-message'
 import { formatKvDateTime } from '../../lib/date-format'
 import { currentSystemDate, currentSystemISOString } from '../../lib/system-clock'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
+import { BillNamedTemplatePicker } from '../sales-documents/BillNamedTemplatePicker'
+import {
+  listBillTemplatesForDocument,
+  readOrganizationBillSettingsCache,
+  resolveNamedPrintTemplate,
+  resolvePreferredNamedTemplate,
+  writeOrganizationBillSettingsCache,
+  type OrganizationBillSettings,
+} from '../sales-documents/bill-settings'
 import { checkoutSummary, linesToCheckoutItems } from './pos-core'
 
 const pinnedBankAccountsStorageKey = 'finance.bankAccounts.pinnedIds'
@@ -33,6 +42,7 @@ export function CheckoutPanel({
   orderCreatedAt,
   autoFocusCustomerPayment = false,
   revisionSource,
+  loadBillSettings,
   onCheckoutSuccess,
 }: {
   cartLines: CheckoutCartLine[]
@@ -46,7 +56,12 @@ export function CheckoutPanel({
   orderCreatedAt?: string
   autoFocusCustomerPayment?: boolean
   revisionSource?: { id: string; code: string }
-  onCheckoutSuccess?: (payload: { kind: 'invoice' | 'quote'; documentId: string }) => void
+  loadBillSettings?: () => Promise<OrganizationBillSettings>
+  onCheckoutSuccess?: (payload: {
+    kind: 'invoice' | 'quote'
+    documentId: string
+    templateId: string
+  }) => void
 }) {
   const [cashAmountOverride, setCashAmountOverride] = useState<number | null>(null)
   const [checkoutDiscountAmount, setCheckoutDiscountAmount] = useState(0)
@@ -76,10 +91,27 @@ export function CheckoutPanel({
   const [invoiceTimeDraft, setInvoiceTimeDraft] = useState(() => ({ source: orderCreatedAt, value: formatCheckoutDateTime(orderCreatedAt).time }))
   const [invoiceDateTimePickerOpen, setInvoiceDateTimePickerOpen] = useState<'date' | 'time' | null>(null)
   const [invoiceCalendarMonth, setInvoiceCalendarMonth] = useState(() => checkoutCalendarMonth(orderCreatedAt))
+  const [billSettings, setBillSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettingsCache())
+  const [invoiceBillTemplateOverride, setInvoiceBillTemplateOverride] = useState<{
+    customerKey: string
+    templateId: string
+  } | null>(null)
   const invoiceDateTimePickerRef = useRef<HTMLDivElement | null>(null)
   const customerPaymentInputRef = useRef<HTMLInputElement | null>(null)
   const selectedCustomerId = selectedCustomer?.id ?? null
   const effectiveOldDebtPaymentAmount = selectedCustomerId === null ? 0 : oldDebtPaymentAmount
+  const invoiceBillTemplates = listBillTemplatesForDocument(billSettings, 'invoice')
+  const customerBillKey = selectedCustomer?.id ?? selectedCustomer?.code ?? 'walk-in'
+  const preferredInvoiceBillTemplateId = resolvePreferredNamedTemplate({
+    settings: billSettings,
+    documentType: 'invoice',
+    customerCode: selectedCustomer?.code,
+    preferredTemplate: selectedCustomer?.preferred_bill_template,
+  }).id
+  const invoiceBillTemplateId =
+    invoiceBillTemplateOverride?.customerKey === customerBillKey
+      ? invoiceBillTemplateOverride.templateId
+      : preferredInvoiceBillTemplateId
 
   const {
     subtotal,
@@ -130,6 +162,21 @@ export function CheckoutPanel({
       active = false
     }
   }, [orderService])
+
+  useEffect(() => {
+    let active = true
+    if (!loadBillSettings) return undefined
+    void loadBillSettings()
+      .then((remote) => {
+        if (!active) return
+        const saved = writeOrganizationBillSettingsCache(remote)
+        setBillSettings(saved)
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [loadBillSettings])
 
   useEffect(() => {
     let active = true
@@ -255,7 +302,11 @@ export function CheckoutPanel({
         },
       })
       setResult(checkout)
-      onCheckoutSuccess?.({ kind: 'invoice', documentId: checkout.order.id })
+      onCheckoutSuccess?.({
+        kind: 'invoice',
+        documentId: checkout.order.id,
+        templateId: resolveNamedPrintTemplate(billSettings, 'invoice', { templateId: invoiceBillTemplateId }).id,
+      })
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được hóa đơn.'))
     } finally {
@@ -304,7 +355,11 @@ export function CheckoutPanel({
         },
       })
       setResult(revised)
-      onCheckoutSuccess?.({ kind: 'invoice', documentId: revised.order.id })
+      onCheckoutSuccess?.({
+        kind: 'invoice',
+        documentId: revised.order.id,
+        templateId: resolveNamedPrintTemplate(billSettings, 'invoice', { templateId: invoiceBillTemplateId }).id,
+      })
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được hóa đơn sửa.'))
     } finally {
@@ -343,7 +398,13 @@ export function CheckoutPanel({
       }
       const quote = await orderService.saveQuote(payload)
       setQuoteResult(quote)
-      onCheckoutSuccess?.({ kind: 'quote', documentId: quote.id })
+      const invoiceNamed = resolveNamedPrintTemplate(billSettings, 'invoice', { templateId: invoiceBillTemplateId })
+      const quoteNamed = resolveNamedPrintTemplate(billSettings, 'quote', { paper: invoiceNamed.paper_size })
+      onCheckoutSuccess?.({
+        kind: 'quote',
+        documentId: quote.id,
+        templateId: quoteNamed.id,
+      })
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được báo giá.'))
     } finally {
@@ -716,6 +777,18 @@ export function CheckoutPanel({
 
       {error ? <p role="alert">{error}</p> : null}
       {quoteBlockedReason ? <p role="status">{quoteBlockedReason}</p> : null}
+      {invoiceBillTemplates.length > 0 ? (
+        <div className="checkout-bill-template">
+          <BillNamedTemplatePicker
+            compact
+            legend="Mẫu in"
+            name="checkout_bill_template"
+            templates={invoiceBillTemplates}
+            value={invoiceBillTemplateId}
+            onChange={(templateId) => setInvoiceBillTemplateOverride({ customerKey: customerBillKey, templateId })}
+          />
+        </div>
+      ) : null}
       <div aria-label="Thao tác cuối đơn" className="checkout-action-row">
         {revisionSource === undefined ? (
           <button

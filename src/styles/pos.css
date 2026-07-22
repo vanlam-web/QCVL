@@ -3180,6 +3180,31 @@
 }
 
 
+.checkout-bill-template {
+  margin: 0 0 var(--space-2);
+}
+
+.checkout-bill-template .bill-named-template-picker {
+  margin: 0;
+}
+
+.checkout-bill-template .bill-named-template-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.checkout-bill-template .bill-named-template-card {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  padding: 0.35rem 0.45rem;
+}
+
+.checkout-bill-template .bill-named-template-card.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-primary) 40%, transparent);
+}
+
 .checkout-panel {
   display: flex;
   flex-direction: column;
