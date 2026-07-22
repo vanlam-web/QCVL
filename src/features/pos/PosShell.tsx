@@ -27,6 +27,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { dateTimeLocalInputValue } from '../../lib/date-format'
 import { currentSystemDate } from '../../lib/system-clock'
 import { formatMeasure, formatMoney } from '../../lib/number-format'
+import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
 import { ProductGrid } from './ProductGrid'
 import { PosCartPanel } from './PosCartPanel'
 import { PosPaymentPanel } from './PosPaymentPanel'
@@ -199,6 +200,7 @@ export function PosShell({
   const [loadingProducts, setLoadingProducts] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [productSearch, setProductSearch] = useState('')
+  const debouncedProductSearch = useDebouncedValue(productSearch, quickPickSearchDebounceMs)
   const [catalogSearchResult, setCatalogSearchResult] = useState<{ search: string; products: Product[] }>({
     search: '',
     products: [],
@@ -338,7 +340,7 @@ export function PosShell({
     }
   }, [customerSalesDocumentService])
   const productSearchResults = useMemo(() => {
-    const search = productSearch.trim()
+    const search = debouncedProductSearch.trim()
     const query = normalizeSearch(productSearch)
     if (query.length === 0) return []
     const searchProducts = catalogSearchResult.search === search ? catalogSearchResult.products : []
@@ -409,7 +411,7 @@ export function PosShell({
     return () => {
       active = false
     }
-  }, [catalogService, productSearch])
+  }, [catalogService, debouncedProductSearch])
 
   useEffect(() => {
     let active = true

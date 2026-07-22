@@ -1,7 +1,7 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogService } from '../catalog/catalog-service'
 import type { Customer } from '../catalog/types'
 import type { FinanceService } from '../finance/finance-service'
@@ -84,6 +84,10 @@ function financeServiceStub(overrides: Partial<Pick<FinanceService, 'listCashboo
   } satisfies Pick<FinanceService, 'listCashbookEntries'>
 }
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 describe('CustomerPanel', () => {
   it('searches and selects a customer', async () => {
     const service = serviceStub()
@@ -111,6 +115,33 @@ describe('CustomerPanel', () => {
     expect(within(option).getByText('Khach le')).toBeInTheDocument()
     expect(within(option).getByText('Mã: KH000001')).toBeInTheDocument()
     expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
+  })
+
+  it('debounces POS customer suggestions and searches only the latest text', async () => {
+    vi.useFakeTimers()
+    const service = serviceStub()
+
+    render(<CustomerPanel service={service} selectedCustomer={null} onSelectCustomer={vi.fn()} />)
+
+    const input = screen.getByPlaceholderText('Tìm khách hàng (F4)')
+    fireEvent.change(input, { target: { value: 'k' } })
+    fireEvent.change(input, { target: { value: 'kl' } })
+    fireEvent.change(input, { target: { value: 'kl4' } })
+
+    expect(service.listCustomers).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(199)
+      await Promise.resolve()
+    })
+    expect(service.listCustomers).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(1)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(service.listCustomers).toHaveBeenCalledTimes(1)
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'kl4', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
   })
 
   it('closes customer suggestions when clicking outside the customer search', async () => {

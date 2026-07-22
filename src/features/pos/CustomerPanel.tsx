@@ -3,6 +3,7 @@ import { ChevronDown, Search, UserRound, X } from 'lucide-react'
 import { ManagementCompactCreateAction, ManagementCompactSearch } from '../../components/ui-shell/management-layout'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney } from '../../lib/number-format'
+import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
 import { CustomerCreateDialog, createCustomerFormDefaults, type CustomerCreateForm } from '../catalog/CustomerCreateDialog'
 import { customerDateTime, customerSalesDocumentStatusText } from '../catalog/customer-presenter'
 import {
@@ -39,7 +40,6 @@ type CustomerDetailForm = {
 type CustomerDetailDropdownKey = 'group' | 'type' | null
 const customerDebtLedgerFetchPageSize = 1000
 const hiddenPosCustomerGroupNames = new Set(['khach le', 'khach si'])
-
 export function CustomerPanel({
   service,
   orderService,
@@ -69,11 +69,13 @@ export function CustomerPanel({
   const [form, setForm] = useState<CustomerCreateForm>(createCustomerFormDefaults)
   const [error, setError] = useState<string | null>(null)
   const searchRequestId = useRef(0)
+  const lastSuggestionQuery = useRef<string | null>(null)
   const detailRequestId = useRef(0)
   const searchPanelRef = useRef<HTMLElement | null>(null)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
   const selectedCustomerSearchText = selectedCustomer?.name.trim() ?? ''
   const searchQuery = search.trim()
+  const debouncedSearch = useDebouncedValue(search, quickPickSearchDebounceMs)
   const searchShowsSelectedCustomer = selectedCustomer !== null && searchQuery === selectedCustomerSearchText
   const hasSelectedCustomerDebtLedger =
     selectedCustomer !== null
@@ -163,36 +165,63 @@ export function CustomerPanel({
       .catch(() => setCustomerGroups([]))
   }, [createOpen, detailOpen, selectedCustomer, service])
 
+  useEffect(() => {
+    const query = debouncedSearch.trim()
+    const showsSelectedCustomer = selectedCustomer !== null && query === selectedCustomerSearchText
+    if (!suggestionsOpen || query.length === 0 || showsSelectedCustomer) {
+      searchRequestId.current += 1
+      lastSuggestionQuery.current = null
+      if (query.length === 0 || showsSelectedCustomer) setResults([])
+      return undefined
+    }
+    if (lastSuggestionQuery.current === query) return undefined
+
+    const requestId = searchRequestId.current + 1
+    searchRequestId.current = requestId
+    setError(null)
+
+    service
+      .listCustomers({ search: query, status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
+      .then((response) => {
+        if (searchRequestId.current !== requestId) return
+        lastSuggestionQuery.current = query
+        setResults(response.items)
+      })
+      .catch((cause) => {
+        if (searchRequestId.current !== requestId) return
+        lastSuggestionQuery.current = query
+        setResults([])
+        setError(formatApiError(cause, 'Không tìm được khách hàng.'))
+      })
+
+    return undefined
+  }, [debouncedSearch, selectedCustomer, selectedCustomerSearchText, service, suggestionsOpen])
+
   async function searchCustomers(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setError(null)
+    const query = search.trim()
+    const requestId = searchRequestId.current + 1
+    searchRequestId.current = requestId
+    lastSuggestionQuery.current = query || null
     try {
-      const response = await service.listCustomers({ search: search.trim() || undefined, status: 'active', search_context: 'quick_pick' })
+      const response = await service.listCustomers({ search: query || undefined, status: 'active', search_context: 'quick_pick' })
+      if (searchRequestId.current !== requestId) return
       setResults(response.items)
     } catch (cause) {
+      if (searchRequestId.current !== requestId) return
       setError(formatApiError(cause, 'Không tìm được khách hàng.'))
     }
   }
 
-  async function suggestCustomers(nextSearch: string) {
+  function suggestCustomers(nextSearch: string) {
     setSearch(nextSearch)
     const query = nextSearch.trim()
     setSuggestionsOpen(query.length > 0 && !(selectedCustomer !== null && query === selectedCustomerSearchText))
-    const requestId = searchRequestId.current + 1
-    searchRequestId.current = requestId
     if (query.length === 0 || (selectedCustomer !== null && query === selectedCustomerSearchText)) {
+      searchRequestId.current += 1
+      lastSuggestionQuery.current = null
       setResults([])
-      return
-    }
-    setError(null)
-    try {
-      const response = await service.listCustomers({ search: query, status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
-      if (searchRequestId.current !== requestId) return
-      setResults(response.items)
-    } catch (cause) {
-      if (searchRequestId.current !== requestId) return
-      setResults([])
-      setError(formatApiError(cause, 'Không tìm được khách hàng.'))
     }
   }
 

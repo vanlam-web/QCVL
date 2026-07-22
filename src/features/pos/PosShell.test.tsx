@@ -743,8 +743,7 @@ it('checks out the selected remote POS search product instead of the quick-cache
 
   await screen.findByRole('button', { name: /Mica trong 3mm/ })
   await userEvent.type(screen.getByRole('textbox', { name: 'Tìm hàng (F3)' }), 'In bạt')
-  const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
-  await userEvent.click(within(results).getByRole('option', { name: /Chọn IB In bạt/ }))
+  await userEvent.click(await screen.findByRole('option', { name: /Chọn IB In bạt/ }))
   const checkoutDrawer = await openCheckoutDrawer()
   await userEvent.click(within(checkoutDrawer).getByRole('button', { name: 'Tạo hóa đơn' }))
 

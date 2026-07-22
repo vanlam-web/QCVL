@@ -64,6 +64,7 @@ import { ManagementSortableHeader } from '../../components/ui-shell/management-s
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { quickPickSearchDebounceMs, useDebouncedValue } from '../../lib/use-debounced-value'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
@@ -494,6 +495,8 @@ export function PurchaseReceiptsPage({
   const [receiptReceivedAtText, setReceiptReceivedAtText] = useState(() => formatReceiptDateTimeInput(blankForm().received_at))
   const [receiptProductSearch, setReceiptProductSearch] = useState('')
   const [receiptSupplierSearch, setReceiptSupplierSearch] = useState('')
+  const debouncedReceiptProductSearch = useDebouncedValue(receiptProductSearch, quickPickSearchDebounceMs)
+  const debouncedReceiptSupplierSearch = useDebouncedValue(receiptSupplierSearch, quickPickSearchDebounceMs)
   const [receiptSupplierSuggestionsOpen, setReceiptSupplierSuggestionsOpen] = useState(false)
   const [receiptSupplierSearchActive, setReceiptSupplierSearchActive] = useState(false)
   const [receiptSupplierCreateOpen, setReceiptSupplierCreateOpen] = useState(false)
@@ -600,7 +603,7 @@ export function PurchaseReceiptsPage({
       }))
   }, [isCreatingReceipt, receiptSupplierSearchActive, receiptSupplierSearchResults, receiptSupplierSuggestionsOpen])
   const receiptProductSearchResults = useMemo(() => {
-    const search = receiptProductSearch.trim()
+    const search = debouncedReceiptProductSearch.trim()
     const query = normalizeManagementSearchText(receiptProductSearch)
     if (!isCreatingReceipt || query.length === 0) return []
     const searchProducts = receiptProductCatalogSearchResult.search === search ? receiptProductCatalogSearchResult.products : []
@@ -739,12 +742,12 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [isCreatingReceipt, receiptProductSearch, service])
+  }, [debouncedReceiptProductSearch, isCreatingReceipt, service])
 
   useEffect(() => {
     if (!isCreatingReceipt || !receiptSupplierSearchActive) return undefined
 
-    const search = receiptSupplierSearch.trim()
+    const search = debouncedReceiptSupplierSearch.trim()
     if (search.length === 0) {
       return undefined
     }
@@ -777,7 +780,7 @@ export function PurchaseReceiptsPage({
     return () => {
       active = false
     }
-  }, [isCreatingReceipt, receiptSupplierSearch, receiptSupplierSearchActive, service])
+  }, [debouncedReceiptSupplierSearch, isCreatingReceipt, receiptSupplierSearchActive, service])
 
   async function loadReceipts(
     input: {

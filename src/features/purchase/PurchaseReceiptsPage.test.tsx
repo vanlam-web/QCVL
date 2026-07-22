@@ -298,7 +298,16 @@ async function addProductToCreateReceipt(query: string) {
   const productSearch = screen.getByRole('textbox', { name: 'Tìm hàng (F3)' })
   await userEvent.clear(productSearch)
   await userEvent.type(productSearch, query)
-  await userEvent.keyboard('{Enter}')
+  let matchingOption: HTMLElement | undefined
+  await waitFor(() => {
+    const results = screen.getByRole('listbox', { name: 'Kết quả tìm hàng' })
+    expect(within(results).queryByText('Không tìm thấy hàng hóa phù hợp')).not.toBeInTheDocument()
+    matchingOption = within(results)
+      .getAllByRole('option')
+      .find((option) => option.textContent?.toLowerCase().includes(query.toLowerCase()))
+    expect(matchingOption).toBeDefined()
+  })
+  await userEvent.click(matchingOption!)
 }
 
 it('lists draft purchase receipts with totals and opens post action for draft detail', async () => {
