@@ -48,7 +48,7 @@ export function createSupplierService(api: SupplierApiRequester) {
   return {
     listSuppliers: (input: SupplierListFilters = {}) => {
       const params = new URLSearchParams()
-      if (input.search) params.set('q', input.search)
+      if (input.search) params.set('search', input.search)
       if (input.status) params.set('status', input.status)
       if (input.total_purchase_min !== undefined) params.set('total_purchase_min', String(input.total_purchase_min))
       if (input.total_purchase_max !== undefined) params.set('total_purchase_max', String(input.total_purchase_max))

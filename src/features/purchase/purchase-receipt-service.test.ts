@@ -20,7 +20,7 @@ it('builds purchase receipt list filters from existing purchase fields', async (
 
   expect(calls).toEqual([
     [
-      '/api/v1/purchase/receipts?q=HD-NCC-001&status=posted&date_from=2026-07-01&date_to=2026-07-31&created_by=user-1&page=2&page_size=15&sort_key=received_at&sort_direction=desc',
+      '/api/v1/purchase/receipts?search=HD-NCC-001&status=posted&date_from=2026-07-01&date_to=2026-07-31&created_by=user-1&page=2&page_size=15&sort_key=received_at&sort_direction=desc',
       undefined,
     ],
   ])
@@ -75,7 +75,7 @@ it('builds purchase supplier search requests with supplier page params', async (
   await service.listSuppliers({ search: 'cpds', page: 1, page_size: 20 })
 
   expect(calls).toEqual([
-    ['/api/v1/suppliers?status=active&q=cpds&page=1&page_size=20', undefined],
+      ['/api/v1/suppliers?status=active&search=cpds&page=1&page_size=20', undefined],
   ])
 })
 
@@ -91,7 +91,7 @@ it('builds quick-pick supplier search and records selected suppliers', async () 
   await service.recordSearchSelection({ entity_type: 'supplier', entity_id: 'supplier-1' })
 
   expect(calls).toEqual([
-    ['/api/v1/suppliers?status=active&q=NCC000031&page=1&page_size=20&search_context=quick_pick', undefined],
+      ['/api/v1/suppliers?status=active&search=NCC000031&page=1&page_size=20&search_context=quick_pick', undefined],
     [
       '/api/v1/search-selection-stats',
       {

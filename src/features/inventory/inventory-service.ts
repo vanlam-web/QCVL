@@ -41,7 +41,7 @@ export function createInventoryService(api: InventoryApiRequester) {
       page_size?: number
     } = {}) => {
       const params = new URLSearchParams()
-      if (input.search) params.set('q', input.search)
+      if (input.search) params.set('search', input.search)
       if (input.status) params.set('status', input.status)
       if (input.inventory_shape) params.set('inventory_shape', input.inventory_shape)
       if (input.page) params.set('page', String(input.page))

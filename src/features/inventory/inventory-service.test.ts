@@ -20,7 +20,7 @@ describe('inventory-service', () => {
     })
 
     expect(calls).toEqual([
-      ['/api/v1/inventory/products?q=mica&status=all&inventory_shape=normal&page=2&page_size=15', undefined],
+      ['/api/v1/inventory/products?search=mica&status=all&inventory_shape=normal&page=2&page_size=15', undefined],
     ])
   })
 

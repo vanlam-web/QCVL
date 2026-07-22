@@ -45,7 +45,7 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       } = {},
     ) => {
       const params = new URLSearchParams()
-      if (input.search) params.set('q', input.search)
+      if (input.search) params.set('search', input.search)
       if (input.status) params.set('status', input.status)
       if (input.date_from) params.set('date_from', input.date_from)
       if (input.date_to) params.set('date_to', input.date_to)
@@ -106,7 +106,7 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
     } = {}) => {
       const params = new URLSearchParams()
       params.set('status', input.status ?? 'active')
-      if (input.search) params.set('q', input.search)
+      if (input.search) params.set('search', input.search)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
       if (input.search_context) params.set('search_context', input.search_context)
