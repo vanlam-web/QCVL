@@ -56,6 +56,7 @@
 - [ ] Tach list/detail/action footer.
 - [ ] Tach create/edit form.
 - [ ] Tach payment panel.
+  - Da tach `PurchaseReceiptPaymentHistory` ra component rieng, dung chung cho 2 tab thanh toan NCC.
 - [ ] Xoa field khong co DB/API hoac render disabled/empty ro.
 - [ ] Test purchase page + service + server.
 - [ ] Cap nhat docs + TeamAI.

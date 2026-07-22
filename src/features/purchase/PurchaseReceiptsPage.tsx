@@ -68,6 +68,7 @@ import { quickPickDefaultPage, quickPickDefaultPageSize, quickPickSearchContext 
 import { useManagementSearch } from '../../lib/use-management-search'
 import { useQuickPickSearch } from '../../lib/use-quick-pick-search'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
+import { PurchaseReceiptPaymentHistory } from './PurchaseReceiptPaymentHistory'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
 import { financeAccountChoiceLabel } from '../finance/finance-presenter'
@@ -395,14 +396,6 @@ function receiptTotalQuantity(receipt: PurchaseReceipt) {
 
 function quantityText(value: number) {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
-}
-
-function supplierPaymentStatusText(status: 'posted' | 'cancelled') {
-  return status === 'posted' ? 'Đã thanh toán' : 'Đã hủy'
-}
-
-function supplierPaymentMethodText(method: 'cash' | 'bank_transfer') {
-  return method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'
 }
 
 function purchaseReceiptPaymentRows(receipt: PurchaseReceipt): PurchaseReceiptSupplierPayment[] {
@@ -2053,50 +2046,11 @@ export function PurchaseReceiptsPage({
             </>
           ) : null}
           {activeReceiptDetailTab === 'payments' ? (
-            <ManagementDetailSection ariaLabel="Lịch sử thanh toán NCC">
-              {selectedReceiptPayments.length === 0 ? (
-                <ManagementDetailInlineNote>Chưa có thanh toán NCC sau nhập.</ManagementDetailInlineNote>
-              ) : (
-                <table className="management-detail-table management-detail-linked-table">
-                  <thead>
-                    <tr>
-                      <th>Mã phiếu</th>
-                      <th>Thời gian</th>
-                      <th>Người tạo</th>
-                      <th>Phương thức</th>
-                      <th>Trạng thái</th>
-                      <th>Tiền chi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedReceiptPayments.map((payment) => (
-                      <tr key={payment.id}>
-                        <td>
-                          <ManagementRecordLink href={managementRecordOpenHref('/finance', payment.code)}>
-                            {payment.code}
-                          </ManagementRecordLink>
-                        </td>
-                        <td>{formatQcvDateTime(payment.paid_at)}</td>
-                        <td>{payment.created_by}</td>
-                        <td>{supplierPaymentMethodText(payment.payment_method)}</td>
-                        <td>
-                          <StatusChip tone={payment.status === 'posted' ? 'success' : 'neutral'}>
-                            {supplierPaymentStatusText(payment.status)}
-                          </StatusChip>
-                        </td>
-                        <td><MoneyText value={payment.amount} /></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-              {selectedReceiptOutstanding > 0 ? (
-                <button className="button button-primary" type="button" onClick={openSupplierPaymentForReceipt}>
-                  <WalletCards aria-hidden="true" size={16} />
-                  Thanh toán NCC
-                </button>
-              ) : null}
-            </ManagementDetailSection>
+            <PurchaseReceiptPaymentHistory
+              outstandingAmount={selectedReceiptOutstanding}
+              payments={selectedReceiptPayments}
+              onPay={openSupplierPaymentForReceipt}
+            />
           ) : null}
           {supplierPaymentOpen ? (
             <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
@@ -2539,50 +2493,11 @@ export function PurchaseReceiptsPage({
           </>
         ) : null}
         {activeReceiptDetailTab === 'payments' && selectedReceipt ? (
-          <ManagementDetailSection ariaLabel="Lịch sử thanh toán NCC">
-            {selectedReceiptPayments.length === 0 ? (
-              <ManagementDetailInlineNote>Chưa có thanh toán NCC sau nhập.</ManagementDetailInlineNote>
-            ) : (
-              <table className="management-detail-table management-detail-linked-table">
-                <thead>
-                  <tr>
-                    <th>Mã phiếu</th>
-                    <th>Thời gian</th>
-                    <th>Người tạo</th>
-                    <th>Phương thức</th>
-                    <th>Trạng thái</th>
-                    <th>Tiền chi</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {selectedReceiptPayments.map((payment) => (
-                    <tr key={payment.id}>
-                      <td>
-                        <ManagementRecordLink href={managementRecordOpenHref('/finance', payment.code)}>
-                          {payment.code}
-                        </ManagementRecordLink>
-                      </td>
-                      <td>{formatQcvDateTime(payment.paid_at)}</td>
-                      <td>{payment.created_by}</td>
-                      <td>{supplierPaymentMethodText(payment.payment_method)}</td>
-                      <td>
-                        <StatusChip tone={payment.status === 'posted' ? 'success' : 'neutral'}>
-                          {supplierPaymentStatusText(payment.status)}
-                        </StatusChip>
-                      </td>
-                      <td><MoneyText value={payment.amount} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-            {selectedReceiptOutstanding > 0 ? (
-              <button className="button button-primary" type="button" onClick={openSupplierPaymentForReceipt}>
-                <WalletCards aria-hidden="true" size={16} />
-                Thanh toán NCC
-              </button>
-            ) : null}
-          </ManagementDetailSection>
+          <PurchaseReceiptPaymentHistory
+            outstandingAmount={selectedReceiptOutstanding}
+            payments={selectedReceiptPayments}
+            onPay={openSupplierPaymentForReceipt}
+          />
         ) : null}
         {supplierPaymentOpen && selectedReceipt ? (
           <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
