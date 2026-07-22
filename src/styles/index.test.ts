@@ -995,3 +995,15 @@ it('keeps inline detail surfaces unframed and summary rows single-line', () => {
   expect(cssRule('.management-detail-lower-right .management-detail-summary-box-right dd')).toContain('min-width: 5.5rem')
   expect(cssRule('.management-detail-lower-right .management-detail-summary-box-right dd')).toContain('white-space: nowrap')
 })
+
+it('keeps medium modal dialogs compact and modal selects aligned with shared styling', () => {
+  expect(cssRule('.management-modal-dialog-medium')).toContain('gap: var(--space-3)')
+  expect(cssRule('.management-modal-dialog-medium')).toContain('width: min(45rem, calc(100vw - var(--space-4)))')
+  expect(cssRule('.management-modal-dialog-medium')).toContain('padding: var(--space-3)')
+
+  const modalSelectRule = cssRule('.management-modal-form select')
+  expect(modalSelectRule).toContain('appearance: none')
+  expect(modalSelectRule).toContain('background-image: url("data:image/svg+xml')
+  expect(modalSelectRule).toContain('background-position: right var(--space-2) center')
+  expect(modalSelectRule).toContain('padding-right: calc(var(--space-4) + 1.25rem)')
+})

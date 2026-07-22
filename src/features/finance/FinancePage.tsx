@@ -1364,6 +1364,15 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const voucherCounterpartyNameLabel = voucherMode === 'in' ? 'Tên người nộp' : 'Tên người nhận'
   const voucherActorName = currentUserName.trim() || 'Cloud Admin'
   const voucherCounterpartyOptionsForType = voucherMode === null ? [] : voucherCounterpartyTypeOptions(voucherType, voucherMode)
+  const voucherTabs = voucherMode === 'out'
+    ? [
+        { direction: 'out' as const, label: 'Phiếu chi' },
+        { direction: 'in' as const, label: 'Phiếu thu' },
+      ]
+    : [
+        { direction: 'in' as const, label: 'Phiếu thu' },
+        { direction: 'out' as const, label: 'Phiếu chi' },
+      ]
   const bankAccountModalTitle = editingBankAccountId === null ? 'Thêm tài khoản ngân hàng' : 'Sửa tài khoản ngân hàng'
   return (
     <ManagementPage
@@ -1638,7 +1647,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
           <section
             aria-label={voucherDialogLabel}
             aria-modal="true"
-            className="management-modal-dialog finance-voucher-panel"
+            className="management-modal-dialog management-modal-dialog-medium finance-voucher-panel"
             role="dialog"
           >
             <header className="management-modal-header">
@@ -1649,22 +1658,17 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
             </header>
             <div className="inline-detail-tabbar">
               <div className="inline-detail-tabs" role="tablist" aria-label="Loại phiếu">
-                <button
-                  aria-selected={voucherMode === 'in'}
-                  role="tab"
-                  type="button"
-                  onClick={() => openVoucherForm('in')}
-                >
-                  Phiếu thu
-                </button>
-                <button
-                  aria-selected={voucherMode === 'out'}
-                  role="tab"
-                  type="button"
-                  onClick={() => openVoucherForm('out')}
-                >
-                  Phiếu chi
-                </button>
+                {voucherTabs.map((tab) => (
+                  <button
+                    aria-selected={voucherMode === tab.direction}
+                    key={tab.direction}
+                    role="tab"
+                    type="button"
+                    onClick={() => openVoucherForm(tab.direction)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             </div>
             <form aria-label={voucherDialogLabel} className="management-modal-form" onSubmit={createManualVoucher}>
