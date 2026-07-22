@@ -131,6 +131,7 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
     getQuoteReopenPayload: vi.fn(),
     listFinanceAccounts: vi.fn(async () => ({ items: [] })),
     getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-1', total_debt: 0, invoices: [] })),
+    getCustomerOpenDebts: vi.fn(async () => ({ items: [], has_more: false })),
     listRecentCustomerProductPrices: vi.fn(async () => ({ items: [] })),
     ...overrides,
   }
