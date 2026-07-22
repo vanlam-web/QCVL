@@ -18,6 +18,7 @@ import {
   type ProductImportUpsertRow,
 } from './modules/catalog/product-import.js'
 import { handleFinanceRoute } from './modules/finance/finance-routes.js'
+import { sliceCustomerOpenDebtsOldestFirst } from './modules/finance/customer-debt.js'
 import {
   applyKiotVietCashbookImport,
   mapKiotVietCashbookRows,
@@ -459,6 +460,18 @@ export type CustomerDebtDetailData = {
     source_id?: string | null
   }>
 }
+export type CustomerOpenDebtData = {
+  items: Array<{
+    order_id: string
+    order_code: string
+    created_at: string
+    total_amount: number
+    paid_amount: number
+    remaining_debt: number
+    allocated_amount: number
+  }>
+  has_more: boolean
+}
 export interface StocktakeListData {
   id: string
   code: string
@@ -884,6 +897,12 @@ export interface ServerRepository {
   }>
   listCustomerDebts?(input: { organizationId: string; url: URL }): Promise<CustomerDebtSummaryData[]>
   getCustomerDebt?(input: { organizationId: string; customerId: string }): Promise<CustomerDebtDetailData>
+  getCustomerOpenDebts?(input: {
+    organizationId: string
+    customerId: string
+    amount?: number
+    limit?: number
+  }): Promise<CustomerOpenDebtData>
   collectCustomerDebt?(input: {
     organizationId: string
     customerId: string
@@ -4400,6 +4419,29 @@ async function getDevApiResponse(
           return { found: true, data: { ...detail, total_debt: totalDebt ?? detail.total_debt } }
         }
         return { found: true, data: makeCustomerDebtDetail(customerId) }
+      },
+      getCustomerOpenDebts: async () => {
+        const customerId = getFinanceCustomerId(path)
+        const amountParam = Number(url.searchParams.get('amount') ?? '')
+        const limitParam = Number(url.searchParams.get('limit') ?? '')
+        const amount = Number.isFinite(amountParam) && amountParam > 0 ? amountParam : undefined
+        const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.max(1, Math.min(Math.floor(limitParam), 100)) : 50
+        if (repository.getCustomerOpenDebts) {
+          return {
+            found: true,
+            data: await repository.getCustomerOpenDebts({
+              organizationId: currentUser.organization.id,
+              customerId,
+              amount,
+              limit,
+            }),
+          }
+        }
+        const detail = makeCustomerDebtDetail(customerId)
+        return {
+          found: true,
+          data: sliceCustomerOpenDebtsOldestFirst(detail.invoices, { amount, limit }),
+        }
       },
       collectCustomerDebt: async () => {
         if (repository.collectCustomerDebt) {

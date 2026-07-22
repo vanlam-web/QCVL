@@ -213,6 +213,52 @@ export interface MemoryLinkedSupplierReceipt {
   remaining_amount: number
 }
 
+export interface CustomerOpenDebtInvoiceInput {
+  order_id: string
+  order_code: string
+  created_at: string
+  total_amount: number
+  paid_amount: number
+  remaining_debt: number
+}
+
+export interface CustomerOpenDebtSliceData {
+  items: Array<CustomerOpenDebtInvoiceInput & { allocated_amount: number }>
+  has_more: boolean
+}
+
+export function sliceCustomerOpenDebtsOldestFirst(
+  invoices: CustomerOpenDebtInvoiceInput[],
+  input: { amount?: number; limit?: number } = {},
+): CustomerOpenDebtSliceData {
+  const limit = Math.max(1, Math.min(Math.floor(Number(input.limit ?? 50)), 100))
+  const amount = Number(input.amount)
+  let remainingAmount = Number.isFinite(amount) && amount > 0 ? amount : Number.POSITIVE_INFINITY
+  const openInvoices = invoices
+    .filter((invoice) => Number(invoice.remaining_debt) > 0)
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.created_at)
+      const rightTime = Date.parse(right.created_at)
+      if (leftTime !== rightTime) return leftTime - rightTime
+      return left.order_code.localeCompare(right.order_code)
+    })
+  const items: CustomerOpenDebtSliceData['items'] = []
+  for (const invoice of openInvoices) {
+    if (items.length >= limit || remainingAmount <= 0) break
+    const allocatedAmount = Math.min(Number(invoice.remaining_debt), remainingAmount)
+    if (allocatedAmount <= 0) continue
+    items.push({
+      ...invoice,
+      allocated_amount: allocatedAmount,
+    })
+    remainingAmount -= allocatedAmount
+  }
+  return {
+    items,
+    has_more: openInvoices.length > items.length,
+  }
+}
+
 /** In-memory port of customerDebtTotalsSql for a single customer. */
 export function computeCustomerDebtTotal(input: {
   customerId: string

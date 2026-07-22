@@ -5,6 +5,7 @@ import {
   KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN,
   customerDebtTotalsSql,
   mapCustomerDebtTotalsRow,
+  sliceCustomerOpenDebtsOldestFirst,
   type CustomerDebtTotalsRow,
 } from './modules/finance/customer-debt.js'
 import { buildPartnerDebtLedger, type PartnerDebtDocumentInput } from './modules/finance/partner-debt-ledger.js'
@@ -4833,6 +4834,47 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           source_id: row.sourceId,
         })),
       }
+    },
+
+    async getCustomerOpenDebts(input) {
+      await ensureSalesFinanceTables(pool)
+      const limit = Math.max(1, Math.min(Math.floor(Number(input.limit ?? 50)), 100))
+      const result = await pool.query(
+        `
+          select
+            o.id,
+            o.code,
+            o.created_at,
+            o.total_amount,
+            o.paid_amount,
+            coalesce(cde.remaining_debt, o.debt_amount) as remaining_debt
+          from orders o
+          left join customer_debt_entries cde
+            on cde.organization_id = o.organization_id
+           and cde.order_id = o.id
+           and cde.status = 'open'
+           and cde.remaining_debt > 0
+          where o.organization_id = $1
+            and o.customer_id = $2
+            and o.order_type = 'invoice'
+            and o.status <> 'cancelled'
+            and coalesce(cde.remaining_debt, o.debt_amount) > 0
+          order by o.created_at asc, o.code asc
+          limit $3
+        `,
+        [input.organizationId, input.customerId, limit + 1],
+      )
+      return sliceCustomerOpenDebtsOldestFirst(
+        result.rows.map((row) => ({
+          order_id: String(row.id),
+          order_code: String(row.code),
+          created_at: row.created_at.toISOString(),
+          total_amount: Number(row.total_amount),
+          paid_amount: Number(row.paid_amount),
+          remaining_debt: Number(row.remaining_debt),
+        })),
+        { amount: input.amount, limit },
+      )
     },
 
     async listCustomerDebts(input) {
