@@ -437,6 +437,7 @@ function QuotePrintRoute() {
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
+  const financeService = useMemo(() => createBrowserFinanceService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -455,6 +456,11 @@ function QuotePrintRoute() {
       service={service}
       initialTemplate={initialTemplate}
       loadBillSettings={foundationService.getOrganizationBillSettings}
+      loadBillBankAccount={async () => {
+        const { pickBillPrintBankAccount } = await import('../features/sales-documents/bill-print-bank')
+        const accounts = await financeService.listAccounts({ is_active: true })
+        return pickBillPrintBankAccount(accounts.items)
+      }}
       saveCustomerBillPreference={(customerId, template) =>
         catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
       }
@@ -472,6 +478,7 @@ function InvoicePrintRoute() {
   const service = useMemo(() => createBrowserSalesDocumentService(getAccessToken), [getAccessToken])
   const foundationService = useMemo(() => createBrowserFoundationService(getAccessToken), [getAccessToken])
   const catalogService = useMemo(() => createBrowserCatalogService(getAccessToken), [getAccessToken])
+  const financeService = useMemo(() => createBrowserFinanceService(getAccessToken), [getAccessToken])
   const initialTemplate = searchParams.get('template')
 
   if (!initialized) return <BootstrapScreen />
@@ -490,6 +497,11 @@ function InvoicePrintRoute() {
       service={service}
       initialTemplate={initialTemplate}
       loadBillSettings={foundationService.getOrganizationBillSettings}
+      loadBillBankAccount={async () => {
+        const { pickBillPrintBankAccount } = await import('../features/sales-documents/bill-print-bank')
+        const accounts = await financeService.listAccounts({ is_active: true })
+        return pickBillPrintBankAccount(accounts.items)
+      }}
       saveCustomerBillPreference={(customerId, template) =>
         catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
       }

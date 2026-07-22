@@ -1707,10 +1707,8 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const hydratedCashbookEntries = [...cashbookEntries.values()].map((entry) => hydrateCashbookEntryUserSnapshot(entry, users))
       const withReceipts = hydrateSalesDocumentPaymentReceipts({ ...hydratedDocument, items: hydratedItems }, hydratedCashbookEntries)
       const liveCustomer = resolveDocumentCustomer(withReceipts, customers)
-      const preferred =
-        liveCustomer && (liveCustomer.code ?? '').trim().toLowerCase() !== 'khachle'
-          ? liveCustomer.preferred_bill_template ?? null
-          : null
+      const walkIn = (liveCustomer?.code ?? withReceipts.customer.code ?? '').trim().toLowerCase() === 'khachle'
+      const preferred = !walkIn && liveCustomer ? liveCustomer.preferred_bill_template ?? null : null
       return {
         ...withReceipts,
         customer: {
@@ -1721,6 +1719,11 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
               : typeof preferred === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(preferred.trim())
                 ? preferred.trim()
                 : null,
+          address: !walkIn && liveCustomer?.address?.trim() ? liveCustomer.address.trim() : null,
+          total_debt_amount:
+            !walkIn && typeof liveCustomer?.total_debt_amount === 'number'
+              ? liveCustomer.total_debt_amount
+              : null,
         },
       }
     },

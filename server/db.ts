@@ -4431,7 +4431,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const userDisplayNames = await userDisplayNameMap(pool, input.organizationId)
       const document = hydrateSalesDocumentUserSnapshot(mapOrderRow(result.rows[0]), userDisplayNames)
       const paymentReceipts = await listSalesDocumentPaymentReceipts(pool, input.organizationId, document, userDisplayNames)
-      const preferredBillTemplate = await loadCustomerPreferredBillTemplate(
+      const billCustomer = await loadCustomerBillPrintExtras(
         pool,
         input.organizationId,
         document.customer.id,
@@ -4441,7 +4441,9 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         ...document,
         customer: {
           ...document.customer,
-          preferred_bill_template: preferredBillTemplate,
+          preferred_bill_template: billCustomer.preferred_bill_template,
+          address: billCustomer.address,
+          total_debt_amount: billCustomer.total_debt_amount,
         },
         payment_receipts: paymentReceipts,
       }
@@ -6790,13 +6792,15 @@ function snapshotImportIds(tableName: 'customer_snapshots' | 'supplier_snapshots
   ]
 }
 
-async function loadCustomerPreferredBillTemplate(
+async function loadCustomerBillPrintExtras(
   pool: pg.Pool,
   organizationId: string,
   customerId: string | null | undefined,
   customerCode: string | null | undefined,
 ) {
-  if ((customerCode ?? '').trim().toLowerCase() === 'khachle') return null
+  if ((customerCode ?? '').trim().toLowerCase() === 'khachle') {
+    return { preferred_bill_template: null, address: null, total_debt_amount: null }
+  }
   await ensureImportedSnapshotTables(pool)
   const result = await pool.query(
     `
@@ -6811,8 +6815,13 @@ async function loadCustomerPreferredBillTemplate(
     `,
     [organizationId, customerId ?? null, customerCode ?? null],
   )
-  const preferred = (result.rows[0]?.data as CustomerListData | undefined)?.preferred_bill_template
-  return normalizeBillPreferenceValue(preferred ?? null)
+  const data = result.rows[0]?.data as CustomerListData | undefined
+  const debtRaw = data?.total_debt_amount
+  return {
+    preferred_bill_template: normalizeBillPreferenceValue(data?.preferred_bill_template ?? null),
+    address: typeof data?.address === 'string' && data.address.trim() ? data.address.trim() : null,
+    total_debt_amount: typeof debtRaw === 'number' && Number.isFinite(debtRaw) ? debtRaw : null,
+  }
 }
 
 function purchaseReceiptDataFromImportRows(

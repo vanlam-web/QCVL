@@ -6,7 +6,15 @@ export interface SalesDocumentListItem {
   order_type: 'quote' | 'invoice'
   status: 'active' | 'converted' | 'completed' | 'cancelled'
   created_at: string
-  customer: { id: string | null; code: string | null; name: string; phone: string | null; preferred_bill_template?: string | null }
+  customer: {
+    id: string | null
+    code: string | null
+    name: string
+    phone: string | null
+    preferred_bill_template?: string | null
+    address?: string | null
+    total_debt_amount?: number | null
+  }
   seller: { id: string; name: string }
   subtotal_amount: number
   discount_amount: number

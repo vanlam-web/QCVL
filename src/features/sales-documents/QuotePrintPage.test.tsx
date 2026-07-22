@@ -89,18 +89,20 @@ it('renders a simple quote print preview from saved snapshot data', async () => 
 
   expect(await screen.findByRole('heading', { name: 'BÁO GIÁ' })).toBeInTheDocument()
   expect(screen.getByText('QCVL')).toBeInTheDocument()
-  expect(screen.getByText('BG000123')).toBeInTheDocument()
+  expect(screen.getByText(/Số báo giá:\s*BG000123/)).toBeInTheDocument()
   expect(screen.getByText('Công ty Phong Cảnh')).toBeInTheDocument()
-  expect(screen.getByText('Admin')).toBeInTheDocument()
-  expect(screen.getByText('Giao sau khi khách xác nhận')).toBeInTheDocument()
+  expect(screen.getByText(/NV:\s*Admin/)).toBeInTheDocument()
+  expect(screen.getByText(/Ghi chú:\s*Giao sau khi khách xác nhận/)).toBeInTheDocument()
 
   const lines = screen.getByRole('table', { name: 'Dòng hàng báo giá' })
   expect(within(lines).getByText('DECAL-PP')).toBeInTheDocument()
+  expect(within(lines).getByText('Decal PP')).toBeInTheDocument()
   expect(within(lines).getByText('1.2 x 0.5 m')).toBeInTheDocument()
   expect(within(lines).getByText('FORMEX-5')).toBeInTheDocument()
-  expect(within(lines).getByText('Cắt theo mẫu')).toBeInTheDocument()
+  expect(within(lines).getByText(/Cắt theo mẫu/)).toBeInTheDocument()
   expect(screen.getByText('Tổng báo giá')).toBeInTheDocument()
   expect(screen.getByText('600 000')).toBeInTheDocument()
+  expect(screen.getByText(/Tổng thanh toán bằng chữ:/)).toBeInTheDocument()
 })
 
 it('calls browser print from the quote print action', async () => {
