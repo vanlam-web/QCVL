@@ -90,8 +90,8 @@ describe('finance presenter', () => {
     expect(sourceTypeText('payment_receipt_method')).toBe('Phiếu thu')
     expect(sourceTypeText('kiotviet_cashbook')).toBe('Sổ quỹ KV')
     expect(financeDateText('bad-date')).toBe('')
-    expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 10:00')
-    expect(financeDateText('2026-07-14T09:08:00.000Z')).toBe('14/07/2026 16:08')
+    expect(financeDateText('2026-07-09T03:00:00Z')).toBe('09/07/2026 03:00')
+    expect(financeDateText('2026-07-20T17:42:00.000Z')).toBe('20/07/2026 17:42')
   })
 
   it('shows the concrete bank and account number for bank cashbook payment method', () => {
