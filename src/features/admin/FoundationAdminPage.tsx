@@ -15,7 +15,7 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { permissions } from '../users/permissions'
@@ -37,6 +37,7 @@ import {
 } from '../sales-documents/bill-settings'
 import { BillShopHeaderPreview } from '../sales-documents/BillShopHeaderPreview'
 import { BillTemplateManager } from '../sales-documents/BillTemplateManager'
+import { useManagementSearch } from '../../lib/use-management-search'
 
 interface AdminState {
   users: UserListItem[]
@@ -220,7 +221,8 @@ export function FoundationAdminPage({
       logo_data_url: settings.logo_data_url,
     }
   })
-  const [userSearch, setUserSearch] = useState('')
+  const userManagementSearch = useManagementSearch({ initialSearch: '' })
+  const userSearch = userManagementSearch.draftSearch
   const [userStatus, setUserStatus] = useState<UserStatusFilter>('all')
   const [lastUserSearch, setLastUserSearch] = useState('')
   const [lastUserStatus, setLastUserStatus] = useState<UserStatusFilter>('all')
@@ -380,15 +382,20 @@ export function FoundationAdminPage({
   }
 
   async function filterUsers(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => load({ search: userSearch, status: userStatus }))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = userSearch.trim()
+      userManagementSearch.applySearch(nextSearch)
+      return load({ search: nextSearch, status: userStatus })
+    })
   }
 
   function changeUserSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch: setUserSearch,
-      resetSelection: () => setSelectedUser(null),
-      load: (query) => load({ search: query, status: userStatus }),
-    })
+    userManagementSearch.changeSearch(nextSearch)
+    setSelectedUser(null)
+    if (nextSearch.trim().length === 0) {
+      userManagementSearch.applySearch('')
+      void load({ search: '', status: userStatus })
+    }
   }
 
   function changeUserStatus(nextStatus: UserStatusFilter) {

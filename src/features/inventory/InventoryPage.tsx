@@ -22,11 +22,12 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
 import {
@@ -95,7 +96,8 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(defaultPageSize)
-  const [search, setSearch] = useState('')
+  const inventoryManagementSearch = useManagementSearch({ initialSearch: '' })
+  const search = inventoryManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<InventoryProductStatusFilter>('active')
   const [shape, setShape] = useState<InventoryShape | 'all'>('all')
@@ -476,7 +478,11 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   }, [defaultPageSize, service, view])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyFilters(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      inventoryManagementSearch.applySearch(nextSearch)
+      return applyFilters(nextSearch)
+    })
   }
 
   async function filterStocktakes(event: React.FormEvent<HTMLFormElement>) {
@@ -596,14 +602,13 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   }
 
   function changeProductSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      resetSelection: () => {
-        setDetail(null)
-        setMovements([])
-      },
-      load: applyFilters,
-    })
+    inventoryManagementSearch.changeSearch(nextSearch)
+    setDetail(null)
+    setMovements([])
+    if (nextSearch.trim().length === 0) {
+      inventoryManagementSearch.applySearch('')
+      void applyFilters('')
+    }
   }
 
   async function openProduct(product: InventoryProduct) {

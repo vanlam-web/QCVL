@@ -29,10 +29,11 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, sortManagementItemsByDateDesc, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import { formatPhoneDisplay } from '../../lib/phone-format'
 import { supplierNumberFilterValue } from './supplier-filters'
 import { supplierCreatedDateText, supplierCreatorLabel, supplierGroupLabel, supplierListSummary, supplierMoneyText } from './supplier-presenter'
@@ -118,7 +119,8 @@ export function SuppliersPage({
   const [financeAccountsLoaded, setFinanceAccountsLoaded] = useState(false)
   const [total, setTotal] = useState(0)
   const [summary, setSummary] = useState<{ current_payable_amount: number; total_purchase_amount: number } | null>(null)
-  const [search, setSearch] = useState(routeSearch)
+  const supplierManagementSearch = useManagementSearch({ initialSearch: routeSearch })
+  const search = supplierManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState(routeSearch)
   const [status, setStatus] = useState<SupplierStatus | 'all'>('active')
   const [lastStatus, setLastStatus] = useState<SupplierStatus | 'all'>('active')
@@ -292,7 +294,11 @@ export function SuppliersPage({
   }
 
   async function filterSuppliers(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applySupplierSearch(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      supplierManagementSearch.applySearch(nextSearch)
+      return applySupplierSearch(nextSearch)
+    })
   }
 
   function applySupplierSearch(nextSearch: string) {
@@ -309,10 +315,11 @@ export function SuppliersPage({
   }
 
   function changeSupplierSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      load: applySupplierSearch,
-    })
+    supplierManagementSearch.changeSearch(nextSearch)
+    if (nextSearch.trim().length === 0) {
+      supplierManagementSearch.applySearch('')
+      void applySupplierSearch('')
+    }
   }
 
   async function applySidebarFilters(

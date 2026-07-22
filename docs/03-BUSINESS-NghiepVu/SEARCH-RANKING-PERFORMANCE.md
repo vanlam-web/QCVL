@@ -24,6 +24,13 @@ Chuẩn chung:
 
 Nút `Xóa tìm kiếm` luôn reset ngay, không cần bấm `Enter`.
 
+### 2.1. Chuẩn code bắt buộc
+
+- Quick-pick search phải đi qua `useQuickPickSearch`.
+- Search danh sách quản trị phải đi qua `useManagementSearch`.
+- Không tự viết debounce/request-id/clear-state riêng ở từng page nếu chưa có ngoại lệ ghi rõ trong doc này.
+- Search quản trị chỉ áp dụng khi bấm `Enter` hoặc submit form; gõ ký tự chỉ đổi draft.
+
 ## 3. Quy tắc lọc trạng thái
 
 | Ngữ cảnh | Dữ liệu được hiện | Dữ liệu không được hiện |
@@ -157,6 +164,43 @@ Index tối thiểu:
 4. Thêm bảng lịch sử chọn và cộng điểm khi chọn.
 5. Thêm index/normalized search nếu đo thấy chậm.
 6. Đo lại bằng browser và API timing trên dữ liệu NAS.
+
+### 6.5. Hướng fix tiếp cho POS chọn khách
+
+Hiện tượng đã đo ngày `2026-07-22`:
+
+- POS tìm hàng cảm giác nhanh hơn POS chọn khách dù dữ liệu hàng hóa nhiều hơn.
+- Lý do chính: POS đã preload danh sách hàng nhanh vào RAM, nên khi gõ có thể lọc ngay trên dữ liệu sẵn có; API hàng chỉ bổ sung kết quả.
+- POS chọn khách không preload danh sách khách; mỗi lần gõ phải gọi API.
+- API chọn khách đang đọc `customer_snapshots.data` dạng JSON, normalize tiếng Việt, lọc mã/tên/phone/MST/địa chỉ/ghi chú và rank theo lịch sử chọn.
+- Máy ngoài LAN gọi API local nhưng DB ở NAS qua mạng, nên quick-pick khách sau warm-up vẫn khoảng `0.8s`; có thể spike cao hơn nếu request cũ còn pending hoặc DB/mạng chậm.
+
+Hướng fix tạm thời đã chốt:
+
+1. Giữ UI loading rõ ràng: khi request khách đang chờ, dropdown hiển thị `Đang tìm...`, không hiển thị `Không có kết quả phù hợp` giả.
+2. Bỏ các tải nặng khỏi quick-pick khách: không load tổng công nợ, user list, NCC liên kết, supplier snapshots trong request chọn khách.
+3. Quick-pick khách chỉ trả `page_size` nhỏ, thường `8`, và lọc active-only.
+
+Hướng fix tiếp theo khi cần nhanh như hàng hóa:
+
+1. Tạo dữ liệu tìm kiếm khách đã chuẩn hóa ở DB, không tìm trực tiếp trên JSON snapshot mỗi request.
+   - Đã chọn bảng search cache `customer_search_index`.
+   - Cột triển khai: `organization_id`, `customer_id`, `status`, `normalized_code`, `normalized_name`, `normalized_haystack`, `updated_at`.
+   - Index tối thiểu: `(organization_id, status, normalized_code)`, `(organization_id, status, normalized_name)`, và nếu cần tìm chứa giữa chuỗi thì thêm trigram cho `normalized_haystack`.
+   - Migration `0016_customer_search_index.sql` tạo bảng, tạo index, backfill dữ liệu từ `customer_snapshots`.
+   - Runtime phải sync index khi tạo, sửa hoặc import khách hàng.
+2. POS preload/cache nhóm khách hay dùng:
+   - Lấy `8-20` khách hay chọn gần đây của user khi mở POS.
+   - Khi gõ, lọc ngay trên cache trước để có phản hồi tức thì.
+   - Vẫn gọi API nền để bổ sung kết quả chính xác.
+3. Frontend hủy hoặc bỏ qua request cũ mạnh hơn:
+   - Mỗi từ khóa chỉ nhận kết quả request mới nhất.
+   - Nếu request cũ trả chậm, không làm dropdown quay lại trạng thái cũ.
+4. Đo bằng cùng một checklist:
+   - API direct qua `3100`.
+   - Browser `3202` đang mở.
+   - Từ khóa chuẩn: `hlo`, `kl2`, `KH000384`.
+   - Mục tiêu quick-pick khách sau cache/index: dưới `200ms` cảm nhận UI, API dưới `300ms` trong LAN.
 
 ## 7. Acceptance
 

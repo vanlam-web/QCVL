@@ -15,13 +15,14 @@ import {
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { managementSortStatesEqual, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementDateTimeInput } from '../../components/ui-shell/management-date-time-input'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { formatMoney } from '../../lib/number-format'
+import { useManagementSearch } from '../../lib/use-management-search'
 import type {
   CashbookBusinessAccountedFilter,
   CashbookColumnKey,
@@ -217,7 +218,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [cashbookTotal, setCashbookTotal] = useState(0)
   const [cashbookPage, setCashbookPage] = useState(1)
   const [cashbookPageSize, setCashbookPageSize] = useState(defaultPageSize)
-  const [cashbookSearch, setCashbookSearch] = useState(routeFilters.search)
+  const cashbookManagementSearch = useManagementSearch({ initialSearch: routeFilters.search })
+  const cashbookSearch = cashbookManagementSearch.draftSearch
   const [lastCashbookSearch, setLastCashbookSearch] = useState(routeFilters.search)
   const [lastCashbookSearchScope, setLastCashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [cashbookTimeFilter, setCashbookTimeFilter] = useState<CashbookTimeFilter>(routeFilters.time)
@@ -774,7 +776,11 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }, [defaultPageSize, hydrateCashbookCounterparties, hydrateCashbookDetail, routeFilters.from, routeFilters.open, routeFilters.search, routeFilters.to, service])
 
   async function filterCashbook(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyCashbookSearch(cashbookSearch))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = cashbookSearch.trim()
+      cashbookManagementSearch.applySearch(nextSearch)
+      return applyCashbookSearch(nextSearch)
+    })
   }
 
   function applyCashbookSearch(nextSearch: string) {
@@ -782,10 +788,11 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }
 
   function changeCashbookSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch: setCashbookSearch,
-      load: applyCashbookSearch,
-    })
+    cashbookManagementSearch.changeSearch(nextSearch)
+    if (nextSearch.trim().length === 0) {
+      cashbookManagementSearch.applySearch('')
+      void applyCashbookSearch('')
+    }
   }
 
   async function applyCashbookFilters(input: {

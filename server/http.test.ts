@@ -1377,7 +1377,7 @@ describe('createHttpHandler', () => {
     expect(body.data.items[0].code).toBe('SP000064{DEL}')
   })
 
-  test('sorts POS quick products by persisted invoice and quote usage', async () => {
+  test('sorts POS quick products by completed invoice usage', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
       new Request('http://api.local/api/v1/auth/login', {
@@ -1389,7 +1389,7 @@ describe('createHttpHandler', () => {
     const authorization = `Bearer ${loginBody.data.access_token}`
 
     await handler(
-      new Request('http://api.local/api/v1/orders/quotes', {
+      new Request('http://api.local/api/v1/orders/checkout', {
         method: 'POST',
         headers: { authorization },
         body: JSON.stringify({
@@ -1398,7 +1398,7 @@ describe('createHttpHandler', () => {
             { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
             { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
           ],
-          payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+          payment: { cash_amount: 1200000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
         }),
       }),
     )
@@ -1414,7 +1414,7 @@ describe('createHttpHandler', () => {
     expect(body.data.items[0].id).toBe('product-005')
   })
 
-  test('sorts POS quick products by dev-memory quote usage', async () => {
+  test('sorts POS quick products by dev-memory completed invoice usage', async () => {
     const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
     const authorization = 'Bearer dev-token'
 
@@ -1433,13 +1433,13 @@ describe('createHttpHandler', () => {
 
     for (let index = 0; index < 10; index++) {
       await handler(
-        new Request('http://api.local/api/v1/orders/quotes', {
+        new Request('http://api.local/api/v1/orders/checkout', {
           method: 'POST',
           headers: { authorization },
           body: JSON.stringify({
             customer_id: 'customer-retail',
             items: [{ product_id: 'product-hot', quantity: 1, unit_price: 25000, discount_amount: 0, price_source: 'manual' }],
-            payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+            payment: { cash_amount: 25000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
           }),
         }),
       )
@@ -3362,6 +3362,66 @@ describe('createHttpHandler', () => {
 
     expect(response.status).toBe(200)
     expect(body.data.items.some((item: { code: string; name: string }) => item.code === 'khachle' && item.name === 'Khách lẻ')).toBe(true)
+  })
+
+  test('returns quick-pick customers without loading customer summaries and linked suppliers', async () => {
+    const base = repository(await hashPassword('ChangeMe123!'))
+    const listCustomers = vi.fn(async () => [{
+      id: 'customer-quick-1',
+      code: 'KH000384',
+      name: 'KL2',
+      phone: null,
+      tax_code: null,
+      address: null,
+      customer_group_id: null,
+      customer_group: null,
+      created_by: null,
+      created_at: '2026-07-01T00:00:00.000Z',
+      total_sales_amount: 0,
+      total_debt_amount: 0,
+      status: 'active' as const,
+    }])
+    const listUsers = vi.fn(async () => [])
+    const listSuppliers = vi.fn(async () => [])
+    const getCustomerFinancialTotals = vi.fn(async () => new Map())
+    const ensureSalesFinanceSeed = vi.fn(async () => undefined)
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        listCustomers,
+        listUsers,
+        listSuppliers,
+        getCustomerFinancialTotals,
+        ensureSalesFinanceSeed,
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/customers?search=KH000384&status=active&page=1&page_size=8&search_context=quick_pick', {
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['KH000384'])
+    expect(listCustomers).toHaveBeenCalledWith(expect.objectContaining({
+      userId: user.id,
+      url: expect.objectContaining({
+        search: expect.stringContaining('search_context=quick_pick'),
+      }),
+    }))
+    expect(getCustomerFinancialTotals).not.toHaveBeenCalled()
+    expect(listUsers).not.toHaveBeenCalled()
+    expect(listSuppliers).not.toHaveBeenCalled()
+    expect(ensureSalesFinanceSeed).not.toHaveBeenCalled()
   })
 
   test('filters imported customers by status and summarizes KiotViet net sales', async () => {
@@ -5735,6 +5795,14 @@ describe('createHttpHandler', () => {
     expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['FAST-1'])
     expect(body.data.total).toBe(51)
     expect(body.data.total_all).toBe(51)
+
+    listProducts.mockClear()
+    listProductsPage.mockClear()
+    const posResponse = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=120&sort=pos_usage', { headers: { authorization } }))
+
+    expect(posResponse.status).toBe(200)
+    expect(listProductsPage).toHaveBeenCalledTimes(1)
+    expect(listProducts).not.toHaveBeenCalled()
   })
 
   test('uses paged stocktake repository with creator options instead of loading all stocktakes twice', async () => {

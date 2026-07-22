@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogService } from '../catalog/catalog-service'
-import type { Customer } from '../catalog/types'
+import type { Customer, CustomerListResponse } from '../catalog/types'
 import type { FinanceService } from '../finance/finance-service'
 import type { OrderService } from '../orders/order-service'
 import type { SalesDocumentService } from '../sales-documents/sales-document-service'
@@ -99,7 +99,7 @@ describe('CustomerPanel', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', search_context: 'quick_pick' })
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
     expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'customer', entity_id: customer.id })
     expect(onSelectCustomer).toHaveBeenCalledWith(customer)
   })
@@ -142,6 +142,34 @@ describe('CustomerPanel', () => {
 
     expect(service.listCustomers).toHaveBeenCalledTimes(1)
     expect(service.listCustomers).toHaveBeenCalledWith({ search: 'kl4', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
+  })
+
+  it('shows a loading suggestion while POS customer search is pending', async () => {
+    vi.useFakeTimers()
+    let resolveSearch: (value: CustomerListResponse) => void = () => undefined
+    const service = serviceStub({
+      listCustomers: vi.fn(() => new Promise<CustomerListResponse>((resolve) => {
+        resolveSearch = resolve
+      })),
+    })
+
+    render(<CustomerPanel service={service} selectedCustomer={null} onSelectCustomer={vi.fn()} />)
+
+    fireEvent.change(screen.getByPlaceholderText('Tìm khách hàng (F4)'), { target: { value: 'hlo' } })
+    await act(async () => {
+      vi.advanceTimersByTime(200)
+      await Promise.resolve()
+    })
+
+    expect(screen.getByText('Đang tìm...')).toBeInTheDocument()
+    expect(screen.queryByText('Không có kết quả phù hợp')).not.toBeInTheDocument()
+
+    await act(async () => {
+      resolveSearch({ items: [customer], page: 1, page_size: 8, total: 1 })
+      await Promise.resolve()
+    })
+
+    expect(screen.getByRole('option', { name: 'Chọn KH000001 Khach le' })).toBeInTheDocument()
   })
 
   it('closes customer suggestions when clicking outside the customer search', async () => {

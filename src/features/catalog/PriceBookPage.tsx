@@ -18,11 +18,12 @@ import {
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
 import { ManagementChipPicker } from '../../components/ui-shell/ManagementChipPicker'
-import { preventManagementSearchSubmit, runManagementLiveSearch } from '../../components/ui-shell/management-search'
+import { preventManagementSearchSubmit } from '../../components/ui-shell/management-search'
 import { ManagementSortableHeader } from '../../components/ui-shell/management-sortable-header'
 import { type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { useChipSelection } from '../../components/ui-shell/use-chip-selection'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
+import { useManagementSearch } from '../../lib/use-management-search'
 import type { CatalogService, ProductListSortKey } from './catalog-service'
 import { ProductImportDialog } from './ProductImportDialog'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
@@ -84,7 +85,8 @@ export function PriceBookPage({
   const [applyingFormula, setApplyingFormula] = useState(false)
   const [formulaPreview, setFormulaPreview] = useState<PriceFormulaPreview | null>(null)
   const [showFilters, setShowFilters] = useState(true)
-  const [search, setSearch] = useState('')
+  const priceBookManagementSearch = useManagementSearch({ initialSearch: '' })
+  const search = priceBookManagementSearch.draftSearch
   const [lastSearch, setLastSearch] = useState('')
   const [status, setStatus] = useState<ProductStatusFilter>('active')
   const [lastStatus, setLastStatus] = useState<ProductStatusFilter>('active')
@@ -179,7 +181,11 @@ export function PriceBookPage({
   }, [defaultPageSize, service])
 
   async function filterProducts(event: React.FormEvent<HTMLFormElement>) {
-    preventManagementSearchSubmit(event, () => applyProductSearch(search))
+    preventManagementSearchSubmit(event, () => {
+      const nextSearch = search.trim()
+      priceBookManagementSearch.applySearch(nextSearch)
+      return applyProductSearch(nextSearch)
+    })
   }
 
   function applyProductSearch(nextSearch: string) {
@@ -194,10 +200,11 @@ export function PriceBookPage({
   }
 
   function changeProductSearch(nextSearch: string) {
-    runManagementLiveSearch(nextSearch, {
-      setSearch,
-      load: applyProductSearch,
-    })
+    priceBookManagementSearch.changeSearch(nextSearch)
+    if (nextSearch.trim().length === 0) {
+      priceBookManagementSearch.applySearch('')
+      void applyProductSearch('')
+    }
   }
 
   async function goToPage(nextPage: number) {
