@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { Banknote, ChevronLeft, ChevronRight, Copy, ExternalLink, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, ExternalLink, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { dateTimeLocalInputValue, formatQcvDateTime, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { parseMoneyInput } from '../../lib/number-format'
@@ -64,6 +64,7 @@ import { useQuickPickSearch } from '../../lib/use-quick-pick-search'
 import { PurchaseReceiptImportDialog } from './PurchaseReceiptImportDialog'
 import { PurchaseReceiptPaymentHistory } from './PurchaseReceiptPaymentHistory'
 import { PurchaseReceiptList, type PurchaseReceiptSortKey } from './PurchaseReceiptList'
+import { PurchaseReceiptSupplierPaymentForm } from './PurchaseReceiptSupplierPaymentForm'
 import { dateRangeFromItems, displayDateRangeForData, toDisplayDateInput } from '../../lib/date-ranges'
 import type { CurrentUserData } from '../../lib/api/types'
 import { financeAccountChoiceLabel } from '../finance/finance-presenter'
@@ -2039,54 +2040,19 @@ export function PurchaseReceiptsPage({
             />
           ) : null}
           {supplierPaymentOpen ? (
-            <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
-              <section role="form" aria-label="Thanh toán nhà cung cấp" className="receipt-payment-box">
-                <h3>Thanh toán NCC</h3>
-                <p>{selectedReceipt.code}</p>
-                <p>Còn nợ: {money(selectedReceiptOutstanding)}</p>
-                <label>
-                  Số tiền trả cho {selectedReceipt.code}
-                  <input
-                    min="0"
-                    max={selectedReceiptOutstanding}
-                    step="1000"
-                    type="number"
-                    value={supplierPaymentAmount}
-                    onChange={(event) => setSupplierPaymentAmount(Number(event.target.value))}
-                  />
-                </label>
-                <label>
-                  Phương thức trả NCC
-                  <select
-                    value={supplierPaymentMethod}
-                    onChange={(event) => void changeSupplierPaymentMethod(event.target.value as 'cash' | 'bank_transfer')}
-                  >
-                    <option value="cash">Tiền mặt</option>
-                    <option value="bank_transfer">Chuyển khoản</option>
-                  </select>
-                </label>
-                {supplierPaymentMethod === 'bank_transfer' ? (
-                  <label>
-                    Tài khoản chuyển khoản NCC
-                    <select
-                      value={supplierPaymentFinanceAccountId}
-                      onChange={(event) => setSupplierPaymentFinanceAccountId(event.target.value)}
-                    >
-                      <option value="">Chọn tài khoản</option>
-                      {bankAccounts.map((account) => (
-                        <option key={account.id} value={account.id}>
-                          {financeAccountChoiceLabel(account)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : null}
-                <button className="button button-primary" disabled={posting} type="button" onClick={() => void saveSupplierPayment()}>
-                  <Banknote aria-hidden="true" size={16} />
-                  Lưu thanh toán NCC
-                </button>
-              </section>
-            </ManagementDetailSection>
+            <PurchaseReceiptSupplierPaymentForm
+              amount={supplierPaymentAmount}
+              bankAccounts={bankAccounts}
+              financeAccountId={supplierPaymentFinanceAccountId}
+              method={supplierPaymentMethod}
+              outstandingAmount={selectedReceiptOutstanding}
+              receiptCode={selectedReceipt.code}
+              saving={posting}
+              onAmountChange={setSupplierPaymentAmount}
+              onFinanceAccountChange={setSupplierPaymentFinanceAccountId}
+              onMethodChange={(method) => void changeSupplierPaymentMethod(method)}
+              onSave={() => void saveSupplierPayment()}
+            />
           ) : null}
         </ManagementDetailPanel>
       )
@@ -2486,54 +2452,19 @@ export function PurchaseReceiptsPage({
           />
         ) : null}
         {supplierPaymentOpen && selectedReceipt ? (
-          <ManagementDetailSection ariaLabel="Thanh toán nhà cung cấp">
-            <section role="form" aria-label="Thanh toán nhà cung cấp" className="receipt-payment-box">
-              <h3>Thanh toán NCC</h3>
-              <p>{selectedReceipt.code}</p>
-              <p>Còn nợ: {money(selectedReceiptOutstanding)}</p>
-              <label>
-                Số tiền trả cho {selectedReceipt.code}
-                <input
-                  min="0"
-                  max={selectedReceiptOutstanding}
-                  step="1000"
-                  type="number"
-                  value={supplierPaymentAmount}
-                  onChange={(event) => setSupplierPaymentAmount(Number(event.target.value))}
-                />
-              </label>
-              <label>
-                Phương thức trả NCC
-                <select
-                  value={supplierPaymentMethod}
-                  onChange={(event) => void changeSupplierPaymentMethod(event.target.value as 'cash' | 'bank_transfer')}
-                >
-                  <option value="cash">Tiền mặt</option>
-                  <option value="bank_transfer">Chuyển khoản</option>
-                </select>
-              </label>
-              {supplierPaymentMethod === 'bank_transfer' ? (
-                <label>
-                  Tài khoản chuyển khoản NCC
-                  <select
-                    value={supplierPaymentFinanceAccountId}
-                    onChange={(event) => setSupplierPaymentFinanceAccountId(event.target.value)}
-                  >
-                    <option value="">Chọn tài khoản</option>
-                    {bankAccounts.map((account) => (
-                      <option key={account.id} value={account.id}>
-                        {account.code} - {account.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              ) : null}
-              <button className="button button-primary" disabled={posting} type="button" onClick={() => void saveSupplierPayment()}>
-                <Banknote aria-hidden="true" size={16} />
-                Lưu thanh toán NCC
-              </button>
-            </section>
-          </ManagementDetailSection>
+          <PurchaseReceiptSupplierPaymentForm
+            amount={supplierPaymentAmount}
+            bankAccounts={bankAccounts}
+            financeAccountId={supplierPaymentFinanceAccountId}
+            method={supplierPaymentMethod}
+            outstandingAmount={selectedReceiptOutstanding}
+            receiptCode={selectedReceipt.code}
+            saving={posting}
+            onAmountChange={setSupplierPaymentAmount}
+            onFinanceAccountChange={setSupplierPaymentFinanceAccountId}
+            onMethodChange={(method) => void changeSupplierPaymentMethod(method)}
+            onSave={() => void saveSupplierPayment()}
+          />
         ) : null}
       </ManagementDetailPanel>
     )
