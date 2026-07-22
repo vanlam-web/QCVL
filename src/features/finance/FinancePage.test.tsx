@@ -1087,7 +1087,7 @@ describe('FinancePage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
     await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
     expect(await screen.findByRole('dialog', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual(['Phiếu chi', 'Phiếu thu'])
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent?.trim())).toEqual(['Phiếu chi', 'Phiếu thu'])
     expect(screen.getByRole('tab', { name: 'Phiếu chi' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
