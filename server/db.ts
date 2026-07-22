@@ -2073,7 +2073,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           financeAccountId: input.financeAccountId,
           currentUser: input.currentUser,
           note: `Thanh toán ${postedReceipt.code}`,
-          suffix: 'post',
+          createdAt: postedReceipt.received_at ?? postedReceipt.created_at,
         })
         await insertCashbookEntry(pool, input.organizationId, entry)
         cashbookVoucherId = entry.id
@@ -6371,11 +6371,13 @@ async function purchaseSupplierCashbookEntry(
     financeAccountId?: string
     currentUser: CurrentUserData
     note: string
-    suffix: string
+    suffix?: string
+    createdAt?: string
   },
 ) {
   const account = await resolveFinanceAccountForPurchasePayment(pool, input.organizationId, input.paymentMethod, input.financeAccountId)
-  const code = nextPurchaseSupplierPaymentCode(input.receipt.code, input.suffix)
+  const code = nextPurchaseSupplierPaymentCode(input.receipt.code, input.suffix ?? '')
+  const createdAt = input.createdAt ?? new Date().toISOString()
   return {
     id: `cashbook-voucher-${randomUUID()}`,
     code,
@@ -6385,7 +6387,7 @@ async function purchaseSupplierCashbookEntry(
     finance_account: cashbookFinanceAccountFromPurchaseAccount(account),
     is_business_accounted: true,
     source_type: 'purchase_supplier_payment',
-    created_at: new Date().toISOString(),
+    created_at: createdAt,
     note: input.note,
     counterparty: {
       type: 'supplier',
@@ -6403,6 +6405,7 @@ async function purchaseSupplierCashbookEntry(
     allocations: [{
       order_id: input.receipt.id,
       order_code: input.receipt.code,
+      order_created_at: input.receipt.received_at ?? input.receipt.created_at,
       order_total_amount: input.receipt.payable_amount,
       collected_before: Math.max(input.receipt.paid_amount, 0),
       allocated_amount: Math.max(input.amount, 0),

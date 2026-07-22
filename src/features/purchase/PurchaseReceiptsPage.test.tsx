@@ -873,7 +873,7 @@ it('keeps the purchase receipt list open when a saved create draft exists outsid
     JSON.stringify({
       form: {
         supplier_id: 'supplier-1',
-        received_at: '2026-07-18T08:00',
+        received_at: '2026-07-18T08:00:00.000Z',
         supplier_document_no: 'HD-DANG-NHAP',
         items: [
           {
@@ -1026,7 +1026,7 @@ it('creates a draft receipt for normal items with computed totals shown locally'
   expect(service.createReceipt).toHaveBeenCalledWith({
     code: '',
     supplier_id: 'supplier-1',
-    received_at: '2026-07-01T10:00',
+    received_at: '2026-07-01T10:00:00.000Z',
     supplier_document_no: 'HD-NCC-001',
     notes: '',
     discount_amount: 10000,
