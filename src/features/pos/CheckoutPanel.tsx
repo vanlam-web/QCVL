@@ -107,6 +107,7 @@ export function CheckoutPanel({
     documentType: 'invoice',
     customerCode: selectedCustomer?.code,
     preferredTemplate: selectedCustomer?.preferred_bill_template,
+    preferredTemplates: selectedCustomer?.preferred_bill_templates,
   }).id
   const invoiceBillTemplateId =
     invoiceBillTemplateOverride?.customerKey === customerBillKey

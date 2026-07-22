@@ -5,6 +5,8 @@ export function BillPrintToolbar({
   templates,
   selectedTemplateId,
   onTemplateSelect,
+  selectedTemplateIds,
+  onSelectedTemplateIdsChange,
   onPrint,
   onClose,
   preferenceStatus,
@@ -12,19 +14,25 @@ export function BillPrintToolbar({
   templates: BillPrintTemplate[]
   selectedTemplateId: string
   onTemplateSelect: (templateId: string) => void
+  selectedTemplateIds?: string[]
+  onSelectedTemplateIdsChange?: (templateIds: string[]) => void
   onPrint: () => void
   onClose: () => void
   preferenceStatus?: string | null
 }) {
+  const multi = Boolean(onSelectedTemplateIdsChange)
   return (
     <div className="quote-print-toolbar">
       <BillNamedTemplatePicker
         compact
-        legend="Chọn mẫu in"
+        legend={multi ? 'Tick mẫu thường dùng — bấm tên để xem/in' : 'Chọn mẫu in'}
+        mode={multi ? 'multi' : 'single'}
         name="print_named_bill_template"
+        selectedIds={selectedTemplateIds}
         templates={templates}
         value={selectedTemplateId}
         onChange={onTemplateSelect}
+        onSelectedIdsChange={onSelectedTemplateIdsChange}
       />
       {preferenceStatus ? (
         <p className="quote-print-preference-status" role="status">

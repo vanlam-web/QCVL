@@ -2,7 +2,8 @@
 
 Updated: 2026-07-22  
 SoT QCVL: [POS-BILL-PRINT-MESSAGING.md](../../03-BUSINESS-NghiepVu/Sales/POS-BILL-PRINT-MESSAGING.md)  
-Slice polish A4: [2026-07-22-bill-a4-kv-polish.md](./2026-07-22-bill-a4-kv-polish.md)
+Slice polish A4: [2026-07-22-bill-a4-kv-polish.md](./2026-07-22-bill-a4-kv-polish.md)  
+**Đóng tạm:** [2026-07-22-bill-area-freeze.md](./2026-07-22-bill-area-freeze.md) — Owner 2026-07-22 không mở code bill mới.
 
 ## 1. KiotViet (mẫu shop đang dùng)
 
@@ -17,8 +18,8 @@ Nguồn HDSD:
 | Editor HTML + token `{...}` | Có | **Chưa** |
 | Tối đa ~3–5 mẫu / loại | Có | Có (≤5 / invoice\|quote) |
 | POS chọn mẫu A/B/C | Có | Có |
-| Preference theo khách | Có | Có (1 mẫu / khách) |
-| Multi-bill tick | Có | **Chưa** (SoT §4) |
+| Preference theo khách | Có | Có (multi-tick + primary) |
+| Multi-bill tick | Có | **Có** (SoT §4, 2026-07-22) |
 | Layout A4 kiểu KV (kính gửi, QR, nợ, bằng chữ) | Có | Có (+ polish 2026-07-22) |
 
 ### Mẫu A4 thật của xưởng (đối chiếu)
@@ -72,19 +73,22 @@ Nặng hơn mức xưởng cần; chỉ tham chiếu kiến trúc.
 | Tiêu đề báo giá mặc định `BẢNG BÁO GIÁ` | Có |
 | Nhãn NH đọc được (`MB Bank`) | Có |
 | Danh sách mẫu / A/B/C + POS pick | Có |
-| Preference theo id mẫu | Có |
+| Preference theo id mẫu / multi-tick | Có |
 | Địa chỉ khách trên bill | Enrich từ master khi mở bill (chưa snapshot lúc lưu) |
 | Nợ cũ hiển thị | Công thức xem plan polish — không đụng sổ cái |
 | Editor HTML + token | Chưa |
-| Multi-bill / Zalo ảnh / gợi ý máy in | Chưa |
+| Zalo ảnh / gợi ý máy in | Chưa |
 
-## 6. Hướng tiếp (ưu tiên)
+## 6. Hướng tiếp — **đóng tạm (Owner 2026-07-22)**
 
-1. Multi-bill theo SoT §4 (tick nhiều mẫu / khách).
-2. Gửi bill ảnh Zalo/Messenger (SoT §6–7) — frontend render → clipboard → mở app.
-3. Gợi ý máy in gần nhất (SoT §5) — MVP vẫn browser print dialog.
-4. Snapshot địa chỉ khách vào chứng từ lúc lưu (khớp SoT §2 chặt hơn).
-5. Editor HTML + token (slice lớn — chỉ khi toggle không đủ).
+V1 bill đủ dùng. Các mục dưới **không** mở code đến khi Owner bảo:
+
+1. Gửi bill ảnh Zalo/Messenger (SoT §6–7).
+2. Gợi ý máy in gần nhất (SoT §5).
+3. Snapshot địa chỉ khách vào chứng từ lúc lưu.
+4. Editor HTML + token.
+
+Xem [2026-07-22-bill-area-freeze.md](./2026-07-22-bill-area-freeze.md).
 
 ## 7. Quy tắc giữ cho agent
 
