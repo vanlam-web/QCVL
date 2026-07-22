@@ -573,8 +573,14 @@ export interface ServerRepository {
   listWorkstations(organizationId: string): Promise<WorkstationData[]>
   getPosProductUsageCounts?(organizationId: string): Promise<Map<string, number>>
   recordPosProductUsage?(input: { organizationId: string; productIds: string[] }): Promise<void>
-  listProducts?(input: { organizationId: string; url: URL }): Promise<ProductListData[]>
-  listProductsPage?(input: { organizationId: string; url: URL }): Promise<ProductListPageData>
+  recordSearchSelection?(input: {
+    organizationId: string
+    userId: string
+    entityType: 'customer' | 'supplier' | 'product'
+    entityId: string
+  }): Promise<void>
+  listProducts?(input: { organizationId: string; userId?: string; url: URL }): Promise<ProductListData[]>
+  listProductsPage?(input: { organizationId: string; userId?: string; url: URL }): Promise<ProductListPageData>
   listProductGroups?(input: { organizationId: string }): Promise<ProductGroupListData[]>
   updateProductGroup?(input: { organizationId: string; id: string; name: string }): Promise<ProductGroupListData | null>
   createProduct?(input: {
@@ -611,7 +617,7 @@ export interface ServerRepository {
     price_source: 'default_price_list' | 'customer_group_price_list' | 'fallback_default_price_list'
     price_list_id: string
   }>>
-  listCustomers?(input: { organizationId: string; url: URL }): Promise<CustomerListData[]>
+  listCustomers?(input: { organizationId: string; userId?: string; url: URL }): Promise<CustomerListData[]>
   createCustomer?(input: {
     organizationId: string
     code?: string
@@ -643,7 +649,7 @@ export interface ServerRepository {
   }): Promise<CustomerListData | null>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
   findCustomersByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
-  listSuppliers?(input: { organizationId: string; url: URL }): Promise<SupplierListData[]>
+  listSuppliers?(input: { organizationId: string; userId?: string; url: URL }): Promise<SupplierListData[]>
   createSupplier?(input: {
     organizationId: string
     code?: string
@@ -1527,16 +1533,16 @@ function filterSalesDocuments(url: URL) {
   return newestFirst(filtered)
 }
 
-async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
-  const filtered: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
+async function listProductsForRequest(url: URL, repository: ServerRepository, organizationId: string, userId?: string) {
+  const filtered: ProductListData[] = await repository.listProducts?.({ organizationId, userId, url }) ?? filterProducts(url) as ProductListData[]
   if (url.searchParams.get('sort') !== 'pos_usage') return defaultProductOrder(filtered)
 
   const persistedUsage = await repository.getPosProductUsageCounts?.(organizationId)
   return sortProductsByUsage(filtered, persistedUsage ?? productUsageCounts())
 }
 
-async function countAllProductsForRequest(url: URL, repository: ServerRepository, organizationId: string) {
-  const filteredProducts: ProductListData[] = await repository.listProducts?.({ organizationId, url }) ?? filterProducts(url) as ProductListData[]
+async function countAllProductsForRequest(url: URL, repository: ServerRepository, organizationId: string, userId?: string) {
+  const filteredProducts: ProductListData[] = await repository.listProducts?.({ organizationId, userId, url }) ?? filterProducts(url) as ProductListData[]
   return filteredProducts.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0)
 }
 
@@ -3154,6 +3160,22 @@ async function getDevApiResponse(
     if (!created) throw new HttpError(501, 'NOT_IMPLEMENTED', 'Delivery partner repository is not available.')
     return { found: true, data: created, status: 201 }
   }
+  if (method === 'POST' && path === '/api/v1/search-selection-stats') {
+    const body = await readJson(request)
+    const entityType = body.entity_type
+    if (entityType !== 'customer' && entityType !== 'supplier' && entityType !== 'product') {
+      throw new HttpError(400, 'VALIDATION_ERROR', 'entity_type must be customer, supplier, or product.', {
+        entity_type: ['entity_type must be customer, supplier, or product.'],
+      })
+    }
+    await repository.recordSearchSelection?.({
+      organizationId: currentUser.organization.id,
+      userId: currentUser.user.id,
+      entityType,
+      entityId: requiredString(body.entity_id, 'entity_id'),
+    })
+    return { found: true, data: { ok: true } }
+  }
 
   const catalogRoute = await handleCatalogRoute(
     { request, url, currentUser, repository },
@@ -3191,7 +3213,7 @@ async function getDevApiResponse(
       },
       listProducts: async () => {
         if (repository.listProductsPage && url.searchParams.get('sort') !== 'pos_usage' && !url.searchParams.get('sort_key')) {
-          const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, url })
+          const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, userId: currentUser.user.id, url })
           return {
             found: true,
             data: {
@@ -3203,7 +3225,7 @@ async function getDevApiResponse(
             },
           }
         }
-        const productsForRequest = await listProductsForRequest(url, repository, currentUser.organization.id)
+        const productsForRequest = await listProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id)
         const items = url.searchParams.get('sort') === 'pos_usage'
           ? productsForRequest
           : sortProductsForRequest(productsForRequest, url)
@@ -3211,7 +3233,7 @@ async function getDevApiResponse(
           found: true,
           data: {
             ...paged(items, page, pageSize),
-            total_all: await countAllProductsForRequest(url, repository, currentUser.organization.id),
+            total_all: await countAllProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id),
           },
         }
       },
@@ -3357,6 +3379,7 @@ async function getDevApiResponse(
         }) ?? []
         const repositoryCustomers = await repository.listCustomers?.({
           organizationId: currentUser.organization.id,
+          userId: currentUser.user.id,
           url,
         })
         const repositorySuppliers = await repository.listSuppliers?.({
@@ -3732,6 +3755,7 @@ async function getDevApiResponse(
       listSuppliers: async () => {
         const repositorySuppliers = await repository.listSuppliers?.({
           organizationId: currentUser.organization.id,
+          userId: currentUser.user.id,
           url,
         })
         const items = sortSuppliersForRequest(repositorySuppliers ?? filterSuppliers(url), url)
@@ -4864,6 +4888,7 @@ function sortItemsForRequest<Item extends object>(
 }
 
 function sortCustomersForRequest(customers: readonly CustomerListData[], url: URL) {
+  if (url.searchParams.get('search_context') === 'quick_pick') return [...customers]
   return sortItemsForRequest(customers, url, {
     code: { kind: 'text', value: (customer) => customer.code },
     created_at: { kind: 'date', value: (customer) => customer.created_at },
@@ -4876,6 +4901,7 @@ function sortCustomersForRequest(customers: readonly CustomerListData[], url: UR
 }
 
 function sortProductsForRequest(productsToSort: readonly ProductListData[], url: URL) {
+  if (url.searchParams.get('search_context') === 'quick_pick') return [...productsToSort]
   return sortItemsForRequest(productsToSort, url, {
     code: { kind: 'text', value: (product) => product.code },
     created_at: { kind: 'date', value: (product) => product.created_at },
@@ -4890,6 +4916,7 @@ function sortProductsForRequest(productsToSort: readonly ProductListData[], url:
 }
 
 function sortSuppliersForRequest(suppliersToSort: readonly SupplierListData[], url: URL) {
+  if (url.searchParams.get('search_context') === 'quick_pick') return [...suppliersToSort]
   return sortItemsForRequest(suppliersToSort, url, {
     code: { kind: 'text', value: (supplier) => supplier.code },
     created_at: { kind: 'date', value: (supplier) => supplier.created_at ?? supplier.source_created_at },

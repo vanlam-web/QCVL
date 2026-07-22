@@ -41,6 +41,29 @@ it('builds purchase product search requests with search params', async () => {
   ])
 })
 
+it('builds quick-pick purchase product search and records selected products', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+
+  await service.listProducts({ search: 'SP0001', page: 1, page_size: 20, search_context: 'quick_pick' })
+  await service.recordSearchSelection({ entity_type: 'product', entity_id: 'product-1' })
+
+  expect(calls).toEqual([
+    ['/api/v1/products?status=active&search=SP0001&page=1&page_size=20&search_context=quick_pick', undefined],
+    [
+      '/api/v1/search-selection-stats',
+      {
+        method: 'POST',
+        body: JSON.stringify({ entity_type: 'product', entity_id: 'product-1' }),
+      },
+    ],
+  ])
+})
+
 it('builds purchase supplier search requests with supplier page params', async () => {
   const calls: Array<[string, RequestInit | undefined]> = []
   const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -53,6 +76,29 @@ it('builds purchase supplier search requests with supplier page params', async (
 
   expect(calls).toEqual([
     ['/api/v1/suppliers?status=active&q=cpds&page=1&page_size=20', undefined],
+  ])
+})
+
+it('builds quick-pick supplier search and records selected suppliers', async () => {
+  const calls: Array<[string, RequestInit | undefined]> = []
+  const request: PurchaseReceiptApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+    calls.push([path, init])
+    return null as T
+  }
+  const service = createPurchaseReceiptService({ request })
+
+  await service.listSuppliers({ search: 'NCC000031', page: 1, page_size: 20, search_context: 'quick_pick' })
+  await service.recordSearchSelection({ entity_type: 'supplier', entity_id: 'supplier-1' })
+
+  expect(calls).toEqual([
+    ['/api/v1/suppliers?status=active&q=NCC000031&page=1&page_size=20&search_context=quick_pick', undefined],
+    [
+      '/api/v1/search-selection-stats',
+      {
+        method: 'POST',
+        body: JSON.stringify({ entity_type: 'supplier', entity_id: 'supplier-1' }),
+      },
+    ],
   ])
 })
 

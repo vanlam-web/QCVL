@@ -186,6 +186,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
       ],
     })),
     listCustomers: vi.fn(async () => ({ items: [], page: 1, page_size: 20, total: 0 })),
+    recordSearchSelection: vi.fn(async () => ({ ok: true })),
     listCustomerGroups: vi.fn(async () => ({ items: [] })),
     previewKiotVietCustomerImport: vi.fn(),
     importKiotVietCustomers: vi.fn(),
@@ -447,9 +448,9 @@ it('filters by status and toggles product active state', async () => {
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái hàng hóa' }), 'all')
   expect(service.listProducts).toHaveBeenLastCalledWith({ page: 1, page_size: 15, search: undefined, status: 'all' })
   await userEvent.type(searchInput, 'MICA')
-  await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'MICA', status: 'all' }))
+  expect(service.listProducts).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'MICA' }))
   await userEvent.type(searchInput, '{Enter}')
-  expect(service.listProducts).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'MICA', status: 'all' })
+  await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'MICA', status: 'all' }))
   expect(screen.queryByText('Trạng thái: Tất cả')).not.toBeInTheDocument()
 
   expect(screen.queryByRole('button', { name: 'Ngưng bán' })).not.toBeInTheDocument()

@@ -2,6 +2,7 @@
 
 > **Vai trò:** PRD/UX Source of Truth mức khung.
 > **Business:** [SUPPLIER-PURCHASE.md](../../03-BUSINESS-NghiepVu/Purchase/SUPPLIER-PURCHASE.md)
+> **Search SoT:** [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md)
 
 ---
 
@@ -49,7 +50,8 @@ Vai trò trong tồn vận hành:
 ### Bộ lọc
 
 - tìm theo mã, tên, số điện thoại
-- ô tìm NCC dùng shared compact search, hỗ trợ nhập không dấu và lọc trực tiếp danh sách theo mã, tên, SĐT/email và nợ cần trả hiện tại nếu API trả về
+- ô tìm NCC dùng shared compact search, hỗ trợ nhập không dấu theo mã, tên, SĐT/email và nợ cần trả hiện tại nếu API trả về
+- gõ chữ chỉ cập nhật nội dung tìm; bấm `Enter` mới gọi API/lọc danh sách quản trị
 - không hiển thị dropdown/listbox gợi ý; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
 - trạng thái: tất cả/đang hoạt động/ngừng hoạt động
 - nợ hiện tại: khoảng từ/tới
@@ -106,12 +108,13 @@ Nếu NCC cũng là khách hàng, bảng chính không hiển thị cột `Khác
 
 Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm kiếm phải ưu tiên tìm chính xác và không bị mất do bộ lọc tháng hiện tại.
 
-Ô tìm `Tìm phiếu/NCC` dùng shared compact search và lọc trực tiếp danh sách:
+Ô tìm `Tìm phiếu/NCC` dùng shared compact search:
 
 - gọi API tìm theo mã phiếu nhập, tên/mã NCC, số chứng từ NCC với bộ lọc trạng thái/ngày/người tạo đang chọn
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm
-- nhập tới đâu lọc danh sách chính tới đó; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
-- bấm Enter lọc lại theo nội dung đang nhập
+- gõ chữ chỉ cập nhật nội dung tìm; không gọi API theo từng ký tự
+- bấm Enter lọc theo nội dung đang nhập
+- nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung; bấm xóa reset danh sách ngay
 - không có kết quả thì hiện `Không có kết quả phù hợp`
 - ô `Tìm phiếu/NCC` ở danh sách dùng vị trí header/layout chung như các trang quản trị khác; không kéo sát tiêu đề. Chỉ ô tìm hàng trong màn tạo phiếu mới nằm sát chữ `Nhập hàng`.
 
@@ -138,6 +141,8 @@ Nếu người dùng nhập đúng mã phiếu như `PN000673`, kết quả tìm
 - Khi bấm `Tạo phiếu nhập`, trang chuyển sang `/receipts/new` để mở màn `Nhập hàng`, có nút mũi tên trái quay lại danh sách phiếu nhập ở `/receipts`.
 - Header màn tạo phiếu có thanh `Tìm hàng (F3)` nằm ngay bên phải chữ `Nhập hàng`, dùng visual/cơ chế giống thanh tìm hàng POS nhưng chỉ tìm theo mã hàng và tên hàng, không tìm combo.
 - Thanh tìm hàng phải gọi search từ catalog khi gõ để bắt được mã ngoài cache nạp sẵn; gợi ý merge cache + remote, ưu tiên khớp mã hàng/tên hàng giống POS.
+- Thanh tìm hàng chỉ hiện hàng/vật tư đang hoạt động và được phép nhập; không hiện hàng đã xoá hoặc ngừng kinh doanh.
+- Kết quả tìm hàng ưu tiên hàng user hay chọn gần đây; sau đó mới tới mã trước tên.
 - Gõ mã/tên hàng rồi Enter hoặc bấm một gợi ý sẽ thêm hàng đó vào phiếu ở vùng dòng hàng bên dưới.
 - Khi ô tìm hàng rỗng, nút `+` trong ô là `Tạo hàng hóa`; khi có nội dung, nút này đổi thành `Xóa tìm kiếm`.
 - Nếu chưa chọn hàng nào, vùng dòng hàng không hiện row `1` rỗng; chỉ hiện empty state yêu cầu chọn hàng từ thanh tìm kiếm.
@@ -166,6 +171,8 @@ Trạng thái bắt buộc:
 Quy tắc gợi ý NCC:
 
 - Tìm không dấu theo mã NCC, tên NCC, số điện thoại và MST.
+- Chỉ hiện NCC đang hoạt động; không hiện NCC đã xoá hoặc ngừng hoạt động.
+- Ưu tiên NCC user hay chọn gần đây; sau đó mới tới mã NCC trước tên NCC.
 - Mỗi gợi ý trong panel hẹp hiển thị theo bố cục dọc, không ép 3 cột:
   - Dòng 1: tên NCC.
   - Dòng 2: mã NCC.

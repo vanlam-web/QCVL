@@ -720,6 +720,7 @@ export function PurchaseReceiptsPage({
           search,
           page: 1,
           page_size: receiptProductSearchPageSize,
+          search_context: 'quick_pick',
         })
         if (!active) return
         setReceiptProductCatalogSearchResult({
@@ -757,6 +758,7 @@ export function PurchaseReceiptsPage({
           search,
           page: 1,
           page_size: receiptSupplierSearchPageSize,
+          search_context: 'quick_pick',
         })
         if (!active) return
         const activeSuppliers = supplierResult.items.filter((supplier) => supplier.status === 'active')
@@ -988,7 +990,7 @@ export function PurchaseReceiptsPage({
       }))
     }
     if (!productsLoaded) {
-      requests.push(service.listProducts().then((result) => {
+      requests.push(service.listProducts({ status: 'active' }).then((result) => {
         nextProducts = result.items.filter((product) => product.status === 'active')
         setProducts(nextProducts)
         setProductsLoaded(true)
@@ -1457,6 +1459,7 @@ export function PurchaseReceiptsPage({
   function selectReceiptProduct(productId: string) {
     const product = receiptProductSearchResults.find((candidate) => candidate.id === productId)
     if (!product) return
+    void Promise.resolve(service.recordSearchSelection({ entity_type: 'product', entity_id: product.id })).catch(() => undefined)
 
     const relatedProducts = receiptProductCatalogSearchResult.products.filter((candidate) => (
       candidate.status === 'active'
@@ -1732,6 +1735,7 @@ export function PurchaseReceiptsPage({
   }
 
   function chooseReceiptSupplier(supplier: Supplier) {
+    void Promise.resolve(service.recordSearchSelection({ entity_type: 'supplier', entity_id: supplier.id })).catch(() => undefined)
     setForm((current) => ({ ...current, supplier_id: supplier.id }))
     setReceiptSupplierSearch(supplierSearchText(supplier))
     setReceiptSupplierSuggestionsOpen(false)

@@ -42,6 +42,7 @@ function makeCatalogService(overrides: Partial<CatalogService> = {}): CatalogSer
     listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     adjustNormalProductStock: vi.fn(),
+    recordSearchSelection: vi.fn(),
     listCustomers: vi.fn(async () => ({
       items: [
         {
@@ -675,6 +676,7 @@ it('searches the product catalog beyond the quick POS cache and prioritizes exac
     page: 1,
     page_size: 20,
     search: 'In bạt',
+    search_context: 'quick_pick',
   }))
   const results = await screen.findByRole('listbox', { name: 'Kết quả tìm hàng' })
   const options = within(results).getAllByRole('option')
@@ -683,6 +685,8 @@ it('searches the product catalog beyond the quick POS cache and prioritizes exac
   expect(within(options[0]).getByText('m2')).toBeInTheDocument()
   expect(within(options[0]).getByText('IB')).toBeInTheDocument()
   expect(options[0]).toHaveTextContent('600 000')
+  await userEvent.keyboard('{Enter}')
+  expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'product', entity_id: 'p-combo' })
 })
 
 it('checks out the selected remote POS search product instead of the quick-cache product', async () => {

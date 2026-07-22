@@ -3,6 +3,7 @@
 > **Mốc chốt:** V1 đủ test theo chốt Owner ngày `2026-07-03`; chức năng nâng cao nằm ngoài phạm vi hiện tại.
 > **Tham khảo:** KiotViet `Khách hàng > Khách hàng`
 > **Owner 2026-07-20:** đã import hết khách KV cần dùng — không mở import mới. Công nợ: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · checklist docs [DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
+> Search SoT chung: [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md).
 
 ---
 
@@ -51,14 +52,15 @@ V1 hiện tại:
 | Tìm kiếm nhanh | Tìm theo mã khách, tên khách, SĐT nếu có |
 | Trạng thái | V1 chỉ hiển thị `Đang hoạt động` |
 
-Ô tìm khách hàng dùng shared compact search và lọc trực tiếp danh sách:
+Ô tìm khách hàng dùng shared compact search:
 
 - dùng chung `ManagementCompactSearch`
 - gọi API `/api/v1/customers` với `search` theo mã khách, tên khách, SĐT và các bộ lọc đang chọn
 - nội dung tìm kiếm bỏ dấu tiếng Việt: gõ `khach le` vẫn tìm ra `Khách lẻ`
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm
-- nhập tới đâu lọc danh sách chính tới đó; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
-- bấm Enter chạy lại bộ lọc hiện tại theo nội dung đang nhập
+- gõ chữ chỉ cập nhật nội dung tìm; không gọi API và không lọc danh sách theo từng ký tự
+- bấm Enter chạy bộ lọc hiện tại theo nội dung đang nhập
+- nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung; bấm xóa reset danh sách ngay
 - không có kết quả thì hiện `Không có kết quả phù hợp`
 
 Ngoài phạm vi V1:

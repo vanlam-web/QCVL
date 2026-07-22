@@ -87,6 +87,29 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('created_at = coalesce(excluded.created_at, products.created_at)'))).toBe(true)
   })
 
+  test('upserts search selection stats per organization user and entity', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [], rowCount: 1 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.recordSearchSelection?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      entityType: 'product',
+      entityId: '33333333-3333-3333-3333-333333333333',
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists search_selection_stats'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('on conflict (organization_id, user_id, entity_type, entity_id) do update'))).toBe(true)
+    expect(pgMock.query.mock.calls.at(-1)?.[1]).toEqual([
+      '11111111-1111-1111-1111-111111111111',
+      '22222222-2222-2222-2222-222222222222',
+      'product',
+      '33333333-3333-3333-3333-333333333333',
+    ])
+  })
+
   test('does not deactivate existing product unit conversions when an import row has none', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {

@@ -2,6 +2,7 @@
 
 > Thuộc: [01-K01-TOPBAR.md](./01-K01-TOPBAR.md)
 > Cập nhật: 2026-07-08.
+> Search SoT chung: [SEARCH-RANKING-PERFORMANCE](../../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md).
 
 ## 1. Tìm hàng F3
 
@@ -15,6 +16,8 @@ Hành vi:
 - Không hỗ trợ QR/barcode trong phạm vi POS hiện tại.
 - Không tạo nhanh hàng hóa từ dropdown POS.
 - Thêm hàng vào tab hóa đơn đang active khi nhân viên chọn kết quả.
+- Chỉ hiện hàng/dịch vụ đang kinh doanh; không hiện hàng đã xoá hoặc ngừng kinh doanh.
+- Xếp hạng kết quả ưu tiên hàng user hay chọn gần đây; sau đó mới tới mã trước tên.
 
 Visual:
 
@@ -43,6 +46,7 @@ Quy định:
 - Không tự tạo sản phẩm mới khi không có kết quả.
 - Empty state: `Không tìm thấy hàng hóa phù hợp`.
 - Dòng active/hover phải thấy rõ trên light/dark.
+- Dropdown chỉ lấy số lượng giới hạn; không load toàn bộ danh mục để lọc trên frontend.
 
 ## 3. Tab hóa đơn
 

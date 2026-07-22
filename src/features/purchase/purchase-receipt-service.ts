@@ -26,6 +26,8 @@ export interface PurchaseReceiptApiRequester {
   request<T>(path: string, init?: RequestInit): Promise<T>
 }
 
+type SearchContext = 'quick_pick'
+
 export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
   return {
     listReceipts: (
@@ -100,12 +102,14 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       status?: 'active' | 'inactive' | 'all'
       page?: number
       page_size?: number
+      search_context?: SearchContext
     } = {}) => {
       const params = new URLSearchParams()
       params.set('status', input.status ?? 'active')
       if (input.search) params.set('q', input.search)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.search_context) params.set('search_context', input.search_context)
       const query = params.toString()
       return api.request<PurchaseReceiptSupplierListResponse>(`/api/v1/suppliers${query ? `?${query}` : ''}`)
     },
@@ -119,12 +123,14 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       status?: 'active' | 'inactive' | 'all' | 'deleted'
       page?: number
       page_size?: number
+      search_context?: SearchContext
     } = {}) => {
       const params = new URLSearchParams()
       params.set('status', input.status ?? 'active')
       if (input.search) params.set('search', input.search)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.search_context) params.set('search_context', input.search_context)
       const query = params.toString()
       return api.request<PurchaseReceiptProductListResponse>(`/api/v1/products${query ? `?${query}` : ''}`)
     },
@@ -143,6 +149,11 @@ export function createPurchaseReceiptService(api: PurchaseReceiptApiRequester) {
       }),
     listFinanceAccounts: () =>
       api.request<PurchaseReceiptFinanceAccountListResponse>('/api/v1/finance/accounts?is_active=true'),
+    recordSearchSelection: (input: { entity_type: 'customer' | 'supplier' | 'product'; entity_id: string }) =>
+      api.request<{ ok: boolean }>('/api/v1/search-selection-stats', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
   }
 }
 

@@ -271,6 +271,7 @@ function makeService(overrides: Partial<PurchaseReceiptService> = {}): PurchaseR
       total_purchase_amount: 0,
     })),
     listProducts: vi.fn(async () => ({ items: products, page: 1, page_size: 20, total: products.length })),
+    recordSearchSelection: vi.fn(),
     createProduct: vi.fn(async () => products[0]),
     listFinanceAccounts: vi.fn(async () => ({
       items: [
@@ -434,7 +435,7 @@ it('keeps current receipt filters when changing page size', async () => {
   })
 })
 
-it('filters matching purchase receipts while typing without opening a suggestion dropdown', async () => {
+it('filters matching purchase receipts after Enter without opening a suggestion dropdown', async () => {
   const suggestedReceipt = {
     ...receipt,
     id: 'receipt-suggested',
@@ -457,10 +458,12 @@ it('filters matching purchase receipts while typing without opening a suggestion
   const filterForm = screen.getByRole('search', { name: 'Lọc phiếu nhập' })
   const searchInput = within(filterForm).getByLabelText('Tìm phiếu/NCC')
   await userEvent.type(searchInput, 'PN000674')
+  expect(service.listReceipts).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'PN000674' }))
+  await userEvent.type(searchInput, '{Enter}')
 
   await waitFor(() => expect(service.listReceipts).toHaveBeenLastCalledWith({
     search: 'PN000674',
-    status: 'posted',
+    status: 'all',
     date_from: undefined,
     date_to: undefined,
     created_by: undefined,
@@ -524,6 +527,8 @@ it('uses purchase receipt quick time filters and exact PN search priority withou
   )
 
   await userEvent.type(within(filterForm).getByLabelText('Tìm phiếu/NCC'), 'NCC')
+  expect(service.listReceipts).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'NCC' }))
+  await userEvent.type(within(filterForm).getByLabelText('Tìm phiếu/NCC'), '{Enter}')
   await waitFor(() => expect(service.listReceipts).toHaveBeenCalledWith(expect.objectContaining({
     search: 'NCC',
     status: 'posted',
@@ -683,11 +688,13 @@ it('searches suppliers from the purchase receipt create workspace like POS custo
     search: 'stan',
     page: 1,
     page_size: 20,
+    search_context: 'quick_pick',
   }))
   const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý nhà cung cấp' })
   expect(suggestions).toHaveTextContent('Standee')
   await userEvent.click(within(suggestions).getByRole('option', { name: 'Chọn nhà cung cấp NCC000036 Standee' }))
   expect(within(form).getByRole('group', { name: 'Nhà cung cấp đã chọn' })).toHaveTextContent('Standee')
+  expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'supplier', entity_id: 'supplier-2' })
 
   await addProductToCreateReceipt('SP0001')
   await userEvent.click(within(form).getByRole('button', { name: 'Lưu tạm' }))
@@ -724,6 +731,7 @@ it('searches suppliers remotely when a receipt supplier is not in the initial lo
     search: 'cpds',
     page: 1,
     page_size: 20,
+    search_context: 'quick_pick',
   }))
   const suggestions = await screen.findByRole('listbox', { name: 'Gợi ý nhà cung cấp' })
   expect(suggestions).toHaveTextContent('Chiến Phượng Diên Sanh')
@@ -915,11 +923,13 @@ it('searches remote products by code when creating purchase receipts', async () 
     search: 'NGD-01',
     page: 1,
     page_size: 20,
+    search_context: 'quick_pick',
   }))
   expect(await screen.findByText(/NGD-01/)).toBeInTheDocument()
   await userEvent.keyboard('{Enter}')
 
   expect(within(workspace).getByText('NGD-01')).toBeInTheDocument()
+  expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'product', entity_id: 'product-remote-code' })
 })
 
 it('hides combo products from purchase receipt product search results', async () => {
@@ -945,6 +955,7 @@ it('hides combo products from purchase receipt product search results', async ()
       search: 'decal',
       page: 1,
       page_size: 20,
+      search_context: 'quick_pick',
     }),
   )
   expect(await screen.findByText(/SP0001/)).toBeInTheDocument()

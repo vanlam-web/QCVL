@@ -27,5 +27,8 @@ export function runManagementLiveSearch(
 ) {
   options.setSearch(nextSearch)
   options.resetSelection?.()
-  void options.load(managementSearchQuery(nextSearch))
+  const query = managementSearchQuery(nextSearch)
+  if (query.length === 0) {
+    void options.load(query)
+  }
 }

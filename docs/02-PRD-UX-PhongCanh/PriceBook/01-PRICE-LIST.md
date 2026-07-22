@@ -1,6 +1,7 @@
 # 01-PRICE-LIST — Danh sách bảng giá
 
 > **Tham khảo:** KiotViet `Hàng hóa > Thiết lập giá`
+> **Search SoT:** [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md)
 
 ---
 
@@ -34,7 +35,8 @@ KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QC-
 Ô tìm trong header dùng shared compact search:
 
 - tìm bỏ dấu theo mã hàng/tên hàng trong lưới bảng giá;
-- khi nhập từ khóa, lọc trực tiếp lưới bảng giá theo mã hàng/tên hàng, phương thức bán và đơn vị;
+- gõ chữ chỉ cập nhật nội dung tìm; bấm `Enter` mới gọi API/lọc lưới bảng giá theo mã hàng/tên hàng, phương thức bán và đơn vị;
+- ưu tiên mã hàng trước tên hàng;
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm;
 - nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung.
 

@@ -47,6 +47,7 @@ export interface CustomerListFilters {
   page_size?: number
   sort_key?: 'code' | 'created_at' | 'name' | 'phone' | 'group' | 'total_debt_amount' | 'total_sales_amount'
   sort_direction?: 'asc' | 'desc'
+  search_context?: SearchContext
 }
 
 export type ProductListSortKey =
@@ -61,6 +62,7 @@ export type ProductListSortKey =
   | 'sell_method'
 
 export type ManagementSortDirection = 'asc' | 'desc'
+export type SearchContext = 'quick_pick'
 
 export function createCatalogService(api: CatalogApiRequester) {
   return {
@@ -78,6 +80,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       sort?: 'pos_usage'
       sort_key?: ProductListSortKey
       sort_direction?: ManagementSortDirection
+      search_context?: SearchContext
     } = {}) => {
       const params = new URLSearchParams()
       if (input.search) params.set('search', input.search)
@@ -92,6 +95,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.created_to) params.set('created_to', input.created_to)
       if (input.page) params.set('page', String(input.page))
       if (input.page_size) params.set('page_size', String(input.page_size))
+      if (input.search_context) params.set('search_context', input.search_context)
       if (input.sort) params.set('sort', input.sort)
       if (input.sort !== 'pos_usage') {
         params.set('sort_key', input.sort_key ?? 'created_at')
@@ -217,6 +221,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.page_size) params.set('page_size', String(input.page_size))
       params.set('sort_key', input.sort_key ?? 'created_at')
       params.set('sort_direction', input.sort_direction ?? 'desc')
+      if (input.search_context) params.set('search_context', input.search_context)
       const query = params.toString()
       return api.request<CustomerListResponse>(`/api/v1/customers${query ? `?${query}` : ''}`)
     },
@@ -264,6 +269,11 @@ export function createCatalogService(api: CatalogApiRequester) {
     }) =>
       api.request<Customer>(`/api/v1/customers/${encodeURIComponent(id)}`, {
         method: 'PATCH',
+        body: JSON.stringify(input),
+      }),
+    recordSearchSelection: (input: { entity_type: 'customer' | 'supplier' | 'product'; entity_id: string }) =>
+      api.request<{ ok: boolean }>('/api/v1/search-selection-stats', {
+        method: 'POST',
         body: JSON.stringify(input),
       }),
     resolvePrices: (productIds: string[], customerId?: string) =>

@@ -23,6 +23,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     adjustNormalProductStock: vi.fn(),
+    recordSearchSelection: vi.fn(async () => ({ ok: true })),
     listCustomers: vi.fn(async () => ({
       items: [
         {
@@ -536,11 +537,19 @@ it('searches and creates a customer from the search action', async () => {
   expect(searchForm.closest('.management-page-header')).not.toBeNull()
   expect(within(searchForm).getByLabelText('Tìm khách hàng').closest('.management-compact-search')).not.toBeNull()
   await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), 'Phong')
+  expect(service.listCustomers).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'Phong' }))
+  await userEvent.type(within(searchForm).getByLabelText('Tìm khách hàng'), '{Enter}')
   await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith({ page: 1, page_size: 15, search: 'Phong', status: 'active' }))
   expect(screen.queryByText('Tìm: Phong')).not.toBeInTheDocument()
 
   expect(screen.queryByRole('dialog', { name: 'Tạo khách hàng' })).not.toBeInTheDocument()
   await userEvent.click(within(searchForm).getByRole('button', { name: 'Xóa tìm kiếm' }))
+  await waitFor(() => expect(service.listCustomers).toHaveBeenLastCalledWith({
+    page: 1,
+    page_size: 15,
+    search: undefined,
+    status: 'active',
+  }))
   await userEvent.click(within(searchForm).getByRole('button', { name: /T.o kh.ch h.ng/i }))
   const dialog = screen.getByRole('dialog', { name: 'Tạo khách hàng' })
   expect(dialog).toHaveClass('management-modal-dialog')
@@ -594,7 +603,7 @@ it.each([
   ['mã', 'KH000888'],
   ['tên', 'Anh Nam'],
   ['số điện thoại', '0908123456'],
-])('filters customers by %s while typing without opening a suggestion dropdown', async (_label, keyword) => {
+])('filters customers by %s after Enter without opening a suggestion dropdown', async (_label, keyword) => {
   const suggestedCustomer = {
     id: 'customer-suggested',
     code: 'KH000888',
@@ -624,6 +633,8 @@ it.each([
   const searchForm = screen.getByRole('search', { name: 'Lọc khách hàng' })
   const searchInput = within(searchForm).getByLabelText('Tìm khách hàng')
   await userEvent.type(searchInput, keyword)
+  expect(service.listCustomers).not.toHaveBeenCalledWith(expect.objectContaining({ search: keyword }))
+  await userEvent.type(searchInput, '{Enter}')
 
   await waitFor(() => expect(service.listCustomers).toHaveBeenCalledWith(expect.objectContaining({
     page: 1,

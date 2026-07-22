@@ -393,6 +393,7 @@ export function PosShell({
           page: 1,
           page_size: productSearchPageSize,
           search,
+          search_context: 'quick_pick',
         })
         if (active) setCatalogSearchResult({ search, products: productResult.items })
       } catch (cause) {
@@ -599,6 +600,7 @@ export function PosShell({
   }
 
   function selectProduct(product: Product) {
+    void Promise.resolve(catalogService.recordSearchSelection({ entity_type: 'product', entity_id: product.id })).catch(() => undefined)
     const unitPrice = prices[product.id]?.unit_price ?? 0
     const priceSource = prices[product.id]?.price_source ?? 'default_price_list'
     const lineId = `${product.id}-${cartLines.length + 1}-${Date.now()}`

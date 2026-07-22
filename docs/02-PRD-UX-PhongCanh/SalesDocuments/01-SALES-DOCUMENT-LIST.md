@@ -2,6 +2,7 @@
 
 > **Phase hiện tại:** Đã có readonly list/detail cho `HD...` và `BG...`; báo giá active mở lại được vào POS draft; hóa đơn hoàn thành có nút Sửa mở POS revision draft riêng
 > **Tham khảo:** KiotViet `Đơn hàng > Hóa đơn`; không dùng mô hình `Đặt hàng/Giao hàng`
+> **Search SoT:** [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md)
 
 ---
 
@@ -38,7 +39,8 @@ Hiện tại đã triển khai:
 
 - danh sách hóa đơn `HD...` và báo giá `BG...`
 - tìm kiếm/lọc cơ bản
-- ô tìm `Mã chứng từ, khách hàng, ghi chú` lọc trực tiếp danh sách; search bỏ dấu tiếng Việt, tìm theo mã chứng từ, mã/tên khách và ghi chú chứng từ
+- ô tìm `Mã chứng từ, khách hàng, ghi chú` dùng shared compact search; gõ chữ chỉ cập nhật nội dung tìm, bấm `Enter` mới gọi API/lọc danh sách
+- search bỏ dấu tiếng Việt, ưu tiên mã chứng từ trước mã/tên khách và ghi chú chứng từ
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm; nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung
 - bộ lọc thời gian dùng control chung: nút chọn nhanh, hai ô từ ngày/đến ngày luôn hiển thị và icon lịch mở popup bên phải cột filter
 - bộ lọc trạng thái thanh toán, phương thức thanh toán, người bán/người tạo và bảng giá nếu dữ liệu/API hiện có hỗ trợ

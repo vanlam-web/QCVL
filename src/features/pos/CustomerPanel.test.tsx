@@ -23,6 +23,7 @@ const customer: Customer = {
 function serviceStub(overrides: Partial<CatalogService> = {}): CatalogService {
   return {
     listProducts: vi.fn(),
+    recordSearchSelection: vi.fn(),
     createProduct: vi.fn(),
     updateProduct: vi.fn(),
     resolvePrices: vi.fn(),
@@ -94,7 +95,8 @@ describe('CustomerPanel', () => {
     await userEvent.keyboard('{Enter}')
     await userEvent.click(await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' }))
 
-    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach' })
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', search_context: 'quick_pick' })
+    expect(service.recordSearchSelection).toHaveBeenCalledWith({ entity_type: 'customer', entity_id: customer.id })
     expect(onSelectCustomer).toHaveBeenCalledWith(customer)
   })
 
@@ -108,7 +110,7 @@ describe('CustomerPanel', () => {
     const option = await screen.findByRole('option', { name: 'Chọn KH000001 Khach le' })
     expect(within(option).getByText('Khach le')).toBeInTheDocument()
     expect(within(option).getByText('Mã: KH000001')).toBeInTheDocument()
-    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', page: 1, page_size: 8 })
+    expect(service.listCustomers).toHaveBeenCalledWith({ search: 'khach', status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
   })
 
   it('closes customer suggestions when clicking outside the customer search', async () => {

@@ -478,13 +478,7 @@ describe('InventoryPage', () => {
 
     await userEvent.type(searchInput, 'KK000333')
     expect(within(toolbar).getByRole('button', { name: 'Xóa tìm kiếm' })).toHaveClass('management-compact-create-action-clear')
-
-    await waitFor(() =>
-      expect(service.listStocktakes).toHaveBeenLastCalledWith({
-        search: 'KK000333',
-        ...defaultStocktakeQuery,
-      }),
-    )
+    expect(service.listStocktakes).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'KK000333' }))
 
     await userEvent.keyboard('{Enter}')
     await waitFor(() =>

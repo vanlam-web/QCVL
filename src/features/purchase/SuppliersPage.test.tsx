@@ -229,6 +229,8 @@ it('filters suppliers by search and status', async () => {
   const searchInput = within(filterForm).getByLabelText('Tìm NCC')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
   await userEvent.type(searchInput, 'Nguyen')
+  expect(service.listSuppliers).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'Nguyen' }))
+  await userEvent.type(searchInput, '{Enter}')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái' }), 'all')
 
   await waitFor(() => expect(service.listSuppliers).toHaveBeenLastCalledWith({
@@ -250,6 +252,8 @@ it('uses supplier sidebar filters without a reset action', async () => {
   const searchInput = within(filterForm).getByLabelText('Tìm NCC')
   const sidebar = screen.getByRole('complementary', { name: 'Bộ lọc nhà cung cấp' })
   await userEvent.type(searchInput, 'NCC000031')
+  expect(service.listSuppliers).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'NCC000031' }))
+  await userEvent.type(searchInput, '{Enter}')
   await userEvent.selectOptions(within(sidebar).getByRole('combobox', { name: 'Trạng thái' }), 'inactive')
 
   await waitFor(() => expect(service.listSuppliers).toHaveBeenLastCalledWith({

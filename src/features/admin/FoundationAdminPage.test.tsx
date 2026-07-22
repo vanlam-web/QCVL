@@ -470,6 +470,8 @@ it('creates, disables, and updates permissions for users', async () => {
   await screen.findByText('admin')
   const userFilter = screen.getByRole('search', { name: 'Lọc người dùng' })
   await userEvent.type(within(userFilter).getByRole('textbox', { name: 'Tìm người dùng' }), 'Admin')
+  expect(service.listUsers).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'Admin' }))
+  await userEvent.type(within(userFilter).getByRole('textbox', { name: 'Tìm người dùng' }), '{Enter}')
   await userEvent.selectOptions(within(userFilter).getByRole('combobox', { name: 'Trạng thái' }), 'active')
   await waitFor(() => expect(service.listUsers).toHaveBeenCalledWith({ search: 'Admin', status: 'active' }))
   expect(within(userFilter).queryByRole('button', { name: 'Lọc' })).not.toBeInTheDocument()

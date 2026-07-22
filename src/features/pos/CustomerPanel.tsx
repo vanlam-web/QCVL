@@ -167,7 +167,7 @@ export function CustomerPanel({
     event.preventDefault()
     setError(null)
     try {
-      const response = await service.listCustomers({ search: search.trim() || undefined })
+      const response = await service.listCustomers({ search: search.trim() || undefined, status: 'active', search_context: 'quick_pick' })
       setResults(response.items)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tìm được khách hàng.'))
@@ -186,7 +186,7 @@ export function CustomerPanel({
     }
     setError(null)
     try {
-      const response = await service.listCustomers({ search: query, page: 1, page_size: 8 })
+      const response = await service.listCustomers({ search: query, status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
       if (searchRequestId.current !== requestId) return
       setResults(response.items)
     } catch (cause) {
@@ -197,6 +197,7 @@ export function CustomerPanel({
   }
 
   function selectCustomer(customer: Customer) {
+    void Promise.resolve(service.recordSearchSelection({ entity_type: 'customer', entity_id: customer.id })).catch(() => undefined)
     setSearch(customer.name)
     setResults([])
     setSuggestionsOpen(false)

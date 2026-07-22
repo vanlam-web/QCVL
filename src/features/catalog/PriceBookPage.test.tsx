@@ -37,6 +37,7 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
     listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     adjustNormalProductStock: vi.fn(),
+    recordSearchSelection: vi.fn(async () => ({ ok: true })),
     listCustomers: vi.fn(async () => ({ items: [], page: 1, page_size: 20, total: 0 })),
     listCustomerGroups: vi.fn(async () => ({ items: [] })),
     previewKiotVietCustomerImport: vi.fn(),
@@ -105,6 +106,8 @@ it('renders the price book as a separate grid-first workspace', async () => {
   expect(within(filterSidebar).queryByRole('button', { name: 'Áp dụng bộ lọc' })).not.toBeInTheDocument()
   expect(screen.getByRole('navigation', { name: 'Phân trang bảng giá' })).toHaveTextContent('1 - 1 trong 1 hàng hóa')
   await userEvent.type(within(searchForm).getByLabelText('Tìm bảng giá'), 'MICA')
+  expect(service.listProducts).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'MICA' }))
+  await userEvent.type(within(searchForm).getByLabelText('Tìm bảng giá'), '{Enter}')
   await waitFor(() => expect(service.listProducts).toHaveBeenCalledWith({
     page: 1,
     page_size: 20,

@@ -1,6 +1,7 @@
 ﻿# PRODUCT-STOCK-LIST — Danh sách hàng hóa & tồn kho
 
 > **Nguồn tham khảo UI:** KiotViet trang Hàng hóa; điều chỉnh theo nghiệp vụ QC-OMS.
+> **Search SoT:** [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md)
 
 ---
 
@@ -81,7 +82,7 @@ Màn này không thay thế POS bán hàng. Sản phẩm ngưng bán vẫn xem v
 
 | Bộ lọc | Hành vi |
 |---|---|
-| Tìm kiếm | Ô search dùng shared compact search, tìm bỏ dấu theo mã hàng/tên hàng, nhóm/loại tồn và tồn hiện tại nếu API/list có dữ liệu. Khi nhập từ khóa, lọc trực tiếp danh sách chính; không hiển thị dropdown/listbox gợi ý dưới ô tìm. Nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung. |
+| Tìm kiếm | Ô search dùng shared compact search, tìm bỏ dấu theo mã hàng/tên hàng, nhóm/loại tồn và tồn hiện tại nếu API/list có dữ liệu. Gõ chữ chỉ cập nhật nội dung tìm; bấm `Enter` mới gọi API/lọc danh sách chính. Ưu tiên mã hàng trước tên hàng. Không hiển thị dropdown/listbox gợi ý dưới ô tìm. Nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung; bấm xóa reset ngay. |
 | Nhóm hàng | Tất cả hoặc một nhóm hàng cụ thể. UI gửi `product_group_id`; nếu hàng chưa chọn nhóm thì backend gán nhóm mặc định `Giá chung`. |
 | Tồn kho | Tất cả, hàng thường, cuộn, tấm. UI gửi `inventory_shape`; backend lọc theo `products.inventory_shape`. Đây là filter kiểu tồn, không phải filter tồn nhỏ nhất/lớn nhất. |
 | Thời gian tạo | Mặc định `Toàn thời gian`. UI dùng control thời gian chung giống Hóa đơn/Kiểm kho: nút chọn nhanh theo ngày/tuần/tháng/quý/năm, hai ô từ ngày/đến ngày luôn hiển thị, không còn radio `Tùy chỉnh`. Ô hiển thị `dd/MM/yyyy` như KV; icon lịch mở popup bên phải cột filter như menu chọn nhanh và không chồng popup khác. Frontend/service vẫn gửi `created_from` và `created_to` dạng `YYYY-MM-DD`; backend lọc theo `products.created_at`. Khi đang ở preset hiện tại, ô đến ngày chỉ hiển thị tối đa hôm nay; `Toàn thời gian` hiển thị khoảng ngày có dữ liệu nếu xác định được. |

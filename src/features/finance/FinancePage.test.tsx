@@ -513,7 +513,9 @@ describe('FinancePage', () => {
     expect(screen.getByLabelText('Tìm sổ quỹ').closest('.management-compact-search')).toContainElement(clearSearchButton)
     expect(clearSearchButton).toHaveClass('management-compact-create-action-clear')
     expect(clearSearchButton).toHaveTextContent('')
+    expect(service.listCashbookEntries).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'PT0001' }))
 
+    await userEvent.type(screen.getByLabelText('Tìm sổ quỹ'), '{Enter}')
     await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledWith({
       search: 'PT0001',
       search_scope: 'all',
@@ -544,6 +546,25 @@ describe('FinancePage', () => {
       page: 1,
       page_size: 15,
     })
+  })
+
+  it('keeps cashbook rows unchanged while search text is still draft', async () => {
+    const service = makeService()
+    render(<FinancePage service={service} />)
+
+    const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
+    expect(within(table).getByText('PT0001')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Tìm sổ quỹ'), 'ZZZ_NO_MATCH_42')
+
+    expect(service.listCashbookEntries).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'ZZZ_NO_MATCH_42' }))
+    expect(within(table).getByText('PT0001')).toBeInTheDocument()
+
+    await userEvent.type(screen.getByLabelText('Tìm sổ quỹ'), '{Enter}')
+
+    await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledWith(expect.objectContaining({
+      search: 'ZZZ_NO_MATCH_42',
+    })))
   })
 
   it('filters cashbook by account status and business accounting', async () => {

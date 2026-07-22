@@ -490,7 +490,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     setStocktakeSearch(nextSearch)
     setSelectedStocktakeId(null)
     setStocktakeDetail(null)
-    void loadStocktakeList({ search: nextSearch, page: 1, page_size: stocktakePageSize })
   }
 
   function toggleStocktakeStatus(nextStatus: Stocktake['status']) {

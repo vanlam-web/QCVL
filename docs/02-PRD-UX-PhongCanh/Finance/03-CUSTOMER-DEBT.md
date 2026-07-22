@@ -1,5 +1,6 @@
 # CUSTOMER-DEBT — UX công nợ và thu nợ khách hàng
 
+> **Search SoT:** [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md)
 
 ---
 
@@ -21,7 +22,8 @@ Số tổng công nợ hiển thị chính phải lấy từ công thức canoni
 
 - dùng shared compact search;
 - tìm bỏ dấu theo mã khách, tên khách và mã hóa đơn nợ cũ nhất;
-- khi nhập từ khóa, lọc trực tiếp danh sách công nợ theo mã khách, tên khách, mã hóa đơn nợ cũ nhất và tổng nợ nếu API/list có dữ liệu;
+- gõ chữ chỉ cập nhật nội dung tìm; bấm `Enter` mới gọi API/lọc danh sách công nợ theo mã khách, tên khách, mã hóa đơn nợ cũ nhất và tổng nợ nếu API/list có dữ liệu;
+- ưu tiên mã khách/mã hóa đơn trước tên khách;
 - không hiển thị dropdown/listbox gợi ý dưới ô tìm;
 - nút `+` chuyển thành `Xóa tìm kiếm` khi ô có nội dung.
 

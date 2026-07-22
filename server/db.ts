@@ -58,6 +58,7 @@ const financeAccountsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const salesFinanceEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const userDisplayNameEnsureCache = new WeakMap<pg.Pool, Map<string, Promise<ReadonlyMap<string, string>>>>()
 const financeAccountsListCache = new WeakMap<pg.Pool, Map<string, Promise<FinanceAccountData[]>>>()
+const searchSelectionStatsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 
 export function createPgRepository(databaseUrl: string): ServerRepository & { close(): Promise<void> } {
   const pool = new Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30_000 })
@@ -627,6 +628,22 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       }
     },
 
+    async recordSearchSelection(input) {
+      await ensureSearchSelectionStatsTable(pool)
+      await pool.query(
+        `
+          insert into search_selection_stats (
+            organization_id, user_id, entity_type, entity_id, select_count, last_selected_at
+          )
+          values ($1, $2, $3, $4, 1, now())
+          on conflict (organization_id, user_id, entity_type, entity_id) do update
+          set select_count = search_selection_stats.select_count + 1,
+              last_selected_at = now()
+        `,
+        [input.organizationId, input.userId, input.entityType, input.entityId],
+      )
+    },
+
     async findProductsByCodes(input) {
       const result = await pool.query(
         `
@@ -1005,7 +1022,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         values,
       )
-      return result.rows.map((row) => ({
+      const items = result.rows.map((row) => ({
         id: String(row.id),
         code: String(row.code),
         name: String(row.name),
@@ -1076,6 +1093,16 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         created_at: row.created_at?.toISOString?.() ?? row.created_at,
         updated_at: row.updated_at?.toISOString?.() ?? row.updated_at,
       })) satisfies ProductListData[]
+      return quickPickRankedItems({
+        pool,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'product',
+        url: input.url,
+        items,
+        codeOf: (product) => product.code,
+        nameOf: (product) => product.name,
+      })
     },
 
     async listProductsPage(input) {
@@ -1312,10 +1339,20 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         ),
       ])
       const suppliers = supplierResult.rows.map((row) => row.data as SupplierListData)
-      return customerResult.rows
+      const items = customerResult.rows
         .map((row) => row.data as CustomerListData)
         .map((customer) => hydrateCustomerLinkedSupplier(customer, suppliers))
         .filter((customer) => customerSnapshotMatches(input.url, customer))
+      return quickPickRankedItems({
+        pool,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'customer',
+        url: input.url,
+        items,
+        codeOf: (customer) => customer.code,
+        nameOf: (customer) => customer.name,
+      })
     },
 
     async createCustomer(input) {
@@ -1534,7 +1571,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [input.organizationId],
       )
-      return result.rows.map((row) => row.data as SupplierListData).filter((supplier) => supplierSnapshotMatches(input.url, supplier))
+      const items = result.rows.map((row) => row.data as SupplierListData).filter((supplier) => supplierSnapshotMatches(input.url, supplier))
+      return quickPickRankedItems({
+        pool,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'supplier',
+        url: input.url,
+        items,
+        codeOf: (supplier) => supplier.code,
+        nameOf: (supplier) => supplier.name,
+      })
     },
 
     async createSupplier(input) {
@@ -7363,6 +7410,118 @@ async function ensurePosProductUsageTable(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists pos_product_usage_rank_idx on pos_product_usage (organization_id, usage_count desc, product_id)')
+}
+
+async function ensureSearchSelectionStatsTable(pool: pg.Pool) {
+  return ensureSchemaOnce(searchSelectionStatsEnsureCache, pool, async () => {
+    await pool.query(`
+      create table if not exists search_selection_stats (
+        organization_id uuid not null references organizations(id) on delete cascade,
+        user_id uuid not null references users(id) on delete cascade,
+        entity_type text not null check (entity_type in ('customer', 'supplier', 'product')),
+        entity_id text not null,
+        select_count integer not null default 0 check (select_count >= 0),
+        last_selected_at timestamptz not null default now(),
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        primary key (organization_id, user_id, entity_type, entity_id)
+      )
+    `)
+    await pool.query(`
+      create index if not exists search_selection_stats_rank_idx
+      on search_selection_stats (organization_id, user_id, entity_type, select_count desc, last_selected_at desc)
+    `)
+  })
+}
+
+async function quickPickRankedItems<T extends { id: string }>(input: {
+  pool: pg.Pool
+  organizationId: string
+  userId?: string
+  entityType: 'customer' | 'supplier' | 'product'
+  url: URL
+  items: T[]
+  codeOf: (item: T) => string
+  nameOf: (item: T) => string
+}): Promise<T[]> {
+  if (input.url.searchParams.get('search_context') !== 'quick_pick' || !input.userId || input.items.length === 0) {
+    return input.items
+  }
+  const ranks = await searchSelectionRanks(input.pool, {
+    organizationId: input.organizationId,
+    userId: input.userId,
+    entityType: input.entityType,
+    entityIds: input.items.map((item) => item.id),
+  })
+  return rankQuickPickItems(input.items, {
+    ranks,
+    search: normalizeSearchText(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? ''),
+    codeOf: input.codeOf,
+    nameOf: input.nameOf,
+  })
+}
+
+async function searchSelectionRanks(pool: pg.Pool, input: {
+  organizationId: string
+  userId: string
+  entityType: 'customer' | 'supplier' | 'product'
+  entityIds: string[]
+}) {
+  await ensureSearchSelectionStatsTable(pool)
+  const result = await pool.query(
+    `
+      select entity_id, select_count, last_selected_at
+      from search_selection_stats
+      where organization_id = $1
+        and user_id = $2
+        and entity_type = $3
+        and entity_id = any($4::text[])
+    `,
+    [input.organizationId, input.userId, input.entityType, input.entityIds],
+  )
+  return new Map(result.rows.map((row) => [String(row.entity_id), {
+    selectCount: Number(row.select_count),
+    lastSelectedAt: row.last_selected_at?.toISOString?.() ?? String(row.last_selected_at),
+  }]))
+}
+
+function rankQuickPickItems<T extends { id: string }>(items: T[], input: {
+  ranks: Map<string, { selectCount: number; lastSelectedAt: string }>
+  search: string
+  codeOf: (item: T) => string
+  nameOf: (item: T) => string
+}) {
+  return items
+    .map((item, index) => ({ item, index, score: quickPickItemScore(item, input) }))
+    .sort((left, right) => (
+      right.score.selectCount - left.score.selectCount
+      || right.score.lastSelectedAt - left.score.lastSelectedAt
+      || right.score.exactCode - left.score.exactCode
+      || right.score.codePrefix - left.score.codePrefix
+      || right.score.exactName - left.score.exactName
+      || right.score.namePrefix - left.score.namePrefix
+      || left.index - right.index
+    ))
+    .map((entry) => entry.item)
+}
+
+function quickPickItemScore<T extends { id: string }>(item: T, input: {
+  ranks: Map<string, { selectCount: number; lastSelectedAt: string }>
+  search: string
+  codeOf: (item: T) => string
+  nameOf: (item: T) => string
+}) {
+  const rank = input.ranks.get(item.id)
+  const code = normalizeSearchText(input.codeOf(item))
+  const name = normalizeSearchText(input.nameOf(item))
+  return {
+    selectCount: rank?.selectCount ?? 0,
+    lastSelectedAt: rank ? Date.parse(rank.lastSelectedAt) || 0 : 0,
+    exactCode: input.search && code === input.search ? 1 : 0,
+    codePrefix: input.search && code.startsWith(input.search) ? 1 : 0,
+    exactName: input.search && name === input.search ? 1 : 0,
+    namePrefix: input.search && name.startsWith(input.search) ? 1 : 0,
+  }
 }
 
 async function ensureFinanceAccountsTable(pool: pg.Pool) {

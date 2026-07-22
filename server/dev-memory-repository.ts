@@ -70,6 +70,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
   const userOrder: string[] = []
   const groupIds = new Map<string, string>()
   const groupNamesById = new Map<string, string>()
+  const searchSelectionStats = new Map<string, { select_count: number; last_selected_at: string }>()
   let organizationBillSettings = normalizeOrganizationBillSettingsData({
     shop_name: organization.name,
     shop_address: 'Xưởng in và thi công quảng cáo',
@@ -146,6 +147,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       userOrder,
       groupIds,
       groupNamesById,
+      searchSelectionStats,
     })
     if (!users.has(adminAuthUser.id)) seedAdminUser(adminAuthUser)
   }
@@ -178,6 +180,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       userOrder,
       groupIds,
       groupNamesById,
+      searchSelectionStats,
     })
   }
 
@@ -324,6 +327,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
     },
     async recordPosProductUsage() {
       // Dev memory derives POS usage from saved sales documents, including imported history.
+    },
+    async recordSearchSelection(input) {
+      const key = searchSelectionStatsKey(input.organizationId, input.userId, input.entityType, input.entityId)
+      const current = searchSelectionStats.get(key)
+      searchSelectionStats.set(key, {
+        select_count: (current?.select_count ?? 0) + 1,
+        last_selected_at: new Date().toISOString(),
+      })
+      await persist()
     },
     async listUsers(input) {
       const search = normalize(input.url.searchParams.get('search') ?? '')
@@ -616,7 +628,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const createdTo = input.url.searchParams.get('created_to')
 
       const operatingStock = operatingStockByProductId(stockMovementsFromDocuments(purchaseReceipts, purchaseReceiptItems, salesDocuments, salesDocumentItems, stocktakes, stocktakeItems, products, draftBoms))
-      return [...products.values()].filter((product) => {
+      const items = [...products.values()].filter((product) => {
         if (status === 'deleted') {
           if (!/\{DEL\}/i.test(product.code)) return false
         } else if (status && status !== 'all') {
@@ -633,6 +645,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         ...withImportReviewMetadata(product, provisionalStockBalances, draftBoms, operatingStock),
         price_list_prices: priceListPricesForProduct(product.code, defaultSalePrices, priceListNames, namedSalePrices),
       }))
+      return rankDevMemoryQuickPickItems(items, {
+        stats: searchSelectionStats,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'product',
+        url: input.url,
+        codeOf: (product) => product.code,
+        nameOf: (product) => product.name,
+      })
     },
     async findProductsByCodes(input) {
       return new Set(input.codes.filter((code) => resolveProductByImportCode(products, code)))
@@ -914,7 +935,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const createdTo = input.url.searchParams.get('created_to')
       const createdBy = input.url.searchParams.get('created_by')
       const status = input.url.searchParams.get('status')
-      return [...customers.values()]
+      const items = [...customers.values()]
         .filter((customer) => {
           const hydrated = hydrateCustomerCreator(customer, users)
           if (customerGroupId && customerGroupId !== 'all' && customer.customer_group_id !== customerGroupId) return false
@@ -926,6 +947,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         })
         .map((customer) => hydrateCustomerLinkedSupplier(hydrateCustomerCreator(customerWithDisplaySalesAmount(customer), users), suppliers))
         .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+      return rankDevMemoryQuickPickItems(items, {
+        stats: searchSelectionStats,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'customer',
+        url: input.url,
+        codeOf: (customer) => customer.code,
+        nameOf: (customer) => customer.name,
+      })
     },
     async getCustomerFinancialTotals() {
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
@@ -1258,7 +1288,7 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const totalPurchaseMax = optionalNumber(input.url.searchParams.get('total_purchase_max'))
       const currentPayableMin = optionalNumber(input.url.searchParams.get('current_payable_min'))
       const currentPayableMax = optionalNumber(input.url.searchParams.get('current_payable_max'))
-      return [...suppliers.values()]
+      const items = [...suppliers.values()]
         .filter((supplier) => {
           if (status && status !== 'all' && supplier.status !== status) return false
           if (totalPurchaseMin !== undefined && supplier.total_purchase_amount < totalPurchaseMin) return false
@@ -1269,6 +1299,15 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
           return true
         })
         .sort((left, right) => Date.parse(right.created_at ?? '') - Date.parse(left.created_at ?? ''))
+      return rankDevMemoryQuickPickItems(items, {
+        stats: searchSelectionStats,
+        organizationId: input.organizationId,
+        userId: input.userId,
+        entityType: 'supplier',
+        url: input.url,
+        codeOf: (supplier) => supplier.code,
+        nameOf: (supplier) => supplier.name,
+      })
     },
     async findSuppliersByCodes(input) {
       return new Set(input.codes.filter((code) => suppliers.has(code)))
@@ -1988,6 +2027,7 @@ interface DevMemoryMaps {
   userOrder: string[]
   groupIds: Map<string, string>
   groupNamesById: Map<string, string>
+  searchSelectionStats: Map<string, { select_count: number; last_selected_at: string }>
 }
 
 interface DevMemoryState {
@@ -2017,6 +2057,7 @@ interface DevMemoryState {
   userOrder: string[]
   groupIds: Array<[string, string]>
   groupNamesById: Array<[string, string]>
+  searchSelectionStats?: Array<[string, { select_count: number; last_selected_at: string }]>
 }
 
 async function loadState(stateFile: string, maps: DevMemoryMaps) {
@@ -2050,6 +2091,7 @@ async function loadState(stateFile: string, maps: DevMemoryMaps) {
   replaceMap(maps.authUsers, state.authUsers)
   replaceMap(maps.groupIds, state.groupIds)
   replaceMap(maps.groupNamesById, state.groupNamesById)
+  replaceMap(maps.searchSelectionStats, state.searchSelectionStats)
   maps.stocktakeItems.clear()
   maps.namedSalePrices.clear()
   for (const [priceListName, rows] of state.namedSalePrices ?? []) {
@@ -2103,6 +2145,7 @@ async function saveState(stateFile: string, maps: DevMemoryMaps) {
     userOrder: [...maps.userOrder],
     groupIds: [...maps.groupIds.entries()],
     groupNamesById: [...maps.groupNamesById.entries()],
+    searchSelectionStats: [...maps.searchSelectionStats.entries()],
   }
   await mkdir(dirname(stateFile), { recursive: true })
   await writeFile(stateFile, `${JSON.stringify(state, null, 2)}\n`, 'utf8')
@@ -3301,6 +3344,54 @@ function normalizeCreatorIdentity(value: string | null | undefined) {
   return normalize(String(value ?? '').replace(/\{DEL\}$/i, ''))
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+function searchSelectionStatsKey(
+  organizationId: string,
+  userId: string,
+  entityType: 'customer' | 'supplier' | 'product',
+  entityId: string,
+) {
+  return `${organizationId}|${userId}|${entityType}|${entityId}`
+}
+
+function rankDevMemoryQuickPickItems<T extends { id: string }>(items: T[], input: {
+  stats: Map<string, { select_count: number; last_selected_at: string }>
+  organizationId: string
+  userId?: string
+  entityType: 'customer' | 'supplier' | 'product'
+  url: URL
+  codeOf: (item: T) => string
+  nameOf: (item: T) => string
+}) {
+  if (input.url.searchParams.get('search_context') !== 'quick_pick' || !input.userId) return items
+  const search = normalize(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
+  return items
+    .map((item, index) => {
+      const rank = input.stats.get(searchSelectionStatsKey(input.organizationId, input.userId ?? '', input.entityType, item.id))
+      const code = normalize(input.codeOf(item))
+      const name = normalize(input.nameOf(item))
+      return {
+        item,
+        index,
+        selectCount: rank?.select_count ?? 0,
+        lastSelectedAt: rank ? Date.parse(rank.last_selected_at) || 0 : 0,
+        exactCode: search && code === search ? 1 : 0,
+        codePrefix: search && code.startsWith(search) ? 1 : 0,
+        exactName: search && name === search ? 1 : 0,
+        namePrefix: search && name.startsWith(search) ? 1 : 0,
+      }
+    })
+    .sort((left, right) => (
+      right.selectCount - left.selectCount
+      || right.lastSelectedAt - left.lastSelectedAt
+      || right.exactCode - left.exactCode
+      || right.codePrefix - left.codePrefix
+      || right.exactName - left.exactName
+      || right.namePrefix - left.namePrefix
+      || left.index - right.index
+    ))
+    .map((entry) => entry.item)
 }
 
 function optionalNumber(value: string | null) {

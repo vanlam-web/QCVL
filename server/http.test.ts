@@ -388,6 +388,49 @@ describe('createHttpHandler', () => {
     expect(meBody.data.permissions).toContain('perm.manage_users')
   })
 
+  test('records quick-pick search selections for allowed entities only', async () => {
+    const recordSearchSelection = vi.fn(async () => undefined)
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(await hashPassword('ChangeMe123!')),
+        recordSearchSelection,
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json()
+    const authorization = `Bearer ${loginBody.data.access_token}`
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/search-selection-stats', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'customer', entity_id: 'customer-1' }),
+      }),
+    )
+    const invalid = await handler(
+      new Request('http://api.local/api/v1/search-selection-stats', {
+        method: 'POST',
+        headers: { authorization, 'content-type': 'application/json' },
+        body: JSON.stringify({ entity_type: 'cashbook', entity_id: 'cashbook-1' }),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    expect(recordSearchSelection).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      userId: 'user-1',
+      entityType: 'customer',
+      entityId: 'customer-1',
+    })
+    expect(invalid.status).toBe(400)
+    expect(recordSearchSelection).toHaveBeenCalledTimes(1)
+  })
+
   test('reads and updates shared organization bill settings', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

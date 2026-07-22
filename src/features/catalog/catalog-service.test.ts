@@ -31,6 +31,35 @@ describe('catalog-service', () => {
     ])
   })
 
+  it('builds quick-pick product search and records selected products', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.listProducts({
+      search: 'BT',
+      status: 'active',
+      page: 1,
+      page_size: 20,
+      search_context: 'quick_pick',
+    })
+    await service.recordSearchSelection({ entity_type: 'product', entity_id: 'product-bt' })
+
+    expect(calls).toEqual([
+      ['/api/v1/products?search=BT&status=active&page=1&page_size=20&search_context=quick_pick&sort_key=created_at&sort_direction=desc', undefined],
+      [
+        '/api/v1/search-selection-stats',
+        {
+          method: 'POST',
+          body: JSON.stringify({ entity_type: 'product', entity_id: 'product-bt' }),
+        },
+      ],
+    ])
+  })
+
   it('builds customer list filters from existing customer fields', async () => {
     const calls: Array<[string, RequestInit | undefined]> = []
     const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
@@ -62,6 +91,35 @@ describe('catalog-service', () => {
         undefined,
       ],
       ['/api/v1/customer-groups', undefined],
+    ])
+  })
+
+  it('builds quick-pick customer search and records selected customers', async () => {
+    const calls: Array<[string, RequestInit | undefined]> = []
+    const request: CatalogApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
+      calls.push([path, init])
+      return null as T
+    }
+    const service = createCatalogService({ request })
+
+    await service.listCustomers({
+      search: 'KH000001',
+      status: 'active',
+      page: 1,
+      page_size: 8,
+      search_context: 'quick_pick',
+    })
+    await service.recordSearchSelection({ entity_type: 'customer', entity_id: 'customer-1' })
+
+    expect(calls).toEqual([
+      ['/api/v1/customers?search=KH000001&status=active&page=1&page_size=8&sort_key=created_at&sort_direction=desc&search_context=quick_pick', undefined],
+      [
+        '/api/v1/search-selection-stats',
+        {
+          method: 'POST',
+          body: JSON.stringify({ entity_type: 'customer', entity_id: 'customer-1' }),
+        },
+      ],
     ])
   })
 

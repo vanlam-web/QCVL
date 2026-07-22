@@ -2515,6 +2515,51 @@ describe('createDevMemoryRepository persistence', () => {
     }
   })
 
+  it('ranks quick-pick customers by the current user selection count before exact code matches', async () => {
+    const repository = await createDevMemoryRepository()
+    try {
+      const frequentlySelected = await repository.createCustomer?.({
+        organizationId: 'org-dev-memory',
+        code: 'KH-RANK-OLD',
+        name: 'Khach hay chon',
+      })
+      const exactCode = await repository.createCustomer?.({
+        organizationId: 'org-dev-memory',
+        code: 'KH-RANK',
+        name: 'Khach dung ma',
+      })
+
+      await repository.recordSearchSelection?.({
+        organizationId: 'org-dev-memory',
+        userId: 'user-dev-admin',
+        entityType: 'customer',
+        entityId: frequentlySelected?.id ?? '',
+      })
+      await repository.recordSearchSelection?.({
+        organizationId: 'org-dev-memory',
+        userId: 'user-dev-admin',
+        entityType: 'customer',
+        entityId: frequentlySelected?.id ?? '',
+      })
+      await repository.recordSearchSelection?.({
+        organizationId: 'org-dev-memory',
+        userId: 'user-dev-other',
+        entityType: 'customer',
+        entityId: exactCode?.id ?? '',
+      })
+
+      const quickPick = await repository.listCustomers?.({
+        organizationId: 'org-dev-memory',
+        userId: 'user-dev-admin',
+        url: new URL('http://api.local/api/v1/customers?search=KH-RANK&status=active&search_context=quick_pick'),
+      })
+
+      expect(quickPick?.map((item) => item.code).slice(0, 2)).toEqual(['KH-RANK-OLD', 'KH-RANK'])
+    } finally {
+      await repository.close()
+    }
+  })
+
   it('persists imported KiotViet suppliers across repository restarts', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'qcvl-dev-memory-'))
     const stateFile = join(dir, 'state.json')

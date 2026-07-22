@@ -219,7 +219,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [cashbookPageSize, setCashbookPageSize] = useState(defaultPageSize)
   const [cashbookSearch, setCashbookSearch] = useState(routeFilters.search)
   const [lastCashbookSearch, setLastCashbookSearch] = useState(routeFilters.search)
-  const [cashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [lastCashbookSearchScope, setLastCashbookSearchScope] = useState<CashbookSearchScope>('all')
   const [cashbookTimeFilter, setCashbookTimeFilter] = useState<CashbookTimeFilter>(routeFilters.time)
   const [cashbookFrom, setCashbookFrom] = useState(routeFilters.from)
@@ -323,7 +322,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     : sortedActiveAccounts.filter((account) => account.account_type === 'cash')
   const fundFilteredCashbookEntries = (cashbookEntries ?? []).filter((entry) => (
     cashbookEntryMatchesFundMode(entry, cashbookFundMode, cashbookAccountId)
-    && cashbookEntryMatchesSearch(entry, cashbookSearch)
+    && cashbookEntryMatchesSearch(entry, lastCashbookSearch)
   ))
   const visibleCashbookEntries = showCashbookFavoritesOnly
     ? fundFilteredCashbookEntries.filter((entry) => cashbookFavoriteIds.includes(entry.id))
@@ -842,6 +841,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
 
   async function applyCashbookFilters(input: {
     search?: string
+    search_scope?: CashbookSearchScope
     from?: string
     to?: string
     finance_account_id?: string
@@ -853,8 +853,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setCashbookPage(1)
     const nextFinanceAccountId = input.finance_account_id ?? cashbookAccountId
     await loadCashbook({
-      search: input.search ?? cashbookSearch,
-      search_scope: cashbookSearchScope,
+      search: input.search ?? lastCashbookSearch,
+      search_scope: input.search_scope ?? lastCashbookSearchScope,
       from: input.from ?? cashbookFrom,
       to: input.to ?? cashbookTo,
       finance_account_id: nextFinanceAccountId,

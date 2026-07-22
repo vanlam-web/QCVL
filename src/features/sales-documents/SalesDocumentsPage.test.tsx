@@ -402,6 +402,8 @@ it('searches by document code and keeps filtered empty state clear', async () =>
 
   await screen.findByText('Chưa có chứng từ phù hợp bộ lọc.')
   await userEvent.type(screen.getByLabelText('Tìm chứng từ'), 'HD010985')
+  expect(service.listSalesDocuments).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'HD010985' }))
+  await userEvent.type(screen.getByLabelText('Tìm chứng từ'), '{Enter}')
 
   await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
     from: expect.stringMatching(/^\d{4}-\d{2}-01$/),
@@ -481,7 +483,7 @@ it('loads route-open invoice detail by code without waiting for the list id look
   }
 })
 
-it('filters matching sales documents while typing without accents and without suggestions', async () => {
+it('filters matching sales documents after Enter without accents and without suggestions', async () => {
   const service = makeService({
     listSalesDocuments: vi.fn(async (input = {}) => ({
       items: input.search === 'HD010985' || input.search === 'phong' ? [listItem] : [secondListItem],
@@ -494,6 +496,8 @@ it('filters matching sales documents while typing without accents and without su
 
   await screen.findByText('HD010986')
   await userEvent.type(screen.getByRole('textbox', { name: /Tìm chứng từ/ }), 'phong')
+  expect(service.listSalesDocuments).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'phong' }))
+  await userEvent.type(screen.getByRole('textbox', { name: /Tìm chứng từ/ }), '{Enter}')
 
   await waitFor(() => expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
     search: 'phong',
