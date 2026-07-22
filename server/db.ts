@@ -484,16 +484,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             coalesce(nullif(btrim(shop_name), ''), name) as shop_name,
             coalesce(shop_address, '') as shop_address,
             coalesce(shop_phone, '') as shop_phone,
+            coalesce(print_place, '') as print_place,
             case
               when default_bill_template in ('a4', 'k80') then default_bill_template
               else 'a4'
             end as default_bill_template,
             coalesce(nullif(btrim(invoice_title), ''), 'HÓA ĐƠN BÁN HÀNG') as invoice_title,
-            coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ') as quote_title,
+            coalesce(nullif(btrim(quote_title), ''), 'BẢNG BÁO GIÁ') as quote_title,
             coalesce(footer_note, '') as footer_note,
-            coalesce(show_product_code, true) as show_product_code,
+            coalesce(show_product_code, false) as show_product_code,
             coalesce(show_unit, true) as show_unit,
-            coalesce(show_discount, true) as show_discount,
+            coalesce(show_discount, false) as show_discount,
             logo_data_url,
             coalesce(bill_templates, '[]'::jsonb) as bill_templates
           from organizations
@@ -508,6 +509,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           shop_name: 'QCVL',
           shop_address: '',
           shop_phone: '',
+          print_place: '',
           default_bill_template: 'a4',
         })
       }
@@ -522,16 +524,17 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             coalesce(nullif(btrim(shop_name), ''), name) as shop_name,
             coalesce(shop_address, '') as shop_address,
             coalesce(shop_phone, '') as shop_phone,
+            coalesce(print_place, '') as print_place,
             case
               when default_bill_template in ('a4', 'k80') then default_bill_template
               else 'a4'
             end as default_bill_template,
             coalesce(nullif(btrim(invoice_title), ''), 'HÓA ĐƠN BÁN HÀNG') as invoice_title,
-            coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ') as quote_title,
+            coalesce(nullif(btrim(quote_title), ''), 'BẢNG BÁO GIÁ') as quote_title,
             coalesce(footer_note, '') as footer_note,
-            coalesce(show_product_code, true) as show_product_code,
+            coalesce(show_product_code, false) as show_product_code,
             coalesce(show_unit, true) as show_unit,
-            coalesce(show_discount, true) as show_discount,
+            coalesce(show_discount, false) as show_discount,
             logo_data_url,
             coalesce(bill_templates, '[]'::jsonb) as bill_templates
           from organizations
@@ -546,6 +549,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             shop_name: 'QCVL',
             shop_address: '',
             shop_phone: '',
+            print_place: '',
             default_bill_template: 'a4',
           })
       const next = mergeOrganizationBillSettingsPatch(mapped, input.patch)
@@ -556,15 +560,16 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
             shop_name = $2,
             shop_address = $3,
             shop_phone = $4,
-            default_bill_template = $5,
-            invoice_title = $6,
-            quote_title = $7,
-            footer_note = $8,
-            show_product_code = $9,
-            show_unit = $10,
-            show_discount = $11,
-            logo_data_url = $12,
-            bill_templates = $13::jsonb
+            print_place = $5,
+            default_bill_template = $6,
+            invoice_title = $7,
+            quote_title = $8,
+            footer_note = $9,
+            show_product_code = $10,
+            show_unit = $11,
+            show_discount = $12,
+            logo_data_url = $13,
+            bill_templates = $14::jsonb
           where id = $1
         `,
         [
@@ -572,6 +577,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           next.shop_name,
           next.shop_address,
           next.shop_phone,
+          next.print_place,
           next.default_bill_template,
           next.invoice_title,
           next.quote_title,
@@ -8504,6 +8510,7 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   await pool.query('alter table organizations add column if not exists shop_name text')
   await pool.query('alter table organizations add column if not exists shop_address text')
   await pool.query('alter table organizations add column if not exists shop_phone text')
+  await pool.query('alter table organizations add column if not exists print_place text')
   await pool.query('alter table organizations add column if not exists default_bill_template text')
   await pool.query('alter table organizations add column if not exists invoice_title text')
   await pool.query('alter table organizations add column if not exists quote_title text')
@@ -8535,6 +8542,11 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   `)
   await pool.query(`
     update organizations
+    set print_place = coalesce(print_place, '')
+    where print_place is null
+  `)
+  await pool.query(`
+    update organizations
     set default_bill_template = 'a4'
     where default_bill_template is null
        or btrim(default_bill_template) = ''
@@ -8547,7 +8559,7 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   `)
   await pool.query(`
     update organizations
-    set quote_title = coalesce(nullif(btrim(quote_title), ''), 'BÁO GIÁ')
+    set quote_title = coalesce(nullif(btrim(quote_title), ''), 'BẢNG BÁO GIÁ')
     where quote_title is null or btrim(quote_title) = ''
   `)
   await pool.query(`
@@ -8557,9 +8569,9 @@ async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
   `)
   await pool.query(`
     update organizations
-    set show_product_code = coalesce(show_product_code, true),
+    set show_product_code = coalesce(show_product_code, false),
         show_unit = coalesce(show_unit, true),
-        show_discount = coalesce(show_discount, true)
+        show_discount = coalesce(show_discount, false)
     where show_product_code is null
        or show_unit is null
        or show_discount is null
@@ -8571,13 +8583,14 @@ function mapOrganizationBillSettingsRow(row: Record<string, unknown>) {
     shop_name: String(row.shop_name ?? 'QCVL'),
     shop_address: String(row.shop_address ?? ''),
     shop_phone: String(row.shop_phone ?? ''),
+    print_place: String(row.print_place ?? ''),
     default_bill_template: (row.default_bill_template === 'k80' ? 'k80' : 'a4') as 'a4' | 'k80',
     invoice_title: String(row.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG'),
-    quote_title: String(row.quote_title ?? 'BÁO GIÁ'),
+    quote_title: String(row.quote_title ?? 'BẢNG BÁO GIÁ'),
     footer_note: String(row.footer_note ?? ''),
-    show_product_code: row.show_product_code !== false,
+    show_product_code: row.show_product_code === true,
     show_unit: row.show_unit !== false,
-    show_discount: row.show_discount !== false,
+    show_discount: row.show_discount === true,
     logo_data_url: typeof row.logo_data_url === 'string' && row.logo_data_url ? row.logo_data_url : null,
     templates: Array.isArray(row.bill_templates)
       ? row.bill_templates

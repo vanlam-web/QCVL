@@ -87,18 +87,18 @@ it('renders a simple quote print preview from saved snapshot data', async () => 
 
   render(<QuotePrintPage documentId="quote-1" service={service} onClose={vi.fn()} />)
 
-  expect(await screen.findByRole('heading', { name: 'BÁO GIÁ' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'BẢNG BÁO GIÁ' })).toBeInTheDocument()
   expect(screen.getByText('QCVL')).toBeInTheDocument()
   expect(screen.getByText(/Số báo giá:\s*BG000123/)).toBeInTheDocument()
   expect(screen.getByText('Công ty Phong Cảnh')).toBeInTheDocument()
-  expect(screen.getByText(/NV:\s*Admin/)).toBeInTheDocument()
+  expect(screen.queryByText(/NV:\s*Admin/)).not.toBeInTheDocument()
+  expect(screen.getByText('Người bán')).toBeInTheDocument()
   expect(screen.getByText(/Ghi chú:\s*Giao sau khi khách xác nhận/)).toBeInTheDocument()
 
   const lines = screen.getByRole('table', { name: 'Dòng hàng báo giá' })
-  expect(within(lines).getByText('DECAL-PP')).toBeInTheDocument()
+  expect(within(lines).queryByText('DECAL-PP')).not.toBeInTheDocument()
   expect(within(lines).getByText('Decal PP')).toBeInTheDocument()
   expect(within(lines).getByText('1.2 x 0.5 m')).toBeInTheDocument()
-  expect(within(lines).getByText('FORMEX-5')).toBeInTheDocument()
   expect(within(lines).getByText(/Cắt theo mẫu/)).toBeInTheDocument()
   expect(screen.getByText('Tổng báo giá')).toBeInTheDocument()
   expect(screen.getByText('600 000')).toBeInTheDocument()
@@ -135,7 +135,7 @@ it('uses customer preferred bill template on quote print', async () => {
     <QuotePrintPage documentId="quote-1" service={makeService(preferred)} onClose={vi.fn()} />,
   )
 
-  expect(await screen.findByRole('heading', { name: 'BÁO GIÁ' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'BẢNG BÁO GIÁ' })).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
 })
 

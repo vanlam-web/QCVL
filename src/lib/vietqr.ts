@@ -1,10 +1,32 @@
-import { vietnamBankOptions } from '../features/finance/vietnam-bank-catalog'
+import { vietnamBankOptions, type VietnamBankOption } from '../features/finance/vietnam-bank-catalog'
 
-export function resolveVietnamBankBin(bankName: string | null | undefined): string | null {
+/** Bill-facing labels for catalog shortNames that look cramped on print (KV-style). */
+const billBankDisplayAliases: Record<string, string> = {
+  MBBank: 'MB Bank',
+  VietinBank: 'VietinBank',
+  Vietcombank: 'Vietcombank',
+  HDBank: 'HD Bank',
+  SeABank: 'SeABank',
+  VPBank: 'VPBank',
+  Techcombank: 'Techcombank',
+  Sacombank: 'Sacombank',
+  ACB: 'ACB',
+  TPBank: 'TPBank',
+  VIB: 'VIB',
+  SHB: 'SHB',
+  Eximbank: 'Eximbank',
+  MSB: 'MSB',
+  NamABank: 'Nam A Bank',
+  OCB: 'OCB',
+  BIDV: 'BIDV',
+  Agribank: 'Agribank',
+}
+
+function findVietnamBankOption(bankName: string | null | undefined): VietnamBankOption | null {
   const needle = (bankName ?? '').trim().toLowerCase()
   if (!needle) return null
   const compact = needle.replace(/[\s_-]+/g, '')
-  const match = vietnamBankOptions.find((bank) => {
+  return vietnamBankOptions.find((bank) => {
     const shortName = bank.shortName.toLowerCase()
     const shortCompact = shortName.replace(/[\s_-]+/g, '')
     const name = bank.name.toLowerCase()
@@ -18,8 +40,20 @@ export function resolveVietnamBankBin(bankName: string | null | undefined): stri
       || shortCompact.includes(compact)
       || name.includes(needle)
     )
-  })
-  return match?.bin ?? null
+  }) ?? null
+}
+
+export function resolveVietnamBankBin(bankName: string | null | undefined): string | null {
+  return findVietnamBankOption(bankName)?.bin ?? null
+}
+
+/** Label on A4 bill next to STK — prefers catalog shortName with readable spacing. */
+export function displayVietnamBankLabel(bankName: string | null | undefined): string {
+  const trimmed = (bankName ?? '').trim()
+  if (!trimmed) return ''
+  const match = findVietnamBankOption(trimmed)
+  if (!match) return trimmed
+  return billBankDisplayAliases[match.shortName] ?? match.shortName
 }
 
 export function buildVietQrImageUrl(input: {

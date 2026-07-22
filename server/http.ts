@@ -5169,6 +5169,7 @@ function parseOrganizationBillSettingsPatch(body: Record<string, unknown>): Part
   if ('shop_name' in body) patch.shop_name = requiredString(body.shop_name, 'shop_name')
   if ('shop_address' in body) patch.shop_address = String(body.shop_address ?? '').trim()
   if ('shop_phone' in body) patch.shop_phone = String(body.shop_phone ?? '').trim()
+  if ('print_place' in body) patch.print_place = String(body.print_place ?? '').trim()
   if ('default_bill_template' in body) {
     if (!isBillTemplateId(body.default_bill_template)) {
       throw new HttpError(400, 'VALIDATION_ERROR', 'default_bill_template must be a4 or k80.', {
