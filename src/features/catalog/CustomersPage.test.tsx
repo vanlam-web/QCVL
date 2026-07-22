@@ -87,21 +87,21 @@ function makeOrderService(overrides: Partial<Pick<OrderService, 'getCustomerDebt
       invoices: [
         {
           order_id: 'order-1',
-          order_code: 'HD000045',
-          created_at: '2026-06-28T08:00:00Z',
-          total_amount: 500000,
-          paid_amount: 300000,
-          debt_amount: 200000,
-          remaining_debt: 200000,
+          order_code: 'HD010985',
+          created_at: '2026-06-30T17:08:00Z',
+          total_amount: 150000,
+          paid_amount: 0,
+          debt_amount: 150000,
+          remaining_debt: 150000,
         },
         {
           order_id: 'order-2',
-          order_code: 'HD000046',
-          created_at: '2026-06-29T09:00:00Z',
-          total_amount: 100000,
+          order_code: 'HD010986',
+          created_at: '2026-06-29T17:08:00Z',
+          total_amount: 200000,
           paid_amount: 50000,
-          debt_amount: 50000,
-          remaining_debt: 50000,
+          debt_amount: 150000,
+          remaining_debt: 150000,
         },
       ],
       cashbook_entries: [
@@ -119,6 +119,44 @@ function makeOrderService(overrides: Partial<Pick<OrderService, 'getCustomerDebt
           counterparty: { type: 'customer' as const, name: 'Công ty Phong Cảnh', phone: '0909000000' },
           created_by: { id: 'user-admin', name: 'Admin' },
           source: { type: 'payment_receipt', id: 'TT000001', code: 'TT000001', order_code: 'HD010986' },
+        },
+      ],
+      ledger_rows: [
+        {
+          id: 'order-3',
+          code: 'HD010987',
+          created_at: '2026-06-28T17:08:00Z',
+          amount_delta: 90000,
+          balance_after: 90000,
+          source_type: 'invoice',
+          source_id: 'order-3',
+        },
+        {
+          id: 'order-2',
+          code: 'HD010986',
+          created_at: '2026-06-29T17:08:00Z',
+          amount_delta: 200000,
+          balance_after: 290000,
+          source_type: 'invoice',
+          source_id: 'order-2',
+        },
+        {
+          id: 'cashbook-1',
+          code: 'TT000001',
+          created_at: '2026-06-29T18:00:00Z',
+          amount_delta: -190000,
+          balance_after: 100000,
+          source_type: 'payment',
+          source_id: 'cashbook-1',
+        },
+        {
+          id: 'order-1',
+          code: 'HD010985',
+          created_at: '2026-06-30T17:08:00Z',
+          amount_delta: 150000,
+          balance_after: 250000,
+          source_type: 'invoice',
+          source_id: 'order-1',
         },
       ],
     })),
@@ -827,7 +865,7 @@ it('expands customer details directly under the selected row and closes on secon
   expect(within(detail).queryByText('Hóa đơn mở')).not.toBeInTheDocument()
   expect(within(detail).queryByText('Lịch sử công nợ')).not.toBeInTheDocument()
   expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', status: 'completed', page: 1, page_size: 10 })
-  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({ customer_id: 'customer-1', type: 'invoice', page: 1, page_size: 1000 })
+  expect(salesDocumentService.listSalesDocuments).not.toHaveBeenCalledWith(expect.objectContaining({ page_size: 1000 }))
   expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
   expect(within(detail).getByRole('button', { name: 'Tóm tắt' })).toHaveAttribute('aria-pressed', 'true')
   expect(within(detail).getByRole('button', { name: 'Chi tiết' })).toHaveAttribute('aria-pressed', 'false')
@@ -1155,7 +1193,7 @@ it('reloads customer debt when the debt tab is opened again', async () => {
   expect(detail).toHaveTextContent('300 000')
 })
 
-it('derives open receivable totals from invoice history when the debt endpoint has no rows', async () => {
+it('derives open receivable totals from customer debt endpoint rows', async () => {
   const salesDocumentService = makeSalesDocumentService({
     listSalesDocuments: vi.fn(async () => ({
       items: [
@@ -1200,7 +1238,43 @@ it('derives open receivable totals from invoice history when the debt endpoint h
   render(
     <CustomersPage
       service={makeService()}
-      orderService={makeOrderService({ getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-1', total_debt: 0, invoices: [] })) })}
+      orderService={makeOrderService({
+        getCustomerDebt: vi.fn(async () => ({
+          customer_id: 'customer-1',
+          total_debt: 44800,
+          invoices: [
+            {
+              order_id: 'order-open',
+              order_code: 'HD-OPEN',
+              created_at: '2026-07-02T09:12:00Z',
+              total_amount: 44800,
+              paid_amount: 0,
+              debt_amount: 44800,
+              remaining_debt: 44800,
+            },
+          ],
+          ledger_rows: [
+            {
+              id: 'order-paid-old-debt',
+              code: 'HD-PAID-OLD',
+              created_at: '2026-07-01T09:12:00Z',
+              amount_delta: 100000,
+              balance_after: 100000,
+              source_type: 'invoice',
+              source_id: 'order-paid-old-debt',
+            },
+            {
+              id: 'order-open',
+              code: 'HD-OPEN',
+              created_at: '2026-07-02T09:12:00Z',
+              amount_delta: 44800,
+              balance_after: 44800,
+              source_type: 'invoice',
+              source_id: 'order-open',
+            },
+          ],
+        })),
+      })}
       salesDocumentService={salesDocumentService}
     />,
   )
@@ -1336,7 +1410,17 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
         getCustomerDebt: vi.fn(async () => ({
           customer_id: 'customer-1',
           total_debt: 1510080,
-          invoices: [],
+          invoices: [
+            {
+              order_id: 'order-after-cb',
+              order_code: 'HD000007.03',
+              created_at: '2023-07-12T16:31:00.000Z',
+              total_amount: 790400,
+              paid_amount: 0,
+              debt_amount: 790400,
+              remaining_debt: 790400,
+            },
+          ],
           adjustments: [
             {
               id: 'customer-debt-adjustment-kv-cb000001',
@@ -1359,6 +1443,35 @@ it('shows KiotViet adjustment balance as the debt running balance', async () => 
               remaining_amount: -280320,
               balance_after: 1510080,
               source_file: 'LichSuThanhToanKhachHang_KV19072026-003658-454.xlsx',
+            },
+          ],
+          ledger_rows: [
+            {
+              id: 'customer-debt-adjustment-kv-cb000001',
+              code: 'CB000001',
+              created_at: '2023-07-12T16:27:00.000Z',
+              amount_delta: 1000000,
+              balance_after: 1000000,
+              source_type: 'adjustment',
+              source_id: 'customer-debt-adjustment-kv-cb000001',
+            },
+            {
+              id: 'order-after-cb',
+              code: 'HD000007.03',
+              created_at: '2023-07-12T16:31:00.000Z',
+              amount_delta: 790400,
+              balance_after: 1790400,
+              source_type: 'invoice',
+              source_id: 'order-after-cb',
+            },
+            {
+              id: 'customer-debt-adjustment-kv-pn000449',
+              code: 'PN000449',
+              created_at: '2023-07-12T17:00:00.000Z',
+              amount_delta: -280320,
+              balance_after: 1510080,
+              source_type: 'adjustment',
+              source_id: 'customer-debt-adjustment-kv-pn000449',
             },
           ],
         })),
@@ -1474,7 +1587,17 @@ it('shows the current imported debt balance in the customer debt summary when it
         getCustomerDebt: vi.fn(async () => ({
           customer_id: 'customer-1',
           total_debt: 1510080,
-          invoices: [],
+          invoices: [
+            {
+              order_id: 'order-before-cb',
+              order_code: 'HD011163',
+              created_at: '2026-07-14T14:18:00.000Z',
+              total_amount: 209300,
+              paid_amount: 0,
+              debt_amount: 209300,
+              remaining_debt: 209300,
+            },
+          ],
           adjustments: [{
             id: 'customer-debt-adjustment-kv-cb000001',
             source_code: 'CB000001',

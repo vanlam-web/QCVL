@@ -378,6 +378,7 @@ describe('CustomerPanel', () => {
     expect(within(reopenedDialog).getByText('CB000001')).toBeInTheDocument()
     expect(within(reopenedDialog).getByText('TT001838')).toBeInTheDocument()
     expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
+    expect(salesDocumentService.listSalesDocuments).not.toHaveBeenCalledWith(expect.objectContaining({ page_size: 1000 }))
 
     await userEvent.click(within(reopenedDialog).getByRole('tab', { name: 'Lịch sử' }))
     expect(await within(reopenedDialog).findByRole('table', { name: 'Lịch sử hóa đơn POS' })).toBeInTheDocument()
