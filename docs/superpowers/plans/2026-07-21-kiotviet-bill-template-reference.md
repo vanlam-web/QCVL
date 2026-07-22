@@ -2,7 +2,8 @@
 
 Updated: 2026-07-22  
 SoT QCVL: [POS-BILL-PRINT-MESSAGING.md](../../03-BUSINESS-NghiepVu/Sales/POS-BILL-PRINT-MESSAGING.md)  
-Slice polish A4: [2026-07-22-bill-a4-kv-polish.md](./2026-07-22-bill-a4-kv-polish.md)
+Slice polish A4: [2026-07-22-bill-a4-kv-polish.md](./2026-07-22-bill-a4-kv-polish.md)  
+**Đóng tạm:** [2026-07-22-bill-area-freeze.md](./2026-07-22-bill-area-freeze.md) — Owner 2026-07-22 không mở code bill mới.
 
 ## 1. KiotViet (mẫu shop đang dùng)
 
@@ -78,12 +79,16 @@ Nặng hơn mức xưởng cần; chỉ tham chiếu kiến trúc.
 | Editor HTML + token | Chưa |
 | Zalo ảnh / gợi ý máy in | Chưa |
 
-## 6. Hướng tiếp (ưu tiên)
+## 6. Hướng tiếp — **đóng tạm (Owner 2026-07-22)**
 
-1. Gửi bill ảnh Zalo/Messenger (SoT §6–7) — frontend render → clipboard → mở app.
-2. Gợi ý máy in gần nhất (SoT §5) — MVP vẫn browser print dialog.
-3. Snapshot địa chỉ khách vào chứng từ lúc lưu (khớp SoT §2 chặt hơn).
-4. Editor HTML + token (slice lớn — chỉ khi toggle không đủ).
+V1 bill đủ dùng. Các mục dưới **không** mở code đến khi Owner bảo:
+
+1. Gửi bill ảnh Zalo/Messenger (SoT §6–7).
+2. Gợi ý máy in gần nhất (SoT §5).
+3. Snapshot địa chỉ khách vào chứng từ lúc lưu.
+4. Editor HTML + token.
+
+Xem [2026-07-22-bill-area-freeze.md](./2026-07-22-bill-area-freeze.md).
 
 ## 7. Quy tắc giữ cho agent
 

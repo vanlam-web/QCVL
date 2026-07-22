@@ -38,3 +38,7 @@ Một khách có thể tick **một hoặc nhiều** mẫu bill; lần sau mở 
 2. Tick thêm mẫu → lưu list; mở lại vẫn tick.
 3. Khách lẻ không gọi PATCH preference.
 4. Docs SoT §10 + tham chiếu KV cập nhật trạng thái multi-bill.
+
+## Đóng phạm vi
+
+Gộp vào đóng phân bill tạm: [2026-07-22-bill-area-freeze.md](./2026-07-22-bill-area-freeze.md).

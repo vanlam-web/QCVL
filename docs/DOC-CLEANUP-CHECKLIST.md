@@ -65,7 +65,7 @@
 - [x] Canonical `stocktake_balance` vs tên cũ `stocktake_adjustment` trong STOCKTAKE/TABLES
 - [x] `POST /products` persist (Postgres + dev-memory); combo/service ép `track_inventory=false` theo KV · 2026-07-21
 - [x] `POST /suppliers` tạo NCC tay persist (không stub) · 2026-07-21
-- [x] Bill Preview: Quản lý mẫu in (danh sách mẫu HD/BG + sửa sâu + Postgres `bill_templates`); nhớ mẫu theo khách; chưa editor HTML KV/Zalo · 2026-07-21
+- [x] Bill Preview: Quản lý mẫu in (danh sách mẫu HD/BG + sửa sâu + Postgres `bill_templates`); multi-tick theo khách; A4 gần KV; **đóng tạm** 2026-07-22 — không Zalo/máy in/HTML · [freeze](./superpowers/plans/2026-07-22-bill-area-freeze.md)
 - [ ] Owner chỉ loại đơn cần UI trước (sau PN/NCC/tạo SP) rồi mở gap còn lại nếu có
 
 ---
