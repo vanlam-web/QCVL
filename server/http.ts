@@ -2995,7 +2995,9 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       if (authRoute.found) return authRoute.response
 
       const currentUser = await requireCurrentUser(options.repository, request, traceId)
-      await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
+      if (!isQuickPickLookupRequest(request.method, url)) {
+        await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
+      }
       const devResponse = await getDevApiResponse(request, url, currentUser, options.repository)
       if (devResponse.found) return success(devResponse.data, traceId, devResponse.status)
 
@@ -3013,6 +3015,14 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       return failure(500, 'INTERNAL_ERROR', 'An internal error occurred.', traceId)
     }
   }
+}
+
+function isQuickPickLookupRequest(method: string, url: URL) {
+  if (method !== 'GET') return false
+  if (url.searchParams.get('search_context') !== 'quick_pick') return false
+  return url.pathname === '/api/v1/customers'
+    || url.pathname === '/api/v1/products'
+    || url.pathname === '/api/v1/suppliers'
 }
 
 function serializeError(error: unknown) {

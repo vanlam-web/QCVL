@@ -62,6 +62,8 @@ const salesFinanceEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const userDisplayNameEnsureCache = new WeakMap<pg.Pool, Map<string, Promise<ReadonlyMap<string, string>>>>()
 const financeAccountsListCache = new WeakMap<pg.Pool, Map<string, Promise<FinanceAccountData[]>>>()
 const searchSelectionStatsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const importedSnapshotTablesEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const customerQuickPickSearchReadyCache = new WeakMap<pg.Pool, Promise<void>>()
 const customerSearchIndexEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 
 export function createPgRepository(databaseUrl: string): ServerRepository & { close(): Promise<void> } {
@@ -1328,9 +1330,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     },
 
     async listCustomers(input) {
-      await ensureImportedSnapshotTables(pool)
       if (input.url.searchParams.get('search_context') === 'quick_pick') {
-        await ensureCustomerSearchIndexTable(pool)
+        await ensureCustomerQuickPickSearchReady(pool)
         const { page, pageSize } = paginationFromUrl(input.url, 8)
         const limit = Math.min(page * pageSize, 200)
         const search = normalizeSearchText(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
@@ -1392,6 +1393,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         )
         return result.rows.map((row) => ({ ...(row.data as CustomerListData), linked_supplier: null }))
       }
+      await ensureImportedSnapshotTables(pool)
       const [customerResult, supplierResult] = await Promise.all([
         pool.query(
         `
@@ -7569,6 +7571,8 @@ async function ensurePosProductUsageTable(pool: pg.Pool) {
 
 async function ensureSearchSelectionStatsTable(pool: pg.Pool) {
   return ensureSchemaOnce(searchSelectionStatsEnsureCache, pool, async () => {
+    const existing = await pool.query("select to_regclass('public.search_selection_stats') as stats_table")
+    if (existing.rows[0]?.stats_table) return
     await pool.query(`
       create table if not exists search_selection_stats (
         organization_id uuid not null references organizations(id) on delete cascade,
@@ -9236,46 +9240,56 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
 }
 
 async function ensureImportedSnapshotTables(pool: pg.Pool) {
-  await pool.query(`
-    create table if not exists customer_snapshots (
-      id text primary key,
-      organization_id uuid not null references organizations(id) on delete cascade,
-      code text not null,
-      data jsonb not null,
-      source_type text not null default 'kiotviet_import',
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      unique (organization_id, code)
-    )
-  `)
-  await pool.query('create index if not exists customer_snapshots_org_updated_idx on customer_snapshots (organization_id, updated_at desc)')
-  await pool.query(`
-    create table if not exists supplier_snapshots (
-      id text primary key,
-      organization_id uuid not null references organizations(id) on delete cascade,
-      code text not null,
-      data jsonb not null,
-      source_type text not null default 'kiotviet_import',
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      unique (organization_id, code)
-    )
-  `)
-  await pool.query('create index if not exists supplier_snapshots_org_updated_idx on supplier_snapshots (organization_id, updated_at desc)')
-  await pool.query(`
-    create table if not exists purchase_receipt_snapshots (
-      id text primary key,
-      organization_id uuid not null references organizations(id) on delete cascade,
-      code text not null,
-      data jsonb not null,
-      source_type text not null default 'kiotviet_import',
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now(),
-      unique (organization_id, code)
-    )
-  `)
-  await pool.query('create index if not exists purchase_receipt_snapshots_org_updated_idx on purchase_receipt_snapshots (organization_id, updated_at desc)')
-  await ensureCustomerSearchIndexTable(pool)
+  return ensureSchemaOnce(importedSnapshotTablesEnsureCache, pool, async () => {
+    await pool.query(`
+      create table if not exists customer_snapshots (
+        id text primary key,
+        organization_id uuid not null references organizations(id) on delete cascade,
+        code text not null,
+        data jsonb not null,
+        source_type text not null default 'kiotviet_import',
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (organization_id, code)
+      )
+    `)
+    await pool.query('create index if not exists customer_snapshots_org_updated_idx on customer_snapshots (organization_id, updated_at desc)')
+    await pool.query(`
+      create table if not exists supplier_snapshots (
+        id text primary key,
+        organization_id uuid not null references organizations(id) on delete cascade,
+        code text not null,
+        data jsonb not null,
+        source_type text not null default 'kiotviet_import',
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (organization_id, code)
+      )
+    `)
+    await pool.query('create index if not exists supplier_snapshots_org_updated_idx on supplier_snapshots (organization_id, updated_at desc)')
+    await pool.query(`
+      create table if not exists purchase_receipt_snapshots (
+        id text primary key,
+        organization_id uuid not null references organizations(id) on delete cascade,
+        code text not null,
+        data jsonb not null,
+        source_type text not null default 'kiotviet_import',
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (organization_id, code)
+      )
+    `)
+    await pool.query('create index if not exists purchase_receipt_snapshots_org_updated_idx on purchase_receipt_snapshots (organization_id, updated_at desc)')
+    await ensureCustomerSearchIndexTable(pool)
+  })
+}
+
+async function ensureCustomerQuickPickSearchReady(pool: pg.Pool) {
+  return ensureSchemaOnce(customerQuickPickSearchReadyCache, pool, async () => {
+    const result = await pool.query("select to_regclass('public.customer_search_index') as search_index")
+    if (result.rows[0]?.search_index) return
+    await ensureImportedSnapshotTables(pool)
+  })
 }
 
 async function ensureCustomerSearchIndexTable(pool: pg.Pool) {
@@ -9330,6 +9344,11 @@ async function ensureCustomerSearchIndexTable(pool: pg.Pool) {
         normalized_name = excluded.normalized_name,
         normalized_haystack = excluded.normalized_haystack,
         updated_at = now()
+      where customer_search_index.organization_id is distinct from excluded.organization_id
+         or customer_search_index.status is distinct from excluded.status
+         or customer_search_index.normalized_code is distinct from excluded.normalized_code
+         or customer_search_index.normalized_name is distinct from excluded.normalized_name
+         or customer_search_index.normalized_haystack is distinct from excluded.normalized_haystack
     `)
   })
 }

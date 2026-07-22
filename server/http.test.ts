@@ -3384,6 +3384,7 @@ describe('createHttpHandler', () => {
     const listUsers = vi.fn(async () => [])
     const listSuppliers = vi.fn(async () => [])
     const getCustomerFinancialTotals = vi.fn(async () => new Map())
+    const ensureSalesFinanceSeed = vi.fn(async () => undefined)
     const handler = createHttpHandler({
       repository: {
         ...base,
@@ -3391,6 +3392,7 @@ describe('createHttpHandler', () => {
         listUsers,
         listSuppliers,
         getCustomerFinancialTotals,
+        ensureSalesFinanceSeed,
       },
     })
     const login = await handler(
@@ -3419,6 +3421,7 @@ describe('createHttpHandler', () => {
     expect(getCustomerFinancialTotals).not.toHaveBeenCalled()
     expect(listUsers).not.toHaveBeenCalled()
     expect(listSuppliers).not.toHaveBeenCalled()
+    expect(ensureSalesFinanceSeed).not.toHaveBeenCalled()
   })
 
   test('filters imported customers by status and summarizes KiotViet net sales', async () => {

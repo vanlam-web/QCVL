@@ -42,4 +42,9 @@ do update set
   normalized_code = excluded.normalized_code,
   normalized_name = excluded.normalized_name,
   normalized_haystack = excluded.normalized_haystack,
-  updated_at = now();
+  updated_at = now()
+where customer_search_index.organization_id is distinct from excluded.organization_id
+   or customer_search_index.status is distinct from excluded.status
+   or customer_search_index.normalized_code is distinct from excluded.normalized_code
+   or customer_search_index.normalized_name is distinct from excluded.normalized_name
+   or customer_search_index.normalized_haystack is distinct from excluded.normalized_haystack;

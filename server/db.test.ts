@@ -151,6 +151,96 @@ describe('createPgRepository product units', () => {
     expect(searchQuery).not.toContain("concat_ws(' '")
   })
 
+  test('caches imported snapshot schema checks for repeated quick-pick customer searches', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [], rowCount: 0 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const quickPickUrl = new URL('http://api.local/api/v1/customers?search=kl4&status=active&page=1&page_size=8&search_context=quick_pick')
+
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: quickPickUrl,
+    })
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: quickPickUrl,
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    const customerSnapshotEnsures = sqlCalls.filter((sql) => sql.includes('create table if not exists customer_snapshots'))
+    const supplierSnapshotEnsures = sqlCalls.filter((sql) => sql.includes('create table if not exists supplier_snapshots'))
+    const purchaseReceiptSnapshotEnsures = sqlCalls.filter((sql) => sql.includes('create table if not exists purchase_receipt_snapshots'))
+    expect(customerSnapshotEnsures).toHaveLength(1)
+    expect(supplierSnapshotEnsures).toHaveLength(1)
+    expect(purchaseReceiptSnapshotEnsures).toHaveLength(1)
+  })
+
+  test('does not rewrite unchanged customer search index rows during runtime ensure', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [], rowCount: 0 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: new URL('http://api.local/api/v1/customers?search=kl4&status=active&page=1&page_size=8&search_context=quick_pick'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    const backfillQuery = sqlCalls.find((sql) => sql.includes('insert into customer_search_index'))
+    expect(backfillQuery).toBeDefined()
+    expect(backfillQuery).toContain('is distinct from')
+  })
+
+  test('skips imported snapshot schema DDL for quick-pick search when customer search index exists', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("to_regclass('public.customer_search_index')")) {
+        return { rows: [{ search_index: 'customer_search_index' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: new URL('http://api.local/api/v1/customers?search=kl4&status=active&page=1&page_size=8&search_context=quick_pick'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists customer_snapshots'))).toBe(false)
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists customer_search_index'))).toBe(false)
+    expect(sqlCalls.some((sql) => sql.includes('from customer_search_index csi'))).toBe(true)
+  })
+
+  test('skips selection stats schema DDL for quick-pick search when stats table exists', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string) => {
+      if (sql.includes("to_regclass('public.customer_search_index')")) {
+        return { rows: [{ search_index: 'customer_search_index' }], rowCount: 1 }
+      }
+      if (sql.includes("to_regclass('public.search_selection_stats')")) {
+        return { rows: [{ stats_table: 'search_selection_stats' }], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: new URL('http://api.local/api/v1/customers?search=kl4&status=active&page=1&page_size=8&search_context=quick_pick'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists search_selection_stats'))).toBe(false)
+    expect(sqlCalls.some((sql) => sql.includes('from customer_search_index csi'))).toBe(true)
+  })
+
   test('does not deactivate existing product unit conversions when an import row has none', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
