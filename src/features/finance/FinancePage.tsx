@@ -20,6 +20,7 @@ import { ManagementSortableHeader } from '../../components/ui-shell/management-s
 import { managementSortStatesEqual, type ManagementSortState, useManagementTableSort } from '../../components/ui-shell/management-table-sort'
 import { ManagementDateTimeInput, parseManagementDateTimeInputText } from '../../components/ui-shell/management-date-time-input'
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
+import { dateTimeIsoFromLocalClock } from '../../lib/date-format'
 import { formatMoney } from '../../lib/number-format'
 import { useManagementSearch } from '../../lib/use-management-search'
 import type {
@@ -1172,7 +1173,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         voucher_direction: voucherMode,
         voucher_type: voucherType,
         finance_account_id: voucherAccountId,
-        created_at: issuedAt.toISOString(),
+        created_at: dateTimeIsoFromLocalClock(issuedAt),
         amount,
         partner_debt_mode: voucherPartnerDebtMode,
         is_business_accounted: voucherBusinessAccounted,
@@ -1259,7 +1260,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         ? undefined
         : cashbookEditForm.financeAccountId
       const saved = await hydrateCashbookDetail(await service.updateCashbookEntry(cashbookEditPreview.id, {
-        created_at: `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}-${String(createdAt.getDate()).padStart(2, '0')}T${String(createdAt.getHours()).padStart(2, '0')}:${String(createdAt.getMinutes()).padStart(2, '0')}:00.000Z`,
+        created_at: dateTimeIsoFromLocalClock(createdAt),
         ...(financeAccountId !== undefined ? { finance_account_id: financeAccountId } : {}),
         note: cashbookEditForm.note.trim() || null,
       }))

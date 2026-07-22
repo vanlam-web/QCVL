@@ -22,7 +22,7 @@ import { formatApiError } from '../../lib/api/error-message'
 import { formatMoney, parseMoneyInput } from '../../lib/number-format'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, toDisplayDateInput, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { currentSystemDate } from '../../lib/system-clock'
-import { parseDateTimeValue } from '../../lib/date-format'
+import { dateTimeIsoFromLocalClock, parseDateTimeValue } from '../../lib/date-format'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -668,7 +668,7 @@ export function CustomersPage({
       const result = await financeService.collectCustomerDebt({
         customer_id: customer.id,
         amount,
-        ...(paidAt ? { created_at: paidAt.toISOString() } : {}),
+        ...(paidAt ? { created_at: dateTimeIsoFromLocalClock(paidAt) } : {}),
         allocations: paymentRows
           .filter((row) => row.payment_amount > 0)
           .map((row) => ({
@@ -723,7 +723,7 @@ export function CustomersPage({
     try {
       const formattedIso = form.adjustedAtIso && form.adjustedAt === dateTime(form.adjustedAtIso)
         ? form.adjustedAtIso
-        : selectedAdjustmentDateTime.toISOString()
+        : dateTimeIsoFromLocalClock(selectedAdjustmentDateTime)
       await financeService.updateCustomerDebtAdjustment(form.adjustmentId, {
         adjusted_at: formattedIso,
         amount_delta: amount,
@@ -2032,14 +2032,14 @@ function CustomerDebtAdjustmentDialog({
   const selectAdjustmentDate = (date: Date) => {
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(date.getFullYear(), date.getMonth(), date.getDate(), base.getHours(), base.getMinutes())
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: next.toISOString() })
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeIsoFromLocalClock(next) })
     setPickerOpen(null)
   }
   const selectAdjustmentTime = (time: string) => {
     const [hour, minute] = time.split(':').map(Number)
     const base = selectedAdjustmentDateTime ?? currentSystemDate()
     const next = new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute)
-    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: next.toISOString() })
+    onChange({ ...form, adjustedAt: formatCustomerDebtAdjustmentDateTime(next), adjustedAtIso: dateTimeIsoFromLocalClock(next) })
     setPickerOpen(null)
   }
 

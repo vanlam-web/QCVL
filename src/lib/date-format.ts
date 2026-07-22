@@ -139,3 +139,18 @@ export function dateTimeLocalInputValue(value: Date) {
     padDatePart(value.getMinutes()),
   ].join('')
 }
+
+export function dateTimeIsoFromLocalClock(value: Date) {
+  return [
+    value.getFullYear(),
+    '-',
+    padDatePart(value.getMonth() + 1),
+    '-',
+    padDatePart(value.getDate()),
+    'T',
+    padDatePart(value.getHours()),
+    ':',
+    padDatePart(value.getMinutes()),
+    ':00.000Z',
+  ].join('')
+}
