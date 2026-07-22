@@ -1377,7 +1377,7 @@ describe('createHttpHandler', () => {
     expect(body.data.items[0].code).toBe('SP000064{DEL}')
   })
 
-  test('sorts POS quick products by persisted invoice and quote usage', async () => {
+  test('sorts POS quick products by completed invoice usage', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(
       new Request('http://api.local/api/v1/auth/login', {
@@ -1389,7 +1389,7 @@ describe('createHttpHandler', () => {
     const authorization = `Bearer ${loginBody.data.access_token}`
 
     await handler(
-      new Request('http://api.local/api/v1/orders/quotes', {
+      new Request('http://api.local/api/v1/orders/checkout', {
         method: 'POST',
         headers: { authorization },
         body: JSON.stringify({
@@ -1398,7 +1398,7 @@ describe('createHttpHandler', () => {
             { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
             { product_id: 'product-005', quantity: 1, unit_price: 600000, discount_amount: 0, price_source: 'manual' },
           ],
-          payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+          payment: { cash_amount: 1200000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
         }),
       }),
     )
@@ -1414,7 +1414,7 @@ describe('createHttpHandler', () => {
     expect(body.data.items[0].id).toBe('product-005')
   })
 
-  test('sorts POS quick products by dev-memory quote usage', async () => {
+  test('sorts POS quick products by dev-memory completed invoice usage', async () => {
     const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
     const authorization = 'Bearer dev-token'
 
@@ -1433,13 +1433,13 @@ describe('createHttpHandler', () => {
 
     for (let index = 0; index < 10; index++) {
       await handler(
-        new Request('http://api.local/api/v1/orders/quotes', {
+        new Request('http://api.local/api/v1/orders/checkout', {
           method: 'POST',
           headers: { authorization },
           body: JSON.stringify({
             customer_id: 'customer-retail',
             items: [{ product_id: 'product-hot', quantity: 1, unit_price: 25000, discount_amount: 0, price_source: 'manual' }],
-            payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
+            payment: { cash_amount: 25000, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 },
           }),
         }),
       )
@@ -5795,6 +5795,14 @@ describe('createHttpHandler', () => {
     expect(body.data.items.map((item: { code: string }) => item.code)).toEqual(['FAST-1'])
     expect(body.data.total).toBe(51)
     expect(body.data.total_all).toBe(51)
+
+    listProducts.mockClear()
+    listProductsPage.mockClear()
+    const posResponse = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=120&sort=pos_usage', { headers: { authorization } }))
+
+    expect(posResponse.status).toBe(200)
+    expect(listProductsPage).toHaveBeenCalledTimes(1)
+    expect(listProducts).not.toHaveBeenCalled()
   })
 
   test('uses paged stocktake repository with creator options instead of loading all stocktakes twice', async () => {

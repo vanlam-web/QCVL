@@ -1630,7 +1630,7 @@ function sortProductsByUsage<T extends { id: string }>(filtered: T[], usageByPro
 function productUsageCounts() {
   const usageByProductId = new Map<string, number>()
   for (const document of salesDocuments) {
-    if (document.order_type !== 'invoice' && document.order_type !== 'quote') continue
+    if (document.order_type !== 'invoice' || document.status !== 'completed') continue
     for (const item of document.items ?? []) {
       if (typeof item.product_id !== 'string' || item.product_id.trim() === '') continue
       usageByProductId.set(item.product_id, (usageByProductId.get(item.product_id) ?? 0) + 1)
@@ -3279,7 +3279,7 @@ async function getDevApiResponse(
         return { found: true, data: renamed }
       },
       listProducts: async () => {
-        if (repository.listProductsPage && url.searchParams.get('sort') !== 'pos_usage' && !url.searchParams.get('sort_key')) {
+        if (repository.listProductsPage && !url.searchParams.get('sort_key')) {
           const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, userId: currentUser.user.id, url })
           return {
             found: true,
@@ -4261,7 +4261,6 @@ async function getDevApiResponse(
         const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
         const code = await nextSalesDocumentCode(repository, currentUser.organization.id, 'quote')
         const quote = makeOrderFromCheckout(body, 'quote', customer, code, { id: currentUser.user.id, name: currentUser.user.display_name })
-        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
         if (repository.saveSalesDocument) {
           await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
         } else {
@@ -4299,7 +4298,6 @@ async function getDevApiResponse(
           revision_reason_code: reason.code,
           revision_reason_note: reason.note,
         } satisfies SalesDocumentData
-        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
         const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(revisedOrder, body.payment, seller) : addCashbookEntriesFromCheckout(revisedOrder, body.payment, seller)
         const saved = repository.reviseSalesDocument
           ? await repository.reviseSalesDocument({

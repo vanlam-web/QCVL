@@ -1121,8 +1121,13 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
       const items = await this.listProducts?.(input) ?? []
       const { page, pageSize } = paginationFromUrl(input.url, 15)
       const start = Math.max(0, page - 1) * pageSize
+      let sortedItems = items
+      if (input.url.searchParams.get('sort') === 'pos_usage') {
+        const usageByProductId = (await this.getPosProductUsageCounts?.(input.organizationId)) ?? new Map()
+        sortedItems = sortProductsByUsage(items, usageByProductId)
+      }
       return {
-        items: items.slice(start, start + pageSize),
+        items: sortedItems.slice(start, start + pageSize),
         total: items.length,
         total_all: items.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0),
       }
@@ -5817,6 +5822,16 @@ function paginationFromUrl(url: URL, defaultPageSize: number) {
     page: Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1,
     pageSize: Number.isFinite(rawPageSize) && rawPageSize > 0 ? Math.floor(rawPageSize) : defaultPageSize,
   }
+}
+
+function sortProductsByUsage<T extends { id: string }>(items: readonly T[], usageByProductId: Map<string, number>) {
+  return [...items]
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) => {
+      const usageDelta = (usageByProductId.get(right.item.id) ?? 0) - (usageByProductId.get(left.item.id) ?? 0)
+      return usageDelta === 0 ? left.index - right.index : usageDelta
+    })
+    .map((entry) => entry.item)
 }
 
 function stocktakeCreatorOptions(items: readonly StocktakeListData[]) {
