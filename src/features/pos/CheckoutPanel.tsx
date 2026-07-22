@@ -35,7 +35,6 @@ export function CheckoutPanel({
   cartLines,
   selectedCustomer,
   orderService,
-  salesDocumentService,
   orderNote = '',
   quoteBlockedReason = null,
   sellerName = '',
@@ -184,21 +183,13 @@ export function CheckoutPanel({
 
     if (selectedCustomer === null) return
 
-    Promise.all([
-      orderService.getCustomerDebt(selectedCustomer.id),
-      salesDocumentService?.listSalesDocuments({
-        customer_id: selectedCustomer.id,
-        type: 'invoice',
-        page: 1,
-        page_size: 1000,
-      }) ?? Promise.resolve({ items: [], page: 1, page_size: 1000, total: 0 }),
-    ])
-      .then(([debt, invoiceHistory]) => {
+    orderService.getCustomerDebt(selectedCustomer.id)
+      .then((debt) => {
         if (active) {
           setCustomerDebt(debt)
           setCustomerDebtLedger({
             debt,
-            invoiceHistory: invoiceHistory.items,
+            invoiceHistory: [],
             cashbookHistory: debt.cashbook_entries ?? [],
           })
           setDebtLookupError(null)
@@ -215,7 +206,7 @@ export function CheckoutPanel({
     return () => {
       active = false
     }
-  }, [orderService, salesDocumentService, selectedCustomer])
+  }, [orderService, selectedCustomer])
 
   useEffect(() => {
     if (invoiceDateTimePickerOpen === null) return
@@ -288,6 +279,7 @@ export function CheckoutPanel({
 
     setSubmitting(true)
     try {
+      const oldDebtAllocations = await loadOldDebtAllocations(oldDebtPayment)
       const checkout = await orderService.checkout({
         customer_id: selectedCustomer?.id,
         created_at: checkoutCreatedAt(orderCreatedAt, invoiceDate, invoiceTime),
@@ -299,6 +291,7 @@ export function CheckoutPanel({
           bank_amount: bankAmount,
           bank_account_id: bankAmount > 0 ? selectedBankAccountId : null,
           old_debt_payment_amount: oldDebtPayment,
+          old_debt_allocations: oldDebtAllocations,
           change_returned_amount: surplusMode === 'return' ? surplus : 0,
         },
       })
@@ -339,6 +332,7 @@ export function CheckoutPanel({
 
     setSubmitting(true)
     try {
+      const oldDebtAllocations = await loadOldDebtAllocations(oldDebtPayment)
       const revised = await orderService.reviseInvoice(revisionSource.id, {
         customer_id: selectedCustomer?.id,
         created_at: checkoutCreatedAt(orderCreatedAt, invoiceDate, invoiceTime),
@@ -352,6 +346,7 @@ export function CheckoutPanel({
           bank_amount: bankAmount,
           bank_account_id: bankAmount > 0 ? selectedBankAccountId : null,
           old_debt_payment_amount: oldDebtPayment,
+          old_debt_allocations: oldDebtAllocations,
           change_returned_amount: surplusMode === 'return' ? surplus : 0,
         },
       })
@@ -366,6 +361,16 @@ export function CheckoutPanel({
     } finally {
       setSubmitting(false)
     }
+  }
+
+  async function loadOldDebtAllocations(amount: number) {
+    if (selectedCustomer === null || amount <= 0) return undefined
+    const response = await orderService.getCustomerOpenDebts(selectedCustomer.id, { amount, limit: 50 })
+    return response.items.map((item) => ({
+      order_id: item.order_id,
+      order_code: item.order_code,
+      allocated_amount: item.allocated_amount,
+    }))
   }
 
   async function saveQuote() {

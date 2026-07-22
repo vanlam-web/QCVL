@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
-import { computeCustomerDebtTotal } from './modules/finance/customer-debt.js'
+import { computeCustomerDebtTotal, sliceCustomerOpenDebtsOldestFirst } from './modules/finance/customer-debt.js'
 import {
   rebuildKiotVietCashbookAllocations,
   type AllocatableInvoice,
@@ -1038,6 +1038,19 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         cashbook_entries: [],
         ledger_rows: debt.ledger_rows,
       }
+    },
+    async getCustomerOpenDebts(input) {
+      return sliceCustomerOpenDebtsOldestFirst(
+        openCustomerInvoices(input.customerId).map((document) => ({
+          order_id: document.id,
+          order_code: document.code,
+          created_at: document.created_at,
+          total_amount: document.total_amount,
+          paid_amount: document.paid_amount,
+          remaining_debt: document.debt_amount,
+        })),
+        { amount: input.amount, limit: input.limit },
+      )
     },
     async upsertImportedKiotVietCustomerDebtAdjustments(input) {
       let created = 0

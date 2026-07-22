@@ -3817,6 +3817,63 @@ describe('createHttpHandler', () => {
     }
   })
 
+  test('returns customer open debts oldest first with limit and amount cap', async () => {
+    const getCustomerOpenDebts = vi.fn(async () => ({
+      items: [
+        {
+          order_id: 'order-old',
+          order_code: 'HD000001',
+          created_at: '2026-07-01T08:00:00.000Z',
+          total_amount: 50_000,
+          paid_amount: 0,
+          remaining_debt: 50_000,
+          allocated_amount: 50_000,
+        },
+        {
+          order_id: 'order-new',
+          order_code: 'HD000002',
+          created_at: '2026-07-02T08:00:00.000Z',
+          total_amount: 80_000,
+          paid_amount: 10_000,
+          remaining_debt: 70_000,
+          allocated_amount: 20_000,
+        },
+      ],
+      has_more: true,
+    }))
+    const handler = createHttpHandler({
+      repository: {
+        ...repository(await hashPassword('ChangeMe123!')),
+        getCustomerOpenDebts,
+      } as ServerRepository,
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json() as { data: { access_token: string } }
+
+    const response = await handler(
+      new Request('http://api.local/api/v1/finance/customers/customer-1/open-debts?amount=70000&limit=2', {
+        headers: { authorization: `Bearer ${loginBody.data.access_token}` },
+      }),
+    )
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body.data.items.map((item: { order_code: string }) => item.order_code)).toEqual(['HD000001', 'HD000002'])
+    expect(body.data.items.reduce((sum: number, item: { allocated_amount: number }) => sum + item.allocated_amount, 0)).toBe(70_000)
+    expect(body.data.has_more).toBe(true)
+    expect(getCustomerOpenDebts).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      customerId: 'customer-1',
+      amount: 70_000,
+      limit: 2,
+    })
+  })
+
   test('keeps demo supplier summaries aligned with purchase receipts', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
     const login = await handler(

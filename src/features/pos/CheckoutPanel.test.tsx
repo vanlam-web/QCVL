@@ -83,6 +83,10 @@ function makeOrderService(overrides: Partial<OrderService> = {}): OrderService {
       ],
     })),
     getCustomerDebt: vi.fn(async () => ({ customer_id: 'customer-1', total_debt: 100000, invoices: [] })),
+    getCustomerOpenDebts: vi.fn(async () => ({
+      items: [],
+      has_more: false,
+    })),
     listRecentCustomerProductPrices: vi.fn(async () => ({
       items: [{ unitPrice: 110000, soldAt: '2026-06-30T10:00:00Z', orderCode: 'HD000099' }],
     })),
@@ -802,12 +806,7 @@ it('shows the backend canonical debt total for the checkout debt badge', async (
   expect(await screen.findByText('1 115 740')).toBeInTheDocument()
   expect(screen.queryByText('4 648 009')).not.toBeInTheDocument()
   expect(orderService.getCustomerDebt).toHaveBeenCalledWith('customer-1')
-  expect(salesDocumentService.listSalesDocuments).toHaveBeenCalledWith({
-    customer_id: 'customer-1',
-    type: 'invoice',
-    page: 1,
-    page_size: 1000,
-  })
+  expect(salesDocumentService.listSalesDocuments).not.toHaveBeenCalled()
   expect(financeService.listCashbookEntries).not.toHaveBeenCalled()
 })
 
@@ -828,6 +827,55 @@ it('submits old debt collection separately from the current invoice payment', as
         cash_amount: 290000,
         old_debt_payment_amount: 50000,
         change_returned_amount: 0,
+      }),
+    }),
+  )
+})
+
+it('loads old debt allocations without fetching 1000 customer invoices', async () => {
+  const orderService = makeOrderService({
+    getCustomerOpenDebts: vi.fn(async () => ({
+      items: [
+        {
+          order_id: 'old-order-1',
+          order_code: 'HD000001',
+          created_at: '2026-07-01T08:00:00.000Z',
+          total_amount: 50000,
+          paid_amount: 0,
+          remaining_debt: 50000,
+          allocated_amount: 50000,
+        },
+      ],
+      has_more: false,
+    })),
+  })
+  const salesDocumentService = makeSalesDocumentService()
+  render(
+    <CheckoutPanel
+      cartLines={[line]}
+      selectedCustomer={customer}
+      orderService={orderService}
+      salesDocumentService={salesDocumentService}
+    />,
+  )
+
+  await screen.findByText('Tổng nợ cũ')
+  await userEvent.clear(screen.getByLabelText('Khách thanh toán'))
+  await userEvent.type(screen.getByLabelText('Khách thanh toán'), '240000')
+  await userEvent.click(screen.getByRole('button', { name: 'Trả thêm nợ cũ' }))
+  await userEvent.clear(screen.getByLabelText('Thanh toán nợ cũ'))
+  await userEvent.type(screen.getByLabelText('Thanh toán nợ cũ'), '50000')
+  await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
+
+  expect(orderService.getCustomerOpenDebts).toHaveBeenCalledWith('customer-1', { amount: 50000, limit: 50 })
+  expect(salesDocumentService.listSalesDocuments).not.toHaveBeenCalled()
+  expect(orderService.checkout).toHaveBeenCalledWith(
+    expect.objectContaining({
+      payment: expect.objectContaining({
+        old_debt_payment_amount: 50000,
+        old_debt_allocations: [
+          { order_id: 'old-order-1', order_code: 'HD000001', allocated_amount: 50000 },
+        ],
       }),
     }),
   )

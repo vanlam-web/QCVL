@@ -18,6 +18,7 @@ import {
   type ProductImportUpsertRow,
 } from './modules/catalog/product-import.js'
 import { handleFinanceRoute } from './modules/finance/finance-routes.js'
+import { sliceCustomerOpenDebtsOldestFirst } from './modules/finance/customer-debt.js'
 import {
   applyKiotVietCashbookImport,
   mapKiotVietCashbookRows,
@@ -463,6 +464,18 @@ export type CustomerDebtDetailData = {
     source_id?: string | null
   }>
 }
+export type CustomerOpenDebtData = {
+  items: Array<{
+    order_id: string
+    order_code: string
+    created_at: string
+    total_amount: number
+    paid_amount: number
+    remaining_debt: number
+    allocated_amount: number
+  }>
+  has_more: boolean
+}
 export interface StocktakeListData {
   id: string
   code: string
@@ -889,6 +902,12 @@ export interface ServerRepository {
   }>
   listCustomerDebts?(input: { organizationId: string; url: URL }): Promise<CustomerDebtSummaryData[]>
   getCustomerDebt?(input: { organizationId: string; customerId: string }): Promise<CustomerDebtDetailData>
+  getCustomerOpenDebts?(input: {
+    organizationId: string
+    customerId: string
+    amount?: number
+    limit?: number
+  }): Promise<CustomerOpenDebtData>
   collectCustomerDebt?(input: {
     organizationId: string
     customerId: string
@@ -2275,7 +2294,14 @@ function makeOrderFromCheckout(body: {
     stock_qty_per_sale_unit?: number
     discount_amount?: number
   }>
-  payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
+  payment?: {
+    cash_amount?: number
+    bank_amount?: number
+    old_debt_payment_amount?: number
+    old_debt_allocations?: Array<{ order_id?: string; order_code?: string; allocated_amount?: number }>
+    change_returned_amount?: number
+    bank_account_id?: string | null
+  }
 }, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>, code: string, seller: { id: string; name: string }) {
   const createdAt = readCheckoutCreatedAt(body.created_at) ?? runtimeIso()
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
@@ -2530,6 +2556,20 @@ function splitCheckoutPaymentForCurrentOrderAndOldDebt(payment: { cash_amount?: 
     oldDebtBankAmount,
     oldDebtPaymentAmount: oldDebtCashAmount + oldDebtBankAmount,
   }
+}
+
+function checkoutOldDebtAllocations(payment: {
+  old_debt_allocations?: Array<{ order_id?: string; order_code?: string; allocated_amount?: number }>
+} = {}) {
+  return Array.isArray(payment.old_debt_allocations)
+    ? payment.old_debt_allocations
+        .map((allocation) => ({
+          order_id: String(allocation.order_id ?? ''),
+          order_code: String(allocation.order_code ?? ''),
+          allocated_amount: Math.max(Number(allocation.allocated_amount ?? 0), 0),
+        }))
+        .filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+    : undefined
 }
 
 async function collectCustomerDebt(request: Request) {
@@ -4184,6 +4224,7 @@ async function getDevApiResponse(
             customerId: body.customer_id,
             amount: oldDebtPayment.oldDebtPaymentAmount,
             createdAt: order.created_at,
+            allocations: checkoutOldDebtAllocations(body.payment),
             cashAmount: oldDebtPayment.oldDebtCashAmount,
             bankAmount: oldDebtPayment.oldDebtBankAmount,
             bankAccountId: body.payment?.bank_account_id ?? null,
@@ -4436,6 +4477,29 @@ async function getDevApiResponse(
           return { found: true, data: { ...detail, total_debt: totalDebt ?? detail.total_debt } }
         }
         return { found: true, data: makeCustomerDebtDetail(customerId) }
+      },
+      getCustomerOpenDebts: async () => {
+        const customerId = getFinanceCustomerId(path)
+        const amountParam = Number(url.searchParams.get('amount') ?? '')
+        const limitParam = Number(url.searchParams.get('limit') ?? '')
+        const amount = Number.isFinite(amountParam) && amountParam > 0 ? amountParam : undefined
+        const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.max(1, Math.min(Math.floor(limitParam), 100)) : 50
+        if (repository.getCustomerOpenDebts) {
+          return {
+            found: true,
+            data: await repository.getCustomerOpenDebts({
+              organizationId: currentUser.organization.id,
+              customerId,
+              amount,
+              limit,
+            }),
+          }
+        }
+        const detail = makeCustomerDebtDetail(customerId)
+        return {
+          found: true,
+          data: sliceCustomerOpenDebtsOldestFirst(detail.invoices, { amount, limit }),
+        }
       },
       collectCustomerDebt: async () => {
         if (repository.collectCustomerDebt) {

@@ -2,6 +2,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { createOrderService } from './order-service'
 
 describe('createOrderService', () => {
+  it('loads customer open debts with amount and limit query params', async () => {
+    const request = vi.fn(async () => ({ items: [], has_more: false }))
+    const service = createOrderService({ request: request as <T>(path: string, init?: RequestInit) => Promise<T> })
+
+    await service.getCustomerOpenDebts('customer-1', { amount: 70000, limit: 50 })
+
+    expect(request).toHaveBeenCalledWith('/api/v1/finance/customers/customer-1/open-debts?amount=70000&limit=50')
+  })
+
   it('posts invoice revision payload to the locked-order revise endpoint', async () => {
     const request = vi.fn(async () => ({
       order: {

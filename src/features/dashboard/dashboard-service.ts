@@ -363,20 +363,9 @@ async function loadDashboardProductCatalog(
   service: DashboardProductCatalogService | undefined,
   documents: DashboardProductRankDocument[],
 ) {
-  if (!service || !productRanksNeedCatalog(documents)) return []
-  try {
-    const result = await service.listProducts({ status: 'all', page: 1, page_size: 10000 })
-    return result.items.map((item) => ({ id: item.id, code: item.code, name: item.name }))
-  } catch {
-    return []
-  }
-}
-
-function productRanksNeedCatalog(documents: DashboardProductRankDocument[]) {
-  return documents.some((document) => (document.items ?? []).some((item) => {
-    const hasSnapshotLabel = Boolean(stringValue(item.product?.name) || stringValue(item.product_snapshot?.name))
-    return !hasSnapshotLabel && Boolean(stringValue(item.product_id))
-  }))
+  void service
+  void documents
+  return []
 }
 
 function emptyDashboardPurchaseReceiptPage() {

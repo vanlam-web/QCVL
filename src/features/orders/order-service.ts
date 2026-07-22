@@ -4,6 +4,7 @@ import type {
   CheckoutInput,
   CheckoutResult,
   CustomerDebtDetail,
+  CustomerOpenDebtResponse,
   FinanceAccount,
   QuoteReopenPayload,
   QuoteSummary,
@@ -15,6 +16,7 @@ export type {
   CheckoutCartLine,
   CheckoutResult,
   CustomerDebtDetail,
+  CustomerOpenDebtResponse,
   FinanceAccount,
   InvoiceRevisionHandoffPayload,
   QuoteReopenPayload,
@@ -54,6 +56,13 @@ export function createOrderService(api: OrderApiRequester) {
     listFinanceAccounts: () => api.request<{ items: FinanceAccount[] }>('/api/v1/finance/accounts'),
     getCustomerDebt: (customerId: string) =>
       api.request<CustomerDebtDetail>(`/api/v1/finance/customers/${customerId}/debt`),
+    getCustomerOpenDebts: (customerId: string, input: { amount?: number; limit?: number } = {}) => {
+      const params = new URLSearchParams()
+      if (input.amount !== undefined) params.set('amount', String(input.amount))
+      if (input.limit !== undefined) params.set('limit', String(input.limit))
+      const query = params.toString()
+      return api.request<CustomerOpenDebtResponse>(`/api/v1/finance/customers/${customerId}/open-debts${query ? `?${query}` : ''}`)
+    },
     listRecentCustomerProductPrices: (customerId: string, productId: string) =>
       api.request<RecentPriceList>(
         `/api/v1/customers/${customerId}/products/${productId}/recent-prices`,
