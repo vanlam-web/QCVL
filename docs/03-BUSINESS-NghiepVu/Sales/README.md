@@ -17,7 +17,7 @@
 | [POS-ORDER-LIFECYCLE.md](./POS-ORDER-LIFECYCLE.md) | Vòng đời đơn hàng POS — nháp, báo giá, hóa đơn bán hàng | Bổ sung 2026-06-27 |
 | [POS-CHECKOUT.md](./POS-CHECKOUT.md) | Nghiệp vụ thanh toán — trừ kho, sổ quỹ, tiền thừa/nợ | Di chuyển từ PRD-UX 2026-06-26 |
 | [POS-CUSTOMER-DEBT.md](./POS-CUSTOMER-DEBT.md) | Nghiệp vụ công nợ khách hàng — phát sinh nợ, thu tiền, số dư lũy kế | Tách từ PRD-UX 2026-06-27 |
-| [POS-BILL-PRINT-MESSAGING.md](./POS-BILL-PRINT-MESSAGING.md) | Bill, in và gửi bill sau báo giá/hóa đơn | Chốt từ draft bill 2026-07-01 và Owner 2026-07-05 |
+| [POS-BILL-PRINT-MESSAGING.md](./POS-BILL-PRINT-MESSAGING.md) | Bill, in và gửi bill sau báo giá/hóa đơn — **đóng tạm V1** (Owner 2026-07-22) | Chốt draft 2026-07-01 / Owner 2026-07-05; freeze 2026-07-22 |
 
 SoT BOM đầy đủ: [../BOM/BOM-RULES.md](../BOM/BOM-RULES.md) · Tồn kho: [../Inventory/README.md](../Inventory/README.md)
 
@@ -80,7 +80,7 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 | Báo giá → `BG…` | **Có** | Qua POS |
 | Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
 | Tạo nhanh KH/NCC từ phiếu thu/chi | **Có** (UI) | Nút `Tạo mới` → `POST /customers` / `POST /suppliers` |
-| Bill Preview / in HD | **Có** (A4 + K80 + quản lý mẫu) | Thiết lập → **Quản lý mẫu in**: danh sách mẫu HD/BG, sửa sâu (tên/khổ/tiêu đề/cột/chân/logo); nhớ A4/K80 theo khách; chưa editor HTML KV / Zalo |
+| Bill Preview / in HD·BG | **Đã xong / đóng tạm** (Owner 2026-07-22) | A4 gần KV, K80, quản lý mẫu, multi-tick theo khách, QR/STK, nợ hiển thị, `print_place`. **Không** mở Zalo ảnh / máy in / HTML editor — [freeze](../../superpowers/plans/2026-07-22-bill-area-freeze.md) · [SoT](./POS-BILL-PRINT-MESSAGING.md) |
 | Phiếu nhập → `PN…` | **Có** (hàng thường) | Draft/post Postgres; P4 object cuộn/tấm vẫn đóng băng — [Purchase README](../Purchase/README.md) |
 | Tạo NCC mới | **Có** | `POST /suppliers` persist `supplier_snapshots` manual; mã trống → `NCC…`; trùng → 409 |
 | Tạo hàng hóa mới | **Có** | `POST /products` persist Postgres/dev-memory; trùng mã → 409; combo/service ép `track_inventory=false` theo KV |

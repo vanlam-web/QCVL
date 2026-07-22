@@ -461,8 +461,8 @@ function QuotePrintRoute() {
         const accounts = await financeService.listAccounts({ is_active: true })
         return pickBillPrintBankAccount(accounts.items)
       }}
-      saveCustomerBillPreference={(customerId, template) =>
-        catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
+      saveCustomerBillPreference={(customerId, preference) =>
+        catalogService.updateCustomer(customerId, preference).then(() => undefined)
       }
       onClose={() => navigate(printReturnPath(location.search))}
     />
@@ -502,8 +502,8 @@ function InvoicePrintRoute() {
         const accounts = await financeService.listAccounts({ is_active: true })
         return pickBillPrintBankAccount(accounts.items)
       }}
-      saveCustomerBillPreference={(customerId, template) =>
-        catalogService.updateCustomer(customerId, { preferred_bill_template: template }).then(() => undefined)
+      saveCustomerBillPreference={(customerId, preference) =>
+        catalogService.updateCustomer(customerId, preference).then(() => undefined)
       }
       onClose={() => navigate(printReturnPath(location.search))}
     />

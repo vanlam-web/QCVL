@@ -6,11 +6,13 @@ import {
   isWalkInCustomerCode,
   listBillTemplatesForDocument,
   readOrganizationBillSettingsCache,
+  resolveCustomerBillPreferenceIds,
   resolveNamedPrintTemplate,
   resolvePreferredNamedTemplate,
   writeOrganizationBillSettingsCache,
   type OrganizationBillSettings,
 } from './bill-settings'
+import type { CustomerBillPreferenceSave } from './InvoicePrintPage'
 import type { SalesDocumentService } from './sales-document-service'
 import type { SalesDocumentDetail } from './types'
 
@@ -29,7 +31,7 @@ export function QuotePrintPage({
   initialTemplate?: string | null
   loadBillSettings?: () => Promise<OrganizationBillSettings>
   loadBillBankAccount?: () => Promise<BillPrintBankAccount | null>
-  saveCustomerBillPreference?: (customerId: string, template: string) => Promise<void>
+  saveCustomerBillPreference?: (customerId: string, preference: CustomerBillPreferenceSave) => Promise<void>
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +44,7 @@ export function QuotePrintPage({
       queryTemplate: initialTemplate,
     }).id,
   )
+  const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>(() => [templateId])
   const [preferenceStatus, setPreferenceStatus] = useState<string | null>(null)
 
   useEffect(() => {
@@ -64,14 +67,30 @@ export function QuotePrintPage({
           nextSettings = writeOrganizationBillSettingsCache(remoteSettings)
           setSettings(nextSettings)
         }
-        setTemplateId(
-          resolvePreferredNamedTemplate({
-            settings: nextSettings,
-            documentType: 'quote',
-            queryTemplate: initialTemplate,
-            customerCode: result.customer.code,
-            preferredTemplate: result.customer.preferred_bill_template,
-          }).id,
+        const activeTemplate = resolvePreferredNamedTemplate({
+          settings: nextSettings,
+          documentType: 'quote',
+          queryTemplate: initialTemplate,
+          customerCode: result.customer.code,
+          preferredTemplate: result.customer.preferred_bill_template,
+          preferredTemplates: result.customer.preferred_bill_templates,
+        })
+        const remembered = resolveCustomerBillPreferenceIds({
+          preferredTemplates: result.customer.preferred_bill_templates,
+          preferredTemplate: result.customer.preferred_bill_template,
+        })
+        const available = new Set(listBillTemplatesForDocument(nextSettings, 'quote').map((item) => item.id))
+        const ticks = remembered.filter((id) => available.has(id) || id === 'a4' || id === 'k80')
+        const resolvedTicks = ticks.length > 0
+          ? ticks.map((id) => resolveNamedPrintTemplate(nextSettings, 'quote', {
+              templateId: id,
+              paper: id === 'a4' || id === 'k80' ? id : null,
+            }).id)
+          : [activeTemplate.id]
+        const uniqueTicks = [...new Set(resolvedTicks)]
+        setTemplateId(activeTemplate.id)
+        setSelectedTemplateIds(
+          uniqueTicks.includes(activeTemplate.id) ? uniqueTicks : [activeTemplate.id, ...uniqueTicks],
         )
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được báo giá.'))
@@ -85,18 +104,42 @@ export function QuotePrintPage({
     }
   }, [documentId, initialTemplate, loadBillBankAccount, loadBillSettings, service])
 
-  async function handleTemplateSelect(nextId: string) {
-    setTemplateId(nextId)
-    setPreferenceStatus(null)
-    const named = resolveNamedPrintTemplate(settings, 'quote', { templateId: nextId })
+  async function persistPreference(activeId: string, ids: string[]) {
     const customer = document?.customer
     if (!customer?.id || isWalkInCustomerCode(customer.code) || !saveCustomerBillPreference) return
+    const nextIds = ids.includes(activeId) ? ids : [activeId, ...ids]
     try {
-      await saveCustomerBillPreference(customer.id, named.id)
-      setPreferenceStatus('Đã nhớ mẫu cho khách')
+      await saveCustomerBillPreference(customer.id, {
+        preferred_bill_template: activeId,
+        preferred_bill_templates: nextIds,
+      })
+      setPreferenceStatus(
+        nextIds.length > 1
+          ? `Đã nhớ ${nextIds.length} mẫu cho khách`
+          : 'Đã nhớ mẫu cho khách',
+      )
     } catch {
       setPreferenceStatus('Không lưu được mẫu cho khách')
     }
+  }
+
+  async function handleTemplateSelect(nextId: string) {
+    setTemplateId(nextId)
+    setPreferenceStatus(null)
+    const nextIds = selectedTemplateIds.includes(nextId)
+      ? selectedTemplateIds
+      : [...selectedTemplateIds, nextId]
+    setSelectedTemplateIds(nextIds)
+    await persistPreference(nextId, nextIds)
+  }
+
+  async function handleSelectedIdsChange(nextIds: string[]) {
+    const safeIds = nextIds.length > 0 ? nextIds : [templateId]
+    setSelectedTemplateIds(safeIds)
+    setPreferenceStatus(null)
+    const nextActive = safeIds.includes(templateId) ? templateId : safeIds[0]!
+    setTemplateId(nextActive)
+    await persistPreference(nextActive, safeIds)
   }
 
   if (error) {
@@ -137,7 +180,9 @@ export function QuotePrintPage({
       <BillPrintToolbar
         templates={quoteTemplates}
         selectedTemplateId={printContent.id}
-        onTemplateSelect={handleTemplateSelect}
+        selectedTemplateIds={selectedTemplateIds}
+        onTemplateSelect={(id) => { void handleTemplateSelect(id) }}
+        onSelectedTemplateIdsChange={(ids) => { void handleSelectedIdsChange(ids) }}
         onPrint={() => window.print()}
         onClose={onClose}
         preferenceStatus={preferenceStatus}
