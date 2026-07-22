@@ -81,11 +81,12 @@ function initialSalesDocumentRouteFilters() {
   const routeType = params.get('type')
   const type: SalesDocumentTypeFilter[] = routeType === 'invoice' || routeType === 'quote' ? [routeType] : allTypeFilters
   const monthRange = currentMonthRange()
-  const hasSearch = search.length > 0
+  const routeSearch = search || open
+  const hasSearch = routeSearch.length > 0
   const hasOpen = open.length > 0
 
   return {
-    search,
+    search: routeSearch,
     open,
     type,
     time: (hasSearch || hasOpen ? 'all' : 'month') as TimeFilter,
@@ -110,6 +111,27 @@ interface SalesDocumentsState {
   summary?: {
     total_amount: number
     debt_amount: number
+  }
+}
+
+function salesDocumentsStateWithDetail(current: SalesDocumentsState | null, detail: SalesDocumentDetail, pageSize: number): SalesDocumentsState {
+  if (current === null) {
+    return {
+      items: [detail],
+      total: 1,
+      page: 1,
+      pageSize,
+      summary: {
+        total_amount: detail.total_amount,
+        debt_amount: detail.debt_amount,
+      },
+    }
+  }
+  if (current.items.some((item) => item.id === detail.id)) return current
+  return {
+    ...current,
+    items: [detail, ...current.items],
+    total: Math.max(current.total, current.items.length + 1),
   }
 }
 
@@ -345,21 +367,14 @@ export function SalesDocumentsPage({
     try {
       const openDetailPromise = routeFilters.open ? service.getSalesDocument(routeFilters.open) : null
       let openDetailSettled = false
+      let openedDetail: SalesDocumentDetail | null = null
       if (openDetailPromise) {
         openDetailPromise
           .then((detail) => {
             if (!active) return
+            openedDetail = detail
             setSelected(detail)
-            setState((current) => current ?? {
-              items: [detail],
-              total: 1,
-              page: 1,
-              pageSize: defaultPageSize,
-              summary: {
-                total_amount: detail.total_amount,
-                debt_amount: detail.debt_amount,
-              },
-            })
+            setState((current) => salesDocumentsStateWithDetail(current, detail, defaultPageSize))
             openDetailSettled = true
           })
           .catch((cause) => {
@@ -384,7 +399,8 @@ export function SalesDocumentsPage({
         }),
       })
       if (!active) return
-      setState({ items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary })
+      const nextState = { items: result.items, total: result.total, page: result.page, pageSize: result.page_size, summary: result.summary }
+      setState(openedDetail ? salesDocumentsStateWithDetail(nextState, openedDetail, defaultPageSize) : nextState)
       if (routeFilters.open && openDetailPromise) {
         const openDocument = result.items.find((document) => document.code === routeFilters.open)
         if (openDocument) setLoadingDocumentId(openDocument.id)
@@ -393,6 +409,7 @@ export function SalesDocumentsPage({
             const detail = await openDetailPromise
             if (!active) return
             setSelected(detail)
+            setState((current) => salesDocumentsStateWithDetail(current, detail, defaultPageSize))
           }
         } catch {
           if (!active) return

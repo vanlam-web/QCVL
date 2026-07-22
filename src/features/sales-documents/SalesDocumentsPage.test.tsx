@@ -471,13 +471,19 @@ it('loads route-open invoice detail by code without waiting for the list id look
     render(<SalesDocumentsPage service={service} onOpenDashboard={vi.fn()} />)
 
     await waitFor(() => expect(service.getSalesDocument).toHaveBeenCalledWith('HD010985'))
+    expect(service.listSalesDocuments).toHaveBeenCalledWith(expect.objectContaining({
+      search: 'HD010985',
+      type: 'invoice',
+    }))
+    expect(screen.getByLabelText('Tìm chứng từ')).toHaveValue('HD010985')
     expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
     resolveList({
-      items: [listItem],
+      items: [],
       page: 1,
       page_size: 15,
-      total: 1,
+      total: 0,
     })
+    expect(await screen.findByRole('region', { name: /HD010985/ })).toBeInTheDocument()
   } finally {
     window.history.pushState({}, '', originalUrl)
   }
