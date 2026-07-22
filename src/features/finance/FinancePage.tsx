@@ -1381,7 +1381,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         <FinanceFiltersPanel
           search={cashbookSearch}
           onCreateVoucher={() => openVoucherForm('in')}
-          onCreateExpenseVoucher={() => openVoucherForm('out')}
           onExportCashbook={exportCashbook}
           onOpenImport={() => setCashbookImportOpen(true)}
           onSearchChange={changeCashbookSearch}

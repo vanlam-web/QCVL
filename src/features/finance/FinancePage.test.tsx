@@ -878,8 +878,8 @@ describe('FinancePage', () => {
     const voucherActions = screen.getByLabelText('Tác vụ sổ quỹ')
 
     expect(screen.getByRole('button', { name: 'Tạo phiếu thu chi' })).toBeInTheDocument()
-    expect(within(voucherActions).queryByRole('button', { name: '+ Phiếu thu' })).not.toBeInTheDocument()
-    expect(within(voucherActions).queryByRole('button', { name: '+ Phiếu chi' })).not.toBeInTheDocument()
+    expect(within(voucherActions).queryByRole('button', { name: 'Phiếu thu' })).not.toBeInTheDocument()
+    expect(within(voucherActions).queryByRole('button', { name: 'Phiếu chi' })).not.toBeInTheDocument()
     expect(within(voucherActions).getByRole('button', { name: 'Import' })).toBeInTheDocument()
     expect(within(voucherActions).getByRole('button', { name: 'Xuất file' })).toBeInTheDocument()
 

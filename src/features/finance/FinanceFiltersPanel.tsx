@@ -12,7 +12,6 @@ interface FinanceFiltersPanelProps {
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onSearchChange: (value: string) => void
   onCreateVoucher: () => void
-  onCreateExpenseVoucher: () => void
   onExportCashbook: () => void | Promise<void>
   onOpenImport: () => void
 }
@@ -22,7 +21,6 @@ export function FinanceFiltersPanel({
   onSubmit,
   onSearchChange,
   onCreateVoucher,
-  onCreateExpenseVoucher,
   onExportCashbook,
   onOpenImport,
 }: FinanceFiltersPanelProps) {
@@ -41,12 +39,6 @@ export function FinanceFiltersPanel({
         />
       </ManagementCompactToolbar>
       <div className="finance-voucher-actions" aria-label="Tác vụ sổ quỹ">
-        <button className="button button-secondary" type="button" onClick={onCreateVoucher}>
-          Phiếu thu
-        </button>
-        <button className="button button-secondary" type="button" onClick={onCreateExpenseVoucher}>
-          Phiếu chi
-        </button>
         <ManagementImportButton onClick={onOpenImport}>Import</ManagementImportButton>
         <button className="button button-secondary" type="button" onClick={() => void onExportCashbook()}>
           <Download aria-hidden="true" size={16} />
