@@ -3420,6 +3420,15 @@ async function getDevApiResponse(
         return { found: true, data: { items: [...groupsById.values()].sort((left, right) => left.name.localeCompare(right.name, 'vi', { numeric: true })) } }
       },
       listCustomers: async () => {
+        if (url.searchParams.get('search_context') === 'quick_pick') {
+          const repositoryCustomers = await repository.listCustomers?.({
+            organizationId: currentUser.organization.id,
+            userId: currentUser.user.id,
+            url,
+          })
+          const sortedCustomers = sortCustomersForRequest(repositoryCustomers ?? filterCustomers(url), url)
+          return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
+        }
         const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
         const userList = await repository.listUsers?.({
           organizationId: currentUser.organization.id,

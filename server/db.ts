@@ -1326,6 +1326,77 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
     async listCustomers(input) {
       await ensureImportedSnapshotTables(pool)
+      if (input.url.searchParams.get('search_context') === 'quick_pick') {
+        const { page, pageSize } = paginationFromUrl(input.url, 8)
+        const limit = Math.min(page * pageSize, 200)
+        const search = normalizeSearchText(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
+        const status = input.url.searchParams.get('status')
+        const values: unknown[] = [input.organizationId]
+        const where = ['cs.organization_id = $1']
+        const normalizedCode = customerSnapshotSearchSql("cs.data->>'code'")
+        const normalizedName = customerSnapshotSearchSql("cs.data->>'name'")
+        const normalizedHaystack = customerSnapshotSearchSql(`
+          concat_ws(' ',
+            cs.data->>'code',
+            cs.data->>'name',
+            cs.data->>'phone',
+            cs.data->>'tax_code',
+            cs.data->>'address',
+            cs.data->>'note'
+          )
+        `)
+
+        if (status && status !== 'all') {
+          values.push(status)
+          where.push(`coalesce(cs.data->>'status', 'active') = $${values.length}`)
+        }
+        if (search) {
+          values.push(`%${search}%`)
+          where.push(`${normalizedHaystack} like $${values.length}`)
+        }
+
+        let join = ''
+        let selectionCountOrder = '0'
+        let lastSelectedOrder = "'epoch'::timestamptz"
+        if (input.userId) {
+          await ensureSearchSelectionStatsTable(pool)
+          values.push(input.userId)
+          const userParam = values.length
+          join = `
+            left join search_selection_stats s
+              on s.organization_id = cs.organization_id
+             and s.user_id = $${userParam}
+             and s.entity_type = 'customer'
+             and s.entity_id = cs.data->>'id'
+          `
+          selectionCountOrder = 'coalesce(s.select_count, 0)'
+          lastSelectedOrder = "coalesce(s.last_selected_at, 'epoch'::timestamptz)"
+        }
+        const searchParam = search ? (() => {
+          values.push(search)
+          return `$${values.length}`
+        })() : "''"
+        values.push(limit)
+        const result = await pool.query(
+          `
+            select cs.data
+            from customer_snapshots cs
+            ${join}
+            where ${where.join('\n              and ')}
+            order by
+              ${selectionCountOrder} desc,
+              ${lastSelectedOrder} desc,
+              case when ${normalizedCode} = ${searchParam} then 1 else 0 end desc,
+              case when ${normalizedCode} like ${searchParam} || '%' then 1 else 0 end desc,
+              case when ${normalizedName} = ${searchParam} then 1 else 0 end desc,
+              case when ${normalizedName} like ${searchParam} || '%' then 1 else 0 end desc,
+              coalesce(nullif(cs.data->>'created_at', '')::timestamptz, cs.created_at) desc
+            limit $${values.length}
+          `,
+          values,
+        )
+        return result.rows.map((row) => ({ ...(row.data as CustomerListData), linked_supplier: null }))
+      }
       const [customerResult, supplierResult] = await Promise.all([
         pool.query(
         `
@@ -9240,6 +9311,10 @@ async function nextDeliveryPartnerCode(pool: pg.Pool, organizationId: string) {
   )
   const nextNumber = Number(result.rows[0]?.max_number ?? 0) + 1
   return `DVVC${String(nextNumber).padStart(6, '0')}`
+}
+
+function customerSnapshotSearchSql(expression: string) {
+  return `translate(lower(coalesce(${expression}, '')), ${sqlStringLiteral(vietnameseSearchFrom)}, ${sqlStringLiteral(vietnameseSearchTo)})`
 }
 
 function customerSnapshotMatches(url: URL, customer: CustomerListData) {

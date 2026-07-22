@@ -110,6 +110,26 @@ describe('createPgRepository product units', () => {
     ])
   })
 
+  test('bounds quick-pick customer search in SQL instead of loading all customer snapshots', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [], rowCount: 0 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: new URL('http://api.local/api/v1/customers?search=KH000384&status=active&page=1&page_size=8&search_context=quick_pick'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    const customerSnapshotQueries = sqlCalls.filter((sql) => sql.includes('from customer_snapshots'))
+    expect(customerSnapshotQueries).toHaveLength(1)
+    expect(customerSnapshotQueries[0]).toContain('limit')
+    expect(customerSnapshotQueries[0]).toContain("data->>'code'")
+    expect(customerSnapshotQueries[0]).toContain("data->>'name'")
+    expect(sqlCalls.some((sql) => sql.includes('from supplier_snapshots'))).toBe(false)
+  })
+
   test('does not deactivate existing product unit conversions when an import row has none', async () => {
     const { createPgRepository } = await import('./db')
     pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
