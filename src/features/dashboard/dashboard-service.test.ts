@@ -825,7 +825,7 @@ describe('dashboard-service', () => {
     }
   })
 
-  it('resolves product rank labels from catalog when list item snapshots are missing', async () => {
+  it('does not load the full product catalog when product rank snapshots are missing', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-17T09:00:00.000Z'))
 
@@ -892,8 +892,8 @@ describe('dashboard-service', () => {
     try {
       const data = await service.loadDashboardData()
 
-      expect(data.topProducts[0]).toMatchObject({ label: 'IB In bat', value: '6,4tr' })
-      expect(productService.listProducts).toHaveBeenCalledWith({ status: 'all', page: 1, page_size: 10000 })
+      expect(data.topProducts[0]).toMatchObject({ label: 'product-f5dc', value: '6,4tr' })
+      expect(productService.listProducts).not.toHaveBeenCalled()
       expect(getSalesDocument).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
