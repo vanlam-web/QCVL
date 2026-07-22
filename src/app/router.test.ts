@@ -22,7 +22,7 @@ const routePageModules = [
 
 describe('app route bundle boundaries', () => {
   test('loads route page modules lazily instead of bundling every page into the app shell', () => {
-    expect(routerSource).toContain("import { lazy")
+    expect(routerSource).toMatch(/import \{[^}]*\blazy\b[^}]*\} from 'react'/)
 
     for (const modulePath of routePageModules) {
       expect(routerSource).not.toMatch(new RegExp(`import .* from '${modulePath.replaceAll('/', '\\/')}'`))
@@ -44,5 +44,11 @@ describe('app route bundle boundaries', () => {
     expect(routerSource).toContain('location.pathname === appRoutes.purchaseReceiptCreate')
     expect(routerSource).toContain('createMode={effectiveCreateMode}')
     expect(routerSource).toContain("key={effectiveCreateMode ? 'purchase-receipts-create' : 'purchase-receipts-list'}")
+  })
+
+  test('recovers from stale route chunks instead of leaving a blank page', () => {
+    expect(routerSource).toContain('RouteLoadErrorBoundary')
+    expect(routerSource).toContain('Failed to fetch dynamically imported module')
+    expect(routerSource).toContain('window.location.reload()')
   })
 })

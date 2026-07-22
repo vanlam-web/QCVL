@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ForbiddenPage } from './ForbiddenPage'
 import { useAuth } from '../features/auth/auth-context'
-import { lazy, Suspense, useEffect, useMemo } from 'react'
+import { Component, lazy, Suspense, useEffect, useMemo, type ErrorInfo, type ReactNode } from 'react'
 import { createBrowserFoundationService } from '../features/users/foundation-service'
 import { createBrowserCatalogService } from '../features/catalog/catalog-service'
 import { createBrowserOrderService } from '../features/orders/order-service'
@@ -70,32 +70,82 @@ const AccountPage = lazy(() =>
   import('../features/account/AccountPage').then((module) => ({ default: module.AccountPage })),
 )
 
+const routeReloadSessionKey = 'qcvl-route-import-reload-url'
+
+function routeLoadErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function isRouteImportError(error: unknown) {
+  return /ChunkLoadError|Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(
+    routeLoadErrorMessage(error),
+  )
+}
+
+class RouteLoadErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+  state = { error: null as unknown }
+
+  static getDerivedStateFromError(error: unknown) {
+    return { error }
+  }
+
+  componentDidCatch(error: unknown, _errorInfo: ErrorInfo) {
+    if (!isRouteImportError(error) || typeof window === 'undefined') return
+    const currentUrl = window.location.href
+    if (window.sessionStorage.getItem(routeReloadSessionKey) === currentUrl) return
+    window.sessionStorage.setItem(routeReloadSessionKey, currentUrl)
+    window.location.reload()
+  }
+
+  render() {
+    if (this.state.error) {
+      const recoverLabel = isRouteImportError(this.state.error)
+        ? 'Không tải được màn hình. Trình duyệt có thể đang giữ bản cũ.'
+        : 'Không mở được màn hình.'
+      return (
+        <main role="alert">
+          <h1>QCVL</h1>
+          <p>{recoverLabel}</p>
+          <button className="button button-primary" type="button" onClick={() => window.location.reload()}>
+            Tải lại
+          </button>
+        </main>
+      )
+    }
+
+    return this.props.children
+  }
+}
+
 export function AppRoutes() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<BootstrapScreen />}>
-        <Routes>
-          <Route path={appRoutes.login} element={<LoginRoute />} />
-          <Route path={appRoutes.dashboard} element={<DashboardRoute />} />
-          <Route path={appRoutes.account} element={<AccountRoute />} />
-          <Route path={appRoutes.pos} element={<PosRoute />} />
-          <Route path={appRoutes.admin} element={<AdminRoute />} />
-          <Route path={appRoutes.products} element={<CatalogRoute />} />
-          <Route path={appRoutes.priceBook} element={<PriceBookRoute />} />
-          <Route path={appRoutes.customers} element={<CustomersRoute />} />
-          <Route path={appRoutes.suppliers} element={<SuppliersRoute />} />
-          <Route path={appRoutes.purchaseReceiptCreate} element={<PurchaseReceiptsRoute createMode />} />
-          <Route path={appRoutes.purchaseReceipts} element={<PurchaseReceiptsRoute />} />
-          <Route path={appRoutes.inventory} element={<InventoryRoute />} />
-          <Route path={appRoutes.finance} element={<FinanceRoute />} />
-          <Route path={appRoutes.reports} element={<ReportsRoute />} />
-          <Route path={appRoutes.salesDocuments} element={<SalesDocumentsRoute />} />
-          <Route path={appRoutes.quotePrint} element={<QuotePrintRoute />} />
-          <Route path={appRoutes.invoicePrint} element={<InvoicePrintRoute />} />
-          <Route path={appRoutes.forbidden} element={<ForbiddenRoute />} />
-          <Route path="*" element={<RootRedirect />} />
-        </Routes>
-      </Suspense>
+      <RouteLoadErrorBoundary>
+        <Suspense fallback={<BootstrapScreen />}>
+          <Routes>
+            <Route path={appRoutes.login} element={<LoginRoute />} />
+            <Route path={appRoutes.dashboard} element={<DashboardRoute />} />
+            <Route path={appRoutes.account} element={<AccountRoute />} />
+            <Route path={appRoutes.pos} element={<PosRoute />} />
+            <Route path={appRoutes.admin} element={<AdminRoute />} />
+            <Route path={appRoutes.products} element={<CatalogRoute />} />
+            <Route path={appRoutes.priceBook} element={<PriceBookRoute />} />
+            <Route path={appRoutes.customers} element={<CustomersRoute />} />
+            <Route path={appRoutes.suppliers} element={<SuppliersRoute />} />
+            <Route path={appRoutes.purchaseReceiptCreate} element={<PurchaseReceiptsRoute createMode />} />
+            <Route path={appRoutes.purchaseReceipts} element={<PurchaseReceiptsRoute />} />
+            <Route path={appRoutes.inventory} element={<InventoryRoute />} />
+            <Route path={appRoutes.finance} element={<FinanceRoute />} />
+            <Route path={appRoutes.reports} element={<ReportsRoute />} />
+            <Route path={appRoutes.salesDocuments} element={<SalesDocumentsRoute />} />
+            <Route path={appRoutes.quotePrint} element={<QuotePrintRoute />} />
+            <Route path={appRoutes.invoicePrint} element={<InvoicePrintRoute />} />
+            <Route path={appRoutes.forbidden} element={<ForbiddenRoute />} />
+            <Route path="*" element={<RootRedirect />} />
+          </Routes>
+        </Suspense>
+      </RouteLoadErrorBoundary>
     </BrowserRouter>
   )
 }
