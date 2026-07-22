@@ -1676,7 +1676,12 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         ...withReceipts,
         customer: {
           ...withReceipts.customer,
-          preferred_bill_template: preferred === 'a4' || preferred === 'k80' ? preferred : null,
+          preferred_bill_template:
+            preferred === 'a4' || preferred === 'k80'
+              ? preferred
+              : typeof preferred === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(preferred.trim())
+                ? preferred.trim()
+                : null,
         },
       }
     },

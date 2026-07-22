@@ -218,7 +218,7 @@ it('saves customer preference when staff changes template', async () => {
 
   await userEvent.click(await screen.findByRole('radio', { name: /Hóa đơn K80/ }))
 
-  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'k80')
+  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'tpl-invoice-k80')
   expect(await screen.findByRole('status')).toHaveTextContent('Đã nhớ mẫu cho khách')
 })
 

@@ -854,9 +854,15 @@ it('notifies parent to open invoice bill preview after successful checkout', asy
     />,
   )
 
+  expect(screen.getByRole('radiogroup', { name: 'Mẫu in' })).toBeInTheDocument()
+  await userEvent.click(screen.getByRole('radio', { name: /Hóa đơn K80/ }))
   await userEvent.click(screen.getByRole('button', { name: 'Tạo hóa đơn' }))
 
   await waitFor(() =>
-    expect(onCheckoutSuccess).toHaveBeenCalledWith({ kind: 'invoice', documentId: 'order-1' }),
+    expect(onCheckoutSuccess).toHaveBeenCalledWith({
+      kind: 'invoice',
+      documentId: 'order-1',
+      templateId: 'tpl-invoice-k80',
+    }),
   )
 })

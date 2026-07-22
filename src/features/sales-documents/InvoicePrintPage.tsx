@@ -4,14 +4,12 @@ import { displayPriceListName } from '../../lib/price-list-display'
 import { BillPrintToolbar } from './BillPrintToolbar'
 import {
   invoiceFooterText,
-  isBillTemplateId,
   isWalkInCustomerCode,
   listBillTemplatesForDocument,
   readOrganizationBillSettingsCache,
-  resolveBillTemplate,
   resolveNamedPrintTemplate,
+  resolvePreferredNamedTemplate,
   writeOrganizationBillSettingsCache,
-  type BillTemplateId,
   type OrganizationBillSettings,
 } from './bill-settings'
 import type { SalesDocumentService } from './sales-document-service'
@@ -36,16 +34,18 @@ export function InvoicePrintPage({
   onClose: () => void
   initialTemplate?: string | null
   loadBillSettings?: () => Promise<OrganizationBillSettings>
-  saveCustomerBillPreference?: (customerId: string, template: BillTemplateId) => Promise<void>
+  saveCustomerBillPreference?: (customerId: string, template: string) => Promise<void>
 }) {
   const [document, setDocument] = useState<SalesDocumentDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [settings, setSettings] = useState<OrganizationBillSettings>(() => readOrganizationBillSettingsCache())
-  const [templateId, setTemplateId] = useState<string>(() => {
-    const cached = readOrganizationBillSettingsCache()
-    const paper = isBillTemplateId(initialTemplate) ? initialTemplate : cached.default_bill_template
-    return resolveNamedPrintTemplate(cached, 'invoice', { paper }).id
-  })
+  const [templateId, setTemplateId] = useState<string>(() =>
+    resolvePreferredNamedTemplate({
+      settings: readOrganizationBillSettingsCache(),
+      documentType: 'invoice',
+      queryTemplate: initialTemplate,
+    }).id,
+  )
   const [preferenceStatus, setPreferenceStatus] = useState<string | null>(null)
 
   useEffect(() => {
@@ -66,13 +66,15 @@ export function InvoicePrintPage({
           nextSettings = writeOrganizationBillSettingsCache(remoteSettings)
           setSettings(nextSettings)
         }
-        const paper = resolveBillTemplate({
-          queryTemplate: initialTemplate,
-          customerCode: result.customer.code,
-          preferredTemplate: result.customer.preferred_bill_template,
-          orgDefault: nextSettings.default_bill_template,
-        })
-        setTemplateId(resolveNamedPrintTemplate(nextSettings, 'invoice', { paper }).id)
+        setTemplateId(
+          resolvePreferredNamedTemplate({
+            settings: nextSettings,
+            documentType: 'invoice',
+            queryTemplate: initialTemplate,
+            customerCode: result.customer.code,
+            preferredTemplate: result.customer.preferred_bill_template,
+          }).id,
+        )
       } catch (cause) {
         if (active) setError(formatApiError(cause, 'Không tải được hóa đơn.'))
       }
@@ -92,7 +94,7 @@ export function InvoicePrintPage({
     const customer = document?.customer
     if (!customer?.id || isWalkInCustomerCode(customer.code) || !saveCustomerBillPreference) return
     try {
-      await saveCustomerBillPreference(customer.id, named.paper_size)
+      await saveCustomerBillPreference(customer.id, named.id)
       setPreferenceStatus('Đã nhớ mẫu cho khách')
     } catch {
       setPreferenceStatus('Không lưu được mẫu cho khách')
@@ -180,10 +182,10 @@ export function InvoicePrintPage({
               <dt>Khách hàng</dt>
               <dd>{document.customer.name}</dd>
             </div>
-            {printContent.show_customer_phone ? (
+            {printContent.show_customer_phone && document.customer.phone ? (
               <div>
                 <dt>Điện thoại</dt>
-                <dd>{document.customer.phone ?? ''}</dd>
+                <dd>{document.customer.phone}</dd>
               </div>
             ) : null}
             {printContent.show_seller ? (

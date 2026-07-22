@@ -260,7 +260,7 @@ export function createCatalogService(api: CatalogApiRequester) {
       customer_group_id?: string | null
       customer_type?: string | null
       company_name?: string | null
-      preferred_bill_template?: 'a4' | 'k80' | null
+      preferred_bill_template?: string | null
     }) =>
       api.request<Customer>(`/api/v1/customers/${encodeURIComponent(id)}`, {
         method: 'PATCH',

@@ -457,7 +457,7 @@ describe('createHttpHandler', () => {
     const updateCustomer = vi.fn(async (input: {
       organizationId: string
       id: string
-      patch: { preferred_bill_template?: 'a4' | 'k80' | null }
+      patch: { preferred_bill_template?: string | null }
     }) => {
       if (input.id === 'customer-retail') {
         throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })

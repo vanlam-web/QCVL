@@ -67,6 +67,7 @@ import {
   type KiotVietInvoiceImportRow,
 } from './modules/sales/kiotviet-invoice-import.js'
 import {
+  isBillPreferenceValue,
   mergeOrganizationBillSettingsPatch,
   normalizeOrganizationBillSettingsData,
   type OrganizationBillSettingsData,
@@ -162,7 +163,7 @@ export interface SalesDocumentData {
   order_type: 'invoice' | 'quote'
   status: string
   created_at: string
-  customer: { id: string; code: string; name: string; phone: string | null; preferred_bill_template?: 'a4' | 'k80' | null }
+  customer: { id: string; code: string; name: string; phone: string | null; preferred_bill_template?: string | null }
   seller: { id: string; name: string }
   subtotal_amount: number
   discount_amount: number
@@ -330,7 +331,7 @@ export interface CustomerListData {
   kiotviet_net_sales?: number | null
   status?: string | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
-  preferred_bill_template?: 'a4' | 'k80' | null
+  preferred_bill_template?: string | null
 }
 export interface SupplierListData {
   id: string
@@ -637,7 +638,7 @@ export interface ServerRepository {
       customer_group_id?: string | null
       customer_type?: string | null
       company_name?: string | null
-      preferred_bill_template?: 'a4' | 'k80' | null
+      preferred_bill_template?: string | null
     }
   }): Promise<CustomerListData | null>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
@@ -3432,7 +3433,7 @@ async function getDevApiResponse(
           customer_group_id?: string | null
           customer_type?: string | null
           company_name?: string | null
-          preferred_bill_template?: 'a4' | 'k80' | null
+          preferred_bill_template?: string | null
         } = {}
         if (body.name !== undefined) patch.name = requiredString(body.name, 'name')
         if (body.code !== undefined) patch.code = requiredString(body.code, 'code')
@@ -3446,11 +3447,11 @@ async function getDevApiResponse(
         if ('preferred_bill_template' in body) {
           if (body.preferred_bill_template === null || body.preferred_bill_template === '') {
             patch.preferred_bill_template = null
-          } else if (body.preferred_bill_template === 'a4' || body.preferred_bill_template === 'k80') {
-            patch.preferred_bill_template = body.preferred_bill_template
+          } else if (isBillPreferenceValue(body.preferred_bill_template)) {
+            patch.preferred_bill_template = body.preferred_bill_template.trim()
           } else {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_template must be a4 or k80.', {
-              preferred_bill_template: ['preferred_bill_template must be a4 or k80.'],
+            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_template must be a4, k80, or a template id.', {
+              preferred_bill_template: ['preferred_bill_template must be a4, k80, or a template id.'],
             })
           }
         }
