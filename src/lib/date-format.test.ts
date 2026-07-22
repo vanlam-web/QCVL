@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dateTimeLocalInputValue, displayDateKey, formatKvDate, formatKvDateTime, parseDateTimeValue } from './date-format'
+import { dateTimeLocalInputValue, displayDateKey, formatKvDate, formatKvDateTime, parseDateTimeValue, parseKvDateTimeInputToIso } from './date-format'
 
 describe('date format', () => {
   it('formats date time like KiotViet without shifting the source clock', () => {
@@ -33,5 +33,11 @@ describe('date format', () => {
   it('parses ISO and KV datetime strings to the same timestamp basis', () => {
     expect(parseDateTimeValue('2026-07-14T14:18:00.000Z')).toBe(Date.parse('2026-07-14T14:18:00.000Z'))
     expect(parseDateTimeValue('14/07/2026 14:18')).toBe(Date.UTC(2026, 6, 14, 14, 18))
+  })
+
+  it('parses KV datetime input to the stored timestamp shape without timezone math', () => {
+    expect(parseKvDateTimeInputToIso('18/07/2026 4:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseKvDateTimeInputToIso('18/07/2026 04:15')).toBe('2026-07-18T04:15:00.000Z')
+    expect(parseKvDateTimeInputToIso('bad-date')).toBeNull()
   })
 })

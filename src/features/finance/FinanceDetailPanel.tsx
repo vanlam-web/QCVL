@@ -155,7 +155,7 @@ function CashbookLinkedDocuments({ entry }: { entry: CashbookEntryDetail }) {
                         )
                       : linkedDocument.code}
                   </td>
-                  <td>{financeDateText(entry.created_at)}</td>
+                  <td>{financeDateText(linkedDocument.createdAt ?? entry.created_at)}</td>
                   <td><MoneyText value={linkedDocument.totalAmount} /></td>
                   <td><MoneyText value={entry.direction === 'in' ? linkedDocument.remainingAmount : linkedDocument.settledBefore} /></td>
                   <td><MoneyText value={linkedDocument.allocatedAmount} /></td>

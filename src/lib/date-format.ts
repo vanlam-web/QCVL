@@ -69,6 +69,23 @@ export function parseDateTimeValue(value: DateInput) {
   return Number.isNaN(fallback) ? null : fallback
 }
 
+export function parseKvDateTimeInputToIso(value: string | null | undefined) {
+  const normalized = value?.trim()
+  if (!normalized) return null
+  const match = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/)
+  if (!match) return null
+  const [, day, month, year, hour, minute] = match
+  const dayNumber = Number(day)
+  const monthNumber = Number(month)
+  const hourNumber = Number(hour)
+  const minuteNumber = Number(minute)
+  if (monthNumber < 1 || monthNumber > 12) return null
+  if (dayNumber < 1 || dayNumber > 31) return null
+  if (hourNumber < 0 || hourNumber > 23) return null
+  if (minuteNumber < 0 || minuteNumber > 59) return null
+  return `${year}-${padDatePart(monthNumber)}-${padDatePart(dayNumber)}T${padDatePart(hourNumber)}:${minute}:00.000Z`
+}
+
 function dateParts(value: DateInput) {
   if (!value) return null
   if (value instanceof Date) {
