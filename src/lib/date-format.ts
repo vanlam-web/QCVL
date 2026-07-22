@@ -1,4 +1,4 @@
-type DateInput = Date | string | null | undefined
+export type DateInput = Date | string | null | undefined
 
 function padDatePart(value: number) {
   return String(value).padStart(2, '0')

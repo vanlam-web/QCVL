@@ -1513,7 +1513,7 @@ describe('FinancePage', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PCTM000004' }))
 
     const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PCTM000004' })
-    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(new Date(manualVoucherDetail.created_at)))
+    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(manualVoucherDetail.created_at))
     expect(within(editDialog).getByRole('combobox', { name: 'Phương thức TT' })).toHaveValue('cash')
     expect(within(editDialog).getByLabelText('Ghi chú')).toHaveValue('Hoa, trái cây ông địa')
     expect(within(editDialog).queryByRole('button', { name: 'Số tài khoản' })).not.toBeInTheDocument()
