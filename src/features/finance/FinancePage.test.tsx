@@ -5,7 +5,6 @@ import { FinancePage } from './FinancePage'
 import { dateTimeInputText } from './finance-filters'
 import type { FinanceService } from './finance-service'
 import type {
-  CashbookBalance,
   CashbookEntry,
   CashbookEntryDetail,
   CashbookVoucher,
@@ -17,11 +16,6 @@ import type {
 const accounts: FinanceAccount[] = [
   { id: 'cash-1', code: 'CASH', name: 'Quỹ tiền mặt', account_type: 'cash', is_default_cash: true, is_active: true },
   { id: 'bank-1', code: 'MB01', name: 'MB Bank', account_type: 'bank', is_default_cash: false, is_active: true },
-]
-
-const balances: CashbookBalance[] = [
-  { finance_account_id: 'cash-1', code: 'CASH', name: 'Quỹ tiền mặt', account_type: 'cash', balance: 200000 },
-  { finance_account_id: 'bank-1', code: 'MB01', name: 'MB Bank', account_type: 'bank', balance: 300000 },
 ]
 
 const noCounterparty = { type: 'none' as const, name: null, phone: null }
@@ -282,7 +276,7 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
       code: 'PCTM000001.01',
       amount: 50000,
     })),
-    listCashbookBalances: vi.fn(async () => ({ items: balances })),
+    listCashbookBalances: vi.fn(async () => ({ items: [] })),
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
     listVoucherCounterparties: vi.fn(async (input) => {
