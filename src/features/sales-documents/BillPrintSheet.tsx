@@ -1,14 +1,13 @@
 import { displayPriceListName } from '../../lib/price-list-display'
 import { vietnameseMoneyInWords } from '../../lib/money-words-vi'
-import { buildVietQrImageUrl } from '../../lib/vietqr'
+import { buildVietQrImageUrl, displayVietnamBankLabel } from '../../lib/vietqr'
 import type { BillPrintTemplate, OrganizationBillSettings } from './bill-settings'
-import { invoiceFooterText, quoteFooterText } from './bill-settings'
+import { formatBillPlaceDate, invoiceFooterText, quoteFooterText } from './bill-settings'
 import type { SalesDocumentDetail } from './types'
 import {
   salesDocumentLineDimensionText,
   salesDocumentMeasureText,
   salesDocumentMoneyText,
-  salesDocumentQuoteDateText,
   salesDocumentQuoteLineDimensionText,
 } from './sales-document-presenter'
 
@@ -25,13 +24,17 @@ export function BillPrintSheet({
   bankAccount = null,
 }: {
   document: SalesDocumentDetail
-  settings: Pick<OrganizationBillSettings, 'shop_name' | 'shop_address' | 'shop_phone' | 'logo_data_url'>
+  settings: Pick<
+    OrganizationBillSettings,
+    'shop_name' | 'shop_address' | 'shop_phone' | 'logo_data_url' | 'print_place'
+  >
   printContent: BillPrintTemplate
   bankAccount?: BillPrintBankAccount | null
 }) {
   const isQuote = document.order_type === 'quote'
   const remainingDebt = Math.max(0, document.total_amount - document.paid_amount)
   const surplus = Math.max(0, document.paid_amount - document.total_amount)
+  // Nợ khách hiện tại từ master (không đổi công thức sổ nợ). Nợ cũ ≈ tổng nợ − còn lại chứng từ này.
   const customerDebt = typeof document.customer.total_debt_amount === 'number'
     ? Math.max(0, document.customer.total_debt_amount)
     : null
@@ -41,6 +44,7 @@ export function BillPrintSheet({
     isQuote ? document.total_amount : (totalDebt ?? (remainingDebt || document.total_amount)),
   )
   const footer = isQuote ? quoteFooterText(printContent) : invoiceFooterText(printContent)
+  const bankLabel = bankAccount ? displayVietnamBankLabel(bankAccount.bankName) : ''
   const qrUrl = bankAccount
     ? buildVietQrImageUrl({
         bankName: bankAccount.bankName,
@@ -50,10 +54,7 @@ export function BillPrintSheet({
         description: document.code,
       })
     : null
-  const created = new Date(document.created_at)
-  const placeDate = Number.isNaN(created.getTime())
-    ? ''
-    : `Ngày ${String(created.getDate()).padStart(2, '0')} tháng ${String(created.getMonth() + 1).padStart(2, '0')} năm ${created.getFullYear()}`
+  const placeDate = formatBillPlaceDate(document.created_at, settings.print_place)
 
   return (
     <article
@@ -103,12 +104,8 @@ export function BillPrintSheet({
             {printContent.show_seller ? <>NV: {document.seller.name}</> : null}
             {printContent.show_seller && printContent.show_price_list ? ' · ' : null}
             {printContent.show_price_list ? <>Bảng giá: {displayPriceListName(document.price_list)}</> : null}
-            {' · '}
-            {salesDocumentQuoteDateText(document.created_at)}
           </p>
-        ) : (
-          <p className="bill-print-customer-meta">{salesDocumentQuoteDateText(document.created_at)}</p>
-        )}
+        ) : null}
       </section>
 
       <table
@@ -158,7 +155,7 @@ export function BillPrintSheet({
           <div className="bill-print-payment">
             {qrUrl ? <img alt="QR chuyển khoản" className="bill-print-qr" src={qrUrl} /> : null}
             <p>
-              <strong>{bankAccount.bankName}:</strong> {bankAccount.accountNumber}
+              <strong>{bankLabel || bankAccount.bankName}:</strong> {bankAccount.accountNumber}
             </p>
             {bankAccount.accountHolder ? <p>{bankAccount.accountHolder}</p> : null}
           </div>

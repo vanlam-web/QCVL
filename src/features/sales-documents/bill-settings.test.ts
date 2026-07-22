@@ -3,6 +3,7 @@ import {
   billTemplateLabel,
   billTemplateSlotCode,
   defaultOrganizationBillSettings,
+  formatBillPlaceDate,
   invoiceFooterText,
   isBillPreferenceValue,
   isBillTemplateId,
@@ -64,7 +65,32 @@ describe('organization bill settings', () => {
       footer_note: 'Cảm ơn quý khách',
     })
     expect(invoiceFooterText(withFooter)).toBe('Cảm ơn quý khách')
-    expect(quoteFooterText(normalizeOrganizationBillSettings(defaultOrganizationBillSettings))).toMatch(/báo giá/i)
+    const quote = normalizeOrganizationBillSettings(defaultOrganizationBillSettings).templates.find(
+      (item) => item.document_type === 'quote' && item.paper_size === 'a4',
+    )!
+    expect(quoteFooterText(quote)).toMatch(/báo giá/i)
+  })
+
+  it('seeds A4 templates to match shop KiotViet bill defaults', () => {
+    const settings = normalizeOrganizationBillSettings(defaultOrganizationBillSettings)
+    expect(settings.quote_title).toBe('BẢNG BÁO GIÁ')
+    expect(settings.print_place).toBe('')
+    const invoiceA4 = settings.templates.find((item) => item.id === 'tpl-invoice-a4')
+    expect(invoiceA4?.show_product_code).toBe(false)
+    expect(invoiceA4?.show_discount).toBe(false)
+    expect(invoiceA4?.show_signatures).toBe(true)
+    expect(invoiceA4?.show_price_list).toBe(false)
+    expect(invoiceA4?.footer_note).toMatch(/chưa bao gồm thuế/i)
+    const invoiceK80 = settings.templates.find((item) => item.id === 'tpl-invoice-k80')
+    expect(invoiceK80?.show_product_code).toBe(true)
+    expect(invoiceK80?.show_signatures).toBe(false)
+  })
+
+  it('formats place + date like KV bill footer', () => {
+    expect(formatBillPlaceDate('2026-07-21T10:00:00Z', 'TP. Hồ Chí Minh')).toMatch(
+      /TP\. Hồ Chí Minh, ngày \d{2} tháng \d{2} năm 2026/,
+    )
+    expect(formatBillPlaceDate('2026-07-01T03:30:00Z', '')).toMatch(/^Ngày \d{2} tháng \d{2} năm 2026$/)
   })
 
   it('detects walk-in customer code', () => {
@@ -176,7 +202,8 @@ describe('organization bill settings', () => {
     })
     const invoice = settings.templates.find((item) => item.document_type === 'invoice')!
     expect(invoice.show_logo).toBe(true)
-    expect(invoice.show_signatures).toBe(false)
+    // A4 mặc định bật chữ ký khi mẫu cũ không lưu field này.
+    expect(invoice.show_signatures).toBe(true)
     expect(invoice.show_payment_summary).toBe(true)
     expect(invoice.header_note).toBe('')
     expect(invoice.show_discount).toBe(false)

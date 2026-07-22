@@ -216,6 +216,7 @@ export function FoundationAdminPage({
       shop_name: settings.shop_name,
       shop_address: settings.shop_address,
       shop_phone: settings.shop_phone,
+      print_place: settings.print_place,
       logo_data_url: settings.logo_data_url,
     }
   })
@@ -232,6 +233,7 @@ export function FoundationAdminPage({
       shop_name: saved.shop_name,
       shop_address: saved.shop_address,
       shop_phone: saved.shop_phone,
+      print_place: saved.print_place,
       logo_data_url: saved.logo_data_url,
     })
     return saved
@@ -667,6 +669,17 @@ export function FoundationAdminPage({
                   name="shop_phone"
                   value={shopDraft.shop_phone}
                   onChange={(event) => setShopDraft((current) => ({ ...current, shop_phone: event.target.value }))}
+                />
+              </label>
+              <label>
+                Địa danh trên bill
+                <span className="admin-settings-field-hint">Hiện trước dòng ngày cuối trang — ví dụ: TP. Hồ Chí Minh</span>
+                <input
+                  disabled={billSettingsLoading}
+                  name="print_place"
+                  placeholder="TP. Hồ Chí Minh"
+                  value={shopDraft.print_place}
+                  onChange={(event) => setShopDraft((current) => ({ ...current, print_place: event.target.value }))}
                 />
               </label>
               <div className="admin-settings-logo-row">

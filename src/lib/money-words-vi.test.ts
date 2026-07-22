@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { vietnameseMoneyInWords } from './money-words-vi'
-import { buildVietQrImageUrl, resolveVietnamBankBin } from './vietqr'
+import { buildVietQrImageUrl, displayVietnamBankLabel, resolveVietnamBankBin } from './vietqr'
 
 describe('vietnameseMoneyInWords', () => {
   it('formats common bill totals', () => {
@@ -13,10 +13,17 @@ describe('vietnameseMoneyInWords', () => {
 describe('vietqr helpers', () => {
   it('resolves MB Bank bin and builds image url', () => {
     expect(resolveVietnamBankBin('MB Bank')).toBe('970422')
+    expect(resolveVietnamBankBin('MBBank')).toBe('970422')
     expect(buildVietQrImageUrl({
       bankName: 'MB Bank',
       accountNumber: '0947900909',
       accountHolder: 'Van Viet Phuong Lam',
     })).toContain('970422-0947900909-compact2.png')
+  })
+
+  it('prints readable bank labels on bills', () => {
+    expect(displayVietnamBankLabel('MBBank')).toBe('MB Bank')
+    expect(displayVietnamBankLabel('MB Bank')).toBe('MB Bank')
+    expect(displayVietnamBankLabel('Tài khoản riêng')).toBe('Tài khoản riêng')
   })
 })

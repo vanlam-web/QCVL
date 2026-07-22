@@ -65,13 +65,14 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
         shop_name: 'QCVL',
         shop_address: 'Xưởng in và thi công quảng cáo',
         shop_phone: '',
+        print_place: '',
         default_bill_template: 'a4',
         invoice_title: 'HÓA ĐƠN BÁN HÀNG',
-        quote_title: 'BÁO GIÁ',
+        quote_title: 'BẢNG BÁO GIÁ',
         footer_note: '',
-        show_product_code: true,
+        show_product_code: false,
         show_unit: true,
-        show_discount: true,
+        show_discount: false,
         logo_data_url: null,
       }),
     ),
@@ -80,13 +81,14 @@ function makeService(overrides: Partial<FoundationService> = {}): FoundationServ
         shop_name: input.shop_name ?? 'QCVL',
         shop_address: input.shop_address ?? 'Xưởng in và thi công quảng cáo',
         shop_phone: input.shop_phone ?? '',
+        print_place: input.print_place ?? '',
         default_bill_template: input.default_bill_template ?? 'a4',
         invoice_title: input.invoice_title ?? 'HÓA ĐƠN BÁN HÀNG',
-        quote_title: input.quote_title ?? 'BÁO GIÁ',
+        quote_title: input.quote_title ?? 'BẢNG BÁO GIÁ',
         footer_note: input.footer_note ?? '',
-        show_product_code: input.show_product_code ?? true,
+        show_product_code: input.show_product_code ?? false,
         show_unit: input.show_unit ?? true,
-        show_discount: input.show_discount ?? true,
+        show_discount: input.show_discount ?? false,
         logo_data_url: input.logo_data_url !== undefined ? input.logo_data_url : null,
         templates: input.templates,
       }),
@@ -601,12 +603,15 @@ it('saves shop info and default bill template from Thiết lập panels', async 
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Địa chỉ' }), '12 Nguyễn Trãi')
   await userEvent.clear(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }))
   await userEvent.type(within(shopPanel).getByRole('textbox', { name: 'Điện thoại' }), '0909111222')
+  await userEvent.clear(within(shopPanel).getByRole('textbox', { name: /Địa danh trên bill/ }))
+  await userEvent.type(within(shopPanel).getByRole('textbox', { name: /Địa danh trên bill/ }), 'TP. Hồ Chí Minh')
   await userEvent.click(within(shopPanel).getByRole('button', { name: 'Lưu thông tin cửa hàng' }))
   await waitFor(() =>
     expect(service.updateOrganizationBillSettings).toHaveBeenCalledWith({
       shop_name: 'In ảnh Văn Lâm',
       shop_address: '12 Nguyễn Trãi',
       shop_phone: '0909111222',
+      print_place: 'TP. Hồ Chí Minh',
       logo_data_url: null,
     }),
   )
@@ -629,6 +634,7 @@ it('saves shop info and default bill template from Thiết lập panels', async 
             name: 'Hóa đơn K80',
             paper_size: 'k80',
             title: 'PHIẾU BÁN HÀNG',
+            // K80 mặc định bật mã hàng; click checkbox → tắt.
             show_product_code: false,
             is_default: true,
           }),
