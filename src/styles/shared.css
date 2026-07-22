@@ -11,7 +11,7 @@
 .app-topbar {
   position: sticky;
   top: 0;
-  z-index: var(--z-shell);
+  z-index: calc(var(--z-shell) + 20);
   display: flex;
   justify-content: center;
   border-bottom: 1px solid var(--color-border);
@@ -98,7 +98,7 @@
 
 .shell-user-actions {
   position: relative;
-  z-index: calc(var(--z-shell) - 1);
+  z-index: 1;
   display: flex;
   align-items: center;
   gap: var(--space-1);

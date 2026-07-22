@@ -63,11 +63,13 @@ function normalizeSelector(selector: string) {
 it('keeps shell account controls inside the topbar quick actions', () => {
   expect(cssRule('.app-shell')).toContain('grid-template-rows: auto minmax(0, 1fr)')
   expect(cssRule('.app-topbar')).toContain('justify-content: center')
+  expect(cssRule('.app-topbar')).toContain('z-index: calc(var(--z-shell) + 20)')
   expect(cssRule('.app-topbar-inner')).toContain('width: min(100%, 112rem)')
   expect(cssRule('.app-topbar-inner')).toContain('min-width: 0')
   expect(cssRule('.shell-action-rail')).toBe('')
   expect(cssRule('.shell-quick-actions')).toContain('display: flex')
   expect(cssRule('.shell-quick-actions')).toContain('padding: 0')
+  expect(cssRule('.shell-user-actions')).toContain('z-index: 1')
   expect(cssRule('.management-page-header')).not.toContain('padding-right')
 })
 
