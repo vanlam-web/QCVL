@@ -7,6 +7,7 @@ export type HttpErrorCode =
   | 'RESOURCE_CONFLICT'
   | 'RESOURCE_NOT_FOUND'
   | 'RATE_LIMITED'
+  | 'NOT_IMPLEMENTED'
   | 'INTERNAL_ERROR'
 
 export class HttpError extends Error {
