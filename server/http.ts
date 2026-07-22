@@ -2289,7 +2289,14 @@ function makeOrderFromCheckout(body: {
     stock_qty_per_sale_unit?: number
     discount_amount?: number
   }>
-  payment?: { cash_amount?: number; bank_amount?: number; old_debt_payment_amount?: number; change_returned_amount?: number; bank_account_id?: string | null }
+  payment?: {
+    cash_amount?: number
+    bank_amount?: number
+    old_debt_payment_amount?: number
+    old_debt_allocations?: Array<{ order_id?: string; order_code?: string; allocated_amount?: number }>
+    change_returned_amount?: number
+    bank_account_id?: string | null
+  }
 }, orderType: 'invoice' | 'quote', customer: Pick<CustomerListData, 'id' | 'code' | 'name' | 'phone'>, code: string, seller: { id: string; name: string }) {
   const createdAt = readCheckoutCreatedAt(body.created_at) ?? runtimeIso()
   const subtotal = (body.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0) * Number(item.unit_price ?? 0), 0)
@@ -2544,6 +2551,20 @@ function splitCheckoutPaymentForCurrentOrderAndOldDebt(payment: { cash_amount?: 
     oldDebtBankAmount,
     oldDebtPaymentAmount: oldDebtCashAmount + oldDebtBankAmount,
   }
+}
+
+function checkoutOldDebtAllocations(payment: {
+  old_debt_allocations?: Array<{ order_id?: string; order_code?: string; allocated_amount?: number }>
+} = {}) {
+  return Array.isArray(payment.old_debt_allocations)
+    ? payment.old_debt_allocations
+        .map((allocation) => ({
+          order_id: String(allocation.order_id ?? ''),
+          order_code: String(allocation.order_code ?? ''),
+          allocated_amount: Math.max(Number(allocation.allocated_amount ?? 0), 0),
+        }))
+        .filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+    : undefined
 }
 
 async function collectCustomerDebt(request: Request) {
@@ -4167,6 +4188,7 @@ async function getDevApiResponse(
             customerId: body.customer_id,
             amount: oldDebtPayment.oldDebtPaymentAmount,
             createdAt: order.created_at,
+            allocations: checkoutOldDebtAllocations(body.payment),
             cashAmount: oldDebtPayment.oldDebtCashAmount,
             bankAmount: oldDebtPayment.oldDebtBankAmount,
             bankAccountId: body.payment?.bank_account_id ?? null,

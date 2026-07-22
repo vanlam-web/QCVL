@@ -55,6 +55,11 @@ export interface CheckoutInput {
     bank_amount: number
     bank_account_id?: string | null
     old_debt_payment_amount: number
+    old_debt_allocations?: Array<{
+      order_id: string
+      order_code: string
+      allocated_amount: number
+    }>
     change_returned_amount: number
   }
 }
@@ -217,6 +222,19 @@ export interface CustomerDebtDetail {
     source_type?: string
     source_id?: string | null
   }>
+}
+
+export interface CustomerOpenDebtResponse {
+  items: Array<{
+    order_id: string
+    order_code: string
+    created_at: string
+    total_amount: number
+    paid_amount: number
+    remaining_debt: number
+    allocated_amount: number
+  }>
+  has_more: boolean
 }
 
 export interface RecentPriceList {
