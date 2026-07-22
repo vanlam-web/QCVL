@@ -386,6 +386,40 @@ export function isBillPreferenceValue(value: string | null | undefined): value i
   return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(trimmed)
 }
 
+export function normalizeBillPreferenceValue(value: string | null | undefined): string | null {
+  if (!isBillPreferenceValue(value)) return null
+  return value.trim()
+}
+
+/** Danh sách mẫu bill theo khách (SoT §4). Legacy 1 giá trị → mảng 1 phần tử. */
+export function normalizeBillPreferenceList(value: unknown): string[] {
+  const raw = Array.isArray(value)
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? value.split(/[,|]/).map((part) => part.trim())
+      : []
+  const seen = new Set<string>()
+  const result: string[] = []
+  for (const item of raw) {
+    const normalized = normalizeBillPreferenceValue(typeof item === 'string' ? item : null)
+    if (!normalized || seen.has(normalized)) continue
+    seen.add(normalized)
+    result.push(normalized)
+    if (result.length >= maxBillTemplatesPerDocumentType) break
+  }
+  return result
+}
+
+export function resolveCustomerBillPreferenceIds(input: {
+  preferredTemplates?: string[] | null
+  preferredTemplate?: string | null
+}): string[] {
+  const list = normalizeBillPreferenceList(input.preferredTemplates)
+  if (list.length > 0) return list
+  const one = normalizeBillPreferenceValue(input.preferredTemplate)
+  return one ? [one] : []
+}
+
 export function resolveBillTemplate(input: {
   queryTemplate?: string | null
   customerCode?: string | null
@@ -399,13 +433,14 @@ export function resolveBillTemplate(input: {
   return input.orgDefault
 }
 
-/** Resolve named template: query (?template=id|a4) → customer preference (id|paper) → org default. */
+/** Resolve named template: query (?template=id|a4) → customer preference (primary / list) → org default. */
 export function resolvePreferredNamedTemplate(input: {
   settings: OrganizationBillSettings
   documentType: BillDocumentType
   queryTemplate?: string | null
   customerCode?: string | null
   preferredTemplate?: string | null
+  preferredTemplates?: string[] | null
 }): BillPrintTemplate {
   const query = input.queryTemplate?.trim() || null
   if (query && isBillPreferenceValue(query)) {
@@ -414,15 +449,19 @@ export function resolvePreferredNamedTemplate(input: {
       paper: isBillTemplateId(query) ? query : null,
     })
   }
-  const preferred =
-    !isWalkInCustomerCode(input.customerCode) && isBillPreferenceValue(input.preferredTemplate)
-      ? input.preferredTemplate.trim()
-      : null
-  if (preferred) {
-    return resolveNamedPrintTemplate(input.settings, input.documentType, {
-      templateId: preferred,
-      paper: isBillTemplateId(preferred) ? preferred : null,
+  if (!isWalkInCustomerCode(input.customerCode)) {
+    const ids = resolveCustomerBillPreferenceIds({
+      preferredTemplates: input.preferredTemplates,
+      preferredTemplate: input.preferredTemplate,
     })
+    const primary = normalizeBillPreferenceValue(input.preferredTemplate)
+    const preferred = primary && ids.includes(primary) ? primary : ids[0] ?? null
+    if (preferred) {
+      return resolveNamedPrintTemplate(input.settings, input.documentType, {
+        templateId: preferred,
+        paper: isBillTemplateId(preferred) ? preferred : null,
+      })
+    }
   }
   return resolveNamedPrintTemplate(input.settings, input.documentType, {
     paper: input.settings.default_bill_template,

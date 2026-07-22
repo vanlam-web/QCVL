@@ -3794,7 +3794,7 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 }
 
 .quote-print-toolbar .bill-template-card.is-selected,
-.quote-print-toolbar .bill-named-template-card.is-selected {
+.quote-print-toolbar .bill-named-template-card.is-active {
   border-color: #1f2937;
   box-shadow: 0 0 0 1px #1f2937;
   background: #f8fafc;
@@ -3838,10 +3838,47 @@ th[aria-sort='descending'] .management-sort-header-indicator {
   cursor: pointer;
 }
 
-.bill-named-template-card input {
+.bill-named-template-card input[type='radio'] {
   position: absolute;
   opacity: 0;
   pointer-events: none;
+}
+
+.bill-named-template-card input.bill-named-template-check {
+  position: static;
+  opacity: 1;
+  pointer-events: auto;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
+  flex: 0 0 auto;
+  accent-color: #1f2937;
+  cursor: pointer;
+}
+
+.bill-named-template-activate {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bill-named-template-card.is-active {
+  border-color: #1f2937;
+  box-shadow: 0 0 0 1px #1f2937;
+  background: #f8fafc;
+}
+
+.bill-named-template-card.is-selected:not(.is-active) {
+  border-color: #94a3b8;
+  background: #f8fafc;
 }
 
 .bill-named-template-slot {

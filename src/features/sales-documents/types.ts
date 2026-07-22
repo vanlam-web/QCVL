@@ -12,6 +12,7 @@ export interface SalesDocumentListItem {
     name: string
     phone: string | null
     preferred_bill_template?: string | null
+    preferred_bill_templates?: string[] | null
     address?: string | null
     total_debt_amount?: number | null
   }

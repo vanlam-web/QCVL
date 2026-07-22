@@ -11,7 +11,10 @@ import {
 import { hashPassword, type AuthUserRow, type CashbookEntryData, type CurrentUserData, type CustomerListData, type DeliveryPartnerListItemData, type EmployeeListItemData, type FinanceAccountData, type ProductGroupListData, type ProductListData, type PurchaseReceiptData, type SalesDocumentData, type SalesDocumentPaymentReceiptData, type ServerRepository, type StockMovementData, type StocktakeDetailData, type StocktakeListData, type SupplierListData, type UserListItemData } from './http.js'
 import {
   mergeOrganizationBillSettingsPatch,
+  normalizeBillPreferenceValue,
   normalizeOrganizationBillSettingsData,
+  resolveCustomerBillPreferenceIds,
+  syncCustomerBillPreferencePatch,
 } from './bill-settings.js'
 
 const organization = { id: 'org-dev-memory', code: 'DEV', name: 'QCVL Dev' }
@@ -1229,12 +1232,21 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const [key, customer] = entry
       if (
         (customer.code ?? '').trim().toLowerCase() === 'khachle'
-        && input.patch.preferred_bill_template !== undefined
+        && (input.patch.preferred_bill_template !== undefined || input.patch.preferred_bill_templates !== undefined)
       ) {
         throw Object.assign(new Error('WALK_IN_BILL_PREFERENCE_FORBIDDEN'), { code: 'WALK_IN_BILL_PREFERENCE_FORBIDDEN' })
       }
       const groupId = input.patch.customer_group_id === undefined ? customer.customer_group_id : input.patch.customer_group_id
       const groupName = groupId ? customerGroupNamesById.get(groupId) ?? customer.customer_group?.name ?? groupId : null
+      const billPreference =
+        input.patch.preferred_bill_template !== undefined || input.patch.preferred_bill_templates !== undefined
+          ? syncCustomerBillPreferencePatch({
+              preferred_bill_template: input.patch.preferred_bill_template,
+              preferred_bill_templates: input.patch.preferred_bill_templates,
+              currentTemplate: customer.preferred_bill_template ?? null,
+              currentTemplates: customer.preferred_bill_templates ?? null,
+            })
+          : null
       const updated = hydrateCustomerLinkedSupplier(hydrateCustomerCreator({
         ...customer,
         code: input.patch.code ?? customer.code,
@@ -1247,10 +1259,12 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         customer_group: groupId && groupName ? { id: groupId, code: groupName, name: groupName } : null,
         customer_type: input.patch.customer_type === undefined ? customer.customer_type : input.patch.customer_type,
         company_name: input.patch.company_name === undefined ? customer.company_name : input.patch.company_name,
-        preferred_bill_template:
-          input.patch.preferred_bill_template !== undefined
-            ? input.patch.preferred_bill_template
-            : customer.preferred_bill_template ?? null,
+        preferred_bill_template: billPreference
+          ? billPreference.preferred_bill_template
+          : customer.preferred_bill_template ?? null,
+        preferred_bill_templates: billPreference
+          ? billPreference.preferred_bill_templates
+          : customer.preferred_bill_templates ?? null,
       }, users), suppliers)
       if (updated.code !== key) customers.delete(key)
       customers.set(updated.code, updated)
@@ -1721,17 +1735,25 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       const withReceipts = hydrateSalesDocumentPaymentReceipts({ ...hydratedDocument, items: hydratedItems }, hydratedCashbookEntries)
       const liveCustomer = resolveDocumentCustomer(withReceipts, customers)
       const walkIn = (liveCustomer?.code ?? withReceipts.customer.code ?? '').trim().toLowerCase() === 'khachle'
-      const preferred = !walkIn && liveCustomer ? liveCustomer.preferred_bill_template ?? null : null
+      const preferredIds = !walkIn && liveCustomer
+        ? resolveCustomerBillPreferenceIds({
+            preferred_bill_templates: liveCustomer.preferred_bill_templates,
+            preferred_bill_template: liveCustomer.preferred_bill_template,
+          })
+        : []
+      const preferredPrimary = !walkIn && liveCustomer
+        ? normalizeBillPreferenceValue(liveCustomer.preferred_bill_template ?? null)
+        : null
+      const preferred =
+        preferredPrimary && preferredIds.includes(preferredPrimary)
+          ? preferredPrimary
+          : preferredIds[0] ?? null
       return {
         ...withReceipts,
         customer: {
           ...withReceipts.customer,
-          preferred_bill_template:
-            preferred === 'a4' || preferred === 'k80'
-              ? preferred
-              : typeof preferred === 'string' && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,79}$/.test(preferred.trim())
-                ? preferred.trim()
-                : null,
+          preferred_bill_template: preferred,
+          preferred_bill_templates: preferredIds,
           address: !walkIn && liveCustomer?.address?.trim() ? liveCustomer.address.trim() : null,
           total_debt_amount:
             !walkIn && typeof liveCustomer?.total_debt_amount === 'number'

@@ -271,8 +271,10 @@ export interface Customer {
   kiotviet_current_debt?: number | null
   kiotviet_net_sales?: number | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
-  /** Named template id or paper size (`a4` | `k80`). */
+  /** Named template id or paper size (`a4` | `k80`) — mẫu đang xem gần nhất. */
   preferred_bill_template?: string | null
+  /** SoT §4 — nhiều mẫu bill thường dùng. */
+  preferred_bill_templates?: string[] | null
 }
 
 export interface CustomerListResponse {

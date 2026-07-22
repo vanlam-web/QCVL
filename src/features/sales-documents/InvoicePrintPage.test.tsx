@@ -166,7 +166,7 @@ it('uses saved shop header and switches between A4 and K80 templates', async () 
   expect(screen.getByText(/Điện thoại:\s*0909111222/)).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-a4')
 
-  await userEvent.click(screen.getByRole('radio', { name: /Hóa đơn K80/ }))
+  await userEvent.click(screen.getByRole('button', { name: /Xem mẫu Hóa đơn K80/ }))
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
 })
 
@@ -177,7 +177,7 @@ it('honors initialTemplate when opening the bill', async () => {
 
   expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-k80')
-  expect(screen.getByRole('radio', { name: /Hóa đơn K80/ })).toBeChecked()
+  expect(screen.getByRole('button', { name: /Xem mẫu Hóa đơn K80/ })).toHaveAttribute('aria-current', 'true')
 })
 
 it('uses customer preferred bill template when query template is absent', async () => {
@@ -223,10 +223,32 @@ it('saves customer preference when staff changes template', async () => {
     />,
   )
 
-  await userEvent.click(await screen.findByRole('radio', { name: /Hóa đơn K80/ }))
+  await userEvent.click(await screen.findByRole('button', { name: /Xem mẫu Hóa đơn K80/ }))
 
-  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', 'tpl-invoice-k80')
-  expect(await screen.findByRole('status')).toHaveTextContent('Đã nhớ mẫu cho khách')
+  expect(saveCustomerBillPreference).toHaveBeenCalledWith('cus-1', {
+    preferred_bill_template: 'tpl-invoice-k80',
+    preferred_bill_templates: expect.arrayContaining(['tpl-invoice-a4', 'tpl-invoice-k80']),
+  })
+  expect(await screen.findByRole('status')).toHaveTextContent(/Đã nhớ/)
+})
+
+it('restores multiple remembered bill templates for the customer', async () => {
+  const preferred = {
+    ...invoiceDetail,
+    customer: {
+      ...invoiceDetail.customer,
+      preferred_bill_template: 'tpl-invoice-k80',
+      preferred_bill_templates: ['tpl-invoice-a4', 'tpl-invoice-k80'],
+    },
+  }
+  const { container } = render(
+    <InvoicePrintPage documentId="invoice-1" service={makeService(preferred)} onClose={vi.fn()} />,
+  )
+
+  expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
+  expect(container.querySelector('main')).toHaveClass('bill-template-k80')
+  expect(screen.getByRole('checkbox', { name: /Nhớ mẫu Hóa đơn A4/ })).toBeChecked()
+  expect(screen.getByRole('checkbox', { name: /Nhớ mẫu Hóa đơn K80/ })).toBeChecked()
 })
 
 it('does not save preference for walk-in customers', async () => {
@@ -253,7 +275,7 @@ it('does not save preference for walk-in customers', async () => {
   expect(await screen.findByRole('heading', { name: 'HÓA ĐƠN BÁN HÀNG' })).toBeInTheDocument()
   expect(container.querySelector('main')).toHaveClass('bill-template-a4')
 
-  await userEvent.click(screen.getByRole('radio', { name: /Hóa đơn K80/ }))
+  await userEvent.click(screen.getByRole('button', { name: /Xem mẫu Hóa đơn K80/ }))
   expect(saveCustomerBillPreference).not.toHaveBeenCalled()
   expect(screen.queryByRole('status')).not.toBeInTheDocument()
 })

@@ -9,10 +9,12 @@ import {
   isBillTemplateId,
   isWalkInCustomerCode,
   listBillTemplatesForDocument,
+  normalizeBillPreferenceList,
   normalizeOrganizationBillSettings,
   quoteFooterText,
   readOrganizationBillSettings,
   resolveBillTemplate,
+  resolveCustomerBillPreferenceIds,
   resolveNamedPrintTemplate,
   resolvePreferredNamedTemplate,
   resolvePrintTemplateContent,
@@ -91,6 +93,17 @@ describe('organization bill settings', () => {
       /TP\. Hồ Chí Minh, ngày \d{2} tháng \d{2} năm 2026/,
     )
     expect(formatBillPlaceDate('2026-07-01T03:30:00Z', '')).toMatch(/^Ngày \d{2} tháng \d{2} năm 2026$/)
+  })
+
+  it('normalizes multi-bill preference lists with legacy single value', () => {
+    expect(normalizeBillPreferenceList(['tpl-a', 'tpl-a', 'a4'])).toEqual(['tpl-a', 'a4'])
+    expect(resolveCustomerBillPreferenceIds({ preferredTemplate: 'k80' })).toEqual(['k80'])
+    expect(
+      resolveCustomerBillPreferenceIds({
+        preferredTemplates: ['tpl-invoice-a4', 'tpl-invoice-k80'],
+        preferredTemplate: 'tpl-invoice-k80',
+      }),
+    ).toEqual(['tpl-invoice-a4', 'tpl-invoice-k80'])
   })
 
   it('detects walk-in customer code', () => {

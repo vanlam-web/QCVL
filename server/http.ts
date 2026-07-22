@@ -71,6 +71,7 @@ import {
   isBillPreferenceValue,
   mergeOrganizationBillSettingsPatch,
   normalizeOrganizationBillSettingsData,
+  syncCustomerBillPreferencePatch,
   type OrganizationBillSettingsData,
 } from './bill-settings.js'
 
@@ -170,6 +171,7 @@ export interface SalesDocumentData {
     name: string
     phone: string | null
     preferred_bill_template?: string | null
+    preferred_bill_templates?: string[] | null
     address?: string | null
     total_debt_amount?: number | null
   }
@@ -341,6 +343,8 @@ export interface CustomerListData {
   status?: string | null
   linked_supplier?: { id: string; code: string; name: string; linked_at?: string | null } | null
   preferred_bill_template?: string | null
+  /** SoT §4 — nhiều mẫu bill thường dùng của khách. */
+  preferred_bill_templates?: string[] | null
 }
 export interface SupplierListData {
   id: string
@@ -666,6 +670,7 @@ export interface ServerRepository {
       customer_type?: string | null
       company_name?: string | null
       preferred_bill_template?: string | null
+      preferred_bill_templates?: string[] | null
     }
   }): Promise<CustomerListData | null>
   findCustomerByCode?(input: { organizationId: string; code: string }): Promise<CustomerListData | null>
@@ -3514,6 +3519,7 @@ async function getDevApiResponse(
           customer_type?: string | null
           company_name?: string | null
           preferred_bill_template?: string | null
+          preferred_bill_templates?: string[] | null
         } = {}
         if (body.name !== undefined) patch.name = requiredString(body.name, 'name')
         if (body.code !== undefined) patch.code = requiredString(body.code, 'code')
@@ -3533,6 +3539,23 @@ async function getDevApiResponse(
             throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_template must be a4, k80, or a template id.', {
               preferred_bill_template: ['preferred_bill_template must be a4, k80, or a template id.'],
             })
+          }
+        }
+        if ('preferred_bill_templates' in body) {
+          if (body.preferred_bill_templates === null) {
+            patch.preferred_bill_templates = []
+          } else if (!Array.isArray(body.preferred_bill_templates)) {
+            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_templates must be an array.', {
+              preferred_bill_templates: ['preferred_bill_templates must be an array.'],
+            })
+          } else {
+            const invalid = body.preferred_bill_templates.some((item) => !isBillPreferenceValue(item))
+            if (invalid) {
+              throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_templates entries must be a4, k80, or a template id.', {
+                preferred_bill_templates: ['preferred_bill_templates entries must be a4, k80, or a template id.'],
+              })
+            }
+            patch.preferred_bill_templates = body.preferred_bill_templates.map((item) => String(item).trim())
           }
         }
         if (Object.keys(patch).length === 0) {
@@ -3555,12 +3578,21 @@ async function getDevApiResponse(
 
         const index = customers.findIndex((customer) => customer.id === id)
         if (index < 0) return { found: true, data: { message: 'Customer not found' }, status: 404 }
-        if (isWalkInCustomerCode(customers[index].code) && 'preferred_bill_template' in patch) {
+        if (
+          isWalkInCustomerCode(customers[index].code)
+          && ('preferred_bill_template' in patch || 'preferred_bill_templates' in patch)
+        ) {
           throw new HttpError(400, 'VALIDATION_ERROR', 'Walk-in customers cannot store bill template preference.')
         }
         const group = patch.customer_group_id
           ? customerGroups.find((item) => item.id === patch.customer_group_id) ?? null
           : null
+        const billPreference = syncCustomerBillPreferencePatch({
+          preferred_bill_template: patch.preferred_bill_template,
+          preferred_bill_templates: patch.preferred_bill_templates,
+          currentTemplate: customers[index].preferred_bill_template ?? null,
+          currentTemplates: customers[index].preferred_bill_templates ?? null,
+        })
         const updated = {
           ...customers[index],
           code: patch.code ?? customers[index].code,
@@ -3574,9 +3606,13 @@ async function getDevApiResponse(
           customer_type: patch.customer_type === undefined ? customers[index].customer_type : patch.customer_type,
           company_name: patch.company_name === undefined ? customers[index].company_name : patch.company_name,
           preferred_bill_template:
-            patch.preferred_bill_template !== undefined
-              ? patch.preferred_bill_template
+            patch.preferred_bill_template !== undefined || patch.preferred_bill_templates !== undefined
+              ? billPreference.preferred_bill_template
               : customers[index].preferred_bill_template ?? null,
+          preferred_bill_templates:
+            patch.preferred_bill_template !== undefined || patch.preferred_bill_templates !== undefined
+              ? billPreference.preferred_bill_templates
+              : customers[index].preferred_bill_templates ?? null,
         }
         customers[index] = updated
         return { found: true, data: updated }
