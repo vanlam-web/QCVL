@@ -974,7 +974,7 @@ it('clears the previous selected detail when opening another row fails', async (
   expect(within(failedDetailRegion).getByRole('alert')).toHaveTextContent('Không tải được chi tiết chứng từ.')
 })
 
-it('opens quote print only from quote detail', async () => {
+it('opens quote print from the footer In action', async () => {
   const onOpenQuotePrint = vi.fn()
   const service = makeService({
     listSalesDocuments: vi.fn(async () => ({
@@ -990,12 +990,13 @@ it('opens quote print only from quote detail', async () => {
   await clickDocumentRow('BG000123')
 
   const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ BG000123' })
-  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Xem/In báo giá' }))
+  expect(within(detailRegion).queryByRole('button', { name: 'Xem/In báo giá' })).not.toBeInTheDocument()
+  await userEvent.click(within(detailRegion).getByRole('button', { name: 'In' }))
 
   expect(onOpenQuotePrint).toHaveBeenCalledWith('quote-1')
 })
 
-it('opens invoice print only from invoice detail', async () => {
+it('does not duplicate invoice print in the detail header', async () => {
   const onOpenInvoicePrint = vi.fn()
   const service = makeService({
     listSalesDocuments: vi.fn(async () => ({
@@ -1012,7 +1013,8 @@ it('opens invoice print only from invoice detail', async () => {
 
   const detailRegion = await screen.findByRole('region', { name: 'Chi tiết chứng từ HD010985' })
   expect(within(detailRegion).queryByRole('button', { name: 'Xem/In báo giá' })).not.toBeInTheDocument()
-  await userEvent.click(within(detailRegion).getByRole('button', { name: 'Xem/In hóa đơn' }))
+  expect(within(detailRegion).queryByRole('button', { name: 'Xem/In hóa đơn' })).not.toBeInTheDocument()
+  await userEvent.click(within(detailRegion).getByRole('button', { name: 'In' }))
 
   expect(onOpenInvoicePrint).toHaveBeenCalledWith('order-1')
 })

@@ -1162,16 +1162,6 @@ function SalesDocumentDetailView({
             <StatusChip tone={salesDocumentStatusTone(document)}>
               {salesDocumentStatusLabel(document)}
             </StatusChip>
-            {document.order_type === 'quote' && document.code.startsWith('BG') && onOpenQuotePrint ? (
-              <button type="button" onClick={() => onOpenQuotePrint(document.id)}>
-                Xem/In báo giá
-              </button>
-            ) : null}
-            {document.order_type === 'invoice' && document.code.startsWith('HD') && onOpenInvoicePrint ? (
-              <button type="button" onClick={() => onOpenInvoicePrint(document.id)}>
-                Xem/In hóa đơn
-              </button>
-            ) : null}
           </header>
 
           <dl className="management-detail-meta-grid">
