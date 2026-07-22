@@ -62,6 +62,7 @@ const salesFinanceEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const userDisplayNameEnsureCache = new WeakMap<pg.Pool, Map<string, Promise<ReadonlyMap<string, string>>>>()
 const financeAccountsListCache = new WeakMap<pg.Pool, Map<string, Promise<FinanceAccountData[]>>>()
 const searchSelectionStatsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const customerSearchIndexEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 
 export function createPgRepository(databaseUrl: string): ServerRepository & { close(): Promise<void> } {
   const pool = new Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30_000 })
@@ -1329,32 +1330,21 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     async listCustomers(input) {
       await ensureImportedSnapshotTables(pool)
       if (input.url.searchParams.get('search_context') === 'quick_pick') {
+        await ensureCustomerSearchIndexTable(pool)
         const { page, pageSize } = paginationFromUrl(input.url, 8)
         const limit = Math.min(page * pageSize, 200)
         const search = normalizeSearchText(input.url.searchParams.get('search') ?? input.url.searchParams.get('q') ?? '')
         const status = input.url.searchParams.get('status')
         const values: unknown[] = [input.organizationId]
-        const where = ['cs.organization_id = $1']
-        const normalizedCode = customerSnapshotSearchSql("cs.data->>'code'")
-        const normalizedName = customerSnapshotSearchSql("cs.data->>'name'")
-        const normalizedHaystack = customerSnapshotSearchSql(`
-          concat_ws(' ',
-            cs.data->>'code',
-            cs.data->>'name',
-            cs.data->>'phone',
-            cs.data->>'tax_code',
-            cs.data->>'address',
-            cs.data->>'note'
-          )
-        `)
+        const where = ['csi.organization_id = $1']
 
         if (status && status !== 'all') {
           values.push(status)
-          where.push(`coalesce(cs.data->>'status', 'active') = $${values.length}`)
+          where.push(`csi.status = $${values.length}`)
         }
         if (search) {
           values.push(`%${search}%`)
-          where.push(`${normalizedHaystack} like $${values.length}`)
+          where.push(`csi.normalized_haystack like $${values.length}`)
         }
 
         let join = ''
@@ -1366,10 +1356,10 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
           const userParam = values.length
           join = `
             left join search_selection_stats s
-              on s.organization_id = cs.organization_id
+              on s.organization_id = csi.organization_id
              and s.user_id = $${userParam}
              and s.entity_type = 'customer'
-             and s.entity_id = cs.data->>'id'
+             and s.entity_id = csi.customer_id
           `
           selectionCountOrder = 'coalesce(s.select_count, 0)'
           lastSelectedOrder = "coalesce(s.last_selected_at, 'epoch'::timestamptz)"
@@ -1382,16 +1372,19 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         const result = await pool.query(
           `
             select cs.data
-            from customer_snapshots cs
+            from customer_search_index csi
+            join customer_snapshots cs
+              on cs.organization_id = csi.organization_id
+             and cs.id = csi.customer_id
             ${join}
             where ${where.join('\n              and ')}
             order by
               ${selectionCountOrder} desc,
               ${lastSelectedOrder} desc,
-              case when ${normalizedCode} = ${searchParam} then 1 else 0 end desc,
-              case when ${normalizedCode} like ${searchParam} || '%' then 1 else 0 end desc,
-              case when ${normalizedName} = ${searchParam} then 1 else 0 end desc,
-              case when ${normalizedName} like ${searchParam} || '%' then 1 else 0 end desc,
+              case when csi.normalized_code = ${searchParam} then 1 else 0 end desc,
+              case when csi.normalized_code like ${searchParam} || '%' then 1 else 0 end desc,
+              case when csi.normalized_name = ${searchParam} then 1 else 0 end desc,
+              case when csi.normalized_name like ${searchParam} || '%' then 1 else 0 end desc,
               coalesce(nullif(cs.data->>'created_at', '')::timestamptz, cs.created_at) desc
             limit $${values.length}
           `,
@@ -1472,6 +1465,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [data.id, input.organizationId, data.code, JSON.stringify(data), data.created_at],
       )
+      await upsertCustomerSearchIndex(pool, input.organizationId, data)
       return hydrateCustomerLinkedSupplier(data, [])
     },
 
@@ -1577,6 +1571,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         `,
         [input.organizationId, current.id, data.code, JSON.stringify(data)],
       )
+      await upsertCustomerSearchIndex(pool, input.organizationId, data)
       return hydrateCustomerLinkedSupplier(data, [])
     },
 
@@ -1632,6 +1627,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
         )
         if (upsert.rows[0]?.inserted) created += 1
         else updated += 1
+        await upsertCustomerSearchIndex(pool, input.organizationId, data)
       }
       return { created, updated, skipped: 0 }
     },
@@ -9243,6 +9239,105 @@ async function ensureImportedSnapshotTables(pool: pg.Pool) {
     )
   `)
   await pool.query('create index if not exists purchase_receipt_snapshots_org_updated_idx on purchase_receipt_snapshots (organization_id, updated_at desc)')
+  await ensureCustomerSearchIndexTable(pool)
+}
+
+async function ensureCustomerSearchIndexTable(pool: pg.Pool) {
+  return ensureSchemaOnce(customerSearchIndexEnsureCache, pool, async () => {
+    await pool.query(`
+      create table if not exists customer_search_index (
+        customer_id text primary key references customer_snapshots(id) on delete cascade,
+        organization_id uuid not null references organizations(id) on delete cascade,
+        status text not null default 'active',
+        normalized_code text not null default '',
+        normalized_name text not null default '',
+        normalized_haystack text not null default '',
+        updated_at timestamptz not null default now()
+      )
+    `)
+    await pool.query('create index if not exists customer_search_index_org_status_code_idx on customer_search_index (organization_id, status, normalized_code)')
+    await pool.query('create index if not exists customer_search_index_org_status_name_idx on customer_search_index (organization_id, status, normalized_name)')
+    await pool.query('create index if not exists customer_search_index_org_status_updated_idx on customer_search_index (organization_id, status, updated_at desc)')
+    await pool.query(`
+      insert into customer_search_index (
+        customer_id,
+        organization_id,
+        status,
+        normalized_code,
+        normalized_name,
+        normalized_haystack,
+        updated_at
+      )
+      select
+        cs.id,
+        cs.organization_id,
+        coalesce(nullif(cs.data->>'status', ''), 'active'),
+        ${customerSnapshotSearchSql("cs.data->>'code'")},
+        ${customerSnapshotSearchSql("cs.data->>'name'")},
+        ${customerSnapshotSearchSql(`
+          concat_ws(' ',
+            cs.data->>'code',
+            cs.data->>'name',
+            cs.data->>'phone',
+            cs.data->>'tax_code',
+            cs.data->>'address',
+            cs.data->>'note'
+          )
+        `)},
+        now()
+      from customer_snapshots cs
+      on conflict (customer_id)
+      do update set
+        organization_id = excluded.organization_id,
+        status = excluded.status,
+        normalized_code = excluded.normalized_code,
+        normalized_name = excluded.normalized_name,
+        normalized_haystack = excluded.normalized_haystack,
+        updated_at = now()
+    `)
+  })
+}
+
+async function upsertCustomerSearchIndex(pool: pg.Pool, organizationId: string, customer: CustomerListData) {
+  await ensureCustomerSearchIndexTable(pool)
+  const haystack = [
+    customer.code,
+    customer.name,
+    customer.phone,
+    customer.tax_code,
+    customer.address,
+    customer.note,
+  ].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' ')
+  await pool.query(
+    `
+      insert into customer_search_index (
+        customer_id,
+        organization_id,
+        status,
+        normalized_code,
+        normalized_name,
+        normalized_haystack,
+        updated_at
+      )
+      values ($1, $2, $3, $4, $5, $6, now())
+      on conflict (customer_id)
+      do update set
+        organization_id = excluded.organization_id,
+        status = excluded.status,
+        normalized_code = excluded.normalized_code,
+        normalized_name = excluded.normalized_name,
+        normalized_haystack = excluded.normalized_haystack,
+        updated_at = now()
+    `,
+    [
+      customer.id,
+      organizationId,
+      customer.status ?? 'active',
+      normalizeSearchText(customer.code ?? ''),
+      normalizeSearchText(customer.name ?? ''),
+      normalizeSearchText(haystack),
+    ],
+  )
 }
 
 async function findCustomerGroupSnapshot(pool: pg.Pool, organizationId: string, groupId: string) {

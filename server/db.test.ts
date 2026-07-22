@@ -122,12 +122,33 @@ describe('createPgRepository product units', () => {
     })
 
     const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
-    const customerSnapshotQueries = sqlCalls.filter((sql) => sql.includes('from customer_snapshots'))
-    expect(customerSnapshotQueries).toHaveLength(1)
-    expect(customerSnapshotQueries[0]).toContain('limit')
-    expect(customerSnapshotQueries[0]).toContain("data->>'code'")
-    expect(customerSnapshotQueries[0]).toContain("data->>'name'")
+    const searchQuery = sqlCalls.find((sql) => sql.includes('from customer_search_index csi'))
+    expect(searchQuery).toBeDefined()
+    expect(searchQuery).toContain('limit')
+    expect(searchQuery).toContain('csi.normalized_code')
+    expect(searchQuery).toContain('csi.normalized_name')
     expect(sqlCalls.some((sql) => sql.includes('from supplier_snapshots'))).toBe(false)
+  })
+
+  test('uses customer search index for quick-pick customer search', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockResolvedValue({ rows: [], rowCount: 0 })
+
+    const repository = createPgRepository('postgres://unit-test')
+    await repository.listCustomers?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      userId: '22222222-2222-2222-2222-222222222222',
+      url: new URL('http://api.local/api/v1/customers?search=kl2&status=active&page=1&page_size=8&search_context=quick_pick'),
+    })
+
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('create table if not exists customer_search_index'))).toBe(true)
+    expect(sqlCalls.some((sql) => sql.includes('insert into customer_search_index'))).toBe(true)
+    const searchQuery = sqlCalls.find((sql) => sql.includes('from customer_search_index csi'))
+    expect(searchQuery).toBeDefined()
+    expect(searchQuery).toContain('csi.normalized_haystack')
+    expect(searchQuery).toContain('join customer_snapshots cs')
+    expect(searchQuery).not.toContain("concat_ws(' '")
   })
 
   test('does not deactivate existing product unit conversions when an import row has none', async () => {

@@ -177,9 +177,11 @@ Hướng fix tạm thời đã chốt:
 Hướng fix tiếp theo khi cần nhanh như hàng hóa:
 
 1. Tạo dữ liệu tìm kiếm khách đã chuẩn hóa ở DB, không tìm trực tiếp trên JSON snapshot mỗi request.
-   - Có thể dùng bảng/column search cache như `customer_search_index`.
-   - Cột tối thiểu: `organization_id`, `customer_id`, `code`, `name`, `phone`, `status`, `normalized_code`, `normalized_name`, `normalized_haystack`, `updated_at`.
+   - Đã chọn bảng search cache `customer_search_index`.
+   - Cột triển khai: `organization_id`, `customer_id`, `status`, `normalized_code`, `normalized_name`, `normalized_haystack`, `updated_at`.
    - Index tối thiểu: `(organization_id, status, normalized_code)`, `(organization_id, status, normalized_name)`, và nếu cần tìm chứa giữa chuỗi thì thêm trigram cho `normalized_haystack`.
+   - Migration `0015_customer_search_index.sql` tạo bảng, tạo index, backfill dữ liệu từ `customer_snapshots`.
+   - Runtime phải sync index khi tạo, sửa hoặc import khách hàng.
 2. POS preload/cache nhóm khách hay dùng:
    - Lấy `8-20` khách hay chọn gần đây của user khi mở POS.
    - Khi gõ, lọc ngay trên cache trước để có phản hồi tức thì.
