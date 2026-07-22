@@ -18,13 +18,14 @@ SoT QCVL: [POS-BILL-PRINT-MESSAGING.md](../../03-BUSINESS-NghiepVu/Sales/POS-BIL
 | KV | QCVL |
 |---|---|
 | Logo thuộc cửa hàng | **Có** |
-| Danh sách mẫu / A/B/C | **Có** |
-| Tùy biến khối + thông điệp | **Có** (structured) |
-| Chọn mẫu lúc in lại | **Có** (toolbar màn in) |
-| POS chọn mẫu A/B/C trước TT | **Có** (picker trên checkout) |
-| Preference theo mẫu | **Có** (lưu **id mẫu**; vẫn nhận a4/k80 cũ) |
+| Layout A4 kiểu KV (tiêu đề giữa, kính gửi, bảng Tên hàng/Nội dung) | **Có** |
+| QR + STK (từ tài khoản NH active/pinned) | **Có** |
+| Nợ cũ / Tổng nợ (từ công nợ khách) | **Có** (khi có `total_debt_amount`) |
+| Tổng bằng chữ | **Có** |
+| Danh sách mẫu / A/B/C + POS pick | **Có** |
+| Preference theo id mẫu | **Có** |
 | Editor HTML + token | **Chưa** |
-| Multi-bill tick / Zalo ảnh | **Chưa** |
+| Multi-bill / Zalo ảnh | **Chưa** |
 
 ## Hướng tiếp
 
