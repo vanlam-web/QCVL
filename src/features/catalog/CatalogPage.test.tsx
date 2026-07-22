@@ -878,6 +878,8 @@ it('expands product details directly under the selected row and closes on second
   expect(within(detail).getByText('Mica 3mm')).toBeInTheDocument()
   expect(Array.from(detail.querySelectorAll('dt')).map((label) => label.textContent)).not.toContain('Đơn vị')
   expect(within(detail).getByText('100 000')).toBeInTheDocument()
+  expect(service.getProductBom).not.toHaveBeenCalled()
+  expect(service.listStockMovements).not.toHaveBeenCalled()
 
   await userEvent.click(within(detail).getByRole('tab', { name: 'Đơn vị & quy đổi' }))
   expect(within(detail).getByRole('tab', { name: 'Đơn vị & quy đổi' })).toHaveAttribute('aria-selected', 'true')
@@ -885,6 +887,12 @@ it('expands product details directly under the selected row and closes on second
   expect(within(detail).getByRole('region', { name: 'Đơn vị và quy đổi MICA-3MM' })).toHaveTextContent('m tới')
   expect(within(detail).getByRole('region', { name: 'Đơn vị và quy đổi MICA-3MM' })).toHaveTextContent('1 m tới = 0,5 m')
   expect(within(detail).getByRole('region', { name: 'Đơn vị và quy đổi MICA-3MM' })).toHaveTextContent('1 Tấc = 0,042 m')
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'BOM/Vật tư cấu thành' }))
+  expect(service.getProductBom).toHaveBeenCalledWith('p-1')
+
+  await userEvent.click(within(detail).getByRole('tab', { name: 'Thẻ kho' }))
+  expect(service.listStockMovements).toHaveBeenCalledWith({ product_id: 'p-1', page: 1, page_size: 15 })
 
   await userEvent.click(productRow as HTMLElement)
   expect(screen.queryByRole('region', { name: 'Chi tiết hàng hóa MICA-3MM' })).not.toBeInTheDocument()

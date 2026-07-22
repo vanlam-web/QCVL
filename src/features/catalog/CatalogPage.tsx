@@ -633,7 +633,7 @@ export function CatalogPage({
     }
   }
 
-  async function toggleProductDetail(product: Product) {
+  function toggleProductDetail(product: Product) {
     if (selectedProductId === product.id) {
       setSelectedProductId(null)
       setSelectedDetailTab('info')
@@ -642,7 +642,6 @@ export function CatalogPage({
     setSelectedProductId(product.id)
     setSelectedDetailTab('info')
     setError(null)
-    await loadBomForProduct(product)
   }
 
   async function loadBomForProduct(product: Product) {
