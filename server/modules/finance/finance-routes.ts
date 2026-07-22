@@ -14,6 +14,7 @@ export interface FinanceRouteHandlers {
   updateAccount(): RouteResult
   listCustomerDebts(): RouteResult
   getCustomerDebt(): RouteResult
+  getCustomerOpenDebts(): RouteResult
   collectCustomerDebt(): RouteResult
   updateCustomerDebtAdjustment(): RouteResult
   cashbookBalances(): RouteResult
@@ -40,6 +41,7 @@ export function handleFinanceRoute(context: FinanceRouteContext, handlers: Finan
   if (method === 'POST' && pathname === '/api/v1/finance/accounts') return handlers.createAccount()
   if (method === 'PATCH' && /^\/api\/v1\/finance\/accounts\/[^/]+$/.test(pathname)) return handlers.updateAccount()
   if (method === 'GET' && pathname === '/api/v1/finance/customer-debts') return handlers.listCustomerDebts()
+  if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/open-debts$/.test(pathname)) return handlers.getCustomerOpenDebts()
   if (method === 'GET' && /^\/api\/v1\/finance\/customers\/[^/]+\/debt$/.test(pathname)) return handlers.getCustomerDebt()
   if (method === 'POST' && pathname === '/api/v1/finance/debt-collections') return handlers.collectCustomerDebt()
   if (method === 'PATCH' && /^\/api\/v1\/finance\/customer-debt-adjustments\/[^/]+$/.test(pathname)) return handlers.updateCustomerDebtAdjustment()
