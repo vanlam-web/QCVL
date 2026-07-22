@@ -237,7 +237,7 @@ export function PosShell({
   const [recentInvoicesError, setRecentInvoicesError] = useState<string | null>(null)
   const [recentInvoices, setRecentInvoices] = useState<SalesDocumentListItem[]>([])
   const [recentInvoicesPage, setRecentInvoicesPage] = useState(1)
-  const [recentInvoicesPageInput, setRecentInvoicesPageInput] = useState('1')
+  const recentInvoicesPageInputRef = useRef<HTMLInputElement | null>(null)
   const [recentInvoicesTotal, setRecentInvoicesTotal] = useState(0)
   const [recentInvoiceSelectingId, setRecentInvoiceSelectingId] = useState<string | null>(null)
   const [manualOpeningOpen, setManualOpeningOpen] = useState(false)
@@ -313,18 +313,15 @@ export function PosShell({
     setRecentInvoicesOpen(true)
     loadRecentInvoices(1)
   }, [loadRecentInvoices])
-  useEffect(() => {
-    setRecentInvoicesPageInput(String(recentInvoicesPage))
-  }, [recentInvoicesPage])
   function submitRecentInvoicesPage() {
-    const nextPage = Number(recentInvoicesPageInput)
+    const nextPage = Number(recentInvoicesPageInputRef.current?.value ?? recentInvoicesPage)
     if (!Number.isFinite(nextPage)) {
-      setRecentInvoicesPageInput(String(recentInvoicesPage))
+      if (recentInvoicesPageInputRef.current) recentInvoicesPageInputRef.current.value = String(recentInvoicesPage)
       return
     }
     const totalPages = Math.max(1, Math.ceil(recentInvoicesTotal / recentInvoicePageSize))
     const safePage = Math.min(totalPages, Math.max(1, Math.trunc(nextPage)))
-    setRecentInvoicesPageInput(String(safePage))
+    if (recentInvoicesPageInputRef.current) recentInvoicesPageInputRef.current.value = String(safePage)
     loadRecentInvoices(safePage)
   }
   const openRecentInvoice = useCallback(async (document: SalesDocumentListItem) => {
@@ -1684,10 +1681,12 @@ export function PosShell({
                     </button>
                     <input
                       aria-label="Trang hiện tại"
+                      key={recentInvoicesPage}
+                      ref={recentInvoicesPageInputRef}
                       inputMode="numeric"
-                      value={recentInvoicesPageInput}
+                      defaultValue={String(recentInvoicesPage)}
                       onBlur={submitRecentInvoicesPage}
-                      onChange={(event) => setRecentInvoicesPageInput(event.target.value.replace(/[^\d]/g, ''))}
+                      onChange={(event) => { event.currentTarget.value = event.currentTarget.value.replace(/[^\d]/g, '') }}
                       onKeyDown={(event) => {
                         if (event.key === 'Enter') {
                           event.preventDefault()

@@ -734,21 +734,17 @@ export function ManagementTableFooter({
   const rangeStart = total === 0 ? 0 : (page - 1) * pageSize + 1
   const rangeEnd = Math.min(page * pageSize, total)
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
-  const [pageInput, setPageInput] = useState(String(page))
-
-  useEffect(() => {
-    setPageInput(String(page))
-  }, [page])
+  const pageInputRef = useRef<HTMLInputElement | null>(null)
 
   function submitPageChange() {
     if (!onPageChange) return
-    const nextPage = Number(pageInput)
+    const nextPage = Number(pageInputRef.current?.value ?? page)
     if (!Number.isFinite(nextPage)) {
-      setPageInput(String(page))
+      if (pageInputRef.current) pageInputRef.current.value = String(page)
       return
     }
     const safePage = Math.min(totalPages, Math.max(1, Math.trunc(nextPage)))
-    setPageInput(String(safePage))
+    if (pageInputRef.current) pageInputRef.current.value = String(safePage)
     onPageChange(safePage)
   }
 
@@ -781,10 +777,12 @@ export function ManagementTableFooter({
         </button>
         <input
           aria-label="Trang hiện tại"
+          key={page}
+          ref={pageInputRef}
           inputMode={onPageChange ? 'numeric' : undefined}
+          defaultValue={String(page)}
           readOnly={onPageChange === undefined}
-          value={pageInput}
-          onChange={onPageChange ? (event) => setPageInput(event.target.value.replace(/[^\d]/g, '')) : undefined}
+          onChange={onPageChange ? (event) => { event.currentTarget.value = event.currentTarget.value.replace(/[^\d]/g, '') } : undefined}
           onBlur={onPageChange ? submitPageChange : undefined}
           onKeyDown={onPageChange ? (event) => {
             if (event.key === 'Enter') {

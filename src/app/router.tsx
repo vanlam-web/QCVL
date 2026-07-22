@@ -1,7 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ForbiddenPage } from './ForbiddenPage'
 import { useAuth } from '../features/auth/auth-context'
-import { Component, lazy, Suspense, useEffect, useMemo, type ErrorInfo, type ReactNode } from 'react'
+import { Component, lazy, Suspense, useEffect, useMemo, type ReactNode } from 'react'
 import { createBrowserFoundationService } from '../features/users/foundation-service'
 import { createBrowserCatalogService } from '../features/catalog/catalog-service'
 import { createBrowserOrderService } from '../features/orders/order-service'
@@ -90,7 +90,7 @@ class RouteLoadErrorBoundary extends Component<{ children: ReactNode }, { error:
     return { error }
   }
 
-  componentDidCatch(error: unknown, _errorInfo: ErrorInfo) {
+  componentDidCatch(error: unknown) {
     if (!isRouteImportError(error) || typeof window === 'undefined') return
     const currentUrl = window.location.href
     if (window.sessionStorage.getItem(routeReloadSessionKey) === currentUrl) return
