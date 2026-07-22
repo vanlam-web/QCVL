@@ -12,7 +12,6 @@ import {
   ManagementFilterSidebar,
   ManagementListSurface,
   ManagementPage,
-  ManagementRowActionButton,
   ManagementTableFooter,
   ManagementTableViewport,
 } from '../../components/ui-shell/management-layout'
@@ -31,14 +30,12 @@ import type {
   CashbookEntryDetail,
   CashbookSearchScope,
   CashbookStatus,
-  CashbookVoucher,
   CashbookVoucherType,
   CashbookVoucherCounterpartyOption,
   CreateCashbookVoucherInput,
   CustomerDebtDetail,
   CustomerDebtSummary,
   FinanceAccount,
-  CashbookBalance,
   PartnerDebtMode,
 } from './types'
 import type { FinanceService } from './finance-service'
@@ -47,7 +44,6 @@ import { currentMonthRange, dateRangeFromItems, displayDateRangeForData } from '
 import { currentSystemDate } from '../../lib/system-clock'
 import { vietnamBankOptionLabel, vietnamBankOptions } from './vietnam-bank-catalog'
 import {
-  accountTypeText,
   bankAccountDisplayText,
   bankAccountDisplayParts,
   businessAccountedText,
@@ -97,7 +93,6 @@ import { FinanceDetailPanel } from './FinanceDetailPanel'
 import { CashbookImportDialog } from './CashbookImportDialog'
 import { appRoutes } from '../../app/routes'
 
-const showAuxiliaryFinanceSections = false
 const defaultCashbookColumns: CashbookColumnKey[] = [
   'code',
   'created_at',
@@ -213,9 +208,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [defaultPageSize] = useState(() => pageSizeForManagementViewport())
   const [routeFilters] = useState(initialFinanceRouteFilters)
   const [accounts, setAccounts] = useState<FinanceAccount[]>([])
-  const [balances, setBalances] = useState<CashbookBalance[]>([])
-  const [debts, setDebts] = useState<CustomerDebtSummary[] | null>(null)
-  const [debtTotal, setDebtTotal] = useState(0)
   const [debtPage, setDebtPage] = useState(1)
   const [debtPageSize, setDebtPageSize] = useState(defaultPageSize)
   const [lastDebtSearch, setLastDebtSearch] = useState('')
@@ -269,9 +261,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [showCashbookFavoritesOnly, setShowCashbookFavoritesOnly] = useState(false)
   const [cashbookImportOpen, setCashbookImportOpen] = useState(false)
   const visibleCashbookColumns = defaultCashbookColumns
-  const [vouchers, setVouchers] = useState<CashbookVoucher[]>([])
   const [voucherMode, setVoucherMode] = useState<CashbookDirection | null>(null)
-  const [editingVoucher, setEditingVoucher] = useState<CashbookVoucher | null>(null)
   const [voucherAccountId, setVoucherAccountId] = useState('')
   const [voucherType, setVoucherType] = useState<CreateCashbookVoucherInput['voucher_type']>('other_income')
   const [voucherAmount, setVoucherAmount] = useState('')
@@ -406,7 +396,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
     const defaultVoucherType = options[0].value
     const defaultCounterpartyType = voucherCounterpartyTypeOptions(defaultVoucherType, direction)[0]?.value ?? 'other'
-    setEditingVoucher(null)
     setVoucherMode(direction)
     setVoucherAccountId(defaultAccount?.id ?? '')
     setVoucherType(defaultVoucherType)
@@ -441,42 +430,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     }
   }
 
-  function openVoucherRevision(voucher: CashbookVoucher, detail?: CashbookEntryDetail) {
-    const direction: CashbookDirection = voucher.code.startsWith('PT') ? 'in' : 'out'
-    const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
-    const voucherDetail = detail ?? null
-    const revisionAccount = voucherDetail?.finance_account.id
-      ? sortedActiveAccounts.find((account) => account.id === voucherDetail.finance_account.id) ?? voucherDetail.finance_account
-      : defaultAccount
-    const revisionPaymentMethod = voucherDetail?.payment_method ?? (revisionAccount?.account_type === 'bank' ? 'bank_transfer' : 'cash')
-    setEditingVoucher(voucher)
-    setVoucherMode(direction)
-    setVoucherAccountId(revisionAccount?.id ?? '')
-    setVoucherType((voucherDetail?.source?.category_name && voucherTypeOptions(direction).some((option) => option.value === voucherDetail.source.category_name)
-      ? voucherDetail.source.category_name
-      : direction === 'in' ? 'other_income' : 'operating_expense') as CashbookVoucherType)
-    setVoucherAmount(formatVoucherAmountInput(String(voucher.amount)))
-    setVoucherIssuedAt(voucherDetail ? dateTimeInputText(voucherDetail.created_at) : dateTimeInputText(currentSystemDate()))
-    setVoucherPaymentMethod(revisionPaymentMethod)
-    setVoucherPartnerDebtMode(voucherDetail?.source?.transfer_content === 'affects_partner_debt'
-      || voucherDetail?.source?.transfer_content === 'not_affect_partner_debt'
-      || voucherDetail?.source?.transfer_content === 'no_partner_debt'
-      ? voucherDetail.source.transfer_content
-      : 'no_partner_debt')
-    setVoucherBusinessAccounted(voucherDetail?.is_business_accounted ?? true)
-    setVoucherCounterpartyType(voucherDetail?.counterparty?.type ?? 'other')
-    setVoucherCounterpartyId(voucherDetail?.counterparty?.id ?? '')
-    setVoucherCounterpartyName(voucherDetail?.counterparty?.name ?? '')
-    setVoucherCounterpartyOptions([])
-    setVoucherCounterpartyPhone(voucherDetail?.counterparty?.phone ?? '')
-    setVoucherReason(voucherDetail?.note ?? voucherDetail?.source?.source_note ?? '')
-    setError(null)
-    setMessage(null)
-  }
-
   function closeVoucherForm() {
     setVoucherMode(null)
-    setEditingVoucher(null)
     setVoucherCounterpartyCreateOpen(false)
     setVoucherCounterpartyCreateName('')
     setVoucherCounterpartyCreatePhone('')
@@ -611,8 +566,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         page: nextPage,
         page_size: nextPageSize,
       })
-      setDebts(result.items)
-      setDebtTotal(result.total)
       setDebtPage(result.page)
       setDebtPageSize(result.page_size)
       setLastDebtSearch(nextSearch.trim())
@@ -757,14 +710,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   async function loadReferenceData() {
     setError(null)
     try {
-      const [accountResult, balanceResult, voucherResult] = await Promise.all([
-        service.listAccounts({ is_active: true }),
-        showAuxiliaryFinanceSections ? service.listCashbookBalances() : Promise.resolve({ items: [] }),
-        showAuxiliaryFinanceSections ? service.listCashbookVouchers() : Promise.resolve({ items: [], total: 0 }),
-      ])
+      const accountResult = await service.listAccounts({ is_active: true })
       setAccounts(accountResult.items)
-      setBalances(balanceResult.items)
-      setVouchers(voucherResult.items)
     } catch (cause) {
       setError(formatApiError(cause, 'Không tải được dữ liệu tài chính.'))
     }
@@ -775,10 +722,8 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     async function loadInitial() {
       setError(null)
       try {
-        const [accountResult, balanceResult, voucherResult, debtResult, cashbookResult] = await Promise.all([
+        const [accountResult, debtResult, cashbookResult] = await Promise.all([
           service.listAccounts({ is_active: true }),
-          showAuxiliaryFinanceSections ? service.listCashbookBalances() : Promise.resolve({ items: [] }),
-          showAuxiliaryFinanceSections ? service.listCashbookVouchers() : Promise.resolve({ items: [], total: 0 }),
           service.listCustomerDebts({ page: 1, page_size: defaultPageSize }),
           service.listCashbookEntries({
             search: routeFilters.search || routeFilters.open || undefined,
@@ -796,10 +741,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         setCashbookAccountId('all')
         setLastCashbookAccountId('all')
         setLastCashbookStatus('posted')
-        setBalances(balanceResult.items)
-        setVouchers(voucherResult.items)
-        setDebts(debtResult.items)
-        setDebtTotal(debtResult.total)
         setDebtPage(debtResult.page)
         setDebtPageSize(debtResult.page_size)
         setCashbookEntries(cashbookResult.items)
@@ -1241,29 +1182,14 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         ...(voucherCounterpartyPhone.trim() ? { counterparty_phone: voucherCounterpartyPhone.trim() } : {}),
         reason: voucherReason.trim(),
       }
-      const result = editingVoucher === null
-        ? await service.createCashbookVoucher(payload)
-        : await service.reviseCashbookVoucher(editingVoucher.id, payload)
-      setMessage(editingVoucher === null ? `Đã tạo phiếu ${result.code}.` : `Đã sửa phiếu ${result.code}.`)
+      const result = await service.createCashbookVoucher(payload)
+      setMessage(`Đã tạo phiếu ${result.code}.`)
       setVoucherMode(null)
-      setEditingVoucher(null)
       await Promise.all([loadCashbook({ page: 1 }), loadReferenceData()])
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được phiếu thu chi.'))
     } finally {
       setSavingVoucher(false)
-    }
-  }
-
-  async function cancelManualVoucher(voucher: CashbookVoucher) {
-    setError(null)
-    setMessage(null)
-    try {
-      const result = await service.cancelCashbookVoucher(voucher.id)
-      setMessage(`Đã hủy phiếu ${result.code}.`)
-      await Promise.all([loadCashbook({ page: 1 }), loadReferenceData()])
-    } catch (cause) {
-      setError(formatApiError(cause, 'Không hủy được phiếu thu chi.'))
     }
   }
 
@@ -1297,16 +1223,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   }
 
   function openCashbookDetailEdit(detail: CashbookEntryDetail) {
-    if (detail.source.type === 'manual_voucher' && detail.status === 'posted') {
-      openVoucherRevision({
-        id: detail.source.id,
-        code: detail.source.code || detail.code,
-        source_type: 'manual_voucher',
-        status: detail.status,
-        amount: Math.abs(detail.amount_delta),
-      }, detail)
-      return
-    }
     setCashbookEditPreview(detail)
     setCashbookEditForm({
       createdAt: dateText(detail.created_at),
@@ -1362,14 +1278,10 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
 
   const voucherDialogLabel = voucherMode === null
     ? ''
-    : editingVoucher === null
-      ? `Tạo phiếu ${voucherMode === 'in' ? 'thu' : 'chi'}`
-      : `Sửa phiếu ${editingVoucher.code}`
+    : `Tạo phiếu ${voucherMode === 'in' ? 'thu' : 'chi'}`
   const voucherDialogTitle = voucherMode === null
     ? ''
-    : editingVoucher === null
-      ? `Tạo phiếu ${voucherMode === 'in' ? 'thu' : 'chi'}`
-      : `Sửa phiếu ${editingVoucher.code}`
+    : `Tạo phiếu ${voucherMode === 'in' ? 'thu' : 'chi'}`
   const voucherCounterpartyRole = voucherMode === 'in' ? 'nộp' : 'nhận'
   const voucherActorRole = voucherMode === 'in' ? 'thu' : 'chi'
   const voucherTypeLabel = voucherMode === 'in' ? 'Loại thu' : 'Loại chi'
@@ -1962,96 +1874,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         </div>
       ) : null}
 
-      {showAuxiliaryFinanceSections ? (
-      <ManagementListSurface ariaLabel="Tài khoản quỹ">
-        <h2>Tài khoản quỹ</h2>
-        {balances.length === 0 ? <EmptyState>Chưa có số dư quỹ.</EmptyState> : (
-          <ManagementTableViewport>
-            <table aria-label="Tài khoản quỹ" className="management-table">
-              <thead>
-                <tr>
-                  <th>Mã</th>
-                  <th>Tên</th>
-                  <th>Loại</th>
-                  <th>Số dư</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.map((balance) => (
-                  <tr key={balance.finance_account_id}>
-                    <td><strong>{balance.code}</strong></td>
-                    <td>{balance.name}</td>
-                    <td>{accountTypeText(balance.account_type)}</td>
-                    <td><MoneyText value={balance.balance} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ManagementTableViewport>
-        )}
-      </ManagementListSurface>
-      ) : null}
-
-      {showAuxiliaryFinanceSections ? (
-      <ManagementListSurface ariaLabel="Công nợ khách hàng">
-        <h2>Công nợ khách hàng</h2>
-        {debts === null ? <p>Đang tải công nợ...</p> : null}
-        {debts !== null && debts.length === 0 ? <EmptyState>Chưa có công nợ khách hàng.</EmptyState> : null}
-        {debts !== null && debts.length > 0 ? (
-          <>
-            <ManagementTableViewport>
-              <table aria-label="Công nợ khách hàng" className="management-table">
-                <thead>
-                  <tr>
-                    <th>Mã khách</th>
-                    <th>Tên khách</th>
-                    <th>Hóa đơn nợ</th>
-                    <th>Hóa đơn cũ nhất</th>
-                    <th>Tổng nợ</th>
-                    <th>Thao tác</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {debts.map((debt) => (
-                    <tr key={debt.customer_id ?? debt.customer_name}>
-                      <td>{debt.customer_code ?? 'Khách lẻ'}</td>
-                      <td>{debt.customer_name}</td>
-                      <td>{debt.open_invoice_count}</td>
-                      <td>{debt.oldest_order_code ?? ''}</td>
-                      <td><MoneyText value={debt.total_debt} /></td>
-                      <td>
-                        <ManagementRowActionButton
-                          ariaLabel={`Thu nợ ${debt.customer_name}`}
-                          disabled={debt.customer_id === null}
-                          onClick={() => void openDebt(debt)}
-                        >
-                          Thu nợ
-                        </ManagementRowActionButton>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ManagementTableViewport>
-            <ManagementTableFooter
-              ariaLabel="Phân trang công nợ"
-              entityLabel="khách nợ"
-              page={debtPage}
-              pageSize={debtPageSize}
-              total={debtTotal}
-              canGoPrevious={debtPage > 1}
-              canGoNext={debtPage * debtPageSize < debtTotal}
-              onPageSizeChange={(nextPageSize) => void loadDebts({ page: 1, page_size: nextPageSize })}
-              onFirst={() => void loadDebts({ page: 1 })}
-              onPrevious={() => void loadDebts({ page: Math.max(1, debtPage - 1) })}
-              onNext={() => void loadDebts({ page: debtPage + 1 })}
-              onLast={() => void loadDebts({ page: Math.max(1, Math.ceil(debtTotal / debtPageSize)) })}
-            />
-          </>
-        ) : null}
-      </ManagementListSurface>
-      ) : null}
-
       {selectedDebt && debtDetail ? (
         <section aria-label={`Thu nợ ${selectedDebt.customer_name}`} className="management-inline-detail finance-collection-panel">
           <header>
@@ -2234,6 +2056,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
               total={cashbookTotal}
               canGoPrevious={cashbookPage > 1}
               canGoNext={cashbookPage * cashbookPageSize < cashbookTotal}
+              onPageChange={(nextPage) => void loadCashbook({ page: nextPage })}
               onPageSizeChange={(nextPageSize) => void loadCashbook({ page: 1, page_size: nextPageSize })}
               onFirst={() => void loadCashbook({ page: 1 })}
               onPrevious={() => void loadCashbook({ page: Math.max(1, cashbookPage - 1) })}
@@ -2244,54 +2067,6 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
         ) : null}
       </ManagementListSurface>
 
-      {showAuxiliaryFinanceSections ? (
-      <ManagementListSurface ariaLabel="Phiếu thu/chi">
-        <h2>Phiếu thu/chi</h2>
-        {vouchers.length === 0 ? <EmptyState>Chưa có phiếu thu/chi.</EmptyState> : (
-          <ManagementTableViewport>
-            <table aria-label="Phiếu thu/chi" className="management-table">
-              <thead>
-                <tr>
-                  <th>Mã phiếu</th>
-                  <th>Nguồn</th>
-                  <th>Trạng thái</th>
-                  <th>Số tiền</th>
-                  <th>Thao tác</th>
-                </tr>
-              </thead>
-              <tbody>
-                {vouchers.map((voucher) => (
-                  <tr key={voucher.id}>
-                    <td><strong>{voucher.code}</strong></td>
-                    <td>{voucher.source_type === 'payment_receipt' ? 'Phiếu thu' : 'Phiếu thủ công'}</td>
-                    <td><StatusChip tone={voucher.status === 'posted' ? 'success' : 'neutral'}>{statusText(voucher.status)}</StatusChip></td>
-                    <td><MoneyText value={voucher.amount} /></td>
-                    <td>
-                      {voucher.source_type === 'manual_voucher' && voucher.status === 'posted' ? (
-                        <>
-                          <ManagementRowActionButton
-                            ariaLabel={`Sửa phiếu ${voucher.code}`}
-                            onClick={() => openVoucherRevision(voucher)}
-                          >
-                            Sửa
-                          </ManagementRowActionButton>
-                          <ManagementRowActionButton
-                            ariaLabel={`Hủy phiếu ${voucher.code}`}
-                            onClick={() => void cancelManualVoucher(voucher)}
-                          >
-                            Hủy
-                          </ManagementRowActionButton>
-                        </>
-                      ) : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ManagementTableViewport>
-        )}
-      </ManagementListSurface>
-      ) : null}
       <ManagementConfirmDialog
         cancelLabel="Bỏ qua"
         confirmLabel={cashbookDeleteTarget && canDeleteCashbookDetail(cashbookDeleteTarget) ? 'Xóa' : 'Đã hiểu'}

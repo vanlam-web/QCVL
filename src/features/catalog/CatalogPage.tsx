@@ -1638,6 +1638,7 @@ export function CatalogPage({
                                     onFirst={() => void loadStockMovements(product, 1)}
                                     onLast={() => void loadStockMovements(product, movementTotalPages)}
                                     onNext={() => void loadStockMovements(product, movementPage + 1)}
+                                    onPageChange={(nextPage) => void loadStockMovements(product, nextPage)}
                                     onPrevious={() => void loadStockMovements(product, movementPage - 1)}
                                   />
                                 </section>
@@ -1685,6 +1686,7 @@ export function CatalogPage({
               onFirst={() => void goToPage(1)}
               onLast={() => void goToPage(totalPages)}
               onNext={() => void goToPage(page + 1)}
+              onPageChange={(nextPage) => void goToPage(nextPage)}
               onPageSizeChange={(nextPageSize) => void load({ page: 1, page_size: nextPageSize })}
               onPrevious={() => void goToPage(page - 1)}
             />

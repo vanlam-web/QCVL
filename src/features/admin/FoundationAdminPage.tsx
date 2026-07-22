@@ -878,6 +878,7 @@ export function FoundationAdminPage({
               page={1}
               pageSize={Math.max(1, state.users.length)}
               total={state.users.length}
+              onPageChange={() => undefined}
               onNext={() => undefined}
               onPrevious={() => undefined}
             />
@@ -1152,6 +1153,7 @@ export function FoundationAdminPage({
               page={1}
               pageSize={Math.max(1, roleRows.length)}
               total={roleRows.length}
+              onPageChange={() => undefined}
               onNext={() => undefined}
               onPrevious={() => undefined}
             />

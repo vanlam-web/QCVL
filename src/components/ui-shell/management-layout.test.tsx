@@ -518,6 +518,7 @@ it('closes filter sidebar popovers when clicking empty sidebar background', asyn
 it('renders a reusable management table footer with range page and disabled controls', () => {
   const onFirst = vi.fn()
   const onLast = vi.fn()
+  const onPageChange = vi.fn()
   const onPageSizeChange = vi.fn()
 
   render(
@@ -532,6 +533,7 @@ it('renders a reusable management table footer with range page and disabled cont
       onFirst={onFirst}
       onLast={onLast}
       onNext={vi.fn()}
+      onPageChange={onPageChange}
       onPageSizeChange={onPageSizeChange}
       onPrevious={vi.fn()}
     />,
@@ -547,6 +549,32 @@ it('renders a reusable management table footer with range page and disabled cont
   expect(within(footer).getByRole('button', { name: 'Trang trước' })).toBeDisabled()
   expect(within(footer).getByRole('button', { name: 'Trang sau' })).toBeEnabled()
   expect(within(footer).getByRole('button', { name: 'Trang cuối' })).toBeEnabled()
+})
+
+it('jumps to the entered table footer page on Enter', async () => {
+  const onPageChange = vi.fn()
+  const user = userEvent.setup()
+
+  render(
+    <ManagementTableFooter
+      ariaLabel="Phân trang chứng từ"
+      canGoNext
+      canGoPrevious
+      entityLabel="chứng từ"
+      page={1}
+      pageSize={15}
+      total={40}
+      onNext={vi.fn()}
+      onPageChange={onPageChange}
+      onPrevious={vi.fn()}
+    />,
+  )
+
+  const pageInput = screen.getByRole('textbox', { name: 'Trang hiện tại' })
+  await user.clear(pageInput)
+  await user.type(pageInput, '3{Enter}')
+
+  expect(onPageChange).toHaveBeenCalledWith(3)
 })
 
 it('renders compact row action buttons and inline detail rows tied to the table', async () => {

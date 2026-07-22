@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Banknote, ChevronLeft, ChevronRight, Copy, ExternalLink, FileOutput, FilePlus2, PackageCheck, Plus, Printer, Save, Search, Trash2, WalletCards, X } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
-import { dateTimeLocalInputValue, formatKvDateTime } from '../../lib/date-format'
+import { dateTimeLocalInputValue, formatKvDateTime, parseKvDateTimeInputToIso } from '../../lib/date-format'
 import { parseMoneyInput } from '../../lib/number-format'
 import { currentSystemDate } from '../../lib/system-clock'
 import type {
@@ -102,6 +102,8 @@ function formatReceiptDateTimeInput(value: string) {
 function parseReceiptDateTimeInput(value: string) {
   const trimmed = value.trim()
   if (trimmed === '') return ''
+  const kvIso = parseKvDateTimeInputToIso(trimmed)
+  if (kvIso) return kvIso
   const kvMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/)
   const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/)
   const year = kvMatch?.[3] ?? isoMatch?.[1]
@@ -120,7 +122,7 @@ function parseReceiptDateTimeInput(value: string) {
   ) {
     return null
   }
-  return `${year}-${month}-${day}T${hour}:${minute}`
+  return `${year}-${month}-${day}T${hour}:${minute}:00.000Z`
 }
 
 function supplierDocumentNoText(value: string | null | undefined) {
@@ -3557,6 +3559,7 @@ export function PurchaseReceiptsPage({
                 onFirst={() => void goToPage(1)}
                 onLast={() => void goToPage(totalPages)}
                 onNext={() => void goToPage(page + 1)}
+                onPageChange={(nextPage) => void goToPage(nextPage)}
                 onPageSizeChange={(nextPageSize) => void loadReceipts({ page: 1, page_size: nextPageSize })}
                 onPrevious={() => void goToPage(page - 1)}
               />

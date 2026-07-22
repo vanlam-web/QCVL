@@ -5,7 +5,6 @@ import { FinancePage } from './FinancePage'
 import { dateTimeInputText } from './finance-filters'
 import type { FinanceService } from './finance-service'
 import type {
-  CashbookBalance,
   CashbookEntry,
   CashbookEntryDetail,
   CashbookVoucher,
@@ -17,11 +16,6 @@ import type {
 const accounts: FinanceAccount[] = [
   { id: 'cash-1', code: 'CASH', name: 'Quỹ tiền mặt', account_type: 'cash', is_default_cash: true, is_active: true },
   { id: 'bank-1', code: 'MB01', name: 'MB Bank', account_type: 'bank', is_default_cash: false, is_active: true },
-]
-
-const balances: CashbookBalance[] = [
-  { finance_account_id: 'cash-1', code: 'CASH', name: 'Quỹ tiền mặt', account_type: 'cash', balance: 200000 },
-  { finance_account_id: 'bank-1', code: 'MB01', name: 'MB Bank', account_type: 'bank', balance: 300000 },
 ]
 
 const noCounterparty = { type: 'none' as const, name: null, phone: null }
@@ -282,7 +276,7 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
       code: 'PCTM000001.01',
       amount: 50000,
     })),
-    listCashbookBalances: vi.fn(async () => ({ items: balances })),
+    listCashbookBalances: vi.fn(async () => ({ items: [] })),
     getCashbookEntry: vi.fn(async () => cashbookDetail),
     getSalesDocumentByCode: vi.fn(async () => null),
     listVoucherCounterparties: vi.fn(async (input) => {
@@ -1513,8 +1507,10 @@ describe('FinancePage', () => {
     await userEvent.click(within(detail).getByRole('button', { name: 'Sửa phiếu PCTM000004' }))
 
     const editDialog = await screen.findByRole('dialog', { name: 'Sửa phiếu PCTM000004' })
-    expect(within(editDialog).getByLabelText('Thời gian')).toHaveValue(dateTimeInputText(manualVoucherDetail.created_at))
-    expect(within(editDialog).getByRole('combobox', { name: 'Phương thức TT' })).toHaveValue('cash')
+    expect(within(editDialog).queryByRole('tab', { name: 'Phiếu chi' })).not.toBeInTheDocument()
+    expect(within(editDialog).queryByLabelText('Mã phiếu')).not.toBeInTheDocument()
+    expect(within(editDialog).getByLabelText('Sửa thời gian phiếu')).toHaveValue(dateTimeInputText(manualVoucherDetail.created_at))
+    expect(within(editDialog).getByRole('button', { name: 'Phương thức TT' })).toHaveTextContent('Tiền mặt')
     expect(within(editDialog).getByLabelText('Ghi chú')).toHaveValue('Hoa, trái cây ông địa')
     expect(within(editDialog).queryByRole('button', { name: 'Số tài khoản' })).not.toBeInTheDocument()
   })

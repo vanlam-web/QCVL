@@ -928,19 +928,20 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               </tbody>
             </table>
           </ManagementTableViewport>
-          <ManagementTableFooter
-            ariaLabel="Phân trang phiếu kiểm kho"
-            entityLabel="phiếu kiểm"
-            page={stocktakePage}
-            pageSize={stocktakePageSize}
-            total={stocktakeTotal}
-            canGoPrevious={stocktakePage > 1}
-            canGoNext={stocktakePage * stocktakePageSize < stocktakeTotal}
-            onPageSizeChange={(nextPageSize) => void loadStocktakeList({ page: 1, page_size: nextPageSize })}
-            onFirst={() => void loadStocktakeList({ page: 1 })}
-            onPrevious={() => void loadStocktakeList({ page: Math.max(1, stocktakePage - 1) })}
-            onNext={() => void loadStocktakeList({ page: stocktakePage + 1 })}
-            onLast={() => void loadStocktakeList({ page: Math.max(1, Math.ceil(stocktakeTotal / stocktakePageSize)) })}
+            <ManagementTableFooter
+              ariaLabel="Phân trang phiếu kiểm kho"
+              entityLabel="phiếu kiểm"
+              page={stocktakePage}
+              pageSize={stocktakePageSize}
+              total={stocktakeTotal}
+              canGoPrevious={stocktakePage > 1}
+              canGoNext={stocktakePage * stocktakePageSize < stocktakeTotal}
+              onPageChange={(nextPage) => void loadStocktakeList({ page: nextPage })}
+              onPageSizeChange={(nextPageSize) => void loadStocktakeList({ page: 1, page_size: nextPageSize })}
+              onFirst={() => void loadStocktakeList({ page: 1 })}
+              onPrevious={() => void loadStocktakeList({ page: Math.max(1, stocktakePage - 1) })}
+              onNext={() => void loadStocktakeList({ page: stocktakePage + 1 })}
+              onLast={() => void loadStocktakeList({ page: Math.max(1, Math.ceil(stocktakeTotal / stocktakePageSize)) })}
           />
         </ManagementListSurface>
       ) : view === 'objects' ? (
@@ -1044,6 +1045,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               total={total}
               canGoPrevious={page > 1}
               canGoNext={page * pageSize < total}
+              onPageChange={(nextPage) => void loadProducts({ page: nextPage })}
               onPageSizeChange={(nextPageSize) => void loadProducts({ page: 1, page_size: nextPageSize })}
               onFirst={() => void loadProducts({ page: 1 })}
               onPrevious={() => void loadProducts({ page: Math.max(1, page - 1) })}

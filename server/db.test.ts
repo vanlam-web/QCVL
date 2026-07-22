@@ -1635,6 +1635,91 @@ describe('createPgRepository product units', () => {
     expect(sqlCalls.some((sql) => sql.includes('select max(') && sql.includes('purchase_receipt_snapshots'))).toBe(true)
   })
 
+  test('posts paid purchase receipts with clean PCPN code and receipt time in cashbook', async () => {
+    const { createPgRepository } = await import('./db')
+    pgMock.query.mockImplementation(async (sql: string, values?: unknown[]) => {
+      const normalizedSql = sql.trim().toLowerCase()
+      if (normalizedSql === 'begin' || normalizedSql === 'commit' || normalizedSql === 'rollback') return { rows: [], rowCount: 0 }
+      if (sql.includes('from purchase_receipt_snapshots') && sql.includes('limit 1')) {
+        return {
+          rows: [{
+            data: {
+              id: 'purchase-receipt-689',
+              code: 'PN000689',
+              supplier_id: 'supplier-thn',
+              supplier: { id: 'supplier-thn', code: 'THN', name: 'Thịnh Hồng Nguyên' },
+              received_at: '2026-07-22T10:27:00.000Z',
+              status: 'draft',
+              supplier_document_no: null,
+              subtotal_amount: 8068184,
+              discount_amount: 0,
+              payable_amount: 8068184,
+              paid_amount: 8068184,
+              remaining_amount: 0,
+              notes: null,
+              created_by: { id: 'user-1', name: 'Văn Lâm' },
+              created_at: '2026-07-22T10:27:00.000Z',
+              updated_at: '2026-07-22T10:27:00.000Z',
+              items: [],
+              supplier_payments: [],
+            },
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('from finance_accounts')) {
+        return {
+          rows: [{
+            id: 'bank-1',
+            code: 'MBBank',
+            name: 'MBBank',
+            account_type: 'bank',
+            is_default_cash: false,
+            is_active: true,
+            account_number: '0947900909',
+            account_holder: null,
+            opening_balance: 0,
+            note: null,
+            notify_on_transaction: false,
+          }],
+          rowCount: 1,
+        }
+      }
+      if (sql.includes('insert into cashbook_entries')) {
+        expect(values?.[2]).toBe('PCPN000689')
+        expect(values?.[14]).toBe('2026-07-22T10:27:00.000Z')
+        expect(JSON.parse(String(values?.[10]))).toMatchObject({
+          id: 'PCPN000689',
+          code: 'PCPN000689',
+          order_code: 'PN000689',
+        })
+        expect(JSON.parse(String(values?.[11]))[0]).toMatchObject({
+          order_code: 'PN000689',
+          order_created_at: '2026-07-22T10:27:00.000Z',
+        })
+        return { rows: [], rowCount: 1 }
+      }
+      return { rows: [], rowCount: 0 }
+    })
+
+    const repository = createPgRepository('postgres://unit-test')
+    const result = await repository.postPurchaseReceipt?.({
+      organizationId: '11111111-1111-1111-1111-111111111111',
+      id: 'purchase-receipt-689',
+      paymentMethod: 'bank_transfer',
+      financeAccountId: 'bank-1',
+      currentUser: {
+        organization: { id: '11111111-1111-1111-1111-111111111111', code: 'VAN-LAM', name: 'Văn Lâm' },
+        user: { id: 'user-1', email: 'admin@qc.local', username: 'admin', display_name: 'Văn Lâm', status: 'active' },
+        permissions: [],
+      },
+    })
+
+    expect(result?.cashbook_voucher_id).toEqual(expect.stringMatching(/^cashbook-voucher-/))
+    const sqlCalls = pgMock.query.mock.calls.map(([sql]) => String(sql))
+    expect(sqlCalls.some((sql) => sql.includes('insert into cashbook_entries'))).toBe(true)
+  })
+
   test('recomputes supplier payable from PN and PCPN vouchers instead of receipt remaining only', async () => {
     const { createPgRepository } = await import('./db')
     let updatedSupplier: { current_payable_amount: number; total_purchase_amount: number } | null = null
