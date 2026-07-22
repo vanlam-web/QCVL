@@ -1844,7 +1844,7 @@ function CustomerDebtPaymentDialog({
                   <Clock3 size={15} />
                 </button>
                 {pickerOpen === 'date' ? (
-                  <section aria-label="Lịch chọn ngày thanh toán" className="customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
+                  <section aria-label="Lịch chọn ngày thanh toán" className="management-date-time-picker management-date-time-date-picker customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
                     <header>
                       <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
                         ‹
@@ -1854,16 +1854,16 @@ function CustomerDebtPaymentDialog({
                         ›
                       </button>
                     </header>
-                    <div className="customer-debt-adjustment-weekdays" aria-hidden="true">
+                    <div className="management-date-time-weekdays customer-debt-adjustment-weekdays" aria-hidden="true">
                       {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
                     </div>
-                    <div className="customer-debt-adjustment-calendar-grid">
+                    <div className="management-date-time-calendar-grid customer-debt-adjustment-calendar-grid">
                       {calendarDays.map((date) => {
                         const selected = selectedPaidDateTime ? date.toDateString() === selectedPaidDateTime.toDateString() : false
                         return (
                           <button
                             aria-pressed={selected}
-                            className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'customer-debt-adjustment-muted-day'}
+                            className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'management-date-time-muted-day customer-debt-adjustment-muted-day'}
                             key={date.toISOString()}
                             type="button"
                             onClick={() => selectPaidDate(date)}
@@ -1876,7 +1876,7 @@ function CustomerDebtPaymentDialog({
                   </section>
                 ) : null}
                 {pickerOpen === 'time' ? (
-                  <section aria-label="Chọn giờ thanh toán" className="customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
+                  <section aria-label="Chọn giờ thanh toán" className="management-date-time-picker management-date-time-time-picker customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
                     {managementDateTimeTimeOptions.map((time) => (
                       <button key={time} type="button" onClick={() => selectPaidTime(time)}>
                         {time}
@@ -2063,7 +2063,7 @@ function CustomerDebtAdjustmentDialog({
                 <Clock3 size={15} />
               </button>
               {pickerOpen === 'date' ? (
-                <section aria-label="Lịch chọn ngày điều chỉnh" className="customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
+                <section aria-label="Lịch chọn ngày điều chỉnh" className="management-date-time-picker management-date-time-date-picker customer-debt-adjustment-picker customer-debt-adjustment-date-picker">
                   <header>
                     <button aria-label="Tháng trước" type="button" onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}>
                       ‹
@@ -2073,10 +2073,10 @@ function CustomerDebtAdjustmentDialog({
                       ›
                     </button>
                   </header>
-                  <div className="customer-debt-adjustment-weekdays" aria-hidden="true">
+                  <div className="management-date-time-weekdays customer-debt-adjustment-weekdays" aria-hidden="true">
                     {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
                   </div>
-                  <div className="customer-debt-adjustment-calendar-grid">
+                  <div className="management-date-time-calendar-grid customer-debt-adjustment-calendar-grid">
                     {calendarDays.map((date) => {
                       const selected = selectedAdjustmentDateTime
                         ? date.toDateString() === selectedAdjustmentDateTime.toDateString()
@@ -2084,7 +2084,7 @@ function CustomerDebtAdjustmentDialog({
                       return (
                         <button
                           aria-pressed={selected}
-                          className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'customer-debt-adjustment-muted-day'}
+                          className={date.getMonth() === calendarMonth.getMonth() ? undefined : 'management-date-time-muted-day customer-debt-adjustment-muted-day'}
                           key={date.toISOString()}
                           type="button"
                           onClick={() => selectAdjustmentDate(date)}
@@ -2097,7 +2097,7 @@ function CustomerDebtAdjustmentDialog({
                 </section>
               ) : null}
               {pickerOpen === 'time' ? (
-                <section aria-label="Chọn giờ điều chỉnh" className="customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
+                <section aria-label="Chọn giờ điều chỉnh" className="management-date-time-picker management-date-time-time-picker customer-debt-adjustment-picker customer-debt-adjustment-time-picker">
                   {managementDateTimeTimeOptions.map((time) => (
                     <button key={time} type="button" onClick={() => selectAdjustmentTime(time)}>
                       {time}

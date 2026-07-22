@@ -471,14 +471,14 @@ export function CheckoutPanel({
             <button
               aria-expanded={invoiceDateTimePickerOpen === 'date'}
               aria-label="Chọn ngày hóa đơn"
-              className="checkout-panel-date-time-button checkout-panel-date-button"
+              className="management-date-time-input-button checkout-panel-date-time-button checkout-panel-date-button"
               type="button"
               onClick={toggleInvoiceDatePicker}
             >
               <CalendarDays aria-hidden="true" size={14} />
             </button>
             {invoiceDateTimePickerOpen === 'date' ? (
-              <section aria-label="Lịch chọn ngày hóa đơn" className="checkout-panel-date-time-picker checkout-panel-date-picker">
+              <section aria-label="Lịch chọn ngày hóa đơn" className="management-date-time-picker management-date-time-date-picker checkout-panel-date-time-picker checkout-panel-date-picker">
                 <header>
                   <button aria-label="Tháng trước" type="button" onClick={() => setInvoiceCalendarMonth(new Date(invoiceCalendarMonth.getFullYear(), invoiceCalendarMonth.getMonth() - 1, 1))}>
                     ‹
@@ -488,16 +488,16 @@ export function CheckoutPanel({
                     ›
                   </button>
                 </header>
-                <div aria-hidden="true" className="checkout-panel-date-weekdays">
+                <div aria-hidden="true" className="management-date-time-weekdays checkout-panel-date-weekdays">
                   {['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'].map((day) => <span key={day}>{day}</span>)}
                 </div>
-                <div className="checkout-panel-date-grid">
+                <div className="management-date-time-calendar-grid checkout-panel-date-grid">
                   {invoiceCalendarDays.map((date) => {
                     const selected = selectedInvoiceDate ? date.toDateString() === selectedInvoiceDate.toDateString() : false
                     return (
                       <button
                         aria-pressed={selected}
-                        className={date.getMonth() === invoiceCalendarMonth.getMonth() ? undefined : 'checkout-panel-muted-day'}
+                        className={date.getMonth() === invoiceCalendarMonth.getMonth() ? undefined : 'management-date-time-muted-day checkout-panel-muted-day'}
                         key={date.toISOString()}
                         type="button"
                         onClick={() => selectInvoiceDate(date)}
@@ -523,14 +523,14 @@ export function CheckoutPanel({
             <button
               aria-expanded={invoiceDateTimePickerOpen === 'time'}
               aria-label="Chọn giờ hóa đơn"
-              className="checkout-panel-date-time-button checkout-panel-time-button"
+              className="management-date-time-input-button checkout-panel-date-time-button checkout-panel-time-button"
               type="button"
               onClick={() => setInvoiceDateTimePickerOpen((current) => current === 'time' ? null : 'time')}
             >
               <Clock3 aria-hidden="true" size={14} />
             </button>
             {invoiceDateTimePickerOpen === 'time' ? (
-              <section aria-label="Chọn giờ hóa đơn" className="checkout-panel-date-time-picker checkout-panel-time-picker">
+              <section aria-label="Chọn giờ hóa đơn" className="management-date-time-picker management-date-time-time-picker checkout-panel-date-time-picker checkout-panel-time-picker">
                 {managementDateTimeTimeOptions.map((time) => (
                   <button key={time} type="button" onClick={() => selectInvoiceTime(time)}>
                     {time}

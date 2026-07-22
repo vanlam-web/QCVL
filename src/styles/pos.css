@@ -3448,19 +3448,7 @@
 }
 
 .checkout-panel-date-time-button {
-  position: absolute;
-  top: 50%;
   right: 0.25rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 0;
-  background: transparent;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transform: translateY(-50%);
 }
 
 .checkout-panel-date-time-button:hover,
@@ -3469,72 +3457,11 @@
 }
 
 .checkout-panel-date-time-picker {
-  position: absolute;
-  top: calc(100% + 0.35rem);
   left: 0;
-  z-index: 20;
-  border: 1px solid color-mix(in srgb, var(--color-border) 70%, transparent);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-2);
 }
 
 .checkout-panel-date-picker {
   width: 17rem;
-}
-
-.checkout-panel-date-picker header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-bottom: var(--space-2);
-}
-
-.checkout-panel-date-picker header button {
-  min-width: 1.75rem;
-  min-height: 1.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-muted);
-  color: var(--color-text);
-}
-
-.checkout-panel-date-picker strong {
-  color: var(--color-text);
-  font-size: 0.9rem;
-}
-
-.checkout-panel-date-weekdays,
-.checkout-panel-date-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.125rem;
-}
-
-.checkout-panel-date-weekdays {
-  margin-bottom: 0.25rem;
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-align: center;
-}
-
-.checkout-panel-date-grid button,
-.checkout-panel-time-picker button {
-  min-height: 2rem;
-  border: 0;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--color-text);
-  font: inherit;
-}
-
-.checkout-panel-date-grid button:hover,
-.checkout-panel-time-picker button:hover,
-.checkout-panel-date-grid button[aria-pressed="true"] {
-  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
 }
 
 .checkout-panel-muted-day {
@@ -3544,8 +3471,6 @@
 .checkout-panel-time-picker {
   width: 6.75rem;
   max-height: 13rem;
-  overflow: auto;
-  display: grid;
   grid-template-columns: 1fr;
   gap: 0.125rem;
 }
