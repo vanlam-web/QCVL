@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Clock3 } from 'lucide-react'
 import { currentSystemDate } from '../../lib/system-clock'
 import { formatQcvDateTime, parseQcvDateTimeInputToLocalDate } from '../../lib/date-format'
+import { managementDateTimeCalendarDays, managementDateTimeTimeOptions } from './management-date-time-picker'
 
 type PickerMode = 'date' | 'time'
 
@@ -134,7 +135,7 @@ export function ManagementDateTimeInput({
         ) : null}
         {pickerOpen === 'time' ? (
           <section aria-label={timePickerLabel} className="management-date-time-picker management-date-time-time-picker" role="region">
-            {managementDateTimeOptions.map((time) => (
+            {managementDateTimeTimeOptions.map((time) => (
               <button key={time} type="button" onClick={() => selectTime(time)}>
                 {time}
               </button>
@@ -153,21 +154,3 @@ export function parseManagementDateTimeInputText(value: string) {
 export function formatManagementDateTimeInputText(value: Date) {
   return formatQcvDateTime(value)
 }
-
-function managementDateTimeCalendarDays(month: Date) {
-  const firstDate = new Date(month.getFullYear(), month.getMonth(), 1)
-  const offset = (firstDate.getDay() + 6) % 7
-  const startDate = new Date(firstDate)
-  startDate.setDate(firstDate.getDate() - offset)
-  return Array.from({ length: 35 }, (_, index) => {
-    const date = new Date(startDate)
-    date.setDate(startDate.getDate() + index)
-    return date
-  })
-}
-
-const managementDateTimeOptions = Array.from({ length: 48 }, (_, index) => {
-  const hour = Math.floor(index / 2)
-  const minute = index % 2 === 0 ? '00' : '30'
-  return `${String(hour).padStart(2, '0')}:${minute}`
-})

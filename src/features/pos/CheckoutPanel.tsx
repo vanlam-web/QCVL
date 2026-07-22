@@ -14,6 +14,7 @@ import type {
   QuoteSummary,
 } from '../orders/order-service'
 import type { SalesDocumentListItem, SalesDocumentService } from '../sales-documents/sales-document-service'
+import { managementDateTimeCalendarDays, managementDateTimeTimeOptions } from '../../components/ui-shell/management-date-time-picker'
 import { formatApiError } from '../../lib/api/error-message'
 import { formatQcvDateTime, parseQcvDateTimeInputToStoredIso } from '../../lib/date-format'
 import { currentSystemDate, currentSystemISOString } from '../../lib/system-clock'
@@ -237,7 +238,7 @@ export function CheckoutPanel({
   }, [autoFocusCustomerPayment])
 
   const selectedInvoiceDate = parseCheckoutDisplayDate(invoiceDate)
-  const invoiceCalendarDays = checkoutCalendarDays(invoiceCalendarMonth)
+  const invoiceCalendarDays = managementDateTimeCalendarDays(invoiceCalendarMonth, 6)
   const selectInvoiceDate = (date: Date) => {
     setInvoiceDateDraft({ source: orderCreatedAt, value: formatCheckoutDisplayDate(date) })
     setInvoiceCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1))
@@ -530,7 +531,7 @@ export function CheckoutPanel({
             </button>
             {invoiceDateTimePickerOpen === 'time' ? (
               <section aria-label="Chọn giờ hóa đơn" className="checkout-panel-date-time-picker checkout-panel-time-picker">
-                {checkoutTimeOptions.map((time) => (
+                {managementDateTimeTimeOptions.map((time) => (
                   <button key={time} type="button" onClick={() => selectInvoiceTime(time)}>
                     {time}
                   </button>
@@ -932,20 +933,6 @@ function parseCheckoutDisplayDate(value: string) {
 function formatCheckoutDisplayDate(date: Date) {
   return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')}/${date.getFullYear()}`
 }
-
-function checkoutCalendarDays(month: Date) {
-  const firstOfMonth = new Date(month.getFullYear(), month.getMonth(), 1)
-  const mondayOffset = (firstOfMonth.getDay() + 6) % 7
-  const firstGridDate = new Date(firstOfMonth)
-  firstGridDate.setDate(firstOfMonth.getDate() - mondayOffset)
-  return Array.from({ length: 42 }, (_, index) => new Date(firstGridDate.getFullYear(), firstGridDate.getMonth(), firstGridDate.getDate() + index))
-}
-
-const checkoutTimeOptions = Array.from({ length: 48 }, (_, index) => {
-  const hour = Math.floor(index / 2)
-  const minute = index % 2 === 0 ? '00' : '30'
-  return `${String(hour).padStart(2, '0')}:${minute}`
-})
 
 function parseCheckoutTimeInput(value: string) {
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : null
