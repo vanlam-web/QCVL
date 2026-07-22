@@ -55,6 +55,7 @@ export function CustomerPanel({
 }) {
   const [search, setSearch] = useState(() => selectedCustomer?.name ?? '')
   const [results, setResults] = useState<Customer[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailTab, setDetailTab] = useState<CustomerDetailTab>('info')
@@ -163,6 +164,7 @@ export function CustomerPanel({
       searchRequestId.current += 1
       lastSuggestionQuery.current = null
       if (query.length === 0 || showsSelectedCustomer) setResults([])
+      setSearchLoading(false)
       return undefined
     }
     if (lastSuggestionQuery.current === query) return undefined
@@ -170,6 +172,7 @@ export function CustomerPanel({
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
     setError(null)
+    setSearchLoading(true)
 
     service
       .listCustomers({ search: query, status: 'active', page: 1, page_size: 8, search_context: 'quick_pick' })
@@ -177,11 +180,13 @@ export function CustomerPanel({
         if (searchRequestId.current !== requestId) return
         lastSuggestionQuery.current = query
         setResults(response.items)
+        setSearchLoading(false)
       })
       .catch((cause) => {
         if (searchRequestId.current !== requestId) return
         lastSuggestionQuery.current = query
         setResults([])
+        setSearchLoading(false)
         setError(formatApiError(cause, 'Không tìm được khách hàng.'))
       })
 
@@ -195,12 +200,15 @@ export function CustomerPanel({
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
     lastSuggestionQuery.current = query || null
+    setSearchLoading(true)
     try {
       const response = await service.listCustomers({ search: query || undefined, status: 'active', search_context: 'quick_pick' })
       if (searchRequestId.current !== requestId) return
       setResults(response.items)
+      setSearchLoading(false)
     } catch (cause) {
       if (searchRequestId.current !== requestId) return
+      setSearchLoading(false)
       setError(formatApiError(cause, 'Không tìm được khách hàng.'))
     }
   }
@@ -213,6 +221,7 @@ export function CustomerPanel({
       searchRequestId.current += 1
       lastSuggestionQuery.current = null
       setResults([])
+      setSearchLoading(false)
     }
   }
 
@@ -227,6 +236,7 @@ export function CustomerPanel({
   function clearSelectedCustomer() {
     setSearch('')
     setResults([])
+    setSearchLoading(false)
     setSuggestionsOpen(false)
     setDetailOpen(false)
     setDetailTab('info')
@@ -391,7 +401,7 @@ export function CustomerPanel({
                 : undefined
             }
             suggestionsLabel="Gợi ý khách hàng"
-            emptySuggestion="Không có kết quả phù hợp"
+            emptySuggestion={searchLoading ? 'Đang tìm...' : 'Không có kết quả phù hợp'}
             onChange={(nextSearch) => void suggestCustomers(nextSearch)}
             onSuggestionSelect={(suggestion) => {
               const customer = results.find((item) => item.id === suggestion.id)
