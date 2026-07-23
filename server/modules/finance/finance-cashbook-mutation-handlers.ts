@@ -9,7 +9,9 @@ type ContactRow={id:string;name:string;phone?:string|null}
 const {request,url,currentUser,repository,path,getIdFromPath,readJson,cashbookEntries,financeAccounts,salesDocuments,filterCashbookEntries,sortCashbookEntriesForRequest,cashbookEntriesUrl,cashbookSummarySourceUrl,cashbookListSummary,paged,enrichCashbookEntryDetail,optionalIsoDateTime,nullableString,manualCashbookVoucherRequestFromBody,makeManualCashbookVoucherEntry,cashbookVoucherListItem,validation}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
     listCashbook: async () => {
       const entriesUrl = cashbookEntriesUrl(url)
-      if (repository.listCashbookEntriesPage && !url.searchParams.get('sort_key')) {
+      const usesDefaultDatabaseSort = !url.searchParams.get('sort_key')
+        || (url.searchParams.get('sort_key') === 'created_at' && (url.searchParams.get('sort_direction') ?? 'desc') === 'desc')
+      if (repository.listCashbookEntriesPage && usesDefaultDatabaseSort) {
         const pageData = await repository.listCashbookEntriesPage({ organizationId: currentUser.organization.id, url: entriesUrl })
         return {
           found: true,
