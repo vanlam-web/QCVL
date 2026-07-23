@@ -7,6 +7,7 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
  return {
     async listProducts(input) {
       await ensureStock(pool)
+      if (input.url.searchParams.get('sort') === 'pos_usage') return listPosProducts(pool, input, rankProducts)
       const { clauses, values } = productFilters(input)
       const { page, pageSize } = paginate(input.url, 15)
       const pageOnly = input.url.searchParams.get('page_only') === 'true'
@@ -270,6 +271,32 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
     },
 
   }
+}
+async function listPosProducts(pool:pg.Pool,input:Parameters<NonNullable<ServerRepository['listProducts']>>[0],rankProducts:(input:RankInput)=>Promise<Product[]>){
+ const {clauses,values}=productFilters(input)
+ const result=await pool.query(`
+  with selected as (
+   select p.id,p.organization_id,p.code,p.name,p.status,p.product_kind,p.unit_name,p.sell_method,p.inventory_shape,p.track_inventory,p.created_at,p.updated_at
+   from products p where ${clauses.join(' and ')}
+  ), units as (
+   select puc.product_id,jsonb_agg(jsonb_build_object('source_code',puc.source_code,'unit_name',iu.name,'stock_qty_per_unit',puc.stock_qty_per_sale_unit,'is_default_purchase_unit',puc.is_default_purchase_unit,'is_default_sale_unit',puc.is_default_sale_unit) order by puc.is_default_sale_unit desc,puc.is_default_purchase_unit desc,iu.name) unit_conversions
+   from product_unit_conversions puc join inventory_units iu on iu.id=puc.sale_unit_id and iu.is_active
+   join selected p on p.id=puc.product_id and p.organization_id=puc.organization_id
+   where puc.is_active group by puc.product_id
+  ), provisional as (
+   select distinct on (ipb.product_id) ipb.product_id,jsonb_build_object('quantity',ipb.remaining_qty,'unit_name',iu.name,'source_type','kiotviet_import','source_label',ipb.source_label,'status',ipb.status,'updated_at',ipb.updated_at) stock
+   from inventory_provisional_balances ipb join selected p on p.id=ipb.product_id and p.organization_id=ipb.organization_id join inventory_units iu on iu.id=ipb.stock_unit_id
+   where ipb.source_type='kiotviet_import' order by ipb.product_id,ipb.updated_at desc
+  ), movement as (
+   select sm.product_id,(array_agg(sm.ending_qty order by sm.created_at desc,sm.id desc))[1] latest_ending_qty,sum(sm.quantity_delta) quantity,max(sm.created_at) updated_at
+   from stock_movements sm join selected p on p.id=sm.product_id and p.organization_id=sm.organization_id group by sm.product_id
+  )
+  select p.*,coalesce(units.unit_conversions,'[]'::jsonb) unit_conversions,provisional.stock kiotviet_provisional_stock,
+   case when movement.product_id is null then null else jsonb_build_object('quantity',coalesce(movement.latest_ending_qty,movement.quantity),'unit_name',p.unit_name,'source_type','stock_movements','source_label','Moc ton + chung tu','updated_at',movement.updated_at) end operating_stock
+  from selected p left join units on units.product_id=p.id left join provisional on provisional.product_id=p.id left join movement on movement.product_id=p.id
+ `,values)
+ const items=result.rows.map((row)=>({id:String(row.id),code:String(row.code),name:String(row.name),status:String(row.status),product_kind:String(row.product_kind),unit_name:String(row.unit_name),sell_method:String(row.sell_method),latest_purchase_cost:null,latest_purchase_cost_at:null,default_sale_price:null,price_list_prices:{},product_group_id:null,product_group:null,inventory_shape:String(row.inventory_shape),track_inventory:Boolean(row.track_inventory),unit_conversions:(row.unit_conversions??[]).map((c:{source_code?:string|null;unit_name:string;stock_qty_per_unit:string|number;is_default_purchase_unit:boolean;is_default_sale_unit:boolean})=>({source_code:c.source_code??null,unit_name:String(c.unit_name),stock_qty_per_unit:Number(c.stock_qty_per_unit),is_default_purchase_unit:Boolean(c.is_default_purchase_unit),is_default_sale_unit:Boolean(c.is_default_sale_unit)})),kiotviet_provisional_stock:row.kiotviet_provisional_stock?{quantity:Number(row.kiotviet_provisional_stock.quantity),unit_name:String(row.kiotviet_provisional_stock.unit_name),source_type:'kiotviet_import' as const,source_label:row.kiotviet_provisional_stock.source_label===null?null:String(row.kiotviet_provisional_stock.source_label),status:String(row.kiotviet_provisional_stock.status),updated_at:dateText(row.kiotviet_provisional_stock.updated_at)}:null,operating_stock:row.operating_stock?{quantity:Number(row.operating_stock.quantity),unit_name:String(row.operating_stock.unit_name),source_type:'stock_movements' as const,source_label:String(row.operating_stock.source_label),updated_at:dateText(row.operating_stock.updated_at)}:null,latest_kiotviet_stocktake:null,draft_bom:null,created_at:dateText(row.created_at)??'',updated_at:dateText(row.updated_at)??''})) satisfies Product[]
+ return rankProducts({pool,organizationId:input.organizationId,userId:input.userId,entityType:'product',url:input.url,items,codeOf:p=>p.code,nameOf:p=>p.name})
 }
 function productFilters(input: { organizationId: string; url: URL }) {
  const search=normalizeSearch(input.url.searchParams.get('search')??''),status=input.url.searchParams.get('status'),sellMethod=input.url.searchParams.get('sell_method'),inventoryShape=input.url.searchParams.get('inventory_shape'),productKind=input.url.searchParams.get('product_kind'),productGroupIds=input.url.searchParams.getAll('product_group_id'),createdFrom=input.url.searchParams.get('created_from'),createdTo=input.url.searchParams.get('created_to'),clauses=['p.organization_id = $1'],values:unknown[]=[input.organizationId]
