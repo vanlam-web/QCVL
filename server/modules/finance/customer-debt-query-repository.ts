@@ -123,6 +123,7 @@ export function createCustomerDebtQueryRepository(pool:pg.Pool,deps:DebtQueryDep
                and o.code = cbe.source->>'order_code'
               left join customer_snapshots cs
                 on cs.organization_id = cbe.organization_id
+               and cs.id = $2
                and (
                  lower(cs.code) = lower(cbe.source->>'counterparty_code')
                  or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
