@@ -59,11 +59,11 @@ it('cancels a sales document with status cancelled', async () => {
   const api = { request: request as unknown as SalesDocumentApiRequester['request'] }
   const service = createSalesDocumentService(api)
 
-  await service.cancelSalesDocument('order-1')
+  await service.cancelSalesDocument('order-1', { code: 'wrong_price', note: null })
 
   expect(request).toHaveBeenCalledWith('/api/v1/sales-documents/order-1', {
     method: 'PATCH',
-    body: JSON.stringify({ status: 'cancelled' }),
+    body: JSON.stringify({ status: 'cancelled', cancel_reason_type: 'wrong_price', cancel_reason_note: null }),
   })
 })
 

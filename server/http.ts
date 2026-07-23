@@ -184,6 +184,7 @@ export interface SalesDocumentData {
   revised_from_order_id?: string | null
   replaced_by_order_id?: string | null
   cancel_reason_type?: string | null
+  cancel_reason_note?: string | null
   revision_reason_code?: string | null
   revision_reason_note?: string | null
 }
@@ -865,7 +866,7 @@ export interface ServerRepository {
   listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
   listSalesDocumentsPage?(input: { organizationId: string; url: URL }): Promise<SalesDocumentListPageData>
   getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
-  cancelSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
+  cancelSalesDocument?(input: { organizationId: string; id: string; reason: { code: string; note: string | null } }): Promise<SalesDocumentData | null>
   updateSalesDocumentNote?(input: { organizationId: string; id: string; note?: string | null; created_at?: string }): Promise<SalesDocumentData | null>
   findSalesDocumentsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   deleteImportedKiotVietInvoices?(input: { organizationId: string }): Promise<{ deleted: number; blocked: number }>

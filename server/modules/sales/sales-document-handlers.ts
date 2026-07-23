@@ -96,10 +96,25 @@ export function createSalesDocumentHandlers(deps:SalesDocumentHandlerDeps){const
       if (body.status !== 'cancelled' || body.note !== undefined || body.created_at !== undefined) {
         throw validation('Only sales document cancellation or note update is supported.')
       }
+      const cancelReasonType = typeof body.cancel_reason_type === 'string' ? body.cancel_reason_type.trim() : ''
+      const cancelReasonNote = nullableString(body.cancel_reason_note)
+      if (!['wrong_price', 'wrong_size', 'wrong_customer', 'customer_changed_mind', 'other'].includes(cancelReasonType)) {
+        throw validation('Vui lòng chọn lý do hủy hóa đơn.')
+      }
+      if (cancelReasonType === 'other' && !cancelReasonNote?.trim()) {
+        throw validation('Vui lòng nhập ghi chú cho lý do Khác.')
+      }
       if (repository.cancelSalesDocument) {
-        const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
-        if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-        return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
+        try {
+          const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id, reason: { code: cancelReasonType, note: cancelReasonNote } })
+          if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
+          return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
+        } catch (error) {
+          if (error instanceof Error && error.message === 'SALES_DOCUMENT_SHARED_PAYMENT_REQUIRES_ALLOCATION_REVERSAL') {
+            throw validation('Phiếu thu đang phân bổ cho nhiều hóa đơn. Cần đảo phân bổ riêng trước khi hủy.')
+          }
+          throw error
+        }
       }
       const index = salesDocuments.findIndex((document: SalesDocumentData) => document.id === id || document.code === id)
       if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }

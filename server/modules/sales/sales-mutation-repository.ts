@@ -2,55 +2,52 @@ import type pg from 'pg'
 import type { ServerRepository } from '../../http-types.js'
 type SalesMutationDeps = {
   ensureTables(pool: pg.Pool): Promise<void>
+  ensureMovements(pool: pg.Pool): Promise<void>
   loadDocument(input: Parameters<NonNullable<ServerRepository['getSalesDocument']>>[0]): ReturnType<NonNullable<ServerRepository['getSalesDocument']>> | undefined
   receiptBaseCode(code: string): string | null
   missingGuard(error: unknown): boolean
+  reverseMovements(pool: pg.Pool, organizationId: string, orderId: string, orderCode: string): Promise<Set<string>>
+  cancelPaymentCashbook(pool: pg.Pool, organizationId: string, orderId: string, orderCode: string): Promise<void>
+  recomputeBalances(pool: pg.Pool, organizationId: string, productIds: Iterable<string>): Promise<void>
 }
 
-export function createSalesMutationRepository(connectionPool:pg.Pool,deps:SalesMutationDeps):Pick<ServerRepository,'cancelSalesDocument'|'updateSalesDocumentNote'>{const {ensureTables,loadDocument,receiptBaseCode,missingGuard}=deps;return{
+export function createSalesMutationRepository(connectionPool:pg.Pool,deps:SalesMutationDeps):Pick<ServerRepository,'cancelSalesDocument'|'updateSalesDocumentNote'>{const {ensureTables,ensureMovements,loadDocument,receiptBaseCode,missingGuard,reverseMovements,cancelPaymentCashbook,recomputeBalances}=deps;return{
     async cancelSalesDocument(input) {
       await ensureTables(connectionPool)
+      await ensureMovements(connectionPool)
       const client = await connectionPool.connect()
+      const transactionPool = Object.create(connectionPool) as pg.Pool
+      transactionPool.query = client.query.bind(client) as pg.Pool['query']
       try {
         await client.query('begin')
-        const result = await client.query(
-          `
-            update orders
-            set status = 'cancelled',
-                payment_status = case when order_type = 'invoice' then payment_status else payment_status end,
-                updated_at = now()
-            where organization_id = $1
-              and (id = $2 or code = $2)
-              and status <> 'cancelled'
-            returning id
-          `,
-          [input.organizationId, input.id],
-        )
-        const orderId = result.rows[0]?.id
-        if (!orderId) {
-          await client.query('rollback')
-          return loadDocument({ organizationId: input.organizationId, id: input.id }) ?? null
-        }
-        await client.query(
-          `
-            update customer_debt_entries
-            set status = 'closed',
-                remaining_debt = 0,
-                updated_at = now()
-            where organization_id = $1
-              and order_id = $2
-              and status = 'open'
-          `,
-          [input.organizationId, orderId],
-        )
+        const current = await client.query<{ id: string; code: string; status: string }>(`
+          select id, code, status from orders
+          where organization_id = $1 and (id = $2 or code = $2)
+          limit 1 for update
+        `, [input.organizationId, input.id])
+        const order = current.rows[0]
+        if (!order) { await client.query('rollback'); return null }
+        if (order.status === 'cancelled') { await client.query('rollback'); return loadDocument({ organizationId: input.organizationId, id: order.id }) ?? null }
+        await cancelPaymentCashbook(transactionPool, input.organizationId, String(order.id), String(order.code))
+        const affectedProducts = await reverseMovements(transactionPool, input.organizationId, String(order.id), String(order.code))
+        await client.query(`
+          update orders
+          set status = 'cancelled', paid_amount = 0, debt_amount = 0, payment_status = 'unpaid',
+              cancel_reason_type = $3, cancel_reason_note = $4, updated_at = now()
+          where organization_id = $1 and id = $2
+        `, [input.organizationId, order.id, input.reason.code, input.reason.note])
+        await client.query(`
+          update customer_debt_entries
+          set status = 'closed', remaining_debt = 0, paid_amount = 0, updated_at = now()
+          where organization_id = $1 and order_id = $2
+        `, [input.organizationId, order.id])
+        await recomputeBalances(transactionPool, input.organizationId, affectedProducts)
         await client.query('commit')
-        return loadDocument({ organizationId: input.organizationId, id: String(orderId) }) ?? null
+        return loadDocument({ organizationId: input.organizationId, id: String(order.id) }) ?? null
       } catch (error) {
         await client.query('rollback')
         throw error
-      } finally {
-        client.release()
-      }
+      } finally { client.release() }
     },
 
     async updateSalesDocumentNote(input) {

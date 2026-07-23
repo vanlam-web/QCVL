@@ -1,10 +1,9 @@
-import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Copy, FileOutput, Pencil, Printer, Save, Search, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState, type FormEvent, type MouseEvent } from 'react'
+import { ChevronLeft, ChevronRight, Copy, FileOutput, Pencil, Printer, Save, Search, Trash2, X } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
   ManagementCompactToolbar,
-  ManagementConfirmDialog,
   ManagementDataTable,
   type ManagementDataTableColumn,
   ManagementDateRangeInputs,
@@ -186,6 +185,8 @@ export function SalesDocumentsPage({
   const [openingRevisionId, setOpeningRevisionId] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReasonCode, setCancelReasonCode] = useState<'wrong_price' | 'wrong_size' | 'wrong_customer' | 'customer_changed_mind' | 'other'>('wrong_price')
+  const [cancelReasonNote, setCancelReasonNote] = useState('')
   const [canceling, setCanceling] = useState(false)
   const documentsSortInitialRender = useRef(true)
   async function loadDocuments(input: {
@@ -637,21 +638,21 @@ export function SalesDocumentsPage({
 
   async function cancelSelectedDocument() {
     if (!selected) return
+    if (cancelReasonCode === 'other' && !cancelReasonNote.trim()) {
+      setDetailError('Vui lòng nhập ghi chú cho lý do Khác.')
+      return
+    }
     setDetailError(null)
     setDetailErrorDocumentId(null)
     setCanceling(true)
     try {
-      const saved = await service.cancelSalesDocument(selected.id)
+      const saved = await service.cancelSalesDocument(selected.id, { code: cancelReasonCode, note: cancelReasonNote.trim() || null })
       setSelected(saved)
-      setState((current) => current
-        ? {
-            ...current,
-            items: current.items.map((item) => (
-              item.id === saved.id ? { ...item, status: saved.status, payment_status: saved.payment_status } : item
-            )),
-          }
-        : current)
+      setState((current) => (
+        current ? { ...current, items: current.items.map((item) => (item.id === saved.id ? { ...item, status: saved.status, payment_status: saved.payment_status } : item)) } : current
+      ))
       setCancelOpen(false)
+      setCancelReasonNote('')
       await loadDocuments({ page: state?.page ?? 1 })
     } catch (cause) {
       setDetailError(formatApiError(cause, 'Không hủy được hóa đơn.'))
@@ -660,6 +661,11 @@ export function SalesDocumentsPage({
     } finally {
       setCanceling(false)
     }
+  }
+
+  function submitCancellation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void cancelSelectedDocument()
   }
 
   async function saveSelectedDocumentChanges(input: { note: string; createdAt: string }) {
@@ -1071,18 +1077,29 @@ export function SalesDocumentsPage({
       onImported={() => void loadDocuments({ page: 1 })}
       onOldDataDeleted={() => void loadDocuments({ page: 1 })}
     />
-    <ManagementConfirmDialog
-      open={cancelOpen && Boolean(selected)}
-      title="Hủy hóa đơn"
-      message={(
-        <>
-          Bạn có chắc chắn muốn hủy hóa đơn <strong>{selected?.code}</strong> không?
-        </>
-      )}
-      loading={canceling}
-      onCancel={() => setCancelOpen(false)}
-      onConfirm={() => void cancelSelectedDocument()}
-    />
+    {cancelOpen && selected ? (
+      <div className="management-modal-backdrop">
+        <section aria-label="Hủy hóa đơn" aria-modal="true" className="management-modal-dialog management-modal-dialog-compact" role="dialog">
+          <header className="management-modal-header">
+            <h2>Hủy hóa đơn</h2>
+            <button aria-label="Đóng Hủy hóa đơn" className="management-icon-button" disabled={canceling} type="button" onClick={() => setCancelOpen(false)}><X aria-hidden="true" size={18} /></button>
+          </header>
+          <form onSubmit={submitCancellation}>
+            <p>Hủy <strong>{selected.code}</strong> sẽ đảo tồn kho, tiền đã thu và công nợ. Lịch sử hóa đơn, phiếu thu và bút toán vẫn được giữ lại.</p>
+            <label className="management-field-label" htmlFor="sales-cancel-reason">Lý do hủy</label>
+            <select id="sales-cancel-reason" value={cancelReasonCode} onChange={(event) => setCancelReasonCode(event.target.value as typeof cancelReasonCode)}>
+              <option value="wrong_price">Sai giá</option><option value="wrong_size">Sai kích thước</option><option value="wrong_customer">Sai khách</option><option value="customer_changed_mind">Khách đổi ý</option><option value="other">Khác</option>
+            </select>
+            <label className="management-field-label" htmlFor="sales-cancel-note">Ghi chú {cancelReasonCode === 'other' ? '(bắt buộc)' : '(không bắt buộc)'}</label>
+            <textarea id="sales-cancel-note" value={cancelReasonNote} onChange={(event) => setCancelReasonNote(event.target.value)} />
+            <footer className="management-modal-footer">
+              <button className="button button-secondary" disabled={canceling} type="button" onClick={() => setCancelOpen(false)}>Bỏ qua</button>
+              <button className="button button-primary" disabled={canceling} type="submit">{canceling ? 'Đang xử lý' : 'Hủy hóa đơn'}</button>
+            </footer>
+          </form>
+        </section>
+      </div>
+    ) : null}
     </>
   )
 }

@@ -532,9 +532,10 @@ it('cancels an invoice after confirmation', async () => {
 
   const dialog = screen.getByRole('dialog')
   expect(within(dialog).getByText('HD010985')).toBeInTheDocument()
+  expect(within(dialog).getByText(/đảo tồn kho, tiền đã thu và công nợ/i)).toBeInTheDocument()
   await userEvent.click(within(dialog).getAllByRole('button').at(-1) as HTMLElement)
 
-  await waitFor(() => expect(cancelSalesDocument).toHaveBeenCalledWith('order-1'))
+  await waitFor(() => expect(cancelSalesDocument).toHaveBeenCalledWith('order-1', { code: 'wrong_price', note: null }))
   expect(listSalesDocuments).toHaveBeenCalledTimes(2)
   expect(detailRegion.querySelector('.status-chip')).toHaveTextContent(/h.y/i)
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

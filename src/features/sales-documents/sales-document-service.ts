@@ -45,10 +45,10 @@ export function createSalesDocumentService(api: SalesDocumentApiRequester) {
       return api.request<SalesDocumentListResponse>(`/api/v1/sales-documents${query ? `?${query}` : ''}`)
     },
     getSalesDocument: (id: string) => api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`),
-    cancelSalesDocument: (id: string) =>
+    cancelSalesDocument: (id: string, reason: { code: 'wrong_price' | 'wrong_size' | 'wrong_customer' | 'customer_changed_mind' | 'other'; note: string | null }) =>
       api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ status: 'cancelled' }),
+        body: JSON.stringify({ status: 'cancelled', cancel_reason_type: reason.code, cancel_reason_note: reason.note }),
       }),
     updateSalesDocumentNote: (id: string, input: { note?: string | null; created_at?: string }) =>
       api.request<SalesDocumentDetail>(`/api/v1/sales-documents/${id}`, {

@@ -159,7 +159,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
   const salesSaveRepository = createSalesSaveRepository(pool, { ensureTables: ensureSalesFinanceTables, ensureMovements: ensureStockMovementsTable, insertDocument: insertSalesDocument, insertEntry: insertCashbookEntry, saveMovements: saveSalesDocumentStockMovements, loadDocument: (input: Parameters<NonNullable<ServerRepository['getSalesDocument']>>[0]) => salesQueryRepository.getSalesDocument?.(input) })
 
-  const salesMutationRepository = createSalesMutationRepository(pool, { ensureTables: ensureSalesFinanceTables, loadDocument: (input: Parameters<NonNullable<ServerRepository['getSalesDocument']>>[0]) => salesQueryRepository.getSalesDocument?.(input), receiptBaseCode: salesDocumentSameSaleReceiptBaseCode, missingGuard: isMissingGuardRelationError })
+  const salesMutationRepository = createSalesMutationRepository(pool, { ensureTables: ensureSalesFinanceTables, ensureMovements: ensureStockMovementsTable, loadDocument: (input: Parameters<NonNullable<ServerRepository['getSalesDocument']>>[0]) => salesQueryRepository.getSalesDocument?.(input), receiptBaseCode: salesDocumentSameSaleReceiptBaseCode, missingGuard: isMissingGuardRelationError, reverseMovements: reverseSalesDocumentStockMovements, cancelPaymentCashbook: cancelSalesDocumentPaymentCashbook, recomputeBalances: recomputeStockMovementBalances })
 
   const posUsageRepository = createPosUsageRepository(pool, { ensureUsage: ensurePosProductUsageTable, ensureSearch: ensureSearchSelectionStatsTable })
 
@@ -1372,6 +1372,52 @@ async function cancelPurchaseReceiptSupplierPaymentCashbook(pool: pg.Pool, organ
   )
 }
 
+async function reverseSalesDocumentStockMovements(pool: pg.Pool, organizationId: string, orderId: string, orderCode: string) {
+  await ensureStockMovementsTable(pool)
+  const originals = await pool.query<{ id: string; product_id: string; quantity_delta: number; transaction_price: number | null; cost_price: number | null; partner_name: string | null }>(`
+    select id::text, product_id::text, quantity_delta, transaction_price, cost_price, partner_name
+    from stock_movements
+    where organization_id = $1 and document_type = 'sale_invoice' and document_code = $2
+    order by created_at, id
+  `, [organizationId, orderCode])
+  const affectedProducts = new Set<string>()
+  const reversedAt = new Date().toISOString()
+  for (const original of originals.rows) {
+    const quantityDelta = -Number(original.quantity_delta)
+    if (quantityDelta === 0) continue
+    affectedProducts.add(String(original.product_id))
+    await insertStockMovement(pool, organizationId, {
+      id: stableUuidFromText(`stock-movement-sale-cancellation-${orderId}-${original.id}`),
+      productId: String(original.product_id), movementType: 'sale_reversal', quantityDelta, endingQty: null,
+      documentType: 'sale_invoice_cancellation', documentCode: orderCode,
+      transactionPrice: original.transaction_price === null ? null : Number(original.transaction_price),
+      costPrice: original.cost_price === null ? null : Number(original.cost_price),
+      partnerName: original.partner_name, createdAt: reversedAt,
+    })
+  }
+  return affectedProducts
+}
+
+async function cancelSalesDocumentPaymentCashbook(pool: pg.Pool, organizationId: string, orderId: string, orderCode: string) {
+  await ensureSalesFinanceTables(pool)
+  const linkedEntries = await pool.query<{ id: string; receipt_id: string; allocations: Array<{ order_id?: string; order_code?: string }> }>(`
+    select cbe.id::text, cbe.source->>'id' as receipt_id, cbe.allocations
+    from cashbook_entries cbe
+    where cbe.organization_id = $1 and cbe.status = 'posted' and cbe.source_type = 'payment_receipt_method'
+      and (cbe.source->>'order_id' = $2 or cbe.source->>'order_code' = $3 or cbe.allocations @> jsonb_build_array(jsonb_build_object('order_id', $2::text)))
+    for update
+  `, [organizationId, orderId, orderCode])
+  const sharedEntry = linkedEntries.rows.find((entry) => !Array.isArray(entry.allocations) || entry.allocations.some((allocation) => (
+    String(allocation.order_id ?? '') !== orderId && String(allocation.order_code ?? '') !== orderCode
+  )))
+  if (sharedEntry) throw new Error('SALES_DOCUMENT_SHARED_PAYMENT_REQUIRES_ALLOCATION_REVERSAL')
+  if (linkedEntries.rows.length === 0) return
+  const entryIds = linkedEntries.rows.map((entry) => entry.id)
+  const receiptIds = [...new Set(linkedEntries.rows.map((entry) => entry.receipt_id).filter(Boolean))]
+  await pool.query(`update cashbook_entries set status = 'cancelled' where organization_id = $1 and id = any($2::text[])`, [organizationId, entryIds])
+  if (receiptIds.length > 0) await pool.query(`update payment_receipts set status = 'cancelled' where organization_id = $1 and id = any($2::text[])`, [organizationId, receiptIds])
+}
+
 async function updateLatestPurchaseCostsFromReceipt(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData) {
   await ensureProductCatalogSchema(pool)
   for (const item of receipt.items) {
@@ -2374,6 +2420,7 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
   await pool.query(`alter table orders add column if not exists revised_from_order_id text references orders(id) on delete set null`)
   await pool.query(`alter table orders add column if not exists replaced_by_order_id text references orders(id) on delete set null`)
   await pool.query(`alter table orders add column if not exists cancel_reason_type text`)
+  await pool.query(`alter table orders add column if not exists cancel_reason_note text`)
   await pool.query(`alter table orders add column if not exists revision_reason_code text`)
   await pool.query(`alter table orders add column if not exists revision_reason_note text`)
   await pool.query(`update orders set base_code = regexp_replace(code, '\\.\\d+$', '') where base_code is null or btrim(base_code) = ''`)
@@ -2408,10 +2455,12 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
       order_id text references orders(id) on delete set null,
       total_received_amount numeric(14,2) not null default 0,
       note text not null default '',
+      status text not null default 'posted' check (status in ('posted', 'cancelled')),
       created_at timestamptz not null default now(),
       unique (organization_id, code)
     )
   `)
+  await pool.query(`alter table payment_receipts add column if not exists status text not null default 'posted'`)
   await pool.query('alter table payment_receipts add column if not exists created_at timestamptz not null default now()')
   await pool.query(`
     create table if not exists payment_receipt_methods (
@@ -2660,6 +2709,7 @@ type PgOrderRow = {
   revised_from_order_id?: string | null
   replaced_by_order_id?: string | null
   cancel_reason_type?: string | null
+  cancel_reason_note?: string | null
   revision_reason_code?: string | null
   revision_reason_note?: string | null
 }
@@ -2688,9 +2738,9 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
         id, organization_id, code, order_type, status, customer_id,
         customer_snapshot, seller_snapshot, subtotal_amount, discount_amount,
         total_amount, paid_amount, debt_amount, payment_status, note, base_code, revision_no,
-        revised_from_order_id, replaced_by_order_id, cancel_reason_type, revision_reason_code, revision_reason_note, created_at, updated_at
+        revised_from_order_id, replaced_by_order_id, cancel_reason_type, cancel_reason_note, revision_reason_code, revision_reason_note, created_at, updated_at
       )
-      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, now())
+      values ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, now())
       on conflict (organization_id, code)
       do update set
         order_type = excluded.order_type,
@@ -2710,6 +2760,7 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
         revised_from_order_id = excluded.revised_from_order_id,
         replaced_by_order_id = excluded.replaced_by_order_id,
         cancel_reason_type = excluded.cancel_reason_type,
+        cancel_reason_note = excluded.cancel_reason_note,
         revision_reason_code = excluded.revision_reason_code,
         revision_reason_note = excluded.revision_reason_note,
         created_at = excluded.created_at,
@@ -2737,6 +2788,7 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
       document.revised_from_order_id ?? null,
       document.replaced_by_order_id ?? null,
       document.cancel_reason_type ?? null,
+      document.cancel_reason_note ?? null,
       document.revision_reason_code ?? null,
       document.revision_reason_note ?? null,
       document.created_at,
@@ -2843,6 +2895,7 @@ function mapOrderRow(row: PgOrderRow): SalesDocumentData {
     revised_from_order_id: row.revised_from_order_id ?? null,
     replaced_by_order_id: row.replaced_by_order_id ?? null,
     cancel_reason_type: row.cancel_reason_type ?? null,
+    cancel_reason_note: row.cancel_reason_note ?? null,
     revision_reason_code: row.revision_reason_code ?? null,
     revision_reason_note: row.revision_reason_note ?? null,
   }
