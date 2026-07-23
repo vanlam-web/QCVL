@@ -701,6 +701,7 @@ describe('createPgRepository product units', () => {
       String(sql).includes('select')
       && String(sql).includes('cbe.id')
       && String(sql).includes('from cashbook_entries cbe')
+      && String(sql).includes('order by cbe.created_at desc, cbe.code desc')
     ))?.[0])
     expect(cashbookSql).not.toContain('kiotviet_anchor')
     expect(cashbookSql).not.toContain('cbe.created_at >')

@@ -28,9 +28,6 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
   const customerFilter = options.singleCustomer ? 'where dc.customer_id = $2' : ''
   const liveInvoiceCustomerFilter = options.singleCustomer ? 'and o.customer_id = $2' : ''
   const adjustmentCustomerFilter = options.singleCustomer ? 'and customer_id = $2' : ''
-  const paymentCustomerFilter = options.singleCustomer
-    ? "and coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) = $2"
-    : ''
   const linkedSupplierCustomerFilter = options.singleCustomer ? "and s.data->>'linked_customer_id' = $2" : ''
   return `
     with live_invoice_debt as (
@@ -73,26 +70,76 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         ${adjustmentCustomerFilter}
       group by customer_id
     ),
-    customer_payment_debt as (
+    customer_payment_sources as (
       select
-        coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) as customer_id,
-        min(coalesce(cs.code, o.customer_snapshot->>'code', cbe.source->>'counterparty_code', '')) as customer_code,
-        min(coalesce(cs.data->>'name', o.customer_snapshot->>'name', cbe.counterparty->>'name', '')) as customer_name,
-        sum(case when cbe.direction = 'in' then -abs(cbe.amount_delta) else abs(cbe.amount_delta) end) as amount_delta,
-        max(cbe.created_at) as last_activity_at
+        cbe.id,
+        cbe.organization_id,
+        cbe.direction,
+        cbe.amount_delta,
+        cbe.created_at,
+        nullif(cbe.source->>'customer_id', '') as customer_id,
+        cbe.source,
+        cbe.counterparty
+      from cashbook_entries cbe
+      where cbe.organization_id = $1
+        and cbe.status = 'posted'
+        and (
+          cbe.source_type = 'payment_receipt_method'
+          or (
+            cbe.source_type = 'kiotviet_cashbook'
+            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+          )
+        )
+        and nullif(cbe.source->>'customer_id', '') is not null
+
+      union all
+
+      select
+        cbe.id,
+        cbe.organization_id,
+        cbe.direction,
+        cbe.amount_delta,
+        cbe.created_at,
+        o.customer_id,
+        cbe.source,
+        cbe.counterparty
+      from cashbook_entries cbe
+      join orders o
+        on o.organization_id = cbe.organization_id
+       and o.code = cbe.source->>'order_code'
+       and o.status <> 'cancelled'
+      where cbe.organization_id = $1
+        and cbe.status = 'posted'
+        and (
+          cbe.source_type = 'payment_receipt_method'
+          or (
+            cbe.source_type = 'kiotviet_cashbook'
+            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+          )
+        )
+        and nullif(cbe.source->>'customer_id', '') is null
+
+      union all
+
+      select
+        cbe.id,
+        cbe.organization_id,
+        cbe.direction,
+        cbe.amount_delta,
+        cbe.created_at,
+        cs.id as customer_id,
+        cbe.source,
+        cbe.counterparty
       from cashbook_entries cbe
       left join orders o
         on o.organization_id = cbe.organization_id
        and o.code = cbe.source->>'order_code'
        and o.status <> 'cancelled'
-      left join customer_snapshots cs
+      join customer_snapshots cs
         on cs.organization_id = cbe.organization_id
        and (
-         ${options.singleCustomer ? 'cs.id = $2 and' : ''}
-         (
-           lower(cs.code) = lower(cbe.source->>'counterparty_code')
-           or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
-         )
+         lower(cs.code) = lower(cbe.source->>'counterparty_code')
+         or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
        )
       where cbe.organization_id = $1
         and cbe.status = 'posted'
@@ -103,9 +150,23 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
             and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
           )
         )
-        and coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) is not null
-        ${paymentCustomerFilter}
-      group by coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id)
+        and nullif(cbe.source->>'customer_id', '') is null
+        and o.customer_id is null
+    ),
+    customer_payment_debt as (
+      select
+        cps.customer_id,
+        min(coalesce(cs.code, cps.source->>'counterparty_code', '')) as customer_code,
+        min(coalesce(cs.data->>'name', cps.counterparty->>'name', '')) as customer_name,
+        sum(case when cps.direction = 'in' then -abs(cps.amount_delta) else abs(cps.amount_delta) end) as amount_delta,
+        max(cps.created_at) as last_activity_at
+      from customer_payment_sources cps
+      left join customer_snapshots cs
+        on cs.organization_id = cps.organization_id
+       and cs.id = cps.customer_id
+      where cps.customer_id is not null
+        ${options.singleCustomer ? 'and cps.customer_id = $2' : ''}
+      group by cps.customer_id
     ),
     linked_supplier_debt as (
       select
