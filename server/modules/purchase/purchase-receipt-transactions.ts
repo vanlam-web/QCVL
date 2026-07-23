@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type pg from 'pg'
 import type { ServerRepository } from '../../http-types.js'
 import type { PurchaseReceiptData, CashbookEntryData, CurrentUserData } from '../../http.js'
@@ -6,6 +7,30 @@ export class SupplierPaymentValidationError extends Error {
     super(message)
     this.name = 'SupplierPaymentValidationError'
   }
+}
+export class SupplierPaymentOperationConflictError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SupplierPaymentOperationConflictError'
+  }
+}
+function supplierPaymentPayloadHash(input: {
+  supplierId: string
+  paymentMethod: string
+  financeAccountId?: string
+  note?: string | null
+  allocations: Array<{ purchase_receipt_id: string; amount: number }>
+}) {
+  const payload = {
+    supplierId: input.supplierId,
+    paymentMethod: input.paymentMethod,
+    financeAccountId: input.financeAccountId ?? null,
+    note: input.note ?? null,
+    allocations: [...input.allocations]
+      .map((allocation) => ({ purchase_receipt_id: allocation.purchase_receipt_id, amount: Number(allocation.amount) }))
+      .sort((left, right) => left.purchase_receipt_id.localeCompare(right.purchase_receipt_id)),
+  }
+  return createHash('sha256').update(JSON.stringify(payload)).digest('hex')
 }
 type PurchaseTransactionDeps = {
   ensureSnapshots(pool: pg.Pool): Promise<void>
@@ -153,12 +178,25 @@ export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:Pu
       await ensureSalesFinance(connectionPool)
       const validAllocations = input.allocations.filter((allocation) => allocation.amount > 0)
       if (validAllocations.length === 0) throw new Error('No supplier payment allocations')
+      const payloadHash = supplierPaymentPayloadHash({ ...input, allocations: validAllocations })
 
       const client = await connectionPool.connect()
       const pool = Object.create(connectionPool) as pg.Pool
       pool.query = client.query.bind(client) as pg.Pool['query']
       try {
         await client.query('begin')
+        await client.query('select pg_advisory_xact_lock(hashtext($1))', [`supplier-payment:${input.organizationId}:${input.operationId}`])
+        const existingOperation = await client.query<{ payload_hash: string; response: { supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string } }>(
+          'select payload_hash, response from supplier_payment_operations where organization_id = $1 and operation_id = $2',
+          [input.organizationId, input.operationId],
+        )
+        if (existingOperation.rows[0]) {
+          if (existingOperation.rows[0].payload_hash !== payloadHash) {
+            throw new SupplierPaymentOperationConflictError('Mã thao tác thanh toán đã được dùng với nội dung khác.')
+          }
+          await client.query('rollback')
+          return existingOperation.rows[0].response
+        }
         const receipts: PurchaseReceiptData[] = []
         for (const allocation of validAllocations) {
           await client.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipt:${input.organizationId}:${allocation.purchase_receipt_id}`])
@@ -218,13 +256,22 @@ export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:Pu
           )
         }
         await recomputeSupplier(pool, input.organizationId, input.supplierId)
-        await client.query('commit')
-        return {
+        const result = {
           supplier_payment_id: entry.id,
           code: entry.code,
           amount: totalAmount,
           cashbook_voucher_id: entry.id,
         }
+        await client.query(
+          `
+            insert into supplier_payment_operations (
+              organization_id, operation_id, supplier_id, payload_hash, response
+            ) values ($1, $2, $3, $4, $5::jsonb)
+          `,
+          [input.organizationId, input.operationId, input.supplierId, payloadHash, JSON.stringify(result)],
+        )
+        await client.query('commit')
+        return result
       } catch (error) {
         await client.query('rollback')
         throw error

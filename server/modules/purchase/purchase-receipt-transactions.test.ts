@@ -11,13 +11,19 @@ const receipt = {
   created_at: '2026-07-23T01:00:00.000Z', received_at: '2026-07-23T01:00:00.000Z', updated_at: '2026-07-23T01:00:00.000Z',
 } as unknown as PurchaseReceiptData
 
-function setup(inputReceipt: PurchaseReceiptData = receipt, options: { failBalance?: boolean } = {}) {
+function setup(inputReceipt: PurchaseReceiptData = receipt, options: { failBalance?: boolean; operation?: { payload_hash: string; response: { supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string } } } = {}) {
   const queries: string[] = []
   const directQueries: string[] = []
   let released = false
   let cashbookInserts = 0
   const client = {
-    async query(text: string) { queries.push(text.trim()); return { rows: [] } },
+    async query(text: string) {
+      queries.push(text.trim())
+      if (text.includes('select payload_hash, response from supplier_payment_operations')) {
+        return { rows: options.operation ? [options.operation] : [] }
+      }
+      return { rows: [] }
+    },
     release() { released = true },
   }
   const pool = { connect: async () => client, query: async (text: string) => { directQueries.push(text); return { rows: [] } } } as unknown as pg.Pool
@@ -68,9 +74,29 @@ describe('purchase receipt transaction client', () => {
 
   it('rejects supplier allocation above payable before cashbook mutation', async () => {
     const fake = setup({ ...receipt, status: 'posted', remaining_amount: 40 })
-    await expect(fake.repository.paySupplier?.({ organizationId: 'org-1', supplierId: 'supplier-1', currentUser, paymentMethod: 'cash', allocations: [{ purchase_receipt_id: 'receipt-1', amount: 50 }] })).rejects.toThrow('Số tiền phân bổ vượt số còn phải trả của PN000001.')
+    await expect(fake.repository.paySupplier?.({ organizationId: 'org-1', supplierId: 'supplier-1', operationId: '11111111-1111-4111-8111-111111111111', currentUser, paymentMethod: 'cash', allocations: [{ purchase_receipt_id: 'receipt-1', amount: 50 }] })).rejects.toThrow('Số tiền phân bổ vượt số còn phải trả của PN000001.')
     expect(fake.cashbookInserts()).toBe(0)
     expect(fake.queries.at(-1)).toBe('rollback')
     expect(fake.released()).toBe(true)
+  })
+
+  it('replays an identical supplier payment operation without another cashbook mutation', async () => {
+    const result = { supplier_payment_id: 'payment-1', code: 'PCPN000001', amount: 40, cashbook_voucher_id: 'cashbook-1' }
+    const fake = setup({ ...receipt, status: 'posted', remaining_amount: 40 }, {
+      operation: { payload_hash: '786c5e9c45de84db1165c7aa4eb4bca68fa313d18db55cba28b758ee54d2ffd6', response: result },
+    })
+    const replay = await fake.repository.paySupplier?.({ organizationId: 'org-1', supplierId: 'supplier-1', operationId: '11111111-1111-4111-8111-111111111111', currentUser, paymentMethod: 'cash', allocations: [{ purchase_receipt_id: 'receipt-1', amount: 40 }] })
+    expect(replay).toEqual(result)
+    expect(fake.cashbookInserts()).toBe(0)
+    expect(fake.queries.at(-1)).toBe('rollback')
+  })
+
+  it('rejects changed payload for an already used supplier payment operation', async () => {
+    const fake = setup({ ...receipt, status: 'posted', remaining_amount: 40 }, {
+      operation: { payload_hash: 'different-payload', response: { supplier_payment_id: 'payment-1', code: 'PCPN000001', amount: 40, cashbook_voucher_id: 'cashbook-1' } },
+    })
+    await expect(fake.repository.paySupplier?.({ organizationId: 'org-1', supplierId: 'supplier-1', operationId: '11111111-1111-4111-8111-111111111111', currentUser, paymentMethod: 'cash', allocations: [{ purchase_receipt_id: 'receipt-1', amount: 40 }] })).rejects.toThrow('Mã thao tác thanh toán đã được dùng với nội dung khác.')
+    expect(fake.cashbookInserts()).toBe(0)
+    expect(fake.queries.at(-1)).toBe('rollback')
   })
 })

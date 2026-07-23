@@ -1,14 +1,18 @@
-import { SupplierPaymentValidationError } from './purchase-receipt-transactions.js'
+import { SupplierPaymentOperationConflictError, SupplierPaymentValidationError } from './purchase-receipt-transactions.js'
 import type { CashbookEntryData, CurrentUserData, ProductListData, PurchaseReceiptData, ServerRepository, SupplierListData } from '../../http.js'
 import type { RouteResult } from '../../route-types.js'
 type PurchaseReceiptInputBody={code?:unknown;supplier_id?:unknown;received_at?:unknown;supplier_document_no?:unknown;notes?:unknown;discount_amount?:unknown;paid_amount?:unknown;items?:unknown}
 type Allocation={purchase_receipt_id?:unknown;amount?:number}
 type ReceiptRow=PurchaseReceiptData
 type Paged<T>={items:T[];page:number;page_size:number;total:number}
-type PurchaseHandlerDeps={request:Request;currentUser:CurrentUserData;repository:ServerRepository;path:string;url:URL;readJson(request:Request):Promise<Record<string,unknown>>;getSupplierIdFromPath(path:string):string;getIdFromPath(path:string):string|undefined;purchaseReceipts:PurchaseReceiptData[];suppliers:SupplierListData[];products:ProductListData[];cashbookEntries:CashbookEntryData[];purchaseReceiptQueryHandlers:Record<string,()=>RouteResult>;purchaseImportHandlers:Record<string,()=>RouteResult>;filterPurchaseReceipts(url:URL):PurchaseReceiptData[];sortPurchaseReceiptsForRequest(items:PurchaseReceiptData[],url:URL):PurchaseReceiptData[];purchaseReceiptListSummary(items:PurchaseReceiptData[]):unknown;paged<T>(items:T[],page:number,pageSize:number):Paged<T>;makeManualPurchaseReceipt(input:{body:PurchaseReceiptInputBody;currentUser:CurrentUserData;existing?:PurchaseReceiptData|null;existingReceipts:readonly PurchaseReceiptData[];suppliers:readonly SupplierListData[];products:readonly ProductListData[]}):PurchaseReceiptData;syncSupplierTotalsFromPurchaseReceipts():void;validation(status:number,code:'VALIDATION_ERROR'|'RESOURCE_NOT_FOUND',message:string):Error;randomUUID():string;runtimeIso():string}
+type PurchaseHandlerDeps={request:Request;currentUser:CurrentUserData;repository:ServerRepository;path:string;url:URL;readJson(request:Request):Promise<Record<string,unknown>>;getSupplierIdFromPath(path:string):string;getIdFromPath(path:string):string|undefined;purchaseReceipts:PurchaseReceiptData[];suppliers:SupplierListData[];products:ProductListData[];cashbookEntries:CashbookEntryData[];purchaseReceiptQueryHandlers:Record<string,()=>RouteResult>;purchaseImportHandlers:Record<string,()=>RouteResult>;filterPurchaseReceipts(url:URL):PurchaseReceiptData[];sortPurchaseReceiptsForRequest(items:PurchaseReceiptData[],url:URL):PurchaseReceiptData[];purchaseReceiptListSummary(items:PurchaseReceiptData[]):unknown;paged<T>(items:T[],page:number,pageSize:number):Paged<T>;makeManualPurchaseReceipt(input:{body:PurchaseReceiptInputBody;currentUser:CurrentUserData;existing?:PurchaseReceiptData|null;existingReceipts:readonly PurchaseReceiptData[];suppliers:readonly SupplierListData[];products:readonly ProductListData[]}):PurchaseReceiptData;syncSupplierTotalsFromPurchaseReceipts():void;validation(status:number,code:'VALIDATION_ERROR'|'RESOURCE_NOT_FOUND'|'RESOURCE_CONFLICT',message:string):Error;randomUUID():string;runtimeIso():string}
 export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){const {request,currentUser,repository,path,url,readJson,getSupplierIdFromPath,getIdFromPath,purchaseReceipts,suppliers,products,cashbookEntries,purchaseReceiptQueryHandlers,purchaseImportHandlers,filterPurchaseReceipts,sortPurchaseReceiptsForRequest,purchaseReceiptListSummary,paged,makeManualPurchaseReceipt,syncSupplierTotalsFromPurchaseReceipts,validation,randomUUID,runtimeIso}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
     paySupplier: async () => {
       const body = await readJson(request)
+      const operationId = typeof body.operation_id === 'string' ? body.operation_id.trim() : ''
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(operationId)) {
+        throw validation(400, 'VALIDATION_ERROR', 'Mã thao tác thanh toán không hợp lệ.')
+      }
       const allocations = Array.isArray(body.allocations) ? body.allocations : []
       const paymentMethod = body.payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash'
       const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id : undefined
@@ -29,6 +33,7 @@ export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){cons
           result = await repository.paySupplier({
             organizationId: currentUser.organization.id,
             supplierId,
+            operationId,
             paymentMethod,
             financeAccountId,
             note: typeof body.note === 'string' ? body.note : null,
@@ -38,6 +43,9 @@ export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){cons
         } catch (error) {
           if (error instanceof SupplierPaymentValidationError) {
             throw validation(400, 'VALIDATION_ERROR', error.message)
+          }
+          if (error instanceof SupplierPaymentOperationConflictError) {
+            throw validation(409, 'RESOURCE_CONFLICT', error.message)
           }
           throw error
         }

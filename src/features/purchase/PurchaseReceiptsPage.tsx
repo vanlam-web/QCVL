@@ -421,6 +421,7 @@ export function PurchaseReceiptsPage({
   const [supplierPaymentAmount, setSupplierPaymentAmount] = useState(0)
   const [supplierPaymentMethod, setSupplierPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash')
   const [supplierPaymentFinanceAccountId, setSupplierPaymentFinanceAccountId] = useState('')
+  const [supplierPaymentOperationId, setSupplierPaymentOperationId] = useState<string | null>(null)
   const [cancelReceiptOpen, setCancelReceiptOpen] = useState(false)
   const [cancelingReceipt, setCancelingReceipt] = useState(false)
   const [rollLengthTexts, setRollLengthTexts] = useState<Record<number, string>>({})
@@ -1569,6 +1570,7 @@ export function PurchaseReceiptsPage({
     setSupplierPaymentAmount(Math.max(selectedReceiptOutstanding, 0))
     setSupplierPaymentMethod('cash')
     setSupplierPaymentFinanceAccountId('')
+    setSupplierPaymentOperationId(crypto.randomUUID())
   }
 
   async function changeImmediatePaymentMethod(nextMethod: 'cash' | 'bank_transfer') {
@@ -1744,10 +1746,13 @@ export function PurchaseReceiptsPage({
     }
 
     supplierPaymentSubmittingRef.current = true
+    const operationId = supplierPaymentOperationId ?? crypto.randomUUID()
+    if (supplierPaymentOperationId === null) setSupplierPaymentOperationId(operationId)
     setPosting(true)
     setError(null)
     try {
       await service.paySupplier(selectedReceipt.supplier_id, {
+        operation_id: operationId,
         payment_method: supplierPaymentMethod,
         ...(supplierPaymentMethod === 'bank_transfer' ? { finance_account_id: supplierPaymentFinanceAccountId } : {}),
         allocations: [{ purchase_receipt_id: selectedReceipt.id, amount: supplierPaymentAmount }],
@@ -1755,6 +1760,7 @@ export function PurchaseReceiptsPage({
       const detail = await service.getReceipt(selectedReceipt.id)
       setSelectedReceipt(detail)
       setSupplierPaymentOpen(false)
+      setSupplierPaymentOperationId(null)
       await loadReceipts()
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được thanh toán NCC.'))

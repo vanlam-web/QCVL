@@ -1298,10 +1298,11 @@ it('shows supplier payment history and pays remaining amount from posted receipt
   await userEvent.selectOptions(within(paymentForm).getByLabelText('Phương thức trả NCC'), 'cash')
   await userEvent.click(within(paymentForm).getByRole('button', { name: 'Lưu thanh toán NCC' }))
 
-  expect(service.paySupplier).toHaveBeenCalledWith('supplier-1', {
+  expect(service.paySupplier).toHaveBeenCalledWith('supplier-1', expect.objectContaining({
+    operation_id: expect.stringMatching(/^[0-9a-f-]{36}$/i),
     payment_method: 'cash',
     allocations: [{ purchase_receipt_id: 'receipt-posted', amount: 80000 }],
-  })
+  }))
 })
 
 it('blocks two synchronous supplier payment submits before React rerenders', async () => {
@@ -1322,6 +1323,30 @@ it('blocks two synchronous supplier payment submits before React rerenders', asy
   fireEvent.click(submit)
   await waitFor(() => expect(paySupplier).toHaveBeenCalledTimes(1))
   resolvePayment?.({ supplier_payment_id: 'payment-1', code: 'PCPN000674', amount: 80000, cashbook_voucher_id: 'cashbook-1' })
+})
+
+it('keeps supplier payment operation ID when retrying after request failure', async () => {
+  const paySupplier = vi.fn()
+    .mockRejectedValueOnce(new Error('Network error'))
+    .mockResolvedValueOnce({ supplier_payment_id: 'payment-1', code: 'PCPN000674', amount: 80000, cashbook_voucher_id: 'cashbook-1' })
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({ items: [postedReceipt], page: 1, page_size: 15, total: 1 })),
+    getReceipt: vi.fn(async () => postedReceipt),
+    paySupplier,
+  })
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+  await openReceiptDetail('PN000674')
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000674' })
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán NCC' }))
+  const submit = within(screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })).getByRole('button', { name: 'Lưu thanh toán NCC' })
+
+  await userEvent.click(submit)
+  await waitFor(() => expect(paySupplier).toHaveBeenCalledTimes(1))
+  await userEvent.click(submit)
+  await waitFor(() => expect(paySupplier).toHaveBeenCalledTimes(2))
+  expect(paySupplier.mock.calls[1]?.[1]).toEqual(expect.objectContaining({
+    operation_id: paySupplier.mock.calls[0]?.[1].operation_id,
+  }))
 })
 
 it('shows imported paid amount as a supplier payment history row', async () => {

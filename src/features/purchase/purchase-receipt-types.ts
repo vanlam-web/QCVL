@@ -140,6 +140,7 @@ export interface PurchaseReceiptPostResult {
 }
 
 export interface PurchaseReceiptSupplierPaymentInput {
+  operation_id: string
   payment_method: 'cash' | 'bank_transfer'
   finance_account_id?: string
   note?: string

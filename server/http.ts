@@ -733,6 +733,7 @@ export interface ServerRepository {
   paySupplier?(input: {
     organizationId: string
     supplierId: string
+    operationId: string
     paymentMethod: 'cash' | 'bank_transfer'
     financeAccountId?: string
     note?: string | null
