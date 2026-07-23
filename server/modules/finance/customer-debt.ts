@@ -70,6 +70,35 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         ${adjustmentCustomerFilter}
       group by customer_id
     ),
+    unresolved_customer_payments as materialized (
+      select
+        cbe.id,
+        cbe.organization_id,
+        cbe.direction,
+        cbe.amount_delta,
+        cbe.created_at,
+        cbe.source,
+        cbe.counterparty
+      from cashbook_entries cbe
+      where cbe.organization_id = $1
+        and cbe.status = 'posted'
+        and (
+          cbe.source_type = 'payment_receipt_method'
+          or (
+            cbe.source_type = 'kiotviet_cashbook'
+            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
+          )
+        )
+        and nullif(cbe.source->>'customer_id', '') is null
+    ),
+    unresolved_customer_payment_orders as materialized (
+      select payment.*, o.customer_id
+      from unresolved_customer_payments payment
+      left join orders o
+        on o.organization_id = payment.organization_id
+       and o.code = payment.source->>'order_code'
+       and o.status <> 'cancelled'
+    ),
     customer_payment_sources as (
       select
         cbe.id,
@@ -94,64 +123,29 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
 
       union all
 
-      select
-        cbe.id,
-        cbe.organization_id,
-        cbe.direction,
-        cbe.amount_delta,
-        cbe.created_at,
-        o.customer_id,
-        cbe.source,
-        cbe.counterparty
-      from cashbook_entries cbe
-      join orders o
-        on o.organization_id = cbe.organization_id
-       and o.code = cbe.source->>'order_code'
-       and o.status <> 'cancelled'
-      where cbe.organization_id = $1
-        and cbe.status = 'posted'
-        and (
-          cbe.source_type = 'payment_receipt_method'
-          or (
-            cbe.source_type = 'kiotviet_cashbook'
-            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
-          )
-        )
-        and nullif(cbe.source->>'customer_id', '') is null
+      select id, organization_id, direction, amount_delta, created_at, customer_id, source, counterparty
+      from unresolved_customer_payment_orders
+      where customer_id is not null
 
       union all
 
       select
-        cbe.id,
-        cbe.organization_id,
-        cbe.direction,
-        cbe.amount_delta,
-        cbe.created_at,
+        payment.id,
+        payment.organization_id,
+        payment.direction,
+        payment.amount_delta,
+        payment.created_at,
         cs.id as customer_id,
-        cbe.source,
-        cbe.counterparty
-      from cashbook_entries cbe
-      left join orders o
-        on o.organization_id = cbe.organization_id
-       and o.code = cbe.source->>'order_code'
-       and o.status <> 'cancelled'
+        payment.source,
+        payment.counterparty
+      from unresolved_customer_payment_orders payment
       join customer_snapshots cs
-        on cs.organization_id = cbe.organization_id
+        on cs.organization_id = payment.organization_id
        and (
-         lower(cs.code) = lower(cbe.source->>'counterparty_code')
-         or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+         lower(cs.code) = lower(payment.source->>'counterparty_code')
+         or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(payment.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
        )
-      where cbe.organization_id = $1
-        and cbe.status = 'posted'
-        and (
-          cbe.source_type = 'payment_receipt_method'
-          or (
-            cbe.source_type = 'kiotviet_cashbook'
-            and cbe.code ~* '${KIOTVIET_DEBT_CASHBOOK_CODE_PATTERN}'
-          )
-        )
-        and nullif(cbe.source->>'customer_id', '') is null
-        and o.customer_id is null
+      where payment.customer_id is null
     ),
     customer_payment_debt as (
       select
