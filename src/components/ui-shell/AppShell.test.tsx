@@ -69,7 +69,7 @@ it('renders POS as a quick action and keeps module navigation for management pag
   const quickActions = screen.getByLabelText('Thao tác nhanh')
 
   expect(banner).toContainElement(navigation)
-  expect(document.querySelector('.app-brand-logo')).toHaveAttribute('src', '/brand-logo.png')
+  expect(document.querySelector('.app-brand-logo')).toHaveAttribute('src', '/brand-logo-128.png')
   expect(screen.getByRole('link', { name: 'Mở tổng quan' })).toHaveAttribute('href', '/dashboard')
   expect(within(navigation).queryByRole('link', { name: /Tổng quan/i })).not.toBeInTheDocument()
   expect(quickActions.closest('.app-topbar')).not.toBeNull()

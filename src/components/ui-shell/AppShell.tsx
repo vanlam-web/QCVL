@@ -98,7 +98,7 @@ export function AppShell({
       <header className="app-topbar">
         <div className="app-topbar-inner">
           <NavLink aria-label="Mở tổng quan" className="app-brand" title="Logo" to={appRoutes.dashboard}>
-            <img alt="" className="app-brand-logo" src="/brand-logo.png" />
+            <img alt="" className="app-brand-logo" src="/brand-logo-128.png" />
           </NavLink>
 
           <nav aria-label="Điều hướng chính" className="shell-nav">

@@ -34,7 +34,7 @@ export function LoginPage() {
     <main className="auth-shell">
       <form aria-label="Đăng nhập" noValidate onSubmit={submit}>
         <h1>
-          <img alt="" className="auth-brand-logo" src="/brand-logo.png" />
+          <img alt="" className="auth-brand-logo" src="/brand-logo-128.png" />
           <span>QCVL</span>
         </h1>
         <label>

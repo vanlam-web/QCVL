@@ -85,7 +85,7 @@ export function PosTopbar({
           type="button"
           onClick={onOpenDashboard}
         >
-          <img alt="" className="pos-brand-logo" src="/brand-logo.png" />
+          <img alt="" className="pos-brand-logo" src="/brand-logo-128.png" />
         </button>
         <label className="management-compact-search pos-topbar-search-control">
           <span className="pos-topbar-search-label">Tìm hàng (F3)</span>

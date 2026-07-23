@@ -309,7 +309,7 @@ it('renders POS landmarks, profile identity, and active product grid', async () 
   )
 
   expect(screen.getByLabelText('K01 topbar')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'QC' }).querySelector('.pos-brand-logo')).toHaveAttribute('src', '/brand-logo.png')
+  expect(screen.getByRole('button', { name: 'QC' }).querySelector('.pos-brand-logo')).toHaveAttribute('src', '/brand-logo-128.png')
   expect(screen.getByLabelText('K02 giỏ hàng')).toBeInTheDocument()
   expect(screen.getByLabelText('K03 sản phẩm')).toBeInTheDocument()
   expect(screen.getByLabelText('K01 tìm kiếm')).toBeInTheDocument()
