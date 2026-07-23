@@ -31,10 +31,12 @@ page.on('request', (request) => {
 page.on('requestfailed', (request) => {
   const url = request.url()
   if (!url.includes('/api/')) return
+  const detail = request.failure()?.errorText ?? 'unknown request failure'
+  if (detail === 'net::ERR_ABORTED') return
   failures.push({
     type: 'request-failed',
     url,
-    detail: request.failure()?.errorText ?? 'unknown request failure',
+    detail,
   })
 })
 
