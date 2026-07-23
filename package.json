@@ -35,6 +35,8 @@
     "audit:data": "tsx scripts/audit-data-integrity.ts",
     "repair:debt:dry-run": "tsx scripts/repair-approved-debt-status.ts",
     "repair:debt:apply": "cross-env QCVL_REPAIR_CONFIRM=true tsx scripts/repair-approved-debt-status.ts",
+    "repair:combo-parent:dry-run": "tsx scripts/repair-historic-combo-parent-stock.ts",
+    "repair:combo-parent:apply": "cross-env QCVL_REPAIR_CONFIRM=true tsx scripts/repair-historic-combo-parent-stock.ts",
     "dev:seed-products": "node scripts/dev-seed-kiotviet-products.mjs",
     "lint": "eslint .",
     "typecheck": "tsc -b --pretty false",
