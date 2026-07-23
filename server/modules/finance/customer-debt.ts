@@ -88,8 +88,11 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
       left join customer_snapshots cs
         on cs.organization_id = cbe.organization_id
        and (
-         lower(cs.code) = lower(cbe.source->>'counterparty_code')
-         or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+         ${options.singleCustomer ? 'cs.id = $2 and' : ''}
+         (
+           lower(cs.code) = lower(cbe.source->>'counterparty_code')
+           or cs.id = 'customer-kv-' || lower(regexp_replace(coalesce(cbe.source->>'counterparty_code', ''), '\\{DEL[0-9]*\\}$', '', 'i'))
+         )
        )
       where cbe.organization_id = $1
         and cbe.status = 'posted'
