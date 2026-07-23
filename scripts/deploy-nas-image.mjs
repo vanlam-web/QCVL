@@ -47,7 +47,7 @@ if (!confirmed) {
 }
 if (!sshTarget) throw new Error('QCVL_NAS_SSH_TARGET is required for image deployment.')
 if (!existsSync(composePath)) throw new Error(`NAS Compose file not found: ${composePath}`)
-run(process.execPath, ['scripts/build-nas-image.mjs'])
+run(process.execPath, ['scripts/build-nas-image.mjs'], { env: { ...process.env, QCVL_NAS_RELEASE_ID: releaseId } })
 if (!existsSync(archiveDir)) mkdirSync(archiveDir, { recursive: true })
 run('docker', ['save', '--output', archive, imageRef])
 const checksum = checksumForFile(archive)

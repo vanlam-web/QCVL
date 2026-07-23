@@ -16,7 +16,7 @@ function git(args) { return execFileSync('git', args, { cwd: root, encoding: 'ut
 const commit = git(['rev-parse', 'HEAD'])
 const dirty = git(['status', '--porcelain']).length > 0
 if (dirty && process.env.QCVL_ALLOW_DIRTY_RELEASE !== 'true') throw new Error('Refusing dirty NAS image release. Commit first or set QCVL_ALLOW_DIRTY_RELEASE=true.')
-const releaseId = releaseIdFrom({ commit })
+const releaseId = process.env.QCVL_NAS_RELEASE_ID ?? releaseIdFrom({ commit })
 const imageRef = `qcvl-app:${releaseId}`
 const builtAt = new Date().toISOString()
 
