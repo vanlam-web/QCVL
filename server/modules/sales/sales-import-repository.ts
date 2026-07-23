@@ -1,7 +1,7 @@
 import type pg from 'pg'
 import type { CustomerListData, SalesDocumentData, ServerRepository } from '../../http.js'
 type SalesImportRow = Parameters<NonNullable<ServerRepository['upsertImportedKiotVietInvoices']>>[0]['rows'][number]
-type SalesImportProduct = { id: string; factor: number; track_inventory: boolean; latest_purchase_cost: number | null }
+type SalesImportProduct = { id: string; factor: number; track_inventory: boolean; product_kind: string; latest_purchase_cost: number | null }
 type BomComponent = { productId: string; quantity: number; factor: number; trackInventory: boolean; latestPurchaseCost: number | null }
 type SalesMovement = { id: string; productId: string; movementType: string; quantityDelta: number; endingQty: number | null; documentType: string; documentCode: string; transactionPrice: number | null; costPrice: number | null; partnerName: string | null; createdAt: string }
 type SalesImportDeps = {
@@ -112,7 +112,8 @@ export function createSalesImportRepository(pool:pg.Pool,deps:SalesImportDeps):P
             if (!product) continue
             const saleUnitFactor = row.stock_qty_per_sale_unit && row.stock_qty_per_sale_unit > 0 ? row.stock_qty_per_sale_unit : product.factor
             const soldQuantity = row.quantity * saleUnitFactor
-            if (product.track_inventory) {
+            const parentKind = product.product_kind.trim().toLowerCase()
+            if (product.track_inventory && parentKind !== 'combo' && parentKind !== 'service') {
               const quantityDelta = -soldQuantity
               if (quantityDelta !== 0) {
                 runningEndingQty += quantityDelta

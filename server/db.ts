@@ -753,6 +753,7 @@ type StockImportProduct = {
   name: string
   unit_name: string
   track_inventory: boolean
+  product_kind: string
   latest_purchase_cost: number | null
   factor: number
   purchase_unit_name?: string | null
@@ -769,6 +770,7 @@ async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) 
         p.name,
         p.unit_name,
         p.track_inventory,
+        p.product_kind,
         p.latest_purchase_cost,
         coalesce(
           jsonb_agg(
@@ -802,6 +804,7 @@ async function stockProductsByImportCode(pool: pg.Pool, organizationId: string) 
       name: String(row.name),
       unit_name: String(row.unit_name),
       track_inventory: Boolean(row.track_inventory),
+      product_kind: String(row.product_kind ?? 'goods'),
       latest_purchase_cost: row.latest_purchase_cost === null ? null : Number(row.latest_purchase_cost),
       factor: 1,
     }
@@ -1412,7 +1415,7 @@ async function draftBomComponentsByProductId(pool: pg.Pool, organizationId: stri
         on p.organization_id = pbi.organization_id
        and p.id = pbi.component_product_id
       where pb.organization_id = $1
-        and pb.status in ('draft', 'active')
+        and pb.status = 'active'
       order by pb.product_id, pbi.sort_order, pbi.id
     `,
     [organizationId],
