@@ -20,6 +20,12 @@ function run(command, args, options = {}) {
   if (result.error) throw result.error
   if (result.status !== 0) throw new Error(`${command} ${args.join(' ')} failed with exit ${result.status}`)
 }
+function robocopy(source, target, file) {
+  const result = spawnSync('robocopy', [source, target, file, '/R:2', '/W:2', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'], { cwd: root, stdio: 'inherit' })
+  if (result.error) throw result.error
+  const code = result.status ?? 16
+  if (code > 3) throw new Error(`robocopy failed with exit ${code}: ${source} -> ${target}`)
+}
 function git(args) { return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim() }
 function ssh(command) { run('ssh', [...buildSshArgs(process.env, sshTarget), command]) }
 function remote(command) { return `set -eu; cd '${linuxRoot}'; ${command}` }
@@ -46,7 +52,7 @@ if (!existsSync(archiveDir)) mkdirSync(archiveDir, { recursive: true })
 run('docker', ['save', '--output', archive, imageRef])
 const checksum = checksumForFile(archive)
 mkdirSync(dirname(staging), { recursive: true })
-run('robocopy', [archiveDir, dirname(staging), `${releaseId}.tar`, '/R:2', '/W:2', '/NFL', '/NDL', '/NJH', '/NJS', '/NP'])
+robocopy(archiveDir, dirname(staging), `${releaseId}.tar`)
 const copiedChecksum = execFileSync('powershell', ['-NoProfile', '-Command', `(Get-FileHash -LiteralPath '${staging}' -Algorithm SHA256).Hash.ToLowerInvariant()`], { encoding: 'utf8' }).trim()
 if (copiedChecksum !== checksum) throw new Error(`NAS image archive checksum mismatch for ${staging}`)
 ssh(remote(`mkdir -p images/.staging; test -f 'images/.staging/${releaseId}.tar'; sudo /usr/local/bin/docker load -i 'images/.staging/${releaseId}.tar'; test "$(sudo /usr/local/bin/docker image inspect --format '{{.Id}}' '${imageRef}')" != ''`))
