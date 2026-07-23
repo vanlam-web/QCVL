@@ -7,54 +7,17 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
  return {
     async listProducts(input) {
       await ensureStock(pool)
-      const search = normalizeSearch(input.url.searchParams.get('search') ?? '')
-      const status = input.url.searchParams.get('status')
-      const sellMethod = input.url.searchParams.get('sell_method')
-      const inventoryShape = input.url.searchParams.get('inventory_shape')
-      const productKind = input.url.searchParams.get('product_kind')
-      const productGroupIds = input.url.searchParams.getAll('product_group_id')
-      const createdFrom = input.url.searchParams.get('created_from')
-      const createdTo = input.url.searchParams.get('created_to')
-      const clauses = ['p.organization_id = $1']
-      const values: unknown[] = [input.organizationId]
-      if (status === 'deleted') {
-        clauses.push(`p.code like '%{DEL}%'`)
-      } else if (status && status !== 'all') {
-        values.push(status)
-        clauses.push(`p.status = $${values.length}`)
-        clauses.push(`p.code not like '%{DEL}%'`)
-      }
-      if (sellMethod) {
-        values.push(sellMethod)
-        clauses.push(`p.sell_method = $${values.length}`)
-      }
-      if (inventoryShape) {
-        values.push(inventoryShape)
-        clauses.push(`p.inventory_shape = $${values.length}`)
-      }
-      if (productKind) {
-        values.push(productKind)
-        clauses.push(`p.product_kind = $${values.length}`)
-      }
-      if (productGroupIds.length > 0) {
-        values.push(productGroupIds)
-        clauses.push(`p.product_group_id = any($${values.length}::uuid[])`)
-      }
-      if (createdFrom) {
-        values.push(createdFrom)
-        clauses.push(`(p.created_at at time zone 'UTC')::date >= $${values.length}::date`)
-      }
-      if (createdTo) {
-        values.push(createdTo)
-        clauses.push(`(p.created_at at time zone 'UTC')::date <= $${values.length}::date`)
-      }
-      if (search) {
-        values.push(`%${search}%`)
-        clauses.push(`(${accentSql('p.code')} like $${values.length} or ${accentSql('p.name')} like $${values.length})`)
-      }
+      const { clauses, values } = productFilters(input)
+      const { page, pageSize } = paginate(input.url, 15)
+      const pageOnly = input.url.searchParams.get('page_only') === 'true'
+      const pageValues = pageOnly ? [...values, pageSize, Math.max(0, page - 1) * pageSize] : values
+      const pageCte = pageOnly
+        ? `with selected_products as (select p.id from products p where ${clauses.join(' and ')} order by p.created_at desc, p.code asc, p.name asc limit $${values.length + 1} offset $${values.length + 2})`
+        : ''
 
       const result = await pool.query(
         `
+          ${pageCte}
           select
             p.id::text,
             p.code,
@@ -82,6 +45,7 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
             p.created_at,
             p.updated_at
           from products p
+          ${pageOnly ? 'join selected_products selected on selected.id = p.id' : ''}
           left join product_groups pg on pg.id = p.product_group_id and pg.organization_id = p.organization_id
           left join price_lists pl on pl.organization_id = p.organization_id and pl.is_default = true and pl.is_active = true
           left join price_list_items pli on pli.organization_id = p.organization_id and pli.price_list_id = pl.id and pli.product_id = p.id
@@ -186,10 +150,10 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
             order by case when pb.status = 'active' then 0 else 1 end, pb.version desc, pb.created_at desc
             limit 1
           ) draft_bom_data on true
-          where ${clauses.join(' and ')}
+          where ${pageOnly ? 'true' : clauses.join(' and ')}
           order by p.created_at desc, p.code asc, p.name asc
         `,
-        values,
+        pageValues,
       )
       const items = result.rows.map((row) => ({
         id: String(row.id),
@@ -275,17 +239,49 @@ export function createProductQueryRepository(pool:pg.Pool,deps:{ensureStock:(poo
     },
 
     async listProductsPage(input) {
-      const items = await this.listProducts?.(input) ?? []
-      const { page, pageSize } = paginate(input.url, 15)
-      const start = Math.max(0, page - 1) * pageSize
+      const { clauses, values } = productFilters(input)
+      const totals = await pool.query<{ total: string; total_all: string }>(
+        `
+          select
+            count(*)::text as total,
+            coalesce(sum(1 + (
+              select count(*)
+              from product_unit_conversions puc
+              join inventory_units sale_unit on sale_unit.id = puc.sale_unit_id
+              where puc.organization_id = p.organization_id
+                and puc.product_id = p.id
+                and puc.is_active = true
+                and sale_unit.is_active = true
+            )), 0)::text as total_all
+          from products p
+          where ${clauses.join(' and ')}
+        `,
+        values,
+      )
+      const pageUrl = new URL(input.url)
+      pageUrl.searchParams.set('page_only', 'true')
+      const items = await this.listProducts?.({ ...input, url: pageUrl }) ?? []
+      const row = totals.rows[0]
       return {
-        items: items.slice(start, start + pageSize),
-        total: items.length,
-        total_all: items.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0),
+        items,
+        total: Number(row?.total ?? 0),
+        total_all: Number(row?.total_all ?? 0),
       }
     },
 
   }
+}
+function productFilters(input: { organizationId: string; url: URL }) {
+ const search=normalizeSearch(input.url.searchParams.get('search')??''),status=input.url.searchParams.get('status'),sellMethod=input.url.searchParams.get('sell_method'),inventoryShape=input.url.searchParams.get('inventory_shape'),productKind=input.url.searchParams.get('product_kind'),productGroupIds=input.url.searchParams.getAll('product_group_id'),createdFrom=input.url.searchParams.get('created_from'),createdTo=input.url.searchParams.get('created_to'),clauses=['p.organization_id = $1'],values:unknown[]=[input.organizationId]
+ if(status==='deleted')clauses.push("p.code like '%{DEL}%'");else if(status&&status!=='all'){values.push(status);clauses.push(`p.status = $${values.length}`,"p.code not like '%{DEL}%'")}
+ if(sellMethod){values.push(sellMethod);clauses.push(`p.sell_method = $${values.length}`)}
+ if(inventoryShape){values.push(inventoryShape);clauses.push(`p.inventory_shape = $${values.length}`)}
+ if(productKind){values.push(productKind);clauses.push(`p.product_kind = $${values.length}`)}
+ if(productGroupIds.length){values.push(productGroupIds);clauses.push(`p.product_group_id = any($${values.length}::uuid[])`)}
+ if(createdFrom){values.push(createdFrom);clauses.push(`(p.created_at at time zone 'UTC')::date >= $${values.length}::date`)}
+ if(createdTo){values.push(createdTo);clauses.push(`(p.created_at at time zone 'UTC')::date <= $${values.length}::date`)}
+ if(search){values.push(`%${search}%`);clauses.push(`(${accentSql('p.code')} like $${values.length} or ${accentSql('p.name')} like $${values.length})`)}
+ return{clauses,values}
 }
 function normalizeSearch(value:string){return value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/đ/g,'d').replace(/Đ/g,'D').toLowerCase().trim()}
 function accentSql(expression:string){return `translate(lower(${expression}), 'àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ', 'aaaaaaaaaaaaaaaaaeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyyd')`}
