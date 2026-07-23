@@ -11,7 +11,7 @@ export function createDashboardQueryRepository(pool: pg.Pool, deps: { ensureTabl
       const now = new Date(input.now)
       const periods = [rangeFor(now, 'today'), rangeFor(now, input.salesResultPeriod), previousRangeFor(now, input.salesResultPeriod), rangeFor(now, input.revenuePeriod), rangeFor(now, input.productRankPeriod), rangeFor(now, input.customerRankPeriod)]
       const values = [input.organizationId, ...periods.flatMap((period) => [period.from, period.to])]
-      const invoiceFilter = (from: number) => `o.organization_id = $1 and o.order_type = 'invoice' and o.status <> 'cancelled' and (o.created_at at time zone 'UTC')::date between $${from}::date and $${from + 1}::date`
+      const invoiceFilter = (from: number) => `o.organization_id = $1 and o.order_type = 'invoice' and o.status <> 'cancelled' and o.created_at >= ($${from}::date::timestamp at time zone 'UTC') and o.created_at < (($${from + 1}::date + 1)::timestamp at time zone 'UTC')`
       const result = await pool.query(`
         with
         today as (select coalesce(sum(o.total_amount), 0)::float8 as revenue, count(*)::int as invoice_count, coalesce(sum(greatest(o.total_amount, 0)), 0)::float8 as net_revenue from orders o where ${invoiceFilter(2)}),
