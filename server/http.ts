@@ -865,6 +865,14 @@ export interface ServerRepository {
   }): Promise<SalesDocumentData | null>
   listSalesDocuments?(input: { organizationId: string; url: URL }): Promise<SalesDocumentData[]>
   listSalesDocumentsPage?(input: { organizationId: string; url: URL }): Promise<SalesDocumentListPageData>
+  getDashboardData?(input: {
+    organizationId: string
+    now: string
+    salesResultPeriod: 'today' | 'yesterday' | 'last_7_days' | 'month' | 'last_month'
+    revenuePeriod: 'today' | 'yesterday' | 'last_7_days' | 'month' | 'last_month'
+    productRankPeriod: 'today' | 'yesterday' | 'last_7_days' | 'month' | 'last_month'
+    customerRankPeriod: 'today' | 'yesterday' | 'last_7_days' | 'month' | 'last_month'
+  }): Promise<unknown>
   getSalesDocument?(input: { organizationId: string; id: string }): Promise<SalesDocumentData | null>
   cancelSalesDocument?(input: { organizationId: string; id: string; reason: { code: string; note: string | null } }): Promise<SalesDocumentData | null>
   updateSalesDocumentNote?(input: { organizationId: string; id: string; note?: string | null; created_at?: string }): Promise<SalesDocumentData | null>
@@ -3155,6 +3163,26 @@ async function getDevApiResponse(
     if (!created) throw new HttpError(501, 'NOT_IMPLEMENTED', 'Delivery partner repository is not available.')
     return { found: true, data: created, status: 201 }
   }
+  if (method === 'GET' && path === '/api/v1/dashboard') {
+    const dashboardPeriod = (key: string) => {
+      const value = url.searchParams.get(key) ?? 'month'
+      if (value === 'today' || value === 'yesterday' || value === 'last_7_days' || value === 'month' || value === 'last_month') return value
+      throw new HttpError(400, 'VALIDATION_ERROR', `${key} is invalid.`)
+    }
+    const now = url.searchParams.get('now')
+    if (!now || Number.isNaN(new Date(now).getTime())) throw new HttpError(400, 'VALIDATION_ERROR', 'now is invalid.')
+    const data = await repository.getDashboardData?.({
+      organizationId: currentUser.organization.id,
+      now,
+      salesResultPeriod: dashboardPeriod('sales_result_period'),
+      revenuePeriod: dashboardPeriod('revenue_period'),
+      productRankPeriod: dashboardPeriod('product_rank_period'),
+      customerRankPeriod: dashboardPeriod('customer_rank_period'),
+    })
+    if (!data) throw new HttpError(501, 'NOT_IMPLEMENTED', 'Dashboard repository is not available.')
+    return { found: true, data }
+  }
+
   if (method === 'POST' && path === '/api/v1/search-selection-stats') {
     const body = await readJson(request)
     const entityType = body.entity_type

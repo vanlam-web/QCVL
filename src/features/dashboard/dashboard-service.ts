@@ -3,6 +3,8 @@ import type { SalesDocumentDetail, SalesDocumentListItem } from '../sales-docume
 import { createBrowserPurchaseReceiptService, type PurchaseReceiptService } from '../purchase/purchase-receipt-service'
 import type { PurchaseReceipt } from '../purchase/purchase-receipt-types'
 import { createBrowserCatalogService, type CatalogService } from '../catalog/catalog-service'
+import { createApiClient } from '../../lib/api/client'
+import { runtimeConfig } from '../../lib/config/runtime'
 import { displayDateKey } from '../../lib/date-format'
 import { currentSystemDate } from '../../lib/system-clock'
 
@@ -375,12 +377,73 @@ function emptyDashboardPurchaseReceiptPage() {
   }
 }
 
-export function createBrowserDashboardService(getAccessToken: () => Promise<string | null>) {
-  return createDashboardService(
+export function createBrowserDashboardService(getAccessToken: () => Promise<string | null>): DashboardService {
+  const api = createApiClient({ baseUrl: runtimeConfig.apiBaseUrl, getAccessToken })
+  const activityFallback = createDashboardService(
     createBrowserSalesDocumentService(getAccessToken),
     createBrowserPurchaseReceiptService(getAccessToken),
     createBrowserCatalogService(getAccessToken),
   )
+  return {
+    async loadDashboardData(input = {}) {
+      const now = await currentSystemDate()
+      const params = new URLSearchParams({
+        now: now.toISOString(),
+        sales_result_period: input.salesResultPeriod ?? 'month',
+        revenue_period: input.revenuePeriod ?? 'month',
+        product_rank_period: input.productRankPeriod ?? 'month',
+        customer_rank_period: input.customerRankPeriod ?? 'month',
+      })
+      const data = await api.request<DashboardReadModel>(`/api/v1/dashboard?${params}`)
+      return dashboardDataFromReadModel(data, now, input.salesResultPeriod ?? 'month', input.revenuePeriod ?? 'month')
+    },
+    loadDashboardActivities: activityFallback.loadDashboardActivities,
+  }
+}
+
+type DashboardReadModel = {
+  today: { revenue: number; invoice_count: number; net_revenue: number }
+  sales_result: { revenue: number; invoice_count: number; net_revenue: number }
+  previous_sales_result_net_revenue: number
+  revenue: { net_revenue: number; daily: Array<{ date: string; value: number }>; weekday: Array<{ weekday: number; value: number }> }
+  top_products: Array<{ label: string; value: number }>
+  top_customers: Array<{ label: string; value: number }>
+  activities: Array<{ kind: DashboardActivity['kind']; actor: string; action: string; counterparty_preposition: 'cho' | 'từ'; counterparty_label: string; counterparty_code: string | null; value: number; document_code: string; created_at: string }>
+  has_more_activities: boolean
+}
+
+function dashboardDataFromReadModel(data: DashboardReadModel, now: Date, salesResultPeriod: DashboardPeriod, revenuePeriod: DashboardPeriod): DashboardData {
+  const daily = new Map(data.revenue.daily.map((item) => [item.date, Number(item.value)]))
+  const revenueRange = dashboardPeriodRange(now, revenuePeriod)
+  const revenuePoints: number[] = []
+  for (let cursor = dateKeyToUtcDate(revenueRange.from), end = dateKeyToUtcDate(revenueRange.to); cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    revenuePoints.push(daily.get(cursor.toISOString().slice(0, 10)) ?? 0)
+  }
+  const weekday = new Map(data.revenue.weekday.map((item) => [Number(item.weekday), Number(item.value)]))
+  const maxWeekday = Math.max(...weekday.values(), 0)
+  const rank = (items: Array<{ label: string; value: number }>) => {
+    const max = Math.max(...items.map((item) => item.value), 0)
+    return items.map((item) => ({ label: item.label, value: compactMoneyText(item.value), width: max > 0 ? Math.max(8, Math.round((item.value / max) * 100)) : 0 }))
+  }
+  const activities: DashboardActivity[] = data.activities.map((item) => ({
+    kind: item.kind, actor: item.actor, action: item.action, counterpartyPreposition: item.counterparty_preposition,
+    counterpartyLabel: item.counterparty_label, counterpartyCode: item.counterparty_code ?? undefined,
+    counterpartyType: item.kind === 'purchase' ? 'supplier' : 'customer', value: formatDashboardMoney(item.value),
+    documentCode: item.document_code, documentType: item.kind === 'purchase' ? 'purchase_receipt' : 'sales_invoice', time: relativeTimeText(new Date(item.created_at), now),
+  }))
+  const currentNet = Number(data.sales_result.net_revenue)
+  const previousNet = Number(data.previous_sales_result_net_revenue)
+  return {
+    todayRevenue: formatDashboardMoney(Number(data.today.revenue)), todayInvoiceCount: Number(data.today.invoice_count), todayNetRevenue: formatDashboardMoney(Number(data.today.net_revenue)),
+    salesResultRevenue: formatDashboardMoney(Number(data.sales_result.revenue)), salesResultInvoiceCount: Number(data.sales_result.invoice_count), salesResultNetRevenue: formatDashboardMoney(currentNet),
+    salesResultComparison: dashboardComparison(currentNet, previousNet, salesResultComparisonLabel(salesResultPeriod)),
+    monthNetRevenue: formatDashboardMoney(Number(data.revenue.net_revenue)), monthRevenuePoints: revenuePoints.length > 1 ? revenuePoints : [0, revenuePoints[0] ?? 0],
+    weekdayBars: weekdayLabels.slice(1).concat(weekdayLabels[0]).map((label, index) => {
+      const value = weekday.get((index + 1) % 7) ?? 0
+      return { label, value: maxWeekday > 0 ? Math.max(6, Math.round((value / maxWeekday) * 100)) : 0 }
+    }),
+    topProducts: rank(data.top_products), topCustomers: rank(data.top_customers), activities, hasMoreActivities: data.has_more_activities, systemActivities: [],
+  }
 }
 
 export function emptyDashboardData(): DashboardData {

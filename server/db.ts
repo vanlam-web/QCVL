@@ -50,6 +50,7 @@ import { createSalesImportRepository } from './modules/sales/sales-import-reposi
 import { createSalesSaveRepository } from './modules/sales/sales-save-repository.js'
 import { createSalesQueryRepository } from './modules/sales/sales-query-repository.js'
 import { createSalesMutationRepository } from './modules/sales/sales-mutation-repository.js'
+import { createDashboardQueryRepository } from './modules/dashboard/dashboard-query-repository.js'
 import { createPosUsageRepository } from './modules/catalog/pos-usage-repository.js'
 import { createRepositoryLifecycle } from './modules/system/repository-lifecycle.js'
 import { createProductImportCleanupRepository } from './modules/catalog/product-import-cleanup-repository.js'
@@ -183,6 +184,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
   const supplierCrudRepository = createSupplierCrudRepository(pool, { ensureTables: ensureImportedSnapshotTables, recompute: recomputeSupplierPurchaseTotals, matches: supplierSnapshotMatches, rank: quickPickRankedItems, nextCode: nextManualSupplierCode })
 
+  const dashboardQueryRepository = createDashboardQueryRepository(pool, { ensureTables: ensureSalesFinanceTables, ensureSnapshots: ensureImportedSnapshotTables })
+
   return {
     ...authSessionRepository,
 
@@ -271,6 +274,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     ...customerDebtMutationRepository,
 
     ...customerFinancialTotalsRepository,
+
+    ...dashboardQueryRepository,
 
   }
 }
