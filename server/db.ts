@@ -86,6 +86,9 @@ const productReferenceGuards = [
 
 const financeAccountsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const salesFinanceEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const userManagementEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const productCatalogEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
+const priceListEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
 const userDisplayNameEnsureCache = new WeakMap<pg.Pool, Map<string, Promise<ReadonlyMap<string, string>>>>()
 const financeAccountsListCache = new WeakMap<pg.Pool, Map<string, Promise<FinanceAccountData[]>>>()
 const searchSelectionStatsEnsureCache = new WeakMap<pg.Pool, Promise<void>>()
@@ -297,6 +300,7 @@ function positiveInt(value: string | null, fallback: number) {
 }
 
 async function ensureProductCatalogSchema(pool: pg.Pool) {
+  return ensureSchemaOnce(productCatalogEnsureCache, pool, async () => {
   await pool.query(`
     create table if not exists product_groups (
       id uuid primary key,
@@ -343,6 +347,7 @@ async function ensureProductCatalogSchema(pool: pg.Pool) {
   await pool.query('create index if not exists idx_products_org_product_kind on products (organization_id, product_kind)')
   await pool.query('create index if not exists idx_products_org_status on products (organization_id, status)')
   await pool.query('create index if not exists idx_products_org_updated on products (organization_id, updated_at desc, created_at desc)')
+  })
 }
 
 async function ensureProductUnitTables(pool: pg.Pool) {
@@ -408,6 +413,7 @@ async function ensureProductUnitTables(pool: pg.Pool) {
 }
 
 async function ensurePriceListTables(pool: pg.Pool) {
+  return ensureSchemaOnce(priceListEnsureCache, pool, async () => {
   await pool.query(`
     create table if not exists price_lists (
       id uuid primary key,
@@ -435,6 +441,7 @@ async function ensurePriceListTables(pool: pg.Pool) {
   `)
   await pool.query('create unique index if not exists price_list_items_price_product_uidx on price_list_items (price_list_id, product_id)')
   await pool.query('create index if not exists idx_price_list_items_org_product on price_list_items (organization_id, product_id)')
+  })
 }
 
 async function upsertInventoryUnit(pool: pg.Pool, organizationId: string, unitName: string) {
@@ -3211,6 +3218,7 @@ function accentInsensitiveSearchSql(expression: string) {
 }
 
 async function ensureUserManagementColumns(pool: pg.Pool) {
+  return ensureSchemaOnce(userManagementEnsureCache, pool, async () => {
   await pool.query('alter table users add column if not exists username text')
   await pool.query('alter table users add column if not exists phone text')
   await pool.query('alter table users add column if not exists birthday date')
@@ -3224,6 +3232,7 @@ async function ensureUserManagementColumns(pool: pg.Pool) {
     where username is not null and btrim(username) <> ''
   `)
   await pool.query('create index if not exists users_org_created_idx on users (organization_id, created_at desc)')
+  })
 }
 
 async function ensureOrganizationBillSettingsColumns(pool: pg.Pool) {
