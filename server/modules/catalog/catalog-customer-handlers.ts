@@ -8,24 +8,27 @@ type GroupRow={id:string}
 export function createCatalogCustomerHandlers(deps:CustomerDeps){const {request,url,currentUser,repository,path,readJson,getIdFromPath,customers,customerGroups,suppliers ,filterCustomers,sortCustomersForRequest,hydrateLinkedSuppliers,customerListSummary,customerDisplayTotals,resolveCustomerCreatedBy,customerActivityFromSalesDocuments,randomUUID,nowIso,requiredString,nullableString,isBillPreferenceValue,isWalkInCustomerCode,syncCustomerBillPreferencePatch,httpError,paged}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
     listCustomers: async () => {
       const isQuickPick = url.searchParams.get('search_context') === 'quick_pick'
-      const financialTotals = isQuickPick ? undefined : await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
-      const userList = isQuickPick
-        ? []
-        : await repository.listUsers?.({
-            organizationId: currentUser.organization.id,
-            url: new URL('http://api.local/api/v1/users'),
-          }) ?? []
-      const repositoryCustomers = await repository.listCustomers?.({
-        organizationId: currentUser.organization.id,
-        userId: currentUser.user.id,
-        url,
-      })
-      const repositorySuppliers = isQuickPick || repositoryCustomers
-        ? undefined
-        : await repository.listSuppliers?.({
-            organizationId: currentUser.organization.id,
-            url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
-          })
+      const supportsRepositoryCustomers = repository.listCustomers !== undefined
+      const [financialTotals, userList, repositoryCustomers, repositorySuppliers] = await Promise.all([
+        isQuickPick ? Promise.resolve(undefined) : repository.getCustomerFinancialTotals?.(currentUser.organization.id),
+        isQuickPick
+          ? Promise.resolve([])
+          : repository.listUsers?.({
+              organizationId: currentUser.organization.id,
+              url: new URL('http://api.local/api/v1/users'),
+            }) ?? Promise.resolve([]),
+        repository.listCustomers?.({
+          organizationId: currentUser.organization.id,
+          userId: currentUser.user.id,
+          url,
+        }),
+        isQuickPick || supportsRepositoryCustomers
+          ? Promise.resolve(undefined)
+          : repository.listSuppliers?.({
+              organizationId: currentUser.organization.id,
+              url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
+            }),
+      ])
       const localActivity = isQuickPick || repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
       const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer: CustomerRow) => {
         const totals = financialTotals?.get(customer.id)
