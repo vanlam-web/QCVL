@@ -5801,8 +5801,8 @@ describe('createHttpHandler', () => {
     const posResponse = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=120&sort=pos_usage', { headers: { authorization } }))
 
     expect(posResponse.status).toBe(200)
-    expect(listProductsPage).toHaveBeenCalledTimes(1)
-    expect(listProducts).not.toHaveBeenCalled()
+    expect(listProductsPage).not.toHaveBeenCalled()
+    expect(listProducts).toHaveBeenCalledTimes(1)
   })
 
   test('uses paged stocktake repository with creator options instead of loading all stocktakes twice', async () => {

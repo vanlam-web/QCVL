@@ -18,15 +18,18 @@ export function createCatalogProductHandlers(deps:CatalogProductDeps){const {req
           },
         }
       }
+      const isPosUsageSort = url.searchParams.get('sort') === 'pos_usage'
       const productsForRequest = await listProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id)
-      const items = url.searchParams.get('sort') === 'pos_usage'
+      const items = isPosUsageSort
         ? productsForRequest
         : sortProductsForRequest(productsForRequest, url)
       return {
         found: true,
         data: {
           ...paged(items, page, pageSize),
-          total_all: await countAllProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id),
+          total_all: isPosUsageSort
+            ? productsForRequest.reduce((total, product) => total + 1 + (product.unit_conversions?.length ?? 0), 0)
+            : await countAllProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id),
         },
       }
     },
