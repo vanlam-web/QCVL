@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Edit3, FileOutput, FolderPlus, Lock, Search, Trash2, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Copy, Edit3, FileOutput, FolderPlus, Lock, Search, Trash2 } from 'lucide-react'
 import { formatApiError } from '../../lib/api/error-message'
 import { parseDateTimeValue } from '../../lib/date-format'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
@@ -33,7 +33,6 @@ import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { useManagementSearch } from '../../lib/use-management-search'
 import type { CatalogService } from './catalog-service'
 import { ProductGroupFilterPicker } from './ProductGroupFilterPicker'
-import { ProductGroupTreeSelect } from './ProductGroupTreeSelect'
 import type { Product, ProductBom, ProductGroup, ProductKind, ProductStatus, ProductStatusFilter, ProductStockMovement, SellMethod } from './types'
 import {
   catalogDateTimeText,
@@ -47,6 +46,8 @@ import {
 } from './catalog-presenter'
 import { readProductFavoriteIds, writeProductFavoriteIds } from './catalog-storage'
 import { ProductImportDialog } from './ProductImportDialog'
+import { ProductGroupCreateDialog } from './ProductGroupCreateDialog'
+import { ProductCreateDialog } from './ProductCreateDialog'
 
 interface CatalogState {
   products: Product[]
@@ -1694,235 +1695,32 @@ export function CatalogPage({
         ) : null}
       </ManagementListSurface>
 
-      {createOpen ? (
-        <div className="management-modal-backdrop">
-          <section aria-label="Tạo hàng hóa" aria-modal="true" className="management-modal-dialog catalog-create-dialog" role="dialog">
-            <header className="management-modal-header">
-              <h2>Tạo hàng hóa</h2>
-              <button aria-label="Đóng" className="management-icon-button" type="button" onClick={closeCreateDialog}>
-                <X aria-hidden="true" size={18} />
-              </button>
-            </header>
-            <form aria-label="Tạo hàng hóa" className="catalog-create-form" onSubmit={createProduct}>
-              <section aria-label="Thông tin cơ bản" className="catalog-create-section">
-                <div className="catalog-create-grid">
-                  <label>
-                    Loại hàng
-                    <select value={form.kind} onChange={(event) => void changeCreateKind(event.target.value as ProductCreateKind)}>
-                      <option value="goods">Hàng thường</option>
-                      <option value="service">Dịch vụ</option>
-                      <option value="auxiliary_material">Vật tư phụ</option>
-                      <option value="roll">Hàng cuộn</option>
-                      <option value="sheet">Hàng tấm</option>
-                      <option value="combo">Combo - đóng gói</option>
-                    </select>
-                  </label>
-                  <label>
-                    Mã hàng
-                    <input placeholder="Tự động" value={form.code} onChange={(event) => setForm((current) => ({ ...current, code: event.target.value }))} />
-                  </label>
-                  <label>
-                    Tên hàng
-                    <input placeholder="Bắt buộc *" value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-                  </label>
-                  <label>
-                    Nhóm hàng
-                    <select
-                      value={form.productGroupId}
-                      onChange={(event) => setForm((current) => ({ ...current, productGroupId: event.target.value }))}
-                    >
-                      <option value="">Giá chung</option>
-                      {productGroups.filter((group) => !group.is_default).map((group) => (
-                        <option key={group.id} value={group.id}>{group.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Đơn vị
-                    <input
-                      value={form.unitName}
-                      onChange={(event) => setForm((current) => ({ ...current, unitName: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Cách tính bán
-                    <select
-                      value={form.sellMethod}
-                      onChange={(event) => setForm((current) => ({ ...current, sellMethod: event.target.value as SellMethod }))}
-                    >
-                      {Object.entries(sellMethodLabels).map(([value, label]) => (
-                        <option key={value} value={value}>
-                          {label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Trạng thái
-                    <select
-                      value={form.status}
-                      onChange={(event) => setForm((current) => ({ ...current, status: event.target.value as ProductStatus }))}
-                    >
-                      <option value="active">Đang bán</option>
-                      <option value="inactive">Ngưng bán</option>
-                    </select>
-                  </label>
-                </div>
-              </section>
-
-              <section aria-label="Giá vốn, giá bán" className="catalog-create-section">
-                <div className="catalog-create-grid catalog-create-grid-compact">
-                  <label>
-                    Giá vốn
-                    <input
-                      min="0"
-                      step="1000"
-                      type="number"
-                      value={form.latestPurchaseCost}
-                      onChange={(event) => setForm((current) => ({ ...current, latestPurchaseCost: event.target.value }))}
-                    />
-                  </label>
-                  <label>
-                    Giá bán
-                    <input disabled placeholder="Thiết lập ở Bảng giá" />
-                  </label>
-                </div>
-              </section>
-
-              {productKindDefaults[form.kind].trackInventory ? (
-                <section aria-label="Tồn kho" className="catalog-create-section">
-                  <span className="catalog-create-shape-badge">{catalogInventoryShapeLabel(productKindDefaults[form.kind].inventoryShape)}</span>
-                  <div className="catalog-create-grid catalog-create-grid-compact">
-                    <label>
-                      Loại tồn
-                      <input readOnly value={catalogInventoryShapeLabel(productKindDefaults[form.kind].inventoryShape)} />
-                    </label>
-                    <label>
-                      Tồn kho hiện tại
-                      <input disabled placeholder={form.kind === 'roll' ? 'Cuộn' : form.kind === 'sheet' ? 'Tấm' : 'Nhập sau ở Kho'} />
-                    </label>
-                  </div>
-                </section>
-              ) : null}
-
-              {form.kind === 'combo' ? (
-                <section aria-label="Vật tư cấu thành" className="catalog-create-section">
-                  {createBomLines.map((line, index) => (
-                    <div className="catalog-bom-line" key={`create-combo-${index}`}>
-                      <label>
-                        Vật tư
-                        <select
-                          value={line.component_product_id}
-                          onChange={(event) => {
-                            const next = [...createBomLines]
-                            next[index] = { ...line, component_product_id: event.target.value }
-                            setCreateBomLines(next)
-                          }}
-                        >
-                          <option value="">Chọn vật tư</option>
-                          {(componentProducts.length > 0 ? componentProducts : state?.products ?? []).map((component) => (
-                            <option key={component.id} value={component.id}>
-                              {component.code} · {component.name}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        Định mức
-                        <input
-                          min="0.001"
-                          step="0.001"
-                          type="number"
-                          value={line.quantity}
-                          onChange={(event) => {
-                            const next = [...createBomLines]
-                            next[index] = { ...line, quantity: event.target.value }
-                            setCreateBomLines(next)
-                          }}
-                        />
-                      </label>
-                      <label>
-                        Ghi chú
-                        <input
-                          value={line.notes}
-                          onChange={(event) => {
-                            const next = [...createBomLines]
-                            next[index] = { ...line, notes: event.target.value }
-                            setCreateBomLines(next)
-                          }}
-                        />
-                      </label>
-                    </div>
-                  ))}
-                  <button
-                    className="button button-secondary catalog-create-add-component"
-                    type="button"
-                    onClick={() => setCreateBomLines((current) => [...current, { component_product_id: '', quantity: '1', notes: '' }])}
-                  >
-                    Thêm vật tư
-                  </button>
-                </section>
-              ) : null}
-
-              <footer className="management-modal-footer">
-                <button className="button button-secondary" type="button" onClick={closeCreateDialog}>Bỏ qua</button>
-                <button
-                  className="button button-secondary"
-                  disabled={saving}
-                  type="button"
-                  onClick={(event) => void createProduct(event, { keepOpen: true })}
-                >
-                  Lưu & tạo thêm
-                </button>
-                <button className="button button-primary" disabled={saving} type="submit">Lưu</button>
-              </footer>
-            </form>
-          </section>
-        </div>
-      ) : null}
-      {productGroupCreateOpen ? (
-        <div className="management-modal-backdrop management-modal-backdrop-top">
-          <section aria-label="Tạo nhóm hàng" aria-modal="true" className="management-modal-dialog management-modal-dialog-compact catalog-product-group-dialog" role="dialog">
-            <header className="management-modal-header">
-              <h2>Tạo nhóm hàng</h2>
-              <button aria-label="Đóng tạo nhóm hàng" className="management-icon-button" disabled={creatingProductGroup} type="button" onClick={closeProductGroupCreateDialog}>
-                <X aria-hidden="true" size={18} />
-              </button>
-            </header>
-            <form aria-label="Tạo nhóm hàng" className="management-modal-form" onSubmit={(event) => void saveProductGroup(event)}>
-              <div className="management-modal-form-stack">
-                <label>
-                  Tên nhóm
-                  <input
-                    autoFocus
-                    aria-label="Tên nhóm"
-                    disabled={creatingProductGroup}
-                    value={productGroupCreateName}
-                    onChange={(event) => setProductGroupCreateName(event.target.value)}
-                  />
-                </label>
-                <div className="management-modal-field">
-                  <span>Nhóm cha</span>
-                  <ProductGroupTreeSelect
-                    groups={productGroups}
-                    placeholder="Chọn nhóm hàng"
-                    value={productGroupCreateParentId}
-                    onChange={setProductGroupCreateParentId}
-                  />
-                </div>
-              </div>
-              <footer className="management-modal-footer">
-                <button className="button button-secondary" disabled={creatingProductGroup} type="button" onClick={closeProductGroupCreateDialog}>
-                  Bỏ qua
-                </button>
-                <button className="button button-primary" disabled={creatingProductGroup || productGroupCreateName.trim() === ''} type="submit">
-                  {creatingProductGroup ? 'Đang lưu' : 'Lưu'}
-                </button>
-              </footer>
-            </form>
-          </section>
-        </div>
-      ) : null}
+      <ProductCreateDialog model={{
+        open: createOpen,
+        saving,
+        form,
+        setForm,
+        bomLines: createBomLines,
+        setBomLines: setCreateBomLines,
+        groups: productGroups,
+        components: componentProducts.length > 0 ? componentProducts : state?.products ?? [],
+        kindDefault: productKindDefaults[form.kind],
+        sellMethodLabels,
+        onKindChange: changeCreateKind,
+        onClose: closeCreateDialog,
+        onSubmit: createProduct,
+      }} />
+      <ProductGroupCreateDialog
+        open={productGroupCreateOpen}
+        creating={creatingProductGroup}
+        name={productGroupCreateName}
+        parentId={productGroupCreateParentId}
+        groups={productGroups}
+        onNameChange={setProductGroupCreateName}
+        onParentChange={setProductGroupCreateParentId}
+        onClose={closeProductGroupCreateDialog}
+        onSubmit={(event) => void saveProductGroup(event)}
+      />
       <ProductImportDialog
         open={productImportOpen}
         service={service}

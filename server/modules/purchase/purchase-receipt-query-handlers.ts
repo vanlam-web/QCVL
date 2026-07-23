@@ -1,0 +1,8 @@
+import type { CurrentUserData, ServerRepository } from '../../http-types.js'
+import type { RouteResult } from '../../route-types.js'
+interface Receipt {id:string;code:string;supplier_document_no:string|null;received_at:string;payable_amount:number;paid_amount:number;remaining_amount:number}
+interface Dependencies {currentUser:CurrentUserData;repository:ServerRepository;path:string;fallbackReceipts:Receipt[];fallbackDetail:unknown;getSupplierId:(path:string)=>string;getId:(path:string)=>string|undefined;filterReceipts:(url:URL)=>Receipt[]}
+export function createPurchaseReceiptQueryHandlers(d:Dependencies):{supplierPayableReceipts:()=>RouteResult;getReceipt:()=>RouteResult}{return {
+ supplierPayableReceipts:async()=>{const url=new URL('http://api.local/api/v1/purchase/receipts');url.searchParams.set('supplier_id',d.getSupplierId(d.path));url.searchParams.set('status','posted');const rows=await d.repository.listPurchaseReceipts?.({organizationId:d.currentUser.organization.id,url})??d.filterReceipts(url),items=rows.filter(r=>r.remaining_amount>0).map(r=>({id:r.id,code:r.code,supplier_document_no:r.supplier_document_no,received_at:r.received_at,payable_amount:r.payable_amount,paid_amount:r.paid_amount,remaining_amount:r.remaining_amount,paid_after_post_amount:Math.max(r.paid_amount,0),outstanding_amount:r.remaining_amount}));return {found:true,data:{items}}},
+ getReceipt:async()=>{const id=d.getId(d.path)??'',row=await d.repository.getPurchaseReceipt?.({organizationId:d.currentUser.organization.id,id});return {found:true,data:row??d.fallbackReceipts.find(r=>r.id===d.getId(d.path))??d.fallbackDetail}},
+}}

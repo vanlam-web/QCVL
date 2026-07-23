@@ -1,0 +1,10 @@
+import { randomUUID } from 'node:crypto'
+import type { CurrentUserData, ServerRepository } from '../../http-types.js'
+import type { RouteResult } from '../../route-types.js'
+interface ProductGroup { id:string; code:string; name:string; is_default:boolean; is_active:boolean }
+interface Dependencies { request:Request; currentUser:CurrentUserData; repository:ServerRepository; fallbackGroups:ProductGroup[]; readJson:(request:Request)=>Promise<Record<string,unknown>>; requiredString:(value:unknown,field:string)=>string; productGroupCode:(name:string)=>string; getIdFromPath:(path:string)=>string|undefined; path:string }
+export function createCatalogProductGroupHandlers(d:Dependencies):{productGroups:()=>RouteResult;createProductGroup:()=>RouteResult;updateProductGroup:()=>RouteResult}{return {
+  productGroups:async()=>({found:true,data:{items:await d.repository.listProductGroups?.({organizationId:d.currentUser.organization.id})??d.fallbackGroups}}),
+  createProductGroup:async()=>{const body=await d.readJson(d.request),name=d.requiredString(body.name,'name').replace(/\s*>>\s*/g,' >> ');const ids=await d.repository.upsertProductGroupsByName?.({organizationId:d.currentUser.organization.id,names:[name]});const items=await d.repository.listProductGroups?.({organizationId:d.currentUser.organization.id});const created=items?.find(g=>g.name===name)??d.fallbackGroups.find(g=>g.name===name)??{id:ids?.get(name)??randomUUID(),code:d.productGroupCode(name),name,is_default:false,is_active:true};return {found:true,data:created,status:201}},
+  updateProductGroup:async()=>{const body=await d.readJson(d.request),id=d.getIdFromPath(d.path)??'',name=d.requiredString(body.name,'name').replace(/\s*>>\s*/g,' >> ');const updated=await d.repository.updateProductGroup?.({organizationId:d.currentUser.organization.id,id,name});if(updated)return {found:true,data:updated};const fallback=d.fallbackGroups.find(g=>g.id===id);if(!fallback)return {found:true,data:{message:'Product group not found'},status:404};return {found:true,data:{...fallback,code:d.productGroupCode(name),name}}},
+}}

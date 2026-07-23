@@ -1,0 +1,10 @@
+import { randomUUID } from 'node:crypto'
+import type { CurrentUserData, ServerRepository } from '../../http-types.js'
+import type { RouteResult } from '../../route-types.js'
+interface FinanceAccount {id:string;code:string;name:string;account_type:'cash'|'bank';is_default_cash:boolean;is_active:boolean;account_number?:string|null;account_holder?:string|null;opening_balance?:number;note?:string|null;notify_on_transaction?:boolean}
+interface Dependencies {request:Request;currentUser:CurrentUserData;repository:ServerRepository;url:URL;path:string;fallbackAccounts:FinanceAccount[];readJson:(request:Request)=>Promise<Record<string,unknown>>;fromBody:(body:Partial<FinanceAccount>)=>Omit<FinanceAccount,'id'>;getId:(path:string)=>string|undefined}
+export function createFinanceAccountHandlers(d:Dependencies):{listAccounts:()=>RouteResult;createAccount:()=>RouteResult;updateAccount:()=>RouteResult}{return {
+ listAccounts:async()=>({found:true,data:{items:d.repository.listFinanceAccounts?await d.repository.listFinanceAccounts({organizationId:d.currentUser.organization.id,url:d.url}):d.fallbackAccounts}}),
+ createAccount:async()=>{const account=d.fromBody(await d.readJson(d.request) as Partial<FinanceAccount>);if(d.repository.createFinanceAccount)return {found:true,data:await d.repository.createFinanceAccount({organizationId:d.currentUser.organization.id,account}),status:201};const created={...account,id:randomUUID()};d.fallbackAccounts.push(created);return {found:true,data:created,status:201}},
+ updateAccount:async()=>{const id=d.getId(d.path)??'',body=await d.readJson(d.request) as Partial<FinanceAccount>;if(d.repository.updateFinanceAccount){const updated=await d.repository.updateFinanceAccount({organizationId:d.currentUser.organization.id,id,patch:body});return updated===null?{found:true,data:{message:'Finance account not found'},status:404}:{found:true,data:updated}}const index=d.fallbackAccounts.findIndex(a=>a.id===id);if(index===-1)return {found:true,data:{message:'Finance account not found'},status:404};d.fallbackAccounts[index]={...d.fallbackAccounts[index],...body,id};return {found:true,data:d.fallbackAccounts[index]}},
+}}

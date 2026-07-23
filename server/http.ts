@@ -3,68 +3,63 @@ import { displayDateKey, displayDateRangeMatches } from './date-filter.js'
 import { HttpError, emptyResponse, failure, success } from './http-response.js'
 import { handleAuthRoute, requireCurrentUser } from './modules/auth/auth-routes.js'
 import { handleCatalogRoute } from './modules/catalog/catalog-routes.js'
+import { createCatalogImportHandlers } from './modules/catalog/catalog-import-handlers.js'
+import { createCatalogProductHandlers } from './modules/catalog/catalog-product-handlers.js'
+import { createCatalogCustomerHandlers } from './modules/catalog/catalog-customer-handlers.js'
+import { createCatalogProductGroupHandlers } from './modules/catalog/catalog-product-group-handlers.js'
+import { createCatalogBomHandlers } from './modules/catalog/catalog-bom-handlers.js'
+import { createCatalogCustomerGroupHandlers } from './modules/catalog/catalog-customer-group-handlers.js'
 import {
-  applyKiotVietCustomerImport,
-  mapKiotVietCustomerRows,
   parseKiotVietCustomerWorkbookBuffer,
-  previewKiotVietCustomerImport,
   type CustomerImportUpsertRow,
 } from './modules/catalog/customer-import.js'
 import {
-  applyKiotVietProductImport,
-  mapKiotVietProductRows,
   parseKiotVietProductWorkbookBuffer,
-  previewKiotVietProductImport,
   type ProductImportUpsertRow,
 } from './modules/catalog/product-import.js'
 import { handleFinanceRoute } from './modules/finance/finance-routes.js'
+import { createFinanceImportHandlers } from './modules/finance/finance-import-handlers.js'
+import { createFinanceDebtQueryHandlers } from './modules/finance/finance-debt-query-handlers.js'
+import { createFinanceDebtMutationHandlers } from './modules/finance/finance-debt-mutation-handlers.js'
+import { createFinanceCashbookMutationHandlers } from './modules/finance/finance-cashbook-mutation-handlers.js'
+import { createFinanceAccountHandlers } from './modules/finance/finance-account-handlers.js'
+import { createFinanceCashbookSummaryHandlers } from './modules/finance/finance-cashbook-summary-handlers.js'
 import { sliceCustomerOpenDebtsOldestFirst } from './modules/finance/customer-debt.js'
 import {
-  applyKiotVietCashbookImport,
-  mapKiotVietCashbookRows,
   parseKiotVietCashbookWorkbookBuffer,
-  previewKiotVietCashbookImport,
-  type CashbookImportRepository,
   type KiotVietCashbookImportRow,
 } from './modules/finance/kiotviet-cashbook-import.js'
 import {
-  applyKiotVietCustomerDebtAdjustmentImport,
-  mapKiotVietCustomerDebtAdjustmentRows,
   parseKiotVietCustomerDebtAdjustmentWorkbookBuffer,
-  previewKiotVietCustomerDebtAdjustmentImport,
-  type CustomerDebtAdjustmentImportRepository,
   type KiotVietCustomerDebtAdjustmentImportRow,
 } from './modules/finance/kiotviet-customer-debt-adjustment-import.js'
 import { handleInventoryRoute } from './modules/inventory/inventory-routes.js'
+import { createInventoryImportHandlers } from './modules/inventory/inventory-import-handlers.js'
+import { createInventoryCoreHandlers } from './modules/inventory/inventory-core-handlers.js'
+import { createProductionHandlers } from './modules/production/production-handlers.js'
 import {
-  mapKiotVietStocktakeRows,
-  previewKiotVietStocktakeImport,
   type KiotVietStocktakeImportRow,
 } from './modules/inventory/kiotviet-stocktake-import.js'
 import { handleProductionRoute } from './modules/production/production-routes.js'
 import {
-  applyKiotVietPurchaseReceiptImport,
-  mapKiotVietPurchaseReceiptRows,
   parseKiotVietPurchaseReceiptWorkbookBuffer,
-  previewKiotVietPurchaseReceiptImport,
   type KiotVietPurchaseReceiptImportRow,
-  type PurchaseReceiptImportRepository,
 } from './modules/purchase/purchase-receipt-import.js'
 import {
-  applyKiotVietSupplierImport,
-  mapKiotVietSupplierRows,
   parseKiotVietSupplierWorkbookBuffer,
-  previewKiotVietSupplierImport,
   type SupplierImportUpsertRow,
 } from './modules/purchase/supplier-import.js'
 import { handlePurchaseRoute } from './modules/purchase/purchase-routes.js'
+import { createPurchaseImportHandlers } from './modules/purchase/purchase-import-handlers.js'
+import { createPurchaseReceiptQueryHandlers } from './modules/purchase/purchase-receipt-query-handlers.js'
+import { createPurchaseTransactionHandlers } from './modules/purchase/purchase-transaction-handlers.js'
+import { createPurchaseSupplierHandlers } from './modules/purchase/purchase-supplier-handlers.js'
 import { handleSalesRoute } from './modules/sales/sales-routes.js'
+import { createSalesImportHandlers } from './modules/sales/sales-import-handlers.js'
+import { createSalesCoreHandlers } from './modules/sales/sales-core-handlers.js'
+import { createSalesDocumentHandlers } from './modules/sales/sales-document-handlers.js'
 import {
-  applyKiotVietInvoiceImport,
-  mapKiotVietInvoiceRows,
   parseKiotVietInvoiceWorkbookBuffer,
-  previewKiotVietInvoiceImport,
-  type InvoiceImportRepository,
   type KiotVietInvoiceImportRow,
 } from './modules/sales/kiotviet-invoice-import.js'
 import {
@@ -1630,7 +1625,7 @@ function sortProductsByUsage<T extends { id: string }>(filtered: T[], usageByPro
 function productUsageCounts() {
   const usageByProductId = new Map<string, number>()
   for (const document of salesDocuments) {
-    if (document.order_type !== 'invoice' || document.status !== 'completed') continue
+    if (document.order_type !== 'invoice' && document.order_type !== 'quote') continue
     for (const item of document.items ?? []) {
       if (typeof item.product_id !== 'string' || item.product_id.trim() === '') continue
       usageByProductId.set(item.product_id, (usageByProductId.get(item.product_id) ?? 0) + 1)
@@ -1945,64 +1940,6 @@ function customerImportRepository(repository: ServerRepository) {
   }
 }
 
-function supplierImportRepository(repository: ServerRepository) {
-  return {
-    findSuppliersByCodes: repository.findSuppliersByCodes ?? (async (input: { organizationId: string; codes: string[] }) =>
-      new Set(input.codes.filter((code) => suppliers.some((supplier) => supplier.code === code)))),
-    upsertSuppliersByCode: repository.upsertSuppliersByCode ?? (async (input: { organizationId: string; rows: SupplierImportUpsertRow[] }) => {
-      let created = 0
-      let updated = 0
-      for (const row of input.rows) {
-        const index = suppliers.findIndex((supplier) => supplier.code === row.code)
-        const existing = index >= 0 ? suppliers[index] : null
-        const linkedCustomer = findMatchingCustomerForSupplier(row, customers)
-        const patch = {
-          code: row.code,
-          name: row.name,
-          phone: row.phone,
-          email: row.email,
-          address: row.address,
-          tax_code: row.tax_code,
-          linked_customer_id: existing?.linked_customer_id ?? linkedCustomer?.id ?? null,
-          linked_customer: existing?.linked_customer ?? (linkedCustomer ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name } : null),
-          notes: row.note,
-          status: row.status,
-          current_payable_amount: row.kiotviet_current_payable ?? 0,
-          total_purchase_amount: row.kiotviet_total_purchase ?? 0,
-          created_at: row.source_created_at ?? runtimeIso(),
-          source_creator_name: row.source_creator_name,
-          source_created_at: row.source_created_at,
-          company_name: row.company_name,
-        }
-        if (index >= 0) {
-          suppliers[index] = { ...suppliers[index], ...patch }
-          updated += 1
-        } else {
-          suppliers.push({
-            ...suppliers[0],
-            ...patch,
-            id: `supplier-kv-${hashText(row.code)}`,
-          })
-          created += 1
-        }
-      }
-      return { created, updated, skipped: 0 }
-    }),
-    deleteImportedKiotVietSuppliers: repository.deleteImportedKiotVietSuppliers ?? (async () => {
-      let deleted = 0
-      for (let index = suppliers.length - 1; index >= 0; index -= 1) {
-        const supplier = suppliers[index]
-        const isImportedKiotVietRow = supplier.id.startsWith('supplier-kv-')
-        const isDemoSupplierRow = supplier.code.startsWith('DEV20-NCC-')
-        if (!isImportedKiotVietRow && !isDemoSupplierRow) continue
-        suppliers.splice(index, 1)
-        deleted += 1
-      }
-      return { deleted, blocked: 0 }
-    }),
-  }
-}
-
 function hashText(value: string) {
   return createHash('sha1').update(value).digest('hex').slice(0, 10)
 }
@@ -2103,10 +2040,6 @@ function hydrateLinkedSuppliers(customersToHydrate: readonly CustomerListData[],
 function supplierMatchesCustomer(supplier: Pick<SupplierListData, 'code' | 'name'>, customer: Pick<CustomerListData, 'code' | 'name'>) {
   return normalizeSearchText(supplier.code) === normalizeSearchText(customer.code)
     || normalizeSearchText(supplier.name) === normalizeSearchText(customer.name)
-}
-
-function findMatchingCustomerForSupplier(supplier: Pick<SupplierListData, 'code' | 'name'>, customerRows: readonly CustomerListData[]) {
-  return customerRows.find((customer) => supplierMatchesCustomer(supplier, customer)) ?? null
 }
 
 function customerActivityFromSalesDocuments() {
@@ -2995,9 +2928,7 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       if (authRoute.found) return authRoute.response
 
       const currentUser = await requireCurrentUser(options.repository, request, traceId)
-      if (!isQuickPickLookupRequest(request.method, url)) {
-        await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
-      }
+      await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
       const devResponse = await getDevApiResponse(request, url, currentUser, options.repository)
       if (devResponse.found) return success(devResponse.data, traceId, devResponse.status)
 
@@ -3015,14 +2946,6 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       return failure(500, 'INTERNAL_ERROR', 'An internal error occurred.', traceId)
     }
   }
-}
-
-function isQuickPickLookupRequest(method: string, url: URL) {
-  if (method !== 'GET') return false
-  if (url.searchParams.get('search_context') !== 'quick_pick') return false
-  return url.pathname === '/api/v1/customers'
-    || url.pathname === '/api/v1/products'
-    || url.pathname === '/api/v1/suppliers'
 }
 
 function serializeError(error: unknown) {
@@ -3244,1612 +3167,160 @@ async function getDevApiResponse(
     return { found: true, data: { ok: true } }
   }
 
+  const catalogProductGroupHandlers = createCatalogProductGroupHandlers({ request, currentUser, repository, fallbackGroups: productGroups, readJson, requiredString, productGroupCode, getIdFromPath, path })
+  const catalogBomHandlers = createCatalogBomHandlers({ request, currentUser, repository, path, readJson, nowIso, notFound: (message) => new HttpError(404, 'RESOURCE_NOT_FOUND', message) })
+  const catalogCustomerGroupHandlers = createCatalogCustomerGroupHandlers({ currentUser, repository, fallbackGroups: customerGroups })
+  const catalogImportHandlers = createCatalogImportHandlers({ request, currentUser, repository, readJson, productRowsFromBody: importRowsFromBody, customerRowsFromBody: customerImportRowsFromBody, productRepository: repository, customerRepository: customerImportRepository(repository) })
+  const catalogProductHandlers = createCatalogProductHandlers({ request, url, currentUser, repository, path, readJson, getIdFromPath, products, productGroups, priceLists, catalogImportHandlers, catalogBomHandlers, listProductsForRequest, countAllProductsForRequest, sortProductsForRequest, paged, normalizeCreateProductInput, randomUUID, nowIso, httpError: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_CONFLICT', message: string, fields?: Record<string, string[]>) => new HttpError(status, code, message, fields) })
+  const catalogCustomerHandlers = createCatalogCustomerHandlers({ request, url, currentUser, repository, path, readJson, getIdFromPath, customers, customerGroups, suppliers, filterCustomers, sortCustomersForRequest, hydrateLinkedSuppliers, customerListSummary, customerDisplayTotals, resolveCustomerCreatedBy, customerActivityFromSalesDocuments, randomUUID, nowIso, requiredString, nullableString, isBillPreferenceValue, isWalkInCustomerCode, syncCustomerBillPreferencePatch, httpError: (status: number, code: 'VALIDATION_ERROR', message: string, fields?: Record<string, string[]>) => new HttpError(status, code, message, fields), paged })
   const catalogRoute = await handleCatalogRoute(
     { request, url, currentUser, repository },
     {
-      productGroups: async () => ({
-        found: true,
-        data: { items: await repository.listProductGroups?.({ organizationId: currentUser.organization.id }) ?? productGroups },
-      }),
-      createProductGroup: async () => {
-        const body = await readJson(request)
-        const name = requiredString(body.name, 'name').replace(/\s*>>\s*/g, ' >> ')
-        const groupIds = await repository.upsertProductGroupsByName?.({ organizationId: currentUser.organization.id, names: [name] })
-        const items = await repository.listProductGroups?.({ organizationId: currentUser.organization.id })
-        const created = items?.find((group) => group.name === name)
-          ?? productGroups.find((group) => group.name === name)
-          ?? {
-            id: groupIds?.get(name) ?? randomUUID(),
-            code: productGroupCode(name),
-            name,
-            is_default: false,
-            is_active: true,
-        }
-        return { found: true, data: created, status: 201 }
-      },
-      updateProductGroup: async () => {
-        const body = await readJson(request)
-        const id = getIdFromPath(path) ?? ''
-        const name = requiredString(body.name, 'name').replace(/\s*>>\s*/g, ' >> ')
-        const updated = await repository.updateProductGroup?.({ organizationId: currentUser.organization.id, id, name })
-        if (updated) return { found: true, data: updated }
-        const fallback = productGroups.find((group) => group.id === id)
-        if (!fallback) return { found: true, data: { message: 'Product group not found' }, status: 404 }
-        const renamed = { ...fallback, code: productGroupCode(name), name }
-        return { found: true, data: renamed }
-      },
-      listProducts: async () => {
-        if (repository.listProductsPage && !url.searchParams.get('sort_key')) {
-          const result = await repository.listProductsPage({ organizationId: currentUser.organization.id, userId: currentUser.user.id, url })
-          return {
-            found: true,
-            data: {
-              items: result.items,
-              page,
-              page_size: pageSize,
-              total: result.total,
-              total_all: result.total_all ?? result.total,
-            },
-          }
-        }
-        const productsForRequest = await listProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id)
-        const items = url.searchParams.get('sort') === 'pos_usage'
-          ? productsForRequest
-          : sortProductsForRequest(productsForRequest, url)
-        return {
-          found: true,
-          data: {
-            ...paged(items, page, pageSize),
-            total_all: await countAllProductsForRequest(url, repository, currentUser.organization.id, currentUser.user.id),
-          },
-        }
-      },
-      previewKiotVietProductImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietProductRows(importRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietProductImport({
-            organizationId: currentUser.organization.id,
-            repository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-            cleanupDemo: Boolean(body.cleanup_demo),
-          }),
-        }
-      },
-      importKiotVietProducts: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietProductRows(importRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietProductImport({
-            organizationId: currentUser.organization.id,
-            repository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-            cleanupDemo: Boolean(body.cleanup_demo),
-          }),
-        }
-      },
-      deleteImportedKiotVietProducts: async () => {
-        const result = await repository.deleteImportedKiotVietProducts?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      getProductBom: async () => {
-        const productId = path.split('/')[4]
-        const data = await repository.getProductBom?.({
-          organizationId: currentUser.organization.id,
-          productId,
-        }) ?? null
-        return { found: true, data }
-      },
-      createProduct: async () => {
-        const body = await readJson(request)
-        const normalized = normalizeCreateProductInput(body)
-        try {
-          const created = repository.createProduct
-            ? await repository.createProduct({
-                organizationId: currentUser.organization.id,
-                ...normalized,
-              })
-            : (() => {
-                const resolvedGroup =
-                  (normalized.product_group_id
-                    ? productGroups.find((group) => group.id === normalized.product_group_id)
-                    : productGroups.find((group) => group.is_default))
-                  ?? products[0].product_group
-                const fallback = {
-                  ...products[0],
-                  id: randomUUID(),
-                  code: normalized.code,
-                  name: normalized.name,
-                  status: normalized.status,
-                  product_kind: normalized.product_kind,
-                  unit_name: normalized.unit_name,
-                  sell_method: normalized.sell_method,
-                  inventory_shape: normalized.inventory_shape,
-                  track_inventory: normalized.track_inventory,
-                  product_group_id: resolvedGroup.id,
-                  product_group: { id: resolvedGroup.id, code: resolvedGroup.code, name: resolvedGroup.name },
-                  latest_purchase_cost: normalized.latest_purchase_cost,
-                  latest_purchase_cost_at: normalized.latest_purchase_cost === null ? null : nowIso,
-                  default_sale_price: null as number | null,
-                  unit_conversions: normalized.unit_conversions as typeof products[number]['unit_conversions'],
-                  created_at: nowIso,
-                  updated_at: nowIso,
-                }
-                products.push(fallback)
-                return fallback
-              })()
-          return { found: true, data: created, status: 201 }
-        } catch (error) {
-          if (error instanceof Error && error.message === 'PRODUCT_ALREADY_EXISTS') {
-            throw new HttpError(409, 'RESOURCE_CONFLICT', 'Product code already exists.', { code: ['Product code already exists.'] })
-          }
-          if (error instanceof Error && error.message === 'PRODUCT_GROUP_NOT_FOUND') {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'product_group_id is invalid.', { product_group_id: ['product_group_id is invalid.'] })
-          }
-          throw error
-        }
-      },
-      updateProduct: async () => ({ found: true, data: { ...products[0], ...(await readJson(request)), id: getIdFromPath(path) } }),
-      upsertProductBom: async () => {
-        const productId = path.split('/')[4]
-        const body = await readJson(request) as {
-          notes?: string | null
-          items?: Array<{ component_product_id: string; quantity: number; notes?: string | null }>
-        }
-        if (!repository.upsertProductBom) {
-          return {
-            found: true,
-            data: {
-              id: randomUUID(),
-              product_id: productId,
-              version: 1,
-              status: 'active' as const,
-              notes: body.notes ?? null,
-              created_at: nowIso,
-              items: [],
-            },
-          }
-        }
-        const data = await repository.upsertProductBom({
-          organizationId: currentUser.organization.id,
-          productId,
-          notes: body.notes ?? null,
-          items: Array.isArray(body.items) ? body.items : [],
-        })
-        if (!data) throw new HttpError(404, 'RESOURCE_NOT_FOUND', 'Product not found')
-        return { found: true, data }
-      },
-      customerGroups: async () => {
-        const repositoryCustomers = await repository.listCustomers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/customers?page_size=1000') })
-        const groupsById = new Map(customerGroups.map((group) => [group.id, group]))
-        for (const customer of repositoryCustomers ?? []) {
-          if (!customer.customer_group) continue
-          groupsById.set(customer.customer_group.id, {
-            id: customer.customer_group.id,
-            code: customer.customer_group.code,
-            name: customer.customer_group.name,
-            price_list_id: '',
-            is_active: true,
-          })
-        }
-        return { found: true, data: { items: [...groupsById.values()].sort((left, right) => left.name.localeCompare(right.name, 'vi', { numeric: true })) } }
-      },
-      listCustomers: async () => {
-        if (url.searchParams.get('search_context') === 'quick_pick') {
-          const repositoryCustomers = await repository.listCustomers?.({
-            organizationId: currentUser.organization.id,
-            userId: currentUser.user.id,
-            url,
-          })
-          const sortedCustomers = sortCustomersForRequest(repositoryCustomers ?? filterCustomers(url), url)
-          return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
-        }
-        const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
-        const userList = await repository.listUsers?.({
-          organizationId: currentUser.organization.id,
-          url: new URL('http://api.local/api/v1/users'),
-        }) ?? []
-        const repositoryCustomers = await repository.listCustomers?.({
-          organizationId: currentUser.organization.id,
-          userId: currentUser.user.id,
-          url,
-        })
-        const repositorySuppliers = await repository.listSuppliers?.({
-          organizationId: currentUser.organization.id,
-          url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
-        })
-        const localActivity = repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
-        const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer) => {
-          const totals = financialTotals?.get(customer.id)
-          const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
-          return {
-            ...customer,
-            ...customerDisplayTotals(customer, totals),
-            created_by: resolveCustomerCreatedBy(customer, userList),
-            last_activity_at: lastActivityAt,
-          }
-        })
-        const sortedCustomers = sortCustomersForRequest(hydrateLinkedSuppliers(filteredCustomers, repositorySuppliers ?? suppliers), url)
-        return { found: true, data: { ...paged(sortedCustomers, page, pageSize), summary: customerListSummary(sortedCustomers) } }
-      },
-      createCustomer: async () => {
-        const body = await readJson(request) as {
-          code?: string
-          name?: string
-          phone?: string
-          tax_code?: string | null
-          address?: string | null
-          note?: string | null
-          customer_group_id?: string | null
-          customer_type?: string | null
-          company_name?: string | null
-        }
-        const name = requiredString(body.name, 'name')
-        const createdBy = { id: currentUser.user.id, name: currentUser.user.display_name }
-        const created = repository.createCustomer
-          ? await repository.createCustomer({
-              organizationId: currentUser.organization.id,
-              code: body.code,
-              name,
-              phone: body.phone ?? null,
-              tax_code: nullableString(body.tax_code),
-              address: nullableString(body.address),
-              note: nullableString(body.note),
-              customer_group_id: body.customer_group_id ?? null,
-              customer_type: nullableString(body.customer_type),
-              company_name: nullableString(body.company_name),
-              created_by: createdBy,
-            })
-          : {
-              ...customers[0],
-              ...body,
-              name,
-              id: randomUUID(),
-              code: body.code || `KH${String(customers.length + 1).padStart(6, '0')}`,
-              customer_group_id: body.customer_group_id ?? null,
-              created_by: createdBy,
-              created_at: nowIso,
-              total_sales_amount: 0,
-              total_debt_amount: 0,
-            }
-        if (!repository.createCustomer) customers.push(created)
-        return { found: true, data: created, status: 201 }
-      },
-      updateCustomer: async () => {
-        const body = await readJson(request)
-        const id = getIdFromPath(path) ?? ''
-        const patch: {
-          code?: string
-          name?: string
-          phone?: string | null
-          tax_code?: string | null
-          address?: string | null
-          note?: string | null
-          customer_group_id?: string | null
-          customer_type?: string | null
-          company_name?: string | null
-          preferred_bill_template?: string | null
-          preferred_bill_templates?: string[] | null
-        } = {}
-        if (body.name !== undefined) patch.name = requiredString(body.name, 'name')
-        if (body.code !== undefined) patch.code = requiredString(body.code, 'code')
-        if (body.phone !== undefined) patch.phone = nullableString(body.phone)
-        if (body.tax_code !== undefined) patch.tax_code = nullableString(body.tax_code)
-        if (body.address !== undefined) patch.address = nullableString(body.address)
-        if (body.note !== undefined) patch.note = nullableString(body.note)
-        if (body.customer_group_id !== undefined) patch.customer_group_id = nullableString(body.customer_group_id)
-        if (body.customer_type !== undefined) patch.customer_type = nullableString(body.customer_type)
-        if (body.company_name !== undefined) patch.company_name = nullableString(body.company_name)
-        if ('preferred_bill_template' in body) {
-          if (body.preferred_bill_template === null || body.preferred_bill_template === '') {
-            patch.preferred_bill_template = null
-          } else if (isBillPreferenceValue(body.preferred_bill_template)) {
-            patch.preferred_bill_template = body.preferred_bill_template.trim()
-          } else {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_template must be a4, k80, or a template id.', {
-              preferred_bill_template: ['preferred_bill_template must be a4, k80, or a template id.'],
-            })
-          }
-        }
-        if ('preferred_bill_templates' in body) {
-          if (body.preferred_bill_templates === null) {
-            patch.preferred_bill_templates = []
-          } else if (!Array.isArray(body.preferred_bill_templates)) {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_templates must be an array.', {
-              preferred_bill_templates: ['preferred_bill_templates must be an array.'],
-            })
-          } else {
-            const invalid = body.preferred_bill_templates.some((item) => !isBillPreferenceValue(item))
-            if (invalid) {
-              throw new HttpError(400, 'VALIDATION_ERROR', 'preferred_bill_templates entries must be a4, k80, or a template id.', {
-                preferred_bill_templates: ['preferred_bill_templates entries must be a4, k80, or a template id.'],
-              })
-            }
-            patch.preferred_bill_templates = body.preferred_bill_templates.map((item) => String(item).trim())
-          }
-        }
-        if (Object.keys(patch).length === 0) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'At least one customer field is required.')
-        }
-        let repositoryCustomer: CustomerListData | null | undefined
-        try {
-          repositoryCustomer = await repository.updateCustomer?.({
-            organizationId: currentUser.organization.id,
-            id,
-            patch,
-          })
-        } catch (error) {
-          if (error instanceof Error && (error as { code?: string }).code === 'WALK_IN_BILL_PREFERENCE_FORBIDDEN') {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'Walk-in customers cannot store bill template preference.')
-          }
-          throw error
-        }
-        if (repositoryCustomer) return { found: true, data: repositoryCustomer }
-
-        const index = customers.findIndex((customer) => customer.id === id)
-        if (index < 0) return { found: true, data: { message: 'Customer not found' }, status: 404 }
-        if (
-          isWalkInCustomerCode(customers[index].code)
-          && ('preferred_bill_template' in patch || 'preferred_bill_templates' in patch)
-        ) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'Walk-in customers cannot store bill template preference.')
-        }
-        const group = patch.customer_group_id
-          ? customerGroups.find((item) => item.id === patch.customer_group_id) ?? null
-          : null
-        const billPreference = syncCustomerBillPreferencePatch({
-          preferred_bill_template: patch.preferred_bill_template,
-          preferred_bill_templates: patch.preferred_bill_templates,
-          currentTemplate: customers[index].preferred_bill_template ?? null,
-          currentTemplates: customers[index].preferred_bill_templates ?? null,
-        })
-        const updated = {
-          ...customers[index],
-          code: patch.code ?? customers[index].code,
-          name: patch.name ?? customers[index].name,
-          phone: patch.phone === undefined ? customers[index].phone : patch.phone,
-          tax_code: patch.tax_code === undefined ? customers[index].tax_code : patch.tax_code,
-          address: patch.address === undefined ? customers[index].address : patch.address,
-          note: patch.note === undefined ? customers[index].note : patch.note,
-          customer_group_id: patch.customer_group_id === undefined ? customers[index].customer_group_id : patch.customer_group_id,
-          customer_group: patch.customer_group_id === undefined ? customers[index].customer_group : group,
-          customer_type: patch.customer_type === undefined ? customers[index].customer_type : patch.customer_type,
-          company_name: patch.company_name === undefined ? customers[index].company_name : patch.company_name,
-          preferred_bill_template:
-            patch.preferred_bill_template !== undefined || patch.preferred_bill_templates !== undefined
-              ? billPreference.preferred_bill_template
-              : customers[index].preferred_bill_template ?? null,
-          preferred_bill_templates:
-            patch.preferred_bill_template !== undefined || patch.preferred_bill_templates !== undefined
-              ? billPreference.preferred_bill_templates
-              : customers[index].preferred_bill_templates ?? null,
-        }
-        customers[index] = updated
-        return { found: true, data: updated }
-      },
-      previewKiotVietCustomerImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCustomerRows(customerImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietCustomerImport({
-            organizationId: currentUser.organization.id,
-            repository: customerImportRepository(repository),
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietCustomers: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCustomerRows(customerImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietCustomerImport({
-            organizationId: currentUser.organization.id,
-            repository: customerImportRepository(repository),
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      deleteImportedKiotVietCustomers: async () => {
-        const result = await customerImportRepository(repository).deleteImportedKiotVietCustomers({ organizationId: currentUser.organization.id })
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      customerRecentPrices: async () => ({ found: true, data: { items: [{ unitPrice: 600000, soldAt: nowIso, orderCode: 'HD0001' }] } }),
-      resolvePricing: async () => {
-        const body = await readJson(request)
-        const productIds = Array.isArray(body.product_ids) ? body.product_ids : products.map((product) => product.id)
-        const repositoryPrices = await repository.resolvePrices?.({
-          organizationId: currentUser.organization.id,
-          productIds: productIds.map(String),
-          customerId: typeof body.customer_id === 'string' && body.customer_id.trim() ? body.customer_id.trim() : null,
-        })
-        if (repositoryPrices) {
-          return {
-            found: true,
-            data: { items: repositoryPrices },
-          }
-        }
-        return {
-          found: true,
-          data: { items: productIds.map((productId) => ({ product_id: productId, unit_price: 600000, price_source: 'default_price_list', price_list_id: 'pl-default' })) },
-        }
-      },
-      priceLists: async () => ({
-        found: true,
-        data: { items: await repository.listPriceLists?.({ organizationId: currentUser.organization.id }) ?? priceLists },
-      }),
-      previewPriceFormula: async () => ({ found: true, data: { affected_count: 1, items: [{ product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, latest_purchase_cost: 250000, current_mode: 'manual', current_unit_price: 600000, computed_prices: [{ price_list_id: 'pl-default', price_list_name: 'Bang gia le', current_unit_price: 600000, computed_unit_price: 620000, delta: 20000 }] }] } }),
-      applyPriceFormula: async () => ({ found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }),
+      productGroups: catalogProductGroupHandlers.productGroups,
+      createProductGroup: catalogProductGroupHandlers.createProductGroup,
+      updateProductGroup: catalogProductGroupHandlers.updateProductGroup,
+      listProducts: catalogProductHandlers.listProducts,
+      previewKiotVietProductImport: catalogProductHandlers.previewKiotVietProductImport,
+      importKiotVietProducts: catalogProductHandlers.importKiotVietProducts,
+      deleteImportedKiotVietProducts: catalogProductHandlers.deleteImportedKiotVietProducts,
+      getProductBom: catalogProductHandlers.getProductBom,
+      createProduct: catalogProductHandlers.createProduct,
+      updateProduct: catalogProductHandlers.updateProduct,
+      upsertProductBom: catalogProductHandlers.upsertProductBom,
+      customerGroups: catalogCustomerGroupHandlers.customerGroups,
+      listCustomers: catalogCustomerHandlers.listCustomers,
+      createCustomer: catalogCustomerHandlers.createCustomer,
+      updateCustomer: catalogCustomerHandlers.updateCustomer,
+      previewKiotVietCustomerImport: catalogImportHandlers.previewKiotVietCustomerImport,
+      importKiotVietCustomers: catalogImportHandlers.importKiotVietCustomers,
+      deleteImportedKiotVietCustomers: catalogImportHandlers.deleteImportedKiotVietCustomers,
+      customerRecentPrices: catalogProductHandlers.customerRecentPrices,
+      resolvePricing: catalogProductHandlers.resolvePricing,
+      priceLists: catalogProductHandlers.priceLists,
+      previewPriceFormula: catalogProductHandlers.previewPriceFormula,
+      applyPriceFormula: catalogProductHandlers.applyPriceFormula,
     },
   )
   if (catalogRoute.found) return catalogRoute
 
+  const inventoryImportHandlers = createInventoryImportHandlers({ request, currentUser, repository, readJson, rowsFromBody: importRowsFromBody })
+  const inventoryCoreHandlers = createInventoryCoreHandlers({ request, url, currentUser, repository, path, readJson, getIdFromPath, inventoryProducts, products, stockMovements, filterInventoryProducts, inventoryProductListSummary, sortStocktakesForRequest, stocktakeCreatorOptions, makeStocktake, paged, newestFirst, nowIso, randomUUID, requiredString, nullableString, validation: (message: string, details?: Record<string, string[]>) => new HttpError(400, 'VALIDATION_ERROR', message, details) })
+
   const inventoryRoute = await handleInventoryRoute(
     { request, url, currentUser, repository },
     {
-      listProducts: async () => {
-        const items = filterInventoryProducts(url)
-        return { found: true, data: { ...paged(items, page, pageSize), summary: inventoryProductListSummary(items) } }
-      },
-      getProduct: async () => ({ found: true, data: inventoryProducts.find((product) => product.product_id === getIdFromPath(path)) ?? inventoryProducts[0] }),
-      adjustStock: async () => {
-        const body = await readJson(request)
-        const actualQty = Number(body.actual_qty)
-        const reason = requiredString(body.reason, 'reason')
-        if (!Number.isFinite(actualQty) || actualQty < 0) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'actual_qty must be a non-negative number.', { actual_qty: ['actual_qty must be a non-negative number.'] })
-        }
-        const item = await repository.adjustNormalProductStock?.({
-          organizationId: currentUser.organization.id,
-          productId: getIdFromPath(path) ?? '',
-          actualQty,
-          reason,
-          createdBy: { id: currentUser.user.id, name: currentUser.user.display_name },
-        }) ?? makeStocktake(currentUser.user)
-        return item
-          ? { found: true, data: item }
-          : { found: true, data: { message: 'Product not found' }, status: 404 }
-      },
-      stockMovements: async () => {
-        const repositoryMovements = await repository.listStockMovements?.({ organizationId: currentUser.organization.id, url })
-        const productId = url.searchParams.get('product_id')
-        const items = repositoryMovements ?? (productId ? stockMovements.filter((movement) => movement.product_id === productId) : stockMovements)
-        return { found: true, data: paged(newestFirst(items), page, pageSize) }
-      },
-      stocktakes: async () => {
-        if (repository.listStocktakesPage && !url.searchParams.get('sort_key')) {
-          const result = await repository.listStocktakesPage({ organizationId: currentUser.organization.id, url })
-          return {
-            found: true,
-            data: {
-              items: result.items,
-              page,
-              page_size: pageSize,
-              total: result.total,
-              creator_options: result.creator_options ?? stocktakeCreatorOptions(result.items),
-            },
-          }
-        }
-        const items = sortStocktakesForRequest(
-          await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url })
-            ?? [makeStocktake(currentUser.user)],
-          url,
-        )
-        const creatorUrl = new URL(url)
-        creatorUrl.searchParams.delete('created_by')
-        const creatorItems = await repository.listStocktakes?.({ organizationId: currentUser.organization.id, url: creatorUrl })
-          ?? items
-        return { found: true, data: { ...paged(items, page, pageSize), creator_options: stocktakeCreatorOptions(creatorItems) } }
-      },
-      getStocktake: async () => {
-        const item = await repository.getStocktake?.({ organizationId: currentUser.organization.id, id: getIdFromPath(path) ?? '' })
-        return item
-          ? { found: true, data: item }
-          : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
-      },
-      updateStocktake: async () => {
-        const body = await readJson(request)
-        if (body.status === 'cancelled') {
-          const item = await repository.cancelStocktake?.({
-            organizationId: currentUser.organization.id,
-            id: getIdFromPath(path) ?? '',
-          })
-          return item
-            ? { found: true, data: item }
-            : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
-        }
-        const item = await repository.updateStocktakeNote?.({
-          organizationId: currentUser.organization.id,
-          id: getIdFromPath(path) ?? '',
-          note: nullableString(body.note),
-        })
-        return item
-          ? { found: true, data: item }
-          : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
-      },
-      rolls: async () => ({ found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }),
-      sheets: async () => ({ found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }),
-      shortagePreview: async () => ({ found: true, data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] } }),
-      previewKiotVietStocktakeImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietStocktakeRows(importRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietStocktakeImport({
-            organizationId: currentUser.organization.id,
-            repository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietStocktakes: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietStocktakeRows(importRowsFromBody(body))
-        const allowPartial = Boolean(body.allow_partial)
-        if (mapped.invalid.length > 0 && !allowPartial) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'KiotViet stocktake import has invalid rows.')
-        }
-        const cleanup = Boolean(body.cleanup_demo) && repository.deleteDemoStocktakesForImport
-          ? await repository.deleteDemoStocktakesForImport({ organizationId: currentUser.organization.id })
-          : { deleted: 0, blocked: 0 }
-        const result = await repository.upsertImportedKiotVietStocktakes?.({
-          organizationId: currentUser.organization.id,
-          createdBy: null,
-          rows: mapped.valid,
-        }) ?? {
-          stocktakes_created: 0,
-          stocktakes_updated: 0,
-          items_created: 0,
-          items_updated: 0,
-          missing_product_rows: 0,
-        }
-        return {
-          found: true,
-          data: {
-            summary: {
-              total_rows: mapped.valid.length + mapped.invalid.length,
-              valid_rows: mapped.valid.length,
-              invalid_rows: mapped.invalid.length,
-              ...result,
-              cleanup_deleted_rows: cleanup.deleted,
-              cleanup_blocked_rows: cleanup.blocked,
-              creates_stock_movements: false,
-            },
-            invalid_rows: mapped.invalid,
-          },
-        }
-      },
-      deleteImportedKiotVietStocktakes: async () => {
-        const result = await repository.deleteImportedKiotVietStocktakes?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      materialOpeningOptions: async () => ({ found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }),
-      createMaterialOpening: async () => {
-        const body = await readJson(request)
-        const created = await repository.createMaterialOpening?.({
-          organizationId: currentUser.organization.id,
-          input: {
-            product_id: requiredString(body.product_id, 'product_id'),
-            inventory_shape: body.inventory_shape === 'roll' || body.inventory_shape === 'sheet' ? body.inventory_shape : 'normal',
-            opened_unit_id: nullableString(body.opened_unit_id) ?? undefined,
-            opened_qty: body.opened_qty === undefined ? undefined : Number(body.opened_qty),
-            old_remaining_qty: body.old_remaining_qty === undefined ? undefined : Number(body.old_remaining_qty),
-            old_inventory_roll_id: nullableString(body.old_inventory_roll_id) ?? undefined,
-            old_remaining_length_m: body.old_remaining_length_m === undefined ? undefined : Number(body.old_remaining_length_m),
-            old_inventory_sheet_id: nullableString(body.old_inventory_sheet_id) ?? undefined,
-            old_remaining_width_m: body.old_remaining_width_m === undefined ? undefined : Number(body.old_remaining_width_m),
-            discard_old_sheet: Boolean(body.discard_old_sheet),
-            note: nullableString(body.note) ?? undefined,
-          },
-        }) ?? { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }
-        return { found: true, data: created, status: 201 }
-      },
+      listProducts: inventoryCoreHandlers.listProducts,
+      getProduct: inventoryCoreHandlers.getProduct,
+      adjustStock: inventoryCoreHandlers.adjustStock,
+      stockMovements: inventoryCoreHandlers.stockMovements,
+      stocktakes: inventoryCoreHandlers.stocktakes,
+      getStocktake: inventoryCoreHandlers.getStocktake,
+      updateStocktake: inventoryCoreHandlers.updateStocktake,
+      rolls: inventoryCoreHandlers.rolls,
+      sheets: inventoryCoreHandlers.sheets,
+      shortagePreview: inventoryCoreHandlers.shortagePreview,
+      previewKiotVietStocktakeImport: inventoryImportHandlers.previewKiotVietStocktakeImport,
+      importKiotVietStocktakes: inventoryImportHandlers.importKiotVietStocktakes,
+      deleteImportedKiotVietStocktakes: inventoryImportHandlers.deleteImportedKiotVietStocktakes,
+      materialOpeningOptions: inventoryCoreHandlers.materialOpeningOptions,
+      createMaterialOpening: inventoryCoreHandlers.createMaterialOpening,
     },
   )
   if (inventoryRoute.found) return inventoryRoute
 
+  const purchaseImportHandlers = createPurchaseImportHandlers({ request, currentUser, repository, readJson, supplierRowsFromBody: supplierImportRowsFromBody, receiptRowsFromBody: purchaseReceiptImportRowsFromBody })
+  const purchaseReceiptQueryHandlers = createPurchaseReceiptQueryHandlers({ currentUser, repository, path, fallbackReceipts: purchaseReceipts, fallbackDetail: purchaseReceipt, getSupplierId: getSupplierIdFromPath, getId: getIdFromPath, filterReceipts: filterPurchaseReceipts })
+  const purchaseTransactionHandlers = createPurchaseTransactionHandlers({ request, currentUser, repository, path, url, readJson, getSupplierIdFromPath, getIdFromPath, purchaseReceipts, suppliers, products, cashbookEntries, purchaseReceiptQueryHandlers, purchaseImportHandlers, filterPurchaseReceipts, sortPurchaseReceiptsForRequest, purchaseReceiptListSummary, paged, makeManualPurchaseReceipt, syncSupplierTotalsFromPurchaseReceipts, validation: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_NOT_FOUND', message: string) => new HttpError(status, code, message), randomUUID, runtimeIso })
+  const purchaseSupplierHandlers = createPurchaseSupplierHandlers({ request, url, currentUser, repository, path, readJson, getIdFromPath, suppliers, customers, purchaseImportHandlers, filterSuppliers, sortSuppliersForRequest, supplierListSummary, paged, requiredString, nullableString, supplierPatchFromBody, randomUUID, nowIso, httpError: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_CONFLICT', message: string, fields?: Record<string, string[]>) => new HttpError(status, code, message, fields) })
   const purchaseRoute = await handlePurchaseRoute(
     { request, url, currentUser, repository },
     {
-      listSuppliers: async () => {
-        const repositorySuppliers = await repository.listSuppliers?.({
-          organizationId: currentUser.organization.id,
-          userId: currentUser.user.id,
-          url,
-        })
-        const items = sortSuppliersForRequest(repositorySuppliers ?? filterSuppliers(url), url)
-        return { found: true, data: { ...paged(items, page, pageSize), summary: supplierListSummary(items) } }
-      },
-      previewKiotVietSupplierImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietSupplierRows(supplierImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietSupplierImport({
-            organizationId: currentUser.organization.id,
-            repository: supplierImportRepository(repository),
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietSuppliers: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietSupplierRows(supplierImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietSupplierImport({
-            organizationId: currentUser.organization.id,
-            repository: supplierImportRepository(repository),
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      deleteImportedKiotVietSuppliers: async () => {
-        const result = await supplierImportRepository(repository).deleteImportedKiotVietSuppliers({ organizationId: currentUser.organization.id })
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      getSupplier: async () => {
-        const repositorySuppliers = await repository.listSuppliers?.({
-          organizationId: currentUser.organization.id,
-          url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
-        })
-        return { found: true, data: repositorySuppliers?.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers.find((supplier) => supplier.id === getIdFromPath(path)) ?? suppliers[0] }
-      },
-      createSupplier: async () => {
-        const body = await readJson(request)
-        const name = requiredString(body.name, 'name')
-        const code = typeof body.code === 'string' ? body.code.trim() : ''
-        const statusRaw = body.status === undefined || body.status === null || body.status === ''
-          ? 'active'
-          : String(body.status).trim()
-        if (statusRaw !== 'active' && statusRaw !== 'inactive') {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'status is invalid.', { status: ['status must be active or inactive.'] })
-        }
-        try {
-          const created = repository.createSupplier
-            ? await repository.createSupplier({
-                organizationId: currentUser.organization.id,
-                code: code || undefined,
-                name,
-                phone: nullableString(body.phone),
-                email: nullableString(body.email),
-                address: nullableString(body.address),
-                tax_code: nullableString(body.tax_code),
-                linked_customer_id: nullableString(body.linked_customer_id),
-                notes: nullableString(body.notes),
-                status: statusRaw,
-              })
-            : (() => {
-                const fallback: SupplierListData = {
-                  ...suppliers[0],
-                  id: randomUUID(),
-                  code: code || `NCC${String(suppliers.length + 1).padStart(6, '0')}`,
-                  name,
-                  phone: nullableString(body.phone),
-                  email: nullableString(body.email),
-                  address: nullableString(body.address),
-                  tax_code: nullableString(body.tax_code),
-                  linked_customer_id: nullableString(body.linked_customer_id),
-                  linked_customer: null,
-                  notes: nullableString(body.notes),
-                  status: statusRaw,
-                  current_payable_amount: 0,
-                  total_purchase_amount: 0,
-                  created_at: nowIso,
-                }
-                suppliers.push(fallback)
-                return fallback
-              })()
-          return { found: true, data: created, status: 201 }
-        } catch (error) {
-          if (error instanceof Error && error.message === 'SUPPLIER_ALREADY_EXISTS') {
-            throw new HttpError(409, 'RESOURCE_CONFLICT', 'Supplier code already exists.', { code: ['Supplier code already exists.'] })
-          }
-          if (error instanceof Error && error.message === 'LINKED_CUSTOMER_NOT_FOUND') {
-            throw new HttpError(400, 'VALIDATION_ERROR', 'linked_customer_id is invalid.', { linked_customer_id: ['linked_customer_id is invalid.'] })
-          }
-          throw error
-        }
-      },
-      updateSupplier: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request)
-        const patch = supplierPatchFromBody(body)
-        if (repository.updateSupplier) {
-          const supplier = await repository.updateSupplier({ organizationId: currentUser.organization.id, id, patch })
-          return supplier
-            ? { found: true, data: supplier }
-            : { found: true, data: { message: 'Supplier not found' }, status: 404 }
-        }
-        const index = suppliers.findIndex((supplier) => supplier.id === id)
-        const current = index >= 0 ? suppliers[index] : suppliers[0]
-        const nextLinkedCustomerId = patch.linked_customer_id !== undefined ? patch.linked_customer_id : current.linked_customer_id
-        const linkedCustomer = nextLinkedCustomerId
-          ? customers.find((customer) => customer.id === nextLinkedCustomerId) ?? null
-          : null
-        const updated = {
-          ...current,
-          ...patch,
-          id,
-          linked_customer_id: nextLinkedCustomerId ?? null,
-          linked_customer: patch.linked_customer_id === undefined
-            ? current.linked_customer
-            : linkedCustomer
-              ? { id: linkedCustomer.id, code: linkedCustomer.code, name: linkedCustomer.name }
-              : null,
-        }
-        if (index >= 0) suppliers[index] = updated
-        return { found: true, data: updated }
-      },
-      supplierPayableReceipts: async () => {
-        const supplierId = getSupplierIdFromPath(path)
-        const receiptUrl = new URL('http://api.local/api/v1/purchase/receipts')
-        receiptUrl.searchParams.set('supplier_id', supplierId)
-        receiptUrl.searchParams.set('status', 'posted')
-        const repositoryReceipts = await repository.listPurchaseReceipts?.({
-          organizationId: currentUser.organization.id,
-          url: receiptUrl,
-        })
-        const items = (repositoryReceipts ?? filterPurchaseReceipts(receiptUrl))
-          .filter((receipt) => receipt.remaining_amount > 0)
-          .map((receipt) => ({
-            id: receipt.id,
-            code: receipt.code,
-            supplier_document_no: receipt.supplier_document_no,
-            received_at: receipt.received_at,
-            payable_amount: receipt.payable_amount,
-            paid_amount: receipt.paid_amount,
-            remaining_amount: receipt.remaining_amount,
-            paid_after_post_amount: Math.max(receipt.paid_amount, 0),
-            outstanding_amount: receipt.remaining_amount,
-          }))
-        return { found: true, data: { items } }
-      },
-      paySupplier: async () => {
-        const body = await readJson(request)
-        const allocations = Array.isArray(body.allocations) ? body.allocations : []
-        const paymentMethod = body.payment_method === 'bank_transfer' ? 'bank_transfer' : 'cash'
-        const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id : undefined
-        const supplierId = getSupplierIdFromPath(path)
-        const normalizedAllocations = allocations
-          .map((allocation) => (
-            allocation != null && typeof allocation === 'object' && 'purchase_receipt_id' in allocation
-              ? {
-                  purchase_receipt_id: String((allocation as { purchase_receipt_id: unknown }).purchase_receipt_id),
-                  amount: Number((allocation as { amount?: unknown }).amount ?? 0),
-                }
-              : null
-          ))
-          .filter((allocation): allocation is { purchase_receipt_id: string; amount: number } => Boolean(allocation && allocation.purchase_receipt_id && allocation.amount > 0))
-        if (repository.paySupplier) {
-          const result = await repository.paySupplier({
-            organizationId: currentUser.organization.id,
-            supplierId,
-            paymentMethod,
-            financeAccountId,
-            note: typeof body.note === 'string' ? body.note : null,
-            allocations: normalizedAllocations,
-            currentUser,
-          })
-          return { found: true, data: result, status: 201 }
-        }
-        const firstAllocation = allocations.find((allocation): allocation is { purchase_receipt_id: string; amount?: number } => (
-          allocation != null
-          && typeof allocation === 'object'
-          && 'purchase_receipt_id' in allocation
-          && typeof allocation.purchase_receipt_id === 'string'
-        ))
-        const receipt = firstAllocation
-          ? purchaseReceipts.find((item) => item.id === firstAllocation.purchase_receipt_id)
-          : null
-        const receiptCodeMatch = receipt?.code.match(/^PN(\d{6}(?:\.\d+)?)$/)
-        const code = receiptCodeMatch
-          ? `PCPN${receiptCodeMatch[1]}`
-          : `PC${String(cashbookEntries.length + 1).padStart(6, '0')}`
-        const amount = allocations.reduce((sum, allocation) => (
-          allocation != null && typeof allocation === 'object' && 'amount' in allocation
-          ? sum + Number(allocation.amount ?? 0)
-            : sum
-        ), 0)
-        return { found: true, data: { supplier_payment_id: randomUUID(), code, amount, cashbook_voucher_id: randomUUID() }, status: 201 }
-      },
-      listReceipts: async () => {
-        const repositoryReceipts = await repository.listPurchaseReceipts?.({
-          organizationId: currentUser.organization.id,
-          url,
-        })
-        const items = sortPurchaseReceiptsForRequest(repositoryReceipts ?? filterPurchaseReceipts(url), url)
-        return { found: true, data: { ...paged(items, page, pageSize), summary: purchaseReceiptListSummary(items) } }
-      },
-      previewKiotVietPurchaseReceiptImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietPurchaseReceiptRows(purchaseReceiptImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietPurchaseReceiptImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as PurchaseReceiptImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietPurchaseReceipts: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietPurchaseReceiptRows(purchaseReceiptImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietPurchaseReceiptImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as PurchaseReceiptImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      deleteImportedKiotVietPurchaseReceipts: async () => {
-        const result = await repository.deleteImportedKiotVietPurchaseReceipts?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      getReceipt: async () => {
-        const repositoryReceipt = await repository.getPurchaseReceipt?.({
-          organizationId: currentUser.organization.id,
-          id: getIdFromPath(path) ?? '',
-        })
-        return { found: true, data: repositoryReceipt ?? purchaseReceipts.find((receipt) => receipt.id === getIdFromPath(path)) ?? purchaseReceipt }
-      },
-      createReceipt: async () => {
-        const body = await readJson(request) as PurchaseReceiptInputBody
-        const [existingReceipts, supplierRows, productRows] = await Promise.all([
-          repository.listPurchaseReceipts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/purchase/receipts?status=all&page=1&page_size=10000') }),
-          repository.listSuppliers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') }),
-          repository.listProducts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000') }),
-        ])
-        const receipt = makeManualPurchaseReceipt({
-          body,
-          currentUser,
-          existingReceipts: existingReceipts ?? purchaseReceipts,
-          suppliers: supplierRows ?? suppliers,
-          products: productRows ?? products,
-        })
-        if (repository.savePurchaseReceipt) {
-          return { found: true, data: await repository.savePurchaseReceipt({ organizationId: currentUser.organization.id, receipt, sourceType: 'manual' }), status: 201 }
-        }
-        purchaseReceipts.push(receipt)
-        syncSupplierTotalsFromPurchaseReceipts()
-        return { found: true, data: receipt, status: 201 }
-      },
-      updateReceipt: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request) as PurchaseReceiptInputBody
-        const existing = await repository.getPurchaseReceipt?.({ organizationId: currentUser.organization.id, id })
-          ?? purchaseReceipts.find((receipt) => receipt.id === id || receipt.code === id)
-          ?? null
-        if (!existing) throw new HttpError(404, 'RESOURCE_NOT_FOUND', 'Purchase receipt not found.')
-        if (existing.status !== 'draft') throw new HttpError(400, 'VALIDATION_ERROR', 'Only draft purchase receipts can be edited.')
-        const [existingReceipts, supplierRows, productRows] = await Promise.all([
-          repository.listPurchaseReceipts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/purchase/receipts?status=all&page=1&page_size=10000') }),
-          repository.listSuppliers?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') }),
-          repository.listProducts?.({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/products?status=all&page=1&page_size=10000') }),
-        ])
-        const receipt = makeManualPurchaseReceipt({
-          body,
-          currentUser,
-          existing,
-          existingReceipts: existingReceipts ?? purchaseReceipts,
-          suppliers: supplierRows ?? suppliers,
-          products: productRows ?? products,
-        })
-        if (repository.savePurchaseReceipt) {
-          return { found: true, data: await repository.savePurchaseReceipt({ organizationId: currentUser.organization.id, receipt, sourceType: 'manual' }) }
-        }
-        const index = purchaseReceipts.findIndex((item) => item.id === existing.id || item.code === existing.code)
-        if (index >= 0) purchaseReceipts[index] = receipt
-        syncSupplierTotalsFromPurchaseReceipts()
-        return { found: true, data: receipt }
-      },
-      postReceipt: async () => {
-        const body = await readJson(request)
-        const id = getIdFromPath(path) ?? ''
-        const paymentMethod = body.payment_method === 'bank_transfer' ? 'bank_transfer' : body.payment_method === 'cash' ? 'cash' : undefined
-        const financeAccountId = typeof body.finance_account_id === 'string' ? body.finance_account_id : undefined
-        if (repository.postPurchaseReceipt) {
-          return {
-            found: true,
-            data: await repository.postPurchaseReceipt({
-              organizationId: currentUser.organization.id,
-              id,
-              paymentMethod,
-              financeAccountId,
-              currentUser,
-            }),
-          }
-        }
-        const receipt = purchaseReceipts.find((item) => item.id === id || item.code === id)
-        if (receipt) {
-          receipt.status = 'posted'
-          receipt.updated_at = runtimeIso()
-          syncSupplierTotalsFromPurchaseReceipts()
-        }
-        return { found: true, data: { purchase_receipt_id: id, status: 'posted', posted_at: runtimeIso(), cashbook_voucher_id: randomUUID() } }
-      },
-      cancelReceipt: async () => {
-        const id = getIdFromPath(path) ?? ''
-        if (repository.cancelPurchaseReceipt) {
-          let receipt: PurchaseReceiptData | null
-          try {
-            receipt = await repository.cancelPurchaseReceipt({
-              organizationId: currentUser.organization.id,
-              id,
-            })
-          } catch (error) {
-            if (error instanceof Error && error.message === 'PURCHASE_RECEIPT_HAS_PAYMENTS') {
-              throw new HttpError(400, 'VALIDATION_ERROR', 'Cannot cancel a purchase receipt with supplier payments.')
-            }
-            throw error
-          }
-          return receipt
-            ? { found: true, data: receipt }
-            : { found: true, data: { message: 'Purchase receipt not found' }, status: 404 }
-        }
-        const receipt = purchaseReceipts.find((item) => item.id === id || item.code === id)
-        if (!receipt) return { found: true, data: { message: 'Purchase receipt not found' }, status: 404 }
-        if (receipt.paid_amount > 0 || (receipt.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'Cannot cancel a purchase receipt with supplier payments.')
-        }
-        receipt.status = 'cancelled'
-        receipt.paid_amount = 0
-        receipt.remaining_amount = 0
-        receipt.updated_at = runtimeIso()
-        syncSupplierTotalsFromPurchaseReceipts()
-        return { found: true, data: receipt }
-      },
+      listSuppliers: purchaseSupplierHandlers.listSuppliers,
+      previewKiotVietSupplierImport: purchaseSupplierHandlers.previewKiotVietSupplierImport,
+      importKiotVietSuppliers: purchaseSupplierHandlers.importKiotVietSuppliers,
+      deleteImportedKiotVietSuppliers: purchaseSupplierHandlers.deleteImportedKiotVietSuppliers,
+      getSupplier: purchaseSupplierHandlers.getSupplier,
+      createSupplier: purchaseSupplierHandlers.createSupplier,
+      updateSupplier: purchaseSupplierHandlers.updateSupplier,
+      supplierPayableReceipts: purchaseReceiptQueryHandlers.supplierPayableReceipts,
+      paySupplier: purchaseTransactionHandlers.paySupplier,
+      listReceipts: purchaseTransactionHandlers.listReceipts,
+      previewKiotVietPurchaseReceiptImport: purchaseTransactionHandlers.previewKiotVietPurchaseReceiptImport,
+      importKiotVietPurchaseReceipts: purchaseTransactionHandlers.importKiotVietPurchaseReceipts,
+      deleteImportedKiotVietPurchaseReceipts: purchaseTransactionHandlers.deleteImportedKiotVietPurchaseReceipts,
+      getReceipt: purchaseTransactionHandlers.getReceipt,
+      createReceipt: purchaseTransactionHandlers.createReceipt,
+      updateReceipt: purchaseTransactionHandlers.updateReceipt,
+      postReceipt: purchaseTransactionHandlers.postReceipt,
+      cancelReceipt: purchaseTransactionHandlers.cancelReceipt,
     },
   )
   if (purchaseRoute.found) return purchaseRoute
 
+  const salesImportHandlers = createSalesImportHandlers({ request, currentUser, repository, readJson, rowsFromBody: invoiceImportRowsFromBody })
+  const salesCoreHandlers = createSalesCoreHandlers({ request, currentUser, repository, readJson, validatePosCart, makeOrderFromCheckout, resolveSalesCustomer, nextSalesDocumentCode, checkoutProductIds, previewCashbookEntriesFromCheckout, addCashbookEntriesFromCheckout, splitCheckoutPaymentForCurrentOrderAndOldDebt, checkoutOldDebtAllocations, salesDocuments, addCustomerSalesFromCheckout, addCustomerDebtFromCheckout, makeQuoteReopenPayload, getIdFromPath, path, requiredRevisionReasonCode, forbidden: (message: string) => new HttpError(403, 'PERMISSION_DENIED', message), validation: (message: string) => new HttpError(400, 'VALIDATION_ERROR', message), invoiceBaseCode, nextInvoiceRevision })
+  const salesDocumentHandlers = createSalesDocumentHandlers({ request, url, currentUser, repository, path, getIdFromPath, sortSalesDocumentsForRequest, paged, salesDocumentListSummary, filterSalesDocuments, salesDocuments, makeSalesDocumentDetail, salesDocumentProductCatalog, readJson, optionalIsoDateTime, nullableString, cashbookEntries, sameSalePaymentReceiptBaseCode, isSameSalePaymentReceiptCode, validation: (message: string) => new HttpError(400, 'VALIDATION_ERROR', message) })
+
   const salesRoute = await handleSalesRoute(
     { request, url, currentUser, repository },
     {
-      validateCart: async () => {
-        const body = await readJson(request) as { items?: PosCartValidationLine[] }
-        return { found: true, data: await validatePosCart(repository, currentUser.organization.id, body) }
-      },
-      checkout: async () => {
-        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
-        const code = await nextSalesDocumentCode(repository, currentUser.organization.id, 'invoice')
-        const seller = { id: currentUser.user.id, name: currentUser.user.display_name }
-        const order = makeOrderFromCheckout(body, 'invoice', customer, code, seller)
-        await repository.recordPosProductUsage?.({ organizationId: currentUser.organization.id, productIds: checkoutProductIds(body) })
-        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(order, body.payment, seller) : addCashbookEntriesFromCheckout(order, body.payment, seller)
-        if (repository.saveSalesDocument) {
-          await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: order, cashbookEntries: paymentEntries })
-        } else {
-          salesDocuments.unshift(order)
-          addCustomerSalesFromCheckout(order)
-          addCustomerDebtFromCheckout(order)
-        }
-        const oldDebtPayment = splitCheckoutPaymentForCurrentOrderAndOldDebt(body.payment)
-        if (body.customer_id && oldDebtPayment.oldDebtPaymentAmount > 0) {
-          await repository.collectCustomerDebt?.({
-            organizationId: currentUser.organization.id,
-            customerId: body.customer_id,
-            amount: oldDebtPayment.oldDebtPaymentAmount,
-            createdAt: order.created_at,
-            allocations: checkoutOldDebtAllocations(body.payment),
-            cashAmount: oldDebtPayment.oldDebtCashAmount,
-            bankAmount: oldDebtPayment.oldDebtBankAmount,
-            bankAccountId: body.payment?.bank_account_id ?? null,
-            note: `Thu no POS ${order.code}`,
-          })
-        }
-        return { found: true, data: { order: { id: order.id, code: order.code, order_type: 'invoice', status: 'completed', created_at: order.created_at, total_amount: order.total_amount, paid_amount: order.paid_amount, debt_amount: order.debt_amount, payment_status: order.payment_status }, payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null, inventory_warnings: [] }, status: 201 }
-      },
-      createQuote: async () => {
-        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0]
-        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
-        const code = await nextSalesDocumentCode(repository, currentUser.organization.id, 'quote')
-        const quote = makeOrderFromCheckout(body, 'quote', customer, code, { id: currentUser.user.id, name: currentUser.user.display_name })
-        if (repository.saveSalesDocument) {
-          await repository.saveSalesDocument({ organizationId: currentUser.organization.id, document: quote, cashbookEntries: [] })
-        } else {
-          salesDocuments.unshift(quote)
-        }
-        return { found: true, data: { id: quote.id, code: quote.code, order_type: 'quote', status: 'active', created_at: quote.created_at, total_amount: quote.total_amount }, status: 201 }
-      },
-      reopenQuotePayload: async () => ({ found: true, data: makeQuoteReopenPayload(getIdFromPath(path) ?? 'quote-1') }),
-      reviseInvoice: async () => {
-        const originalId = getIdFromPath(path) ?? ''
-        const body = await readJson(request) as Parameters<typeof makeOrderFromCheckout>[0] & Record<string, unknown>
-        const reason = requiredRevisionReasonCode(body)
-        if (!currentUser.permissions.includes('perm.edit_order_locked')) {
-          throw new HttpError(403, 'PERMISSION_DENIED', 'Missing permission perm.edit_order_locked.')
-        }
-        const original = repository.getSalesDocument
-          ? await repository.getSalesDocument({ organizationId: currentUser.organization.id, id: originalId })
-          : salesDocuments.find((document) => document.id === originalId || document.code === originalId) ?? null
-        if (!original) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-        if (original.order_type !== 'invoice' || original.status !== 'completed') {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'Only completed invoices can be revised.')
-        }
-
-        const customer = await resolveSalesCustomer(repository, currentUser.organization.id, body.customer_id)
-        const baseCode = original.base_code ?? invoiceBaseCode(original.code)
-        const nextRevision = await nextInvoiceRevision(repository, currentUser.organization.id, baseCode)
-        const seller = { id: currentUser.user.id, name: currentUser.user.display_name }
-        const revisedOrder = {
-          ...makeOrderFromCheckout(body, 'invoice', customer, nextRevision.code, seller),
-          base_code: nextRevision.baseCode,
-          revision_no: nextRevision.revisionNo,
-          revised_from_order_id: original.id,
-          replaced_by_order_id: null,
-          cancel_reason_type: null,
-          revision_reason_code: reason.code,
-          revision_reason_note: reason.note,
-        } satisfies SalesDocumentData
-        const paymentEntries = repository.saveSalesDocument ? previewCashbookEntriesFromCheckout(revisedOrder, body.payment, seller) : addCashbookEntriesFromCheckout(revisedOrder, body.payment, seller)
-        const saved = repository.reviseSalesDocument
-          ? await repository.reviseSalesDocument({
-              organizationId: currentUser.organization.id,
-              originalOrderId: original.id,
-              originalOrderCode: original.code,
-              document: revisedOrder,
-              cashbookEntries: paymentEntries,
-              reason,
-            })
-          : null
-        if (!saved) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-        return {
-          found: true,
-          data: {
-            order: {
-              id: saved.id,
-              code: saved.code,
-              order_type: 'invoice',
-              status: 'completed',
-              created_at: saved.created_at,
-              total_amount: saved.total_amount,
-              paid_amount: saved.paid_amount,
-              debt_amount: saved.debt_amount,
-              payment_status: saved.payment_status,
-              base_code: saved.base_code,
-              revision_no: saved.revision_no,
-              revised_from_order_id: saved.revised_from_order_id,
-            },
-            payment_receipt: paymentEntries.length > 0 ? { id: paymentEntries[0].id, code: paymentEntries[0].code, total_received_amount: paymentEntries.reduce((sum, entry) => sum + entry.amount_delta, 0) } : null,
-            inventory_warnings: [],
-          },
-          status: 201,
-        }
-      },
-      listSalesDocuments: async () => {
-        const page = Number(url.searchParams.get('page') ?? '1')
-        const pageSize = Number(url.searchParams.get('page_size') ?? '20')
-        if (repository.listSalesDocumentsPage && !url.searchParams.get('sort_key')) {
-          const result = await repository.listSalesDocumentsPage({ organizationId: currentUser.organization.id, url })
-          return {
-            found: true,
-            data: {
-              items: result.items,
-              page,
-              page_size: pageSize,
-              total: result.total,
-              summary: result.summary,
-            },
-          }
-        }
-        if (repository.listSalesDocuments) {
-          const items = sortSalesDocumentsForRequest(await repository.listSalesDocuments({ organizationId: currentUser.organization.id, url }), url)
-          return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
-        }
-        const items = sortSalesDocumentsForRequest(filterSalesDocuments(url), url)
-        return { found: true, data: { ...paged(items, page, pageSize), summary: salesDocumentListSummary(items) } }
-      },
-      getSalesDocument: async () => {
-        const id = getIdFromPath(path) ?? ''
-        if (repository.getSalesDocument) {
-          const document = await repository.getSalesDocument({ organizationId: currentUser.organization.id, id })
-          if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
-          return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
-        }
-        const document = salesDocuments.find((item) => item.id === id || item.code === id)
-        if (!document) return { found: true, data: { message: 'Sales document not found' }, status: 404 }
-        return { found: true, data: makeSalesDocumentDetail(document) }
-      },
-      updateSalesDocument: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request)
-        const createdAt = optionalIsoDateTime(body.created_at, 'created_at')
-        if ((body.note !== undefined || createdAt !== undefined) && body.status === undefined) {
-          if (repository.updateSalesDocumentNote) {
-            const document = await repository.updateSalesDocumentNote({
-              organizationId: currentUser.organization.id,
-              id,
-              ...(body.note !== undefined ? { note: nullableString(body.note) } : {}),
-              ...(createdAt !== undefined ? { created_at: createdAt } : {}),
-            })
-            if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-            return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
-          }
-          const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
-          if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-          const updatedDocument = {
-            ...salesDocuments[index],
-            ...(body.note !== undefined ? { note: nullableString(body.note) ?? '' } : {}),
-            ...(createdAt !== undefined ? { created_at: createdAt } : {}),
-          }
-          salesDocuments[index] = updatedDocument
-          if (createdAt !== undefined) {
-            const sameSaleReceiptBase = sameSalePaymentReceiptBaseCode(updatedDocument.code)
-            for (const entry of cashbookEntries) {
-              const matchesOrder = entry.source?.order_code === updatedDocument.code
-                || (entry.allocations ?? []).some((allocation) => allocation.order_id === updatedDocument.id || allocation.order_code === updatedDocument.code)
-              const isSameSaleReceipt = sameSaleReceiptBase
-                ? isSameSalePaymentReceiptCode(entry.code, updatedDocument.code)
-                : false
-              if (matchesOrder && isSameSaleReceipt) entry.created_at = createdAt
-            }
-          }
-          return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }
-        }
-        if (body.status !== 'cancelled' || body.note !== undefined || body.created_at !== undefined) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'Only sales document cancellation or note update is supported.')
-        }
-        if (repository.cancelSalesDocument) {
-          const document = await repository.cancelSalesDocument({ organizationId: currentUser.organization.id, id })
-          if (!document) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-          return { found: true, data: makeSalesDocumentDetail(document, await salesDocumentProductCatalog(repository, currentUser.organization.id, document)) }
-        }
-        const index = salesDocuments.findIndex((document) => document.id === id || document.code === id)
-        if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Sales document not found.' }, status: 404 }
-        salesDocuments[index] = { ...salesDocuments[index], status: 'cancelled' }
-        return { found: true, data: makeSalesDocumentDetail(salesDocuments[index]) }
-      },
-      previewKiotVietInvoiceImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietInvoiceRows(invoiceImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietInvoiceImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as InvoiceImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietInvoices: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietInvoiceRows(invoiceImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietInvoiceImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as InvoiceImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      deleteImportedKiotVietInvoices: async () => {
-        const result = await repository.deleteImportedKiotVietInvoices?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
+      validateCart: salesCoreHandlers.validateCart,
+      checkout: salesCoreHandlers.checkout,
+      createQuote: salesCoreHandlers.createQuote,
+      reopenQuotePayload: salesCoreHandlers.reopenQuotePayload,
+      reviseInvoice: salesCoreHandlers.reviseInvoice,
+      listSalesDocuments: salesDocumentHandlers.listSalesDocuments,
+      getSalesDocument: salesDocumentHandlers.getSalesDocument,
+      updateSalesDocument: salesDocumentHandlers.updateSalesDocument,
+      previewKiotVietInvoiceImport: salesImportHandlers.previewKiotVietInvoiceImport,
+      importKiotVietInvoices: salesImportHandlers.importKiotVietInvoices,
+      deleteImportedKiotVietInvoices: salesImportHandlers.deleteImportedKiotVietInvoices,
     },
   )
   if (salesRoute.found) return salesRoute
 
+  const financeImportHandlers = createFinanceImportHandlers({ request, currentUser, repository, readJson, cashbookRowsFromBody: cashbookImportRowsFromBody, customerDebtAdjustmentRowsFromBody: customerDebtAdjustmentImportRowsFromBody })
+  const financeCashbookSummaryHandlers = createFinanceCashbookSummaryHandlers({ currentUser, repository, accounts: financeAccounts, fallbackEntries: cashbookEntries, toVoucher: cashbookVoucherListItem })
+  const financeAccountHandlers = createFinanceAccountHandlers({ request, currentUser, repository, url, path, fallbackAccounts: financeAccounts, readJson, fromBody: financeAccountFromBody, getId: getIdFromPath })
+  const financeDebtQueryHandlers = createFinanceDebtQueryHandlers({ currentUser, repository, url, page, pageSize, getCustomerId: getFinanceCustomerId, path, paged, fallbackList: () => filterCustomerDebts(url), fallbackDetail: makeCustomerDebtDetail, sliceOpen: sliceCustomerOpenDebtsOldestFirst })
+  const financeDebtMutationHandlers = createFinanceDebtMutationHandlers({ request, currentUser, repository, readJson, optionalIsoDateTime, collectCustomerDebtFallback: collectCustomerDebt, path, getIdFromPath, updateAdjustmentFallback: updateCustomerDebtAdjustmentInMemory })
+  const financeCashbookMutationHandlers = createFinanceCashbookMutationHandlers({ request, url, currentUser, repository, path, getIdFromPath, readJson, cashbookEntries, financeAccounts, salesDocuments, filterCashbookEntries, sortCashbookEntriesForRequest, cashbookEntriesUrl, cashbookSummarySourceUrl, cashbookListSummary, paged, enrichCashbookEntryDetail, optionalIsoDateTime, nullableString, manualCashbookVoucherRequestFromBody, makeManualCashbookVoucherEntry, cashbookVoucherListItem, validation: (message: string, details?: Record<string, string[]>) => new HttpError(400, 'VALIDATION_ERROR', message, details) })
   const financeRoute = await handleFinanceRoute(
     { request, url, currentUser, repository },
     {
-      listAccounts: async () => ({
-        found: true,
-        data: { items: repository.listFinanceAccounts ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url }) : financeAccounts },
-      }),
-      createAccount: async () => {
-        const body = await readJson(request) as Partial<FinanceAccountData>
-        const account = financeAccountFromBody(body)
-        if (repository.createFinanceAccount) {
-          return {
-            found: true,
-            data: await repository.createFinanceAccount({ organizationId: currentUser.organization.id, account }),
-            status: 201,
-          }
-        }
-        const created = { ...account, id: randomUUID() }
-        financeAccounts.push(created)
-        return { found: true, data: created, status: 201 }
-      },
-      updateAccount: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request) as Partial<FinanceAccountData>
-        if (repository.updateFinanceAccount) {
-          const updated = await repository.updateFinanceAccount({ organizationId: currentUser.organization.id, id, patch: body })
-          if (updated === null) return { found: true, data: { message: 'Finance account not found' }, status: 404 }
-          return { found: true, data: updated }
-        }
-        const index = financeAccounts.findIndex((account) => account.id === id)
-        if (index === -1) return { found: true, data: { message: 'Finance account not found' }, status: 404 }
-        financeAccounts[index] = { ...financeAccounts[index], ...body, id }
-        return { found: true, data: financeAccounts[index] }
-      },
-      listCustomerDebts: async () => {
-        if (repository.listCustomerDebts) {
-          return { found: true, data: paged(await repository.listCustomerDebts({ organizationId: currentUser.organization.id, url }), page, pageSize) }
-        }
-        return { found: true, data: paged(filterCustomerDebts(url), page, pageSize) }
-      },
-      getCustomerDebt: async () => {
-        const customerId = getFinanceCustomerId(path)
-        if (repository.getCustomerDebt) {
-          const detail = await repository.getCustomerDebt({ organizationId: currentUser.organization.id, customerId })
-          const totalDebt = (await repository.getCustomerFinancialTotals?.(currentUser.organization.id))?.get(customerId)?.total_debt_amount
-          return { found: true, data: { ...detail, total_debt: totalDebt ?? detail.total_debt } }
-        }
-        return { found: true, data: makeCustomerDebtDetail(customerId) }
-      },
-      getCustomerOpenDebts: async () => {
-        const customerId = getFinanceCustomerId(path)
-        const amountParam = Number(url.searchParams.get('amount') ?? '')
-        const limitParam = Number(url.searchParams.get('limit') ?? '')
-        const amount = Number.isFinite(amountParam) && amountParam > 0 ? amountParam : undefined
-        const limit = Number.isFinite(limitParam) && limitParam > 0 ? Math.max(1, Math.min(Math.floor(limitParam), 100)) : 50
-        if (repository.getCustomerOpenDebts) {
-          return {
-            found: true,
-            data: await repository.getCustomerOpenDebts({
-              organizationId: currentUser.organization.id,
-              customerId,
-              amount,
-              limit,
-            }),
-          }
-        }
-        const detail = makeCustomerDebtDetail(customerId)
-        return {
-          found: true,
-          data: sliceCustomerOpenDebtsOldestFirst(detail.invoices, { amount, limit }),
-        }
-      },
-      collectCustomerDebt: async () => {
-        if (repository.collectCustomerDebt) {
-          const body = await readJson(request) as {
-            customer_id?: string
-            amount?: number
-            created_at?: string
-            allocations?: Array<{
-              order_id?: string
-              order_code?: string
-              allocated_amount?: number
-            }>
-            payment_method?: {
-              cash_amount?: number
-              bank_amount?: number
-              bank_account_id?: string | null
-              bank_transaction_ref?: string
-            }
-            note?: string
-          }
-          return {
-            found: true,
-            data: await repository.collectCustomerDebt({
-              organizationId: currentUser.organization.id,
-              customerId: body.customer_id ?? '',
-              amount: Math.max(Number(body.amount ?? 0), 0),
-              createdAt: optionalIsoDateTime(body.created_at, 'created_at'),
-              allocations: Array.isArray(body.allocations)
-                ? body.allocations.map((allocation) => ({
-                    order_id: String(allocation.order_id ?? ''),
-                    order_code: String(allocation.order_code ?? ''),
-                    allocated_amount: Math.max(Number(allocation.allocated_amount ?? 0), 0),
-                  })).filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
-                : undefined,
-              cashAmount: Math.max(Number(body.payment_method?.cash_amount ?? 0), 0),
-              bankAmount: Math.max(Number(body.payment_method?.bank_amount ?? 0), 0),
-              bankAccountId: body.payment_method?.bank_account_id,
-              bankTransactionRef: body.payment_method?.bank_transaction_ref,
-              note: body.note,
-            }),
-            status: 201,
-          }
-        }
-        return { found: true, data: await collectCustomerDebt(request), status: 201 }
-      },
-      updateCustomerDebtAdjustment: async () => {
-        const adjustmentId = getIdFromPath(path) ?? ''
-        if (repository.updateCustomerDebtAdjustment) {
-          const body = await readJson(request) as {
-            adjusted_at?: string
-            amount_delta?: number
-            note?: string | null
-          }
-          const updated = await repository.updateCustomerDebtAdjustment({
-            organizationId: currentUser.organization.id,
-            adjustmentId,
-            adjustedAt: typeof body.adjusted_at === 'string' ? body.adjusted_at : undefined,
-            amountDelta: typeof body.amount_delta === 'number' ? body.amount_delta : undefined,
-            note: body.note,
-          })
-          if (updated === null) return { found: true, data: { message: 'Customer debt adjustment not found' }, status: 404 }
-          return { found: true, data: updated }
-        }
-        const updated = await updateCustomerDebtAdjustmentInMemory(request, adjustmentId)
-        if (updated === null) return { found: true, data: { message: 'Customer debt adjustment not found' }, status: 404 }
-        return { found: true, data: updated }
-      },
-      cashbookBalances: async () => ({ found: true, data: { items: financeAccounts.map((account) => ({ finance_account_id: account.id, code: account.code, name: account.name, account_type: account.account_type, balance: account.id === 'cash-main' ? 5700000 : 14000000 })) } }),
-      cashbookVouchers: async () => {
-        const voucherEntriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
-        const entries = repository.listCashbookEntries
-          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: voucherEntriesUrl })
-          : cashbookEntries
-        const items = entries
-          .filter((entry) => entry.source_type === 'cashbook_voucher')
-          .map(cashbookVoucherListItem)
-        return { found: true, data: { items, total: items.length } }
-      },
-      previewKiotVietCashbookImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCashbookRows(cashbookImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await previewKiotVietCashbookImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as CashbookImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietCashbook: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCashbookRows(cashbookImportRowsFromBody(body))
-        return {
-          found: true,
-          data: await applyKiotVietCashbookImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as CashbookImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      deleteImportedKiotVietCashbook: async () => {
-        const result = await repository.deleteImportedKiotVietCashbook?.({ organizationId: currentUser.organization.id }) ?? { deleted: 0, blocked: 0 }
-        return { found: true, data: { deleted_rows: result.deleted, blocked_rows: result.blocked } }
-      },
-      previewKiotVietCustomerDebtAdjustmentImport: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCustomerDebtAdjustmentRows(customerDebtAdjustmentImportRowsFromBody(body), {
-          sourceFile: typeof body.source_file === 'string' ? body.source_file : typeof body.file_name === 'string' ? body.file_name : null,
-        })
-        return {
-          found: true,
-          data: await previewKiotVietCustomerDebtAdjustmentImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as CustomerDebtAdjustmentImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      importKiotVietCustomerDebtAdjustments: async () => {
-        const body = await readJson(request)
-        const mapped = mapKiotVietCustomerDebtAdjustmentRows(customerDebtAdjustmentImportRowsFromBody(body), {
-          sourceFile: typeof body.source_file === 'string' ? body.source_file : typeof body.file_name === 'string' ? body.file_name : null,
-        })
-        return {
-          found: true,
-          data: await applyKiotVietCustomerDebtAdjustmentImport({
-            organizationId: currentUser.organization.id,
-            repository: repository as CustomerDebtAdjustmentImportRepository,
-            rows: mapped.valid,
-            invalidRows: mapped.invalid,
-          }),
-        }
-      },
-      listCashbook: async () => {
-        const entriesUrl = cashbookEntriesUrl(url)
-        if (repository.listCashbookEntriesPage && !url.searchParams.get('sort_key')) {
-          const pageData = await repository.listCashbookEntriesPage({ organizationId: currentUser.organization.id, url: entriesUrl })
-          return {
-            found: true,
-            data: { ...pageData, page, page_size: pageSize },
-          }
-        }
-        const entries = repository.listCashbookEntries
-          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
-          : filterCashbookEntries(entriesUrl)
-        const sortedEntries = sortCashbookEntriesForRequest(entries, url)
-        const summarySourceUrl = cashbookSummarySourceUrl(url)
-        const summarySourceEntries = summarySourceUrl
-          ? repository.listCashbookEntries
-            ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: summarySourceUrl })
-            : filterCashbookEntries(summarySourceUrl)
-          : entries
-        return { found: true, data: { ...paged(sortedEntries, page, pageSize), summary: cashbookListSummary(entries, { from: url.searchParams.get('from'), sourceEntries: summarySourceEntries }) } }
-      },
-      getCashbookEntry: async () => {
-        const id = getIdFromPath(path) ?? ''
-        if (repository.getCashbookEntry) {
-          const entry = await repository.getCashbookEntry({ organizationId: currentUser.organization.id, id })
-          if (entry === null) return { found: true, data: { message: 'Cashbook entry not found' }, status: 404 }
-          return {
-            found: true,
-            data: await enrichCashbookEntryDetail(entry, async (code) => {
-              const directDocument = await repository.getSalesDocument?.({ organizationId: currentUser.organization.id, id: code })
-              if (directDocument) return directDocument
-              const searchUrl = new URL('http://api.local/api/v1/sales-documents')
-              searchUrl.searchParams.set('search', code)
-              searchUrl.searchParams.set('type', 'invoice')
-              const documents = await repository.listSalesDocuments?.({ organizationId: currentUser.organization.id, url: searchUrl })
-              return documents?.find((document) => document.code === code) ?? null
-            }),
-          }
-        }
-        const entry = cashbookEntries.find((item) => item.id === id) ?? cashbookEntries[0]
-        return {
-          found: true,
-          data: await enrichCashbookEntryDetail(entry, async (code) => (
-          salesDocuments.find((document) => document.code === code) ?? null
-          )),
-        }
-      },
-      updateCashbookEntry: async () => {
-        const id = getIdFromPath(path) ?? ''
-        const body = await readJson(request)
-        const createdAt = optionalIsoDateTime(body.created_at, 'created_at')
-        const financeAccountId = body.finance_account_id === undefined ? undefined : nullableString(body.finance_account_id) ?? undefined
-        const note = body.note === undefined ? undefined : nullableString(body.note)
-        if (createdAt === undefined && financeAccountId === undefined && body.note === undefined) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'No cashbook fields to update.')
-        }
-        if (repository.updateCashbookEntry) {
-          const entry = await repository.updateCashbookEntry({
-            organizationId: currentUser.organization.id,
-            id,
-            ...(createdAt !== undefined ? { created_at: createdAt } : {}),
-            ...(financeAccountId !== undefined ? { finance_account_id: financeAccountId } : {}),
-            ...(body.note !== undefined ? { note } : {}),
-          })
-          if (entry === null) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook entry not found.' }, status: 404 }
-          return {
-            found: true,
-            data: await enrichCashbookEntryDetail(entry, async (code) => {
-              const directDocument = await repository.getSalesDocument?.({ organizationId: currentUser.organization.id, id: code })
-              if (directDocument) return directDocument
-              const searchUrl = new URL('http://api.local/api/v1/sales-documents')
-              searchUrl.searchParams.set('search', code)
-              searchUrl.searchParams.set('type', 'invoice')
-              const documents = await repository.listSalesDocuments?.({ organizationId: currentUser.organization.id, url: searchUrl })
-              return documents?.find((document) => document.code === code) ?? null
-            }),
-          }
-        }
-        const index = cashbookEntries.findIndex((entry) => entry.id === id || entry.code === id)
-        if (index < 0) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook entry not found.' }, status: 404 }
-        const current = cashbookEntries[index]
-        const account = financeAccountId ? financeAccounts.find((item) => item.id === financeAccountId) : null
-        if (financeAccountId && !account) throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.')
-        const nextFinanceAccount = account
-          ? {
-              id: account.id,
-              code: account.account_type === 'bank' ? account.account_number ?? account.code : account.code,
-              name: account.name,
-              account_type: account.account_type,
-              account_number: account.account_number,
-              account_holder: account.account_holder,
-            }
-          : current.finance_account
-        cashbookEntries[index] = {
-          ...current,
-          ...(createdAt !== undefined ? { created_at: createdAt } : {}),
-          ...(body.note !== undefined ? { note } : {}),
-          finance_account: nextFinanceAccount,
-          payment_method: nextFinanceAccount.account_type === 'bank' ? 'bank_transfer' : 'cash',
-        }
-        return { found: true, data: await enrichCashbookEntryDetail(cashbookEntries[index], async (code) => salesDocuments.find((document) => document.code === code) ?? null) }
-      },
-      createCashbookVoucher: async () => {
-        const body = await readJson(request) as Record<string, unknown>
-        const voucherRequest = manualCashbookVoucherRequestFromBody(body)
-        const accountRows = repository.listFinanceAccounts
-          ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/finance/accounts?is_active=true') })
-          : financeAccounts
-      const account = accountRows.find((item) => item.id === voucherRequest.financeAccountId)
-      if (!account) {
-        throw new HttpError(400, 'VALIDATION_ERROR', 'finance_account_id is invalid.', { finance_account_id: ['finance_account_id is invalid.'] })
-      }
-      if (voucherRequest.counterpartyType === 'customer') {
-        const customers = repository.listCustomers
-          ? await repository.listCustomers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/customers?status=active&page=1&page_size=10000') })
-          : []
-        const customer = customers.find((item) => item.id === voucherRequest.counterpartyId)
-        if (!customer) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active customer.'] })
-        }
-        voucherRequest.counterpartyName = customer.name
-        voucherRequest.counterpartyPhone = customer.phone ?? null
-      }
-      if (voucherRequest.counterpartyType === 'supplier') {
-        const suppliers = repository.listSuppliers
-          ? await repository.listSuppliers({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/suppliers?status=active&page=1&page_size=10000') })
-          : []
-        const supplier = suppliers.find((item) => item.id === voucherRequest.counterpartyId)
-        if (!supplier) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active supplier.'] })
-        }
-        voucherRequest.counterpartyName = supplier.name
-        voucherRequest.counterpartyPhone = supplier.phone ?? null
-      }
-      if (voucherRequest.counterpartyType === 'employee') {
-        const employees = repository.listEmployees
-          ? await repository.listEmployees({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/employees?status=active') })
-          : []
-        const employee = employees.find((item) => item.id === voucherRequest.counterpartyId)
-        if (!employee) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active employee.'] })
-        }
-        voucherRequest.counterpartyName = employee.name
-        voucherRequest.counterpartyPhone = employee.phone ?? null
-      }
-      if (voucherRequest.counterpartyType === 'delivery_partner') {
-        const deliveryPartners = repository.listDeliveryPartners
-          ? await repository.listDeliveryPartners({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/delivery-partners?status=active') })
-          : []
-        const deliveryPartner = deliveryPartners.find((item) => item.id === voucherRequest.counterpartyId)
-        if (!deliveryPartner) {
-          throw new HttpError(400, 'VALIDATION_ERROR', 'counterparty_id is required.', { counterparty_id: ['Choose an active delivery partner.'] })
-        }
-        voucherRequest.counterpartyName = deliveryPartner.name
-        voucherRequest.counterpartyPhone = deliveryPartner.phone ?? null
-      }
-        const entriesUrl = new URL('http://api.local/api/v1/finance/cashbook')
-        const existingEntries = repository.listCashbookEntries
-          ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: entriesUrl })
-          : cashbookEntries
-        const entry = makeManualCashbookVoucherEntry(voucherRequest, account, currentUser, existingEntries)
-        const created = repository.createCashbookVoucher
-          ? await repository.createCashbookVoucher({ organizationId: currentUser.organization.id, entry })
-          : entry
-        if (!repository.createCashbookVoucher) cashbookEntries.unshift(created)
-        return { found: true, data: cashbookVoucherListItem(created), status: 201 }
-      },
-      cancelCashbookVoucher: async () => {
-        const pathParts = path.split('/').filter(Boolean)
-        const voucherId = pathParts.at(-2) ?? ''
-        const cancelled = repository.cancelCashbookVoucher
-          ? await repository.cancelCashbookVoucher({ organizationId: currentUser.organization.id, id: voucherId })
-          : null
-        if (!cancelled) return { found: true, data: { code: 'NOT_FOUND', message: 'Cashbook voucher not found.' }, status: 404 }
-        return { found: true, data: cashbookVoucherListItem(cancelled) }
-      },
-      reviseCashbookVoucher: async () => {
-        const pathParts = path.split('/').filter(Boolean)
-        return { found: true, data: { id: pathParts.at(-2) ?? '', code: 'PC0001', source_type: 'manual_voucher', status: 'posted', amount: 1000000 } }
-      },
+      listAccounts: financeAccountHandlers.listAccounts,
+      createAccount: financeAccountHandlers.createAccount,
+      updateAccount: financeAccountHandlers.updateAccount,
+      listCustomerDebts: financeDebtQueryHandlers.listCustomerDebts,
+      getCustomerDebt: financeDebtQueryHandlers.getCustomerDebt,
+      getCustomerOpenDebts: financeDebtQueryHandlers.getCustomerOpenDebts,
+      collectCustomerDebt: financeDebtMutationHandlers.collectCustomerDebt,
+      updateCustomerDebtAdjustment: financeDebtMutationHandlers.updateCustomerDebtAdjustment,
+      cashbookBalances: financeCashbookSummaryHandlers.cashbookBalances,
+      cashbookVouchers: financeCashbookSummaryHandlers.cashbookVouchers,
+      previewKiotVietCashbookImport: financeImportHandlers.previewKiotVietCashbookImport,
+      importKiotVietCashbook: financeImportHandlers.importKiotVietCashbook,
+      deleteImportedKiotVietCashbook: financeImportHandlers.deleteImportedKiotVietCashbook,
+      previewKiotVietCustomerDebtAdjustmentImport: financeImportHandlers.previewKiotVietCustomerDebtAdjustmentImport,
+      importKiotVietCustomerDebtAdjustments: financeImportHandlers.importKiotVietCustomerDebtAdjustments,
+      listCashbook: financeCashbookMutationHandlers.listCashbook,
+      getCashbookEntry: financeCashbookMutationHandlers.getCashbookEntry,
+      updateCashbookEntry: financeCashbookMutationHandlers.updateCashbookEntry,
+      createCashbookVoucher: financeCashbookMutationHandlers.createCashbookVoucher,
+      cancelCashbookVoucher: financeCashbookMutationHandlers.cancelCashbookVoucher,
+      reviseCashbookVoucher: financeCashbookMutationHandlers.reviseCashbookVoucher,
     },
   )
   if (financeRoute.found) return financeRoute
 
+  const productionHandlers = createProductionHandlers({ path, page, pageSize, productionQueueItems, products, paged, newestFirst, defaultRetailCustomer })
   const productionRoute = await handleProductionRoute(
     { request, url, currentUser, repository },
     {
-      listQueue: async () => ({ found: true, data: paged(newestFirst(productionQueueItems), page, pageSize) }),
-      history: async () => ({ found: true, data: paged([], page, pageSize) }),
-      addToDraft: async () => ({ found: true, data: { queue_item_id: path.split('/')[4], customer: defaultRetailCustomer(), draft_line: { product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, unit_name: products[0].unit_name, sell_method: products[0].sell_method, width_m: 1.2, height_m: 0.8, linear_m: null, quantity: 1, source: 'production_queue' } } }),
-      setVisibility: async () => ({ found: true, data: {} }),
+      listQueue: productionHandlers.listQueue,
+      history: productionHandlers.history,
+      addToDraft: productionHandlers.addToDraft,
+      setVisibility: productionHandlers.setVisibility,
     },
   )
   if (productionRoute.found) return productionRoute
@@ -5626,4 +4097,3 @@ function scrypt(
     })
   })
 }
-

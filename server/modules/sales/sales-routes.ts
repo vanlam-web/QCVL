@@ -1,6 +1,5 @@
 import type { CurrentUserData, ServerRepository } from '../../http-types.js'
-
-export type RouteResult = Promise<{ found: true; data: unknown; status?: number } | { found: false }>
+import type { RouteResult } from '../../route-types.js'
 
 export interface SalesRouteContext {
   request: Request

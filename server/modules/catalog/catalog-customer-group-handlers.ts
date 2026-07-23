@@ -1,0 +1,5 @@
+import type { CurrentUserData, ServerRepository } from '../../http-types.js'
+import type { RouteResult } from '../../route-types.js'
+interface CustomerGroup { id:string; code:string; name:string; price_list_id:string; is_active:boolean }
+interface Dependencies { currentUser:CurrentUserData; repository:ServerRepository; fallbackGroups:CustomerGroup[] }
+export function createCatalogCustomerGroupHandlers(d:Dependencies):{customerGroups:()=>RouteResult}{return {customerGroups:async()=>{const customers=await d.repository.listCustomers?.({organizationId:d.currentUser.organization.id,url:new URL('http://api.local/api/v1/customers?page_size=1000')});const groups=new Map(d.fallbackGroups.map(group=>[group.id,group]));for(const customer of customers??[]){if(!customer.customer_group)continue;groups.set(customer.customer_group.id,{id:customer.customer_group.id,code:customer.customer_group.code,name:customer.customer_group.name,price_list_id:'',is_active:true})}return {found:true,data:{items:[...groups.values()].sort((a,b)=>a.name.localeCompare(b.name,'vi',{numeric:true}))}}}}}

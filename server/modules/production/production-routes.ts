@@ -1,5 +1,5 @@
 import type { CurrentUserData, ServerRepository } from '../../http-types.js'
-import type { RouteResult } from '../sales/sales-routes.js'
+import type { RouteResult } from '../../route-types.js'
 
 export interface ProductionRouteContext {
   request: Request
