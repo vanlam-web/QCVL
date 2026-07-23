@@ -34,8 +34,8 @@ describe('api dev PostgreSQL startup', () => {
     expect(url).toBe('postgres://qcvl_user:secret%20value@127.0.0.1:15432/qcvl')
   })
 
-  test('resolves Tailscale NAS env path by default', () => {
-    expect(resolveNasEnvPath({})).toBe('\\\\100.84.228.125\\docker\\QCVL\\.env')
+  test('resolves LAN NAS env path by default', () => {
+    expect(resolveNasEnvPath({})).toBe('\\\\192.168.1.188\\docker\\QCVL\\.env')
   })
 
   test('uses cmd.exe to launch tsx watch on Windows', () => {

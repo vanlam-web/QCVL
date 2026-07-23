@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import { buildSshArgs, requireRestartConfig, restartPlanFromEnv } from './deploy-nas-helpers.mjs'
 
 const root = process.cwd()
-const nasRoot = process.env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
+const nasRoot = process.env.QCVL_NAS_APP_PATH ?? '\\\\192.168.1.188\\docker\\QCVL\\app'
 const nasEnvPath = process.env.QCVL_NAS_ENV_PATH ?? join(dirname(nasRoot), '.env')
 const confirmed = process.env.QCVL_NAS_DEPLOY_CONFIRM === 'true'
 const restartPlan = restartPlanFromEnv(process.env, confirmed)

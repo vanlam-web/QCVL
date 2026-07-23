@@ -6,7 +6,7 @@
 
 Dung duy nhat `npm run deploy:nas` de dua code len `3200`. Khong copy tay bang `robocopy`/`Copy-Item` nua, tru khi dang debug script.
 
-May trong LAN hien dung SMB path LAN, vi `\\100.84.228.125\docker` co the khong mo duoc tu Windows:
+Máy trong LAN phải dùng SMB LAN cố định `\\192.168.1.188\docker\QCVL`. Không dùng SMB qua Tailscale `\\100.84.228.125\docker`, vì share này không mở được từ Windows.
 
 ```powershell
 $env:QCVL_NAS_DEPLOY_CONFIRM='true'
@@ -22,7 +22,7 @@ Remove-Item Env:\QCVL_NAS_SSH_TARGET
 Remove-Item Env:\QCVL_NAS_SSH_KEY
 ```
 
-Neu can kiem tra truoc khi deploy:
+Trước deploy:
 
 ```powershell
 Test-Path '\\192.168.1.188\docker\QCVL\app'
@@ -30,7 +30,7 @@ Test-Path '\\192.168.1.188\docker\QCVL\.env'
 ssh -i "$env:USERPROFILE\.ssh\qcvl_nas_ed25519" -o IdentitiesOnly=yes -o BatchMode=yes adminnas@192.168.1.188 "echo ok"
 ```
 
-`\\100.84.228.125\docker\QCVL\app` chi la default/fallback cu cua script. Neu `Test-Path '\\100.84.228.125\docker'` tra `False`, dung LAN path ben tren. Public URL cua app van la `http://100.84.228.125:3200`.
+Public URL của app là `http://100.84.228.125:3200`.
 
 ## Latest NAS Deploy - 2026-07-18 Route Hot-Path Cut
 
@@ -239,7 +239,7 @@ Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c','npm run api:de
 Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c','npx vite --host 0.0.0.0 --port 3202') -WorkingDirectory 'D:\Phần mềm\QCVL' -WindowStyle Hidden
 ```
 
-`npm run api:dev` phai nap PostgreSQL NAS va sau do chay watch mode (`tsx watch server/index.ts`). Mac dinh script doc `\\100.84.228.125\docker\QCVL\.env`, dung DB qua Tailscale `100.84.228.125:55433`, va `/api/v1/health` phai tra `persistence: "postgres"` de `3202` chung du lieu voi `3200`. Khong chay tay `tsx server/index.ts` khi dang sua backend, vi API `3100` se giu code cu hoac roi ve memory. Dau hieu sai: frontend `3202` co UI moi nhung goi route moi bi `RESOURCE_NOT_FOUND` / `Khong tim thay du lieu can thao tac`, hoac health tra `persistence: "memory"`. Cach sua: dung process dang nghe port `3100`, bat lai bang `npm run api:dev`.
+`npm run api:dev` phải nạp PostgreSQL NAS qua `\\192.168.1.188\docker\QCVL\.env`, sau đó chạy watch mode (`tsx watch server/index.ts`). Kết nối DB dùng Tailscale `100.84.228.125:55433`; `/api/v1/health` phải trả `persistence: "postgres"` để `3202` chung dữ liệu với `3200`. Không chạy tay `tsx server/index.ts` khi sửa backend, vì API `3100` có thể giữ code cũ hoặc rơi về memory. Dấu hiệu sai: UI mới nhưng route mới trả `RESOURCE_NOT_FOUND` / `Không tìm thấy dữ liệu cần thao tác`, hoặc health trả `persistence: "memory"`. Cách sửa: dừng process đang nghe `3100`, bật lại bằng `npm run api:dev`.
 
 Lenh kiem tra:
 

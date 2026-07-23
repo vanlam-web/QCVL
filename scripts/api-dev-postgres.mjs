@@ -7,7 +7,7 @@ const root = process.cwd()
 
 export function resolveNasEnvPath(env) {
   if (env.QCVL_NAS_ENV_PATH) return env.QCVL_NAS_ENV_PATH
-  const nasRoot = env.QCVL_NAS_APP_PATH ?? '\\\\100.84.228.125\\docker\\QCVL\\app'
+  const nasRoot = env.QCVL_NAS_APP_PATH ?? '\\\\192.168.1.188\\docker\\QCVL\\app'
   // Keep Windows UNC siblings portable on Linux CI (path.dirname breaks \\server\share).
   if (nasRoot.includes('\\')) {
     const trimmed = nasRoot.replace(/[\\/]+$/, '')
