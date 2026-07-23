@@ -443,6 +443,7 @@ export function PurchaseReceiptsPage({
   const receiptCreateDraftRestoredRef = useRef(false)
   const skipReceiptCreateDraftPersistRef = useRef(false)
   const receiptSortInitialRender = useRef(true)
+  const supplierPaymentSubmittingRef = useRef(false)
   const searchReceiptProducts = useCallback(async (query: string) => {
     const productResult = await service.listProducts({
       status: 'active',
@@ -1727,6 +1728,7 @@ export function PurchaseReceiptsPage({
   ]
 
   async function saveSupplierPayment() {
+    if (supplierPaymentSubmittingRef.current) return
     if (selectedReceipt === null || selectedReceiptOutstanding <= 0) return
     if (supplierPaymentAmount <= 0) {
       setError('Nhập số tiền thanh toán NCC.')
@@ -1741,6 +1743,7 @@ export function PurchaseReceiptsPage({
       return
     }
 
+    supplierPaymentSubmittingRef.current = true
     setPosting(true)
     setError(null)
     try {
@@ -1756,6 +1759,7 @@ export function PurchaseReceiptsPage({
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được thanh toán NCC.'))
     } finally {
+      supplierPaymentSubmittingRef.current = false
       setPosting(false)
     }
   }

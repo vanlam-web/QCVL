@@ -1,6 +1,12 @@
 import type pg from 'pg'
 import type { ServerRepository } from '../../http-types.js'
 import type { PurchaseReceiptData, CashbookEntryData, CurrentUserData } from '../../http.js'
+export class SupplierPaymentValidationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SupplierPaymentValidationError'
+  }
+}
 type PurchaseTransactionDeps = {
   ensureSnapshots(pool: pg.Pool): Promise<void>
   ensureStock(pool: pg.Pool): Promise<void>
@@ -15,92 +21,114 @@ type PurchaseTransactionDeps = {
   recomputeSupplier(pool: pg.Pool, organizationId: string, supplierId: string): Promise<void>
   deleteMovements(pool: pg.Pool, organizationId: string, sourceType: string, sourceCode: string): Promise<Set<string>>
 }
-export function createPurchaseReceiptTransactions(pool:pg.Pool,deps:PurchaseTransactionDeps):Pick<ServerRepository,'postPurchaseReceipt'|'cancelPurchaseReceipt'|'paySupplier'>{
+export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:PurchaseTransactionDeps):Pick<ServerRepository,'postPurchaseReceipt'|'cancelPurchaseReceipt'|'paySupplier'>{
  const {ensureSnapshots,ensureStock,ensureCatalog,ensureSalesFinance,loadReceipt,replaceMovements,updateCosts,cashEntry,insertCashbook,recomputeBalances,recomputeSupplier,deleteMovements}=deps
  return {
     async postPurchaseReceipt(input) {
-      await ensureSnapshots(pool)
-      await ensureStock(pool)
-      await ensureCatalog(pool)
-      await ensureSalesFinance(pool)
-      const existing = await loadReceipt(pool, input.organizationId, input.id)
-      if (!existing) throw new Error('Purchase receipt not found')
-      if (existing.status !== 'draft') {
-        return {
-          purchase_receipt_id: existing.id,
-          status: 'posted' as const,
-          posted_at: existing.received_at,
-          cashbook_voucher_id: null,
+      await ensureSnapshots(connectionPool)
+      await ensureStock(connectionPool)
+      await ensureCatalog(connectionPool)
+      await ensureSalesFinance(connectionPool)
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
+      try {
+        await client.query('begin')
+        await client.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipt:${input.organizationId}:${input.id}`])
+        const existing = await loadReceipt(pool, input.organizationId, input.id)
+        if (!existing) throw new Error('Purchase receipt not found')
+        if (existing.status !== 'draft') {
+          await client.query('rollback')
+          return {
+            purchase_receipt_id: existing.id,
+            status: 'posted' as const,
+            posted_at: existing.received_at,
+            cashbook_voucher_id: null,
+          }
         }
-      }
 
-      const postedAt = new Date().toISOString()
-      const postedReceipt = {
-        ...existing,
-        status: 'posted' as const,
-        updated_at: postedAt,
-      } satisfies PurchaseReceiptData
-      const affectedProducts = await replaceMovements(pool, input.organizationId, postedReceipt)
-      await updateCosts(pool, input.organizationId, postedReceipt)
+        const postedAt = new Date().toISOString()
+        const postedReceipt = {
+          ...existing,
+          status: 'posted' as const,
+          updated_at: postedAt,
+        } satisfies PurchaseReceiptData
+        const affectedProducts = await replaceMovements(pool, input.organizationId, postedReceipt)
+        await updateCosts(pool, input.organizationId, postedReceipt)
 
-      let cashbookVoucherId: string | null = null
-      if (postedReceipt.paid_amount > 0) {
-        const entry = await cashEntry(pool, {
-          organizationId: input.organizationId,
-          supplier: postedReceipt.supplier,
-          receipt: postedReceipt,
-          amount: postedReceipt.paid_amount,
-          paymentMethod: input.paymentMethod ?? 'cash',
-          financeAccountId: input.financeAccountId,
-          currentUser: input.currentUser,
-          note: `Thanh toán ${postedReceipt.code}`,
-          createdAt: postedReceipt.received_at ?? postedReceipt.created_at,
-        })
-        await insertCashbook(pool, input.organizationId, entry)
-        cashbookVoucherId = entry.id
-      }
+        let cashbookVoucherId: string | null = null
+        if (postedReceipt.paid_amount > 0) {
+          const entry = await cashEntry(pool, {
+            organizationId: input.organizationId,
+            supplier: postedReceipt.supplier,
+            receipt: postedReceipt,
+            amount: postedReceipt.paid_amount,
+            paymentMethod: input.paymentMethod ?? 'cash',
+            financeAccountId: input.financeAccountId,
+            currentUser: input.currentUser,
+            note: `Thanh toán ${postedReceipt.code}`,
+            createdAt: postedReceipt.received_at ?? postedReceipt.created_at,
+          })
+          await insertCashbook(pool, input.organizationId, entry)
+          cashbookVoucherId = entry.id
+        }
 
-      await pool.query(
-        `
-          update purchase_receipt_snapshots
-          set data = $3::jsonb, updated_at = now()
-          where organization_id = $1 and id = $2
-        `,
-        [input.organizationId, existing.id, JSON.stringify(postedReceipt)],
-      )
-      await recomputeBalances(pool, input.organizationId, affectedProducts)
-      await recomputeSupplier(pool, input.organizationId, postedReceipt.supplier_id)
-      return {
-        purchase_receipt_id: postedReceipt.id,
-        status: 'posted' as const,
-        posted_at: postedAt,
-        cashbook_voucher_id: cashbookVoucherId,
+        await client.query(
+          `
+            update purchase_receipt_snapshots
+            set data = $3::jsonb, updated_at = now()
+            where organization_id = $1 and id = $2
+          `,
+          [input.organizationId, existing.id, JSON.stringify(postedReceipt)],
+        )
+        await recomputeBalances(pool, input.organizationId, affectedProducts)
+        await recomputeSupplier(pool, input.organizationId, postedReceipt.supplier_id)
+        await client.query('commit')
+        return {
+          purchase_receipt_id: postedReceipt.id,
+          status: 'posted' as const,
+          posted_at: postedAt,
+          cashbook_voucher_id: cashbookVoucherId,
+        }
+      } catch (error) {
+        await client.query('rollback')
+        throw error
+      } finally {
+        client.release()
       }
     },
 
     async cancelPurchaseReceipt(input) {
-      await ensureSnapshots(pool)
-      await ensureStock(pool)
-      const existing = await loadReceipt(pool, input.organizationId, input.id)
-      if (!existing) return null
-      if (existing.status === 'cancelled') return existing
-      if (existing.paid_amount > 0 || (existing.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
-        throw new Error('PURCHASE_RECEIPT_HAS_PAYMENTS')
-      }
-
-      const cancelledAt = new Date().toISOString()
-      const cancelledReceipt = {
-        ...existing,
-        status: 'cancelled' as const,
-        paid_amount: 0,
-        remaining_amount: 0,
-        updated_at: cancelledAt,
-      } satisfies PurchaseReceiptData
-
-      await pool.query('begin')
+      await ensureSnapshots(connectionPool)
+      await ensureStock(connectionPool)
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
       try {
+        await client.query('begin')
+        const existing = await loadReceipt(pool, input.organizationId, input.id)
+        if (!existing) {
+          await client.query('rollback')
+          return null
+        }
+        if (existing.status === 'cancelled') {
+          await client.query('rollback')
+          return existing
+        }
+        if (existing.paid_amount > 0 || (existing.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
+          throw new Error('PURCHASE_RECEIPT_HAS_PAYMENTS')
+        }
+
+        const cancelledAt = new Date().toISOString()
+        const cancelledReceipt = {
+          ...existing,
+          status: 'cancelled' as const,
+          paid_amount: 0,
+          remaining_amount: 0,
+          updated_at: cancelledAt,
+        } satisfies PurchaseReceiptData
         const affectedProducts = await deleteMovements(pool, input.organizationId, 'purchase_receipt', existing.code)
-        await pool.query(
+        await client.query(
           `
             update purchase_receipt_snapshots
             set data = $3::jsonb, updated_at = now()
@@ -109,49 +137,61 @@ export function createPurchaseReceiptTransactions(pool:pg.Pool,deps:PurchaseTran
           [input.organizationId, existing.id, JSON.stringify(cancelledReceipt)],
         )
         await recomputeBalances(pool, input.organizationId, affectedProducts)
-        await pool.query('commit')
+        await recomputeSupplier(pool, input.organizationId, existing.supplier_id)
+        await client.query('commit')
+        return cancelledReceipt
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
+      } finally {
+        client.release()
       }
-      await recomputeSupplier(pool, input.organizationId, existing.supplier_id)
-      return cancelledReceipt
     },
 
     async paySupplier(input) {
-      await ensureSnapshots(pool)
-      await ensureSalesFinance(pool)
+      await ensureSnapshots(connectionPool)
+      await ensureSalesFinance(connectionPool)
       const validAllocations = input.allocations.filter((allocation) => allocation.amount > 0)
       if (validAllocations.length === 0) throw new Error('No supplier payment allocations')
 
-      const receipts: PurchaseReceiptData[] = []
-      for (const allocation of validAllocations) {
-        const receipt = await loadReceipt(pool, input.organizationId, allocation.purchase_receipt_id)
-        if (!receipt) throw new Error('Purchase receipt not found')
-        receipts.push(receipt)
-      }
-      const firstReceipt = receipts[0]
-      const totalAmount = validAllocations.reduce((sum, allocation) => sum + allocation.amount, 0)
-      const entry = await cashEntry(pool, {
-        organizationId: input.organizationId,
-        supplier: firstReceipt.supplier,
-        receipt: firstReceipt,
-        amount: totalAmount,
-        paymentMethod: input.paymentMethod,
-        financeAccountId: input.financeAccountId,
-        currentUser: input.currentUser,
-        note: input.note ?? `Thanh toán NCC ${firstReceipt.supplier.name}`,
-        suffix: `pay-${Date.now()}`,
-      })
-
-      await pool.query('begin')
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
       try {
+        await client.query('begin')
+        const receipts: PurchaseReceiptData[] = []
+        for (const allocation of validAllocations) {
+          await client.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipt:${input.organizationId}:${allocation.purchase_receipt_id}`])
+          const receipt = await loadReceipt(pool, input.organizationId, allocation.purchase_receipt_id)
+          if (!receipt) throw new Error('Purchase receipt not found')
+          if (receipt.supplier_id !== input.supplierId) {
+            throw new SupplierPaymentValidationError(`Phiếu nhập ${receipt.code} không thuộc nhà cung cấp đã chọn.`)
+          }
+          if (allocation.amount > Math.max(receipt.remaining_amount, 0)) {
+            throw new SupplierPaymentValidationError(`Số tiền phân bổ vượt số còn phải trả của ${receipt.code}.`)
+          }
+          receipts.push(receipt)
+        }
+        const firstReceipt = receipts[0]
+        const totalAmount = validAllocations.reduce((sum, allocation) => sum + allocation.amount, 0)
+        const entry = await cashEntry(pool, {
+          organizationId: input.organizationId,
+          supplier: firstReceipt.supplier,
+          receipt: firstReceipt,
+          amount: totalAmount,
+          paymentMethod: input.paymentMethod,
+          financeAccountId: input.financeAccountId,
+          currentUser: input.currentUser,
+          note: input.note ?? `Thanh toán NCC ${firstReceipt.supplier.name}`,
+          suffix: `pay-${Date.now()}`,
+        })
+
         await insertCashbook(pool, input.organizationId, entry)
         for (const [index, allocation] of validAllocations.entries()) {
           const receipt = receipts[index]
-          const amount = Math.min(allocation.amount, Math.max(receipt.remaining_amount, 0))
-          const paidAmount = Math.min(receipt.payable_amount, receipt.paid_amount + amount)
-          const remainingAmount = Math.max(receipt.payable_amount - paidAmount, 0)
+          const amount = allocation.amount
+          const paidAmount = receipt.paid_amount + amount
+          const remainingAmount = receipt.payable_amount - paidAmount
           const payment = {
             id: `${entry.id}-${index + 1}`,
             code: entry.code,
@@ -168,7 +208,7 @@ export function createPurchaseReceiptTransactions(pool:pg.Pool,deps:PurchaseTran
             updated_at: entry.created_at,
             supplier_payments: [...receipt.supplier_payments, payment] as unknown as PurchaseReceiptData['supplier_payments'],
           } as PurchaseReceiptData
-          await pool.query(
+          await client.query(
             `
               update purchase_receipt_snapshots
               set data = $3::jsonb, updated_at = now()
@@ -177,18 +217,19 @@ export function createPurchaseReceiptTransactions(pool:pg.Pool,deps:PurchaseTran
             [input.organizationId, receipt.id, JSON.stringify(updatedReceipt)],
           )
         }
-        await pool.query('commit')
+        await recomputeSupplier(pool, input.organizationId, input.supplierId)
+        await client.query('commit')
+        return {
+          supplier_payment_id: entry.id,
+          code: entry.code,
+          amount: totalAmount,
+          cashbook_voucher_id: entry.id,
+        }
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
-      }
-      await recomputeSupplier(pool, input.organizationId, input.supplierId)
-
-      return {
-        supplier_payment_id: entry.id,
-        code: entry.code,
-        amount: totalAmount,
-        cashbook_voucher_id: entry.id,
+      } finally {
+        client.release()
       }
     },
 

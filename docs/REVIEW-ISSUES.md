@@ -1,4 +1,4 @@
-﻿# REVIEW-ISSUES â€” Review Thread Issue Tracker
+# REVIEW-ISSUES â€” Review Thread Issue Tracker
 
 > **Vai trÃ²:** Tracker issue cho Review Thread.
 > **Cáº­p nháº­t:** 2026-07-08.
@@ -40,19 +40,18 @@ Issue khÃ´ng thay tháº¿ PR comments, implementation plan, hoáº·c Source 
 
 ### `REV-2026-07-08-001` - `/pos/cart/validate` documented and called by frontend but had fake validation
 
-- TÃ¬nh tráº¡ng: `Ready for Re-check`
-- Báº±ng chá»©ng:
-  - `src/features/orders/order-service.ts` gá»i `POST /api/v1/pos/cart/validate`.
-  - `docs/05-BACKEND-MayChu/POS/ORDER-API.md` Ä‘á»‹nh nghÄ©a `POST /pos/cart/validate`.
-  - `server/modules/sales/sales-routes.ts` routes `POST /api/v1/pos/cart/validate`.
-  - `server/http.ts` previously returned `{ valid: true }` without checking lines.
-- Viá»‡c Ä‘Ã£ lÃ m: Implement real cart validation in `server/http.ts`: product exists/active, quantity, unit price, sell method, area dimensions, linear length, manual price source, and normalized totals.
-- Lá»‡nh re-check:
-  - `rg -n "/api/v1/pos/cart/validate|/pos/cart/validate|validateCart|cart/validate" src server docs/05-BACKEND-MayChu/POS/ORDER-API.md`
-  - `npm test -- server/http.test.ts -t "validates POS cart|normalizes valid POS cart"`
-  - `npm run verify:local`
-  - `npm run verify:nas-build`
-- Luá»“ng phá»¥ trÃ¡ch: Review
+- Tình trạng: `Closed`
+- Bằng chứng:
+  - `src/features/orders/order-service.ts` gọi `POST /api/v1/pos/cart/validate`.
+  - `server/modules/sales/sales-routes.ts` route đến real handler.
+  - `server/modules/sales/sales-core-handlers.ts` đọc payload và gọi `validatePosCart`.
+  - `server/http.ts` kiểm tra product tồn tại/active, quantity, unit price, sell method, area dimensions, linear length và tính normalized totals.
+- Re-check 2026-07-23 dưới Node `v22.23.1`:
+  - Focused tests: `2/2` pass.
+  - `npm run verify:local`: pass; lint `0 errors`/`14 warnings`, typecheck pass, `91/91` test files và `748/748` tests pass, build all pass.
+  - `npm run verify:nas-build`: pass; bundle dùng `100.84.228.125:3200`, không dùng `:3100`.
+- Kết luận: real validation và normalization đã được kiểm chứng; issue đóng.
+- Luồng phụ trách: Review
 
 ---
 

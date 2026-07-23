@@ -1,3 +1,4 @@
+import { SupplierPaymentValidationError } from './purchase-receipt-transactions.js'
 import type { CashbookEntryData, CurrentUserData, ProductListData, PurchaseReceiptData, ServerRepository, SupplierListData } from '../../http.js'
 import type { RouteResult } from '../../route-types.js'
 type PurchaseReceiptInputBody={code?:unknown;supplier_id?:unknown;received_at?:unknown;supplier_document_no?:unknown;notes?:unknown;discount_amount?:unknown;paid_amount?:unknown;items?:unknown}
@@ -23,15 +24,23 @@ export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){cons
         ))
         .filter((allocation): allocation is { purchase_receipt_id: string; amount: number } => Boolean(allocation && allocation.purchase_receipt_id && Number(allocation.amount ?? 0) > 0))
       if (repository.paySupplier) {
-        const result = await repository.paySupplier({
-          organizationId: currentUser.organization.id,
-          supplierId,
-          paymentMethod,
-          financeAccountId,
-          note: typeof body.note === 'string' ? body.note : null,
-          allocations: normalizedAllocations,
-          currentUser,
-        })
+        let result
+        try {
+          result = await repository.paySupplier({
+            organizationId: currentUser.organization.id,
+            supplierId,
+            paymentMethod,
+            financeAccountId,
+            note: typeof body.note === 'string' ? body.note : null,
+            allocations: normalizedAllocations,
+            currentUser,
+          })
+        } catch (error) {
+          if (error instanceof SupplierPaymentValidationError) {
+            throw validation(400, 'VALIDATION_ERROR', error.message)
+          }
+          throw error
+        }
         return { found: true, data: result, status: 201 }
       }
       const firstAllocation = allocations.find((allocation: Allocation): allocation is { purchase_receipt_id: string; amount?: number } => (

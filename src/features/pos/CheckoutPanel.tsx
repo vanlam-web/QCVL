@@ -84,6 +84,7 @@ export function CheckoutPanel({
   } | null>(null)
   const [debtLookupError, setDebtLookupError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const submittingRef = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<CheckoutResult | null>(null)
   const [quoteResult, setQuoteResult] = useState<QuoteSummary | null>(null)
@@ -278,6 +279,8 @@ export function CheckoutPanel({
       return
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const oldDebtAllocations = await loadOldDebtAllocations(oldDebtPayment)
@@ -305,6 +308,7 @@ export function CheckoutPanel({
     } catch (cause) {
       setError(formatApiError(cause, 'Không tạo được hóa đơn.'))
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
@@ -331,6 +335,8 @@ export function CheckoutPanel({
       return
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const oldDebtAllocations = await loadOldDebtAllocations(oldDebtPayment)
@@ -360,6 +366,7 @@ export function CheckoutPanel({
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được hóa đơn sửa.'))
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }
@@ -387,6 +394,8 @@ export function CheckoutPanel({
       return
     }
 
+    if (submittingRef.current) return
+    submittingRef.current = true
     setSubmitting(true)
     try {
       const payload = {
@@ -415,6 +424,7 @@ export function CheckoutPanel({
     } catch (cause) {
       setError(formatApiError(cause, 'Không lưu được báo giá.'))
     } finally {
+      submittingRef.current = false
       setSubmitting(false)
     }
   }

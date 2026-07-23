@@ -12,6 +12,8 @@ export default tseslint.config(
       'node_modules',
       'playwright-report',
       'test-results',
+      'logs',
+      'logs/**',
     ],
   },
   ...tseslint.configs.recommended,

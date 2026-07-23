@@ -15,15 +15,18 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
     async saveSalesDocument(input) {
       await ensureTables(pool)
       await ensureMovements(pool)
-      await pool.query('begin')
+      const client = await pool.connect()
+      const transactionPool = Object.create(pool) as pg.Pool
+      transactionPool.query = client.query.bind(client) as pg.Pool['query']
       try {
-        await insertDocument(pool, input.organizationId, input.document)
+        await client.query('begin')
+        await insertDocument(transactionPool, input.organizationId, input.document)
 
         if (input.cashbookEntries.length > 0) {
           const receiptId = input.cashbookEntries[0].id
           const receiptCode = input.cashbookEntries[0].code
           const totalReceived = input.cashbookEntries.reduce((sum, entry) => sum + Math.max(entry.amount_delta, 0), 0)
-          await pool.query(
+          await client.query(
             `
               insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
               values ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -32,7 +35,7 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
           )
 
           for (const entry of input.cashbookEntries) {
-            await pool.query(
+            await client.query(
               `
                 insert into payment_receipt_methods (
                   organization_id, payment_receipt_id, order_id, method,
@@ -54,40 +57,46 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
         }
 
         for (const entry of input.cashbookEntries) {
-          await insertEntry(pool, input.organizationId, entry)
+          await insertEntry(transactionPool, input.organizationId, entry)
         }
 
-        await saveMovements(pool, input.organizationId, input.document)
+        await saveMovements(transactionPool, input.organizationId, input.document)
 
-        await pool.query('commit')
+        await client.query('commit')
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
+      } finally {
+        client.release()
       }
     },
 
     async reviseSalesDocument(input) {
       await ensureTables(pool)
       await ensureMovements(pool)
-      await pool.query('begin')
+      const client = await pool.connect()
+      const transactionPool = Object.create(pool) as pg.Pool
+      transactionPool.query = client.query.bind(client) as pg.Pool['query']
       try {
-        const originalResult = await pool.query<OrderRow>(
+        await client.query('begin')
+        const originalResult = await client.query<OrderRow>(
           `
             select *
             from orders
             where organization_id = $1
               and (id = $2 or code = $3)
             limit 1
+            for update
           `,
           [input.organizationId, input.originalOrderId, input.originalOrderCode],
         )
         const originalRow = originalResult.rows[0] as { id: string; code: string; base_code?: string | null }
         if (!originalRow) {
-          await pool.query('rollback')
+          await client.query('rollback')
           return null
         }
 
-        const revisionResult = await pool.query<{ max_revision: number }>(
+        const revisionResult = await client.query<{ max_revision: number }>(
           `
             select coalesce(max(revision_no), 0)::int as max_revision
             from orders
@@ -106,9 +115,9 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
           revised_from_order_id: originalRow.id,
         }
 
-        await insertDocument(pool, input.organizationId, revisedDocument)
+        await insertDocument(transactionPool, input.organizationId, revisedDocument)
 
-        await pool.query(
+        await client.query(
           `
             update orders
             set status = 'cancelled',
@@ -120,7 +129,7 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
           `,
           [input.organizationId, originalRow.id, revisedDocument.id],
         )
-        await pool.query(
+        await client.query(
           `
             update customer_debt_entries
             set status = 'closed',
@@ -137,7 +146,7 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
           const receiptId = input.cashbookEntries[0].id
           const receiptCode = input.cashbookEntries[0].code
           const totalReceived = input.cashbookEntries.reduce((sum, entry) => sum + Math.max(entry.amount_delta, 0), 0)
-          await pool.query(
+          await client.query(
             `
               insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
               values ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -145,7 +154,7 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
             [receiptId, input.organizationId, receiptCode, revisedDocument.customer.id, revisedDocument.id, totalReceived, input.cashbookEntries[0].note, input.cashbookEntries[0].created_at],
           )
           for (const entry of input.cashbookEntries) {
-            await pool.query(
+            await client.query(
               `
                 insert into payment_receipt_methods (
                   organization_id, payment_receipt_id, order_id, method,
@@ -167,15 +176,17 @@ export function createSalesSaveRepository(pool:pg.Pool,deps:SalesSaveDeps):Pick<
         }
 
         for (const entry of input.cashbookEntries) {
-          await insertEntry(pool, input.organizationId, entry)
+          await insertEntry(transactionPool, input.organizationId, entry)
         }
 
-        await saveMovements(pool, input.organizationId, revisedDocument)
-        await pool.query('commit')
+        await saveMovements(transactionPool, input.organizationId, revisedDocument)
+        await client.query('commit')
         return loadDocument({ organizationId: input.organizationId, id: revisedDocument.id }) ?? revisedDocument
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
+      } finally {
+        client.release()
       }
     },
 

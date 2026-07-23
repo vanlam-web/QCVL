@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { CheckoutPanel } from './CheckoutPanel'
 import type { CheckoutCartLine, OrderService } from '../orders/order-service'
@@ -113,6 +113,23 @@ function makeSalesDocumentService(overrides: Partial<Pick<SalesDocumentService, 
     ...overrides,
   } satisfies Pick<SalesDocumentService, 'listSalesDocuments'>
 }
+
+it('blocks rapid double checkout before the submitting state rerenders', async () => {
+  const completedCheckout = await makeOrderService().checkout({ items: [], payment: { cash_amount: 0, bank_amount: 0, old_debt_payment_amount: 0, change_returned_amount: 0 } })
+  let resolveCheckout!: (value: typeof completedCheckout) => void
+  const pendingCheckout = new Promise<typeof completedCheckout>((resolve) => { resolveCheckout = resolve })
+  const checkout = vi.fn(() => pendingCheckout)
+  const service = makeOrderService({ checkout })
+  render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={service} />)
+
+  const submit = screen.getByRole('button', { name: 'Tạo hóa đơn' })
+  fireEvent.click(submit)
+  fireEvent.click(submit)
+
+  await waitFor(() => expect(checkout).toHaveBeenCalledTimes(1))
+  await act(async () => { resolveCheckout(completedCheckout) })
+  await waitFor(() => expect(screen.getByText('HD000001')).toBeInTheDocument())
+})
 
 it('shows only QCVL cash bank transfer and mixed payment choices', async () => {
   render(<CheckoutPanel cartLines={[line]} selectedCustomer={customer} orderService={makeOrderService()} />)

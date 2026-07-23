@@ -3,10 +3,12 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 const pgMock = vi.hoisted(() => {
   const query = vi.fn()
   const end = vi.fn()
+  const release = vi.fn()
+  const connect = vi.fn(async () => ({ query, release }))
   const Pool = vi.fn(function Pool() {
-    return { query, end }
+    return { query, connect, end }
   })
-  return { Pool, query, end }
+  return { Pool, query, connect, release, end }
 })
 
 vi.mock('pg', () => ({
@@ -38,6 +40,8 @@ describe('createPgRepository product units', () => {
   beforeEach(() => {
     pgMock.Pool.mockClear()
     pgMock.query.mockReset()
+    pgMock.connect.mockClear()
+    pgMock.release.mockClear()
     pgMock.end.mockReset()
   })
 

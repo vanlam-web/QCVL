@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { PurchaseReceiptsPage } from './PurchaseReceiptsPage'
 import type { PurchaseReceiptService } from './purchase-receipt-service'
@@ -1302,6 +1302,26 @@ it('shows supplier payment history and pays remaining amount from posted receipt
     payment_method: 'cash',
     allocations: [{ purchase_receipt_id: 'receipt-posted', amount: 80000 }],
   })
+})
+
+it('blocks two synchronous supplier payment submits before React rerenders', async () => {
+  let resolvePayment: ((value: { supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string }) => void) | undefined
+  const paySupplier = vi.fn(() => new Promise<{ supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string }>((resolve) => { resolvePayment = resolve }))
+  const service = makeService({
+    listReceipts: vi.fn(async () => ({ items: [postedReceipt], page: 1, page_size: 15, total: 1 })),
+    getReceipt: vi.fn(async () => postedReceipt),
+    paySupplier,
+  })
+  render(<PurchaseReceiptsPage service={service} onOpenDashboard={vi.fn()} />)
+  await openReceiptDetail('PN000674')
+  const detail = screen.getByRole('region', { name: 'Chi tiết phiếu nhập PN000674' })
+  await userEvent.click(within(detail).getByRole('button', { name: 'Thanh toán NCC' }))
+  const submit = within(screen.getByRole('form', { name: 'Thanh toán nhà cung cấp' })).getByRole('button', { name: 'Lưu thanh toán NCC' })
+
+  fireEvent.click(submit)
+  fireEvent.click(submit)
+  await waitFor(() => expect(paySupplier).toHaveBeenCalledTimes(1))
+  resolvePayment?.({ supplier_payment_id: 'payment-1', code: 'PCPN000674', amount: 80000, cashbook_voucher_id: 'cashbook-1' })
 })
 
 it('shows imported paid amount as a supplier payment history row', async () => {

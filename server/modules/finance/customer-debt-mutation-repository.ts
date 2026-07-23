@@ -2,6 +2,19 @@ import { randomUUID } from 'node:crypto'
 import type pg from 'pg'
 import type { CashbookEntryData, ServerRepository } from '../../http.js'
 import { customerDebtTotalsSql, mapCustomerDebtTotalsRow, type CustomerDebtTotalsRow } from './customer-debt.js'
+
+export class CustomerDebtOverCollectionError extends Error {
+  constructor(readonly requestedAmount: number, readonly availableDebt: number) {
+    super('Số tiền thu nợ vượt quá dư nợ còn lại.')
+    this.name = 'CustomerDebtOverCollectionError'
+  }
+}
+export class CustomerDebtAllocationError extends Error {
+  constructor(readonly message: string) {
+    super(message)
+    this.name = 'CustomerDebtAllocationError'
+  }
+}
 type FinanceAccountSnapshot = { id: string; code: string; name: string; account_type: string; account_number?: string | null; account_holder?: string | null }
 type CustomerDebtMutationDeps = {
   ensureTables(pool: pg.Pool): Promise<void>
@@ -9,15 +22,18 @@ type CustomerDebtMutationDeps = {
   bankAccount(id?: string | null): FinanceAccountSnapshot
   insertEntry(pool: pg.Pool, organizationId: string, entry: CashbookEntryData): Promise<void>
 }
-export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerDebtMutationDeps):Pick<ServerRepository,'collectCustomerDebt'|'updateCustomerDebtAdjustment'>{const {ensureTables,cashAccount,bankAccount,insertEntry}=deps;return{
+export function createCustomerDebtMutationRepository(connectionPool:pg.Pool,deps:CustomerDebtMutationDeps):Pick<ServerRepository,'collectCustomerDebt'|'updateCustomerDebtAdjustment'>{const {ensureTables,cashAccount,bankAccount,insertEntry}=deps;return{
     async collectCustomerDebt(input) {
-      await ensureTables(pool)
+      await ensureTables(connectionPool)
       if (input.amount <= 0 || input.cashAmount + input.bankAmount !== input.amount) {
         return { payment_receipt_id: '', allocated_amount: 0 }
       }
 
-      await pool.query('begin')
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
       try {
+        await client.query('begin')
         const [debtRows, openOrderRows, adjustmentRows, anchorRows, totalsBefore] = await Promise.all([
           pool.query(
             `
@@ -105,13 +121,46 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
           ),
         ])
 
+        const canonicalDebtBefore = totalsBefore.rows[0] ? mapCustomerDebtTotalsRow(totalsBefore.rows[0]).total_debt : 0
+        if (input.amount > canonicalDebtBefore) {
+          throw new CustomerDebtOverCollectionError(input.amount, canonicalDebtBefore)
+        }
+
         const requestedAllocations = (input.allocations ?? [])
           .map((allocation) => ({
             order_id: allocation.order_id,
             order_code: allocation.order_code,
-            allocated_amount: Math.max(Number(allocation.allocated_amount), 0),
+            allocated_amount: Number(allocation.allocated_amount),
           }))
-          .filter((allocation) => allocation.allocated_amount > 0 && (allocation.order_id || allocation.order_code))
+        const hasExplicitAllocations = requestedAllocations.length > 0
+        if (requestedAllocations.some((allocation) => !Number.isFinite(allocation.allocated_amount) || allocation.allocated_amount <= 0)) {
+          throw new CustomerDebtAllocationError('Phân bổ thu nợ phải lớn hơn 0.')
+        }
+        const explicitAllocationTotal = requestedAllocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
+        if (hasExplicitAllocations && explicitAllocationTotal > input.amount) {
+          throw new CustomerDebtAllocationError('Tổng phân bổ vượt số tiền thu nợ.')
+        }
+        const debtRowsByOrderId = new Set(debtRows.rows.map((row) => row.order_id))
+        const openDebtRows = [
+          ...debtRows.rows,
+          ...openOrderRows.rows.filter((row) => !debtRowsByOrderId.has(row.order_id)),
+        ]
+        for (const allocation of requestedAllocations) {
+          const row = openDebtRows.find((candidate) => candidate.order_id === allocation.order_id || candidate.order_code === allocation.order_code)
+          if (!row) throw new CustomerDebtAllocationError('Phân bổ tham chiếu hóa đơn không còn nợ.')
+          if (allocation.allocated_amount > Number(row.remaining_debt)) {
+            throw new CustomerDebtAllocationError(`Phân bổ vượt dư nợ hóa đơn ${row.order_code}.`)
+          }
+        }
+        const debtAllocationRows = requestedAllocations.length > 0
+          ? requestedAllocations
+              .map((allocation) => ({
+                allocation,
+                row: openDebtRows.find((row) => row.order_id === allocation.order_id || row.order_code === allocation.order_code),
+              }))
+              .filter((item): item is { allocation: typeof requestedAllocations[number]; row: typeof debtRows.rows[number] } => Boolean(item.row))
+          : openDebtRows.map((row) => ({ allocation: null, row }))
+
         let remainingPayment = input.amount
         const allocations: Array<{
           order_id: string
@@ -122,19 +171,6 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
           remaining_after: number
           order_created_at?: string
         }> = []
-        const debtRowsByOrderId = new Set(debtRows.rows.map((row) => row.order_id))
-        const openDebtRows = [
-          ...debtRows.rows,
-          ...openOrderRows.rows.filter((row) => !debtRowsByOrderId.has(row.order_id)),
-        ]
-        const debtAllocationRows = requestedAllocations.length > 0
-          ? requestedAllocations
-              .map((allocation) => ({
-                allocation,
-                row: openDebtRows.find((row) => row.order_id === allocation.order_id || row.order_code === allocation.order_code),
-              }))
-              .filter((item): item is { allocation: typeof requestedAllocations[number]; row: typeof debtRows.rows[number] } => Boolean(item.row))
-          : openDebtRows.map((row) => ({ allocation: null, row }))
 
         for (const { allocation, row } of debtAllocationRows) {
           if (remainingPayment <= 0) break
@@ -207,7 +243,6 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
         // rows to allocate against. Recording the payment receipt is what reduces the
         // canonical total, so allocate the leftover against the anchor for audit.
         const anchorRow = anchorRows.rows[0]
-        const canonicalDebtBefore = totalsBefore.rows[0] ? mapCustomerDebtTotalsRow(totalsBefore.rows[0]).total_debt : 0
         if (remainingPayment > 0 && anchorRow) {
           const allocatedSoFar = allocations.reduce((sum, allocation) => sum + allocation.allocated_amount, 0)
           const legacyRemaining = Math.max(canonicalDebtBefore - allocatedSoFar, 0)
@@ -322,18 +357,23 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
           await insertEntry(pool, input.organizationId, entry)
         }
 
-        await pool.query('commit')
+        await client.query('commit')
         return { payment_receipt_id: receiptCode, allocated_amount: allocatedAmount }
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
+      } finally {
+        client.release()
       }
     },
 
     async updateCustomerDebtAdjustment(input) {
-      await ensureTables(pool)
-      await pool.query('begin')
+      await ensureTables(connectionPool)
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
       try {
+        await client.query('begin')
         const result = await pool.query(
           `
             update customer_debt_adjustments
@@ -365,7 +405,7 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
             input.note ?? null,
           ],
         )
-        await pool.query('commit')
+        await client.query('commit')
         const row = result.rows[0]
         if (!row) return null
         return {
@@ -380,8 +420,10 @@ export function createCustomerDebtMutationRepository(pool:pg.Pool,deps:CustomerD
           source_file: row.source_file === null ? null : String(row.source_file),
         }
       } catch (error) {
-        await pool.query('rollback')
+        await client.query('rollback')
         throw error
+      } finally {
+        client.release()
       }
     },
 
