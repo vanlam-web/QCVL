@@ -5,19 +5,21 @@ export function createCustomerFinancialTotalsRepository(pool:pg.Pool,deps:{ensur
     async getCustomerFinancialTotals(organizationId) {
       await ensureTables(pool)
       await ensureSnapshots(pool)
-      const sales = await pool.query(
-        `
-          select customer_id, sum(total_amount) as total_sales_amount, max(updated_at) as last_activity_at
-          from orders
-          where organization_id = $1
-            and order_type = 'invoice'
-            and status <> 'cancelled'
-            and customer_id is not null
-          group by customer_id
-        `,
-        [organizationId],
-      )
-      const debts = await pool.query<CustomerDebtTotalsRow>(customerDebtTotalsSql(), [organizationId])
+      const [sales, debts] = await Promise.all([
+        pool.query(
+          `
+            select customer_id, sum(total_amount) as total_sales_amount, max(updated_at) as last_activity_at
+            from orders
+            where organization_id = $1
+              and order_type = 'invoice'
+              and status <> 'cancelled'
+              and customer_id is not null
+            group by customer_id
+          `,
+          [organizationId],
+        ),
+        pool.query<CustomerDebtTotalsRow>(customerDebtTotalsSql(), [organizationId]),
+      ])
       const totals = new Map<string, { total_sales_amount: number; total_debt_amount: number; last_activity_at?: string }>()
       for (const row of sales.rows) {
         totals.set(row.customer_id, {
