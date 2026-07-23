@@ -26,7 +26,9 @@ export function createSalesDocumentHandlers(deps:SalesDocumentHandlerDeps){const
     listSalesDocuments: async () => {
       const page = Number(url.searchParams.get('page') ?? '1')
       const pageSize = Number(url.searchParams.get('page_size') ?? '20')
-      if (repository.listSalesDocumentsPage && !url.searchParams.get('sort_key')) {
+      const usesDefaultDatabaseSort = !url.searchParams.get('sort_key')
+        || (url.searchParams.get('sort_key') === 'created_at' && (url.searchParams.get('sort_direction') ?? 'desc') === 'desc')
+      if (repository.listSalesDocumentsPage && usesDefaultDatabaseSort) {
         const result = await repository.listSalesDocumentsPage({ organizationId: currentUser.organization.id, url })
         return {
           found: true,
