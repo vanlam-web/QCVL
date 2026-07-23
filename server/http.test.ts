@@ -5786,7 +5786,7 @@ describe('createHttpHandler', () => {
     const loginBody = await login.json()
     const authorization = `Bearer ${loginBody.data.access_token}`
 
-    const response = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=15', { headers: { authorization } }))
+    const response = await handler(new Request('http://api.local/api/v1/products?status=active&page=1&page_size=15&sort_key=created_at&sort_direction=desc', { headers: { authorization } }))
     const body = await response.json()
 
     expect(response.status).toBe(200)
