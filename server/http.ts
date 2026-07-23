@@ -2930,7 +2930,10 @@ export function createHttpHandler(options: HttpHandlerOptions): HttpHandler {
       if (authRoute.found) return authRoute.response
 
       const currentUser = await requireCurrentUser(options.repository, request, traceId)
-      await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
+      const isCustomerQuickPick = request.method === 'GET'
+        && url.pathname === '/api/v1/customers'
+        && url.searchParams.get('search_context') === 'quick_pick'
+      if (!isCustomerQuickPick) await ensureSalesFinanceSeed(options.repository, currentUser.organization.id)
       const devResponse = await getDevApiResponse(request, url, currentUser, options.repository)
       if (devResponse.found) return success(devResponse.data, traceId, devResponse.status)
 

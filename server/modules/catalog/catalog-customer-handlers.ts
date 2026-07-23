@@ -7,21 +7,26 @@ type CustomerRow=CustomerListData
 type GroupRow={id:string}
 export function createCatalogCustomerHandlers(deps:CustomerDeps){const {request,url,currentUser,repository,path,readJson,getIdFromPath,customers,customerGroups,suppliers ,filterCustomers,sortCustomersForRequest,hydrateLinkedSuppliers,customerListSummary,customerDisplayTotals,resolveCustomerCreatedBy,customerActivityFromSalesDocuments,randomUUID,nowIso,requiredString,nullableString,isBillPreferenceValue,isWalkInCustomerCode,syncCustomerBillPreferencePatch,httpError,paged}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
     listCustomers: async () => {
-      const financialTotals = await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
-      const userList = await repository.listUsers?.({
-        organizationId: currentUser.organization.id,
-        url: new URL('http://api.local/api/v1/users'),
-      }) ?? []
+      const isQuickPick = url.searchParams.get('search_context') === 'quick_pick'
+      const financialTotals = isQuickPick ? undefined : await repository.getCustomerFinancialTotals?.(currentUser.organization.id)
+      const userList = isQuickPick
+        ? []
+        : await repository.listUsers?.({
+            organizationId: currentUser.organization.id,
+            url: new URL('http://api.local/api/v1/users'),
+          }) ?? []
       const repositoryCustomers = await repository.listCustomers?.({
         organizationId: currentUser.organization.id,
         userId: currentUser.user.id,
         url,
       })
-      const repositorySuppliers = await repository.listSuppliers?.({
-        organizationId: currentUser.organization.id,
-        url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
-      })
-      const localActivity = repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
+      const repositorySuppliers = isQuickPick || repositoryCustomers
+        ? undefined
+        : await repository.listSuppliers?.({
+            organizationId: currentUser.organization.id,
+            url: new URL('http://api.local/api/v1/suppliers?page=1&page_size=10000'),
+          })
+      const localActivity = isQuickPick || repository.getCustomerFinancialTotals || repositoryCustomers ? undefined : customerActivityFromSalesDocuments()
       const filteredCustomers = (repositoryCustomers ?? filterCustomers(url)).map((customer: CustomerRow) => {
         const totals = financialTotals?.get(customer.id)
         const lastActivityAt = totals?.last_activity_at ?? localActivity?.get(customer.id) ?? customer.created_at
