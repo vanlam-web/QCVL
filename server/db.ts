@@ -1363,7 +1363,7 @@ async function cancelPurchaseReceiptSupplierPaymentCashbook(pool: pg.Pool, organ
       update cashbook_entries
       set status = 'cancelled'
       where organization_id = $1
-        and id = any($2::uuid[])
+        and id = any($2::text[])
     `,
     [organizationId, linkedEntries.rows.map((entry) => entry.id)],
   )
