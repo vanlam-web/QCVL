@@ -16,6 +16,8 @@ function setup(inputReceipt: PurchaseReceiptData = receipt, options: { failBalan
   const directQueries: string[] = []
   let released = false
   let cashbookInserts = 0
+  let cashbookCancellations = 0
+  let movementReversals = 0
   const client = {
     async query(text: string) {
       queries.push(text.trim())
@@ -39,9 +41,10 @@ function setup(inputReceipt: PurchaseReceiptData = receipt, options: { failBalan
     insertCashbook: async (transactionPool) => { cashbookInserts += 1; await transactionPool.query('insert cashbook') },
     recomputeBalances: async (transactionPool) => { await transactionPool.query('recompute balances'); if (options.failBalance) throw new Error('balance failed') },
     recomputeSupplier: async (transactionPool) => { await transactionPool.query('recompute supplier') },
-    deleteMovements: async (transactionPool) => { await transactionPool.query('delete movements'); return new Set(['product-1']) },
+    reverseMovements: async (transactionPool) => { movementReversals += 1; await transactionPool.query('reverse movements'); return new Set(['product-1']) },
+    cancelSupplierPaymentCashbook: async (transactionPool) => { cashbookCancellations += 1; await transactionPool.query('cancel supplier payment cashbook') },
   })
-  return { repository, queries, directQueries, released: () => released, cashbookInserts: () => cashbookInserts }
+  return { repository, queries, directQueries, released: () => released, cashbookInserts: () => cashbookInserts, cashbookCancellations: () => cashbookCancellations, movementReversals: () => movementReversals }
 }
 
 describe('purchase receipt transaction client', () => {
@@ -65,11 +68,22 @@ describe('purchase receipt transaction client', () => {
   })
 
   it('rolls back cancellation when balance recompute fails', async () => {
-    const fake = setup(receipt, { failBalance: true })
+    const fake = setup({ ...receipt, status: 'posted' }, { failBalance: true })
     await expect(fake.repository.cancelPurchaseReceipt?.({ organizationId: 'org-1', id: 'receipt-1' })).rejects.toThrow('balance failed')
-    expect(fake.queries).toContain('delete movements')
+    expect(fake.queries).toContain('cancel supplier payment cashbook')
+    expect(fake.queries).toContain('reverse movements')
     expect(fake.queries.at(-1)).toBe('rollback')
     expect(fake.released()).toBe(true)
+  })
+
+  it('cancels paid receipt cashbook and appends stock reversal on one client', async () => {
+    const fake = setup({ ...receipt, status: 'posted', paid_amount: 100, remaining_amount: 0, supplier_payments: [{ id: 'payment-1', status: 'posted', amount: 100 }] as never })
+    const cancelled = await fake.repository.cancelPurchaseReceipt?.({ organizationId: 'org-1', id: 'receipt-1' })
+    expect(cancelled).toMatchObject({ status: 'cancelled', paid_amount: 0, remaining_amount: 0 })
+    expect(fake.cashbookCancellations()).toBe(1)
+    expect(fake.movementReversals()).toBe(1)
+    expect(fake.queries).toEqual(expect.arrayContaining(['cancel supplier payment cashbook', 'reverse movements', 'recompute balances', 'recompute supplier', 'commit']))
+    expect(fake.directQueries).toEqual([])
   })
 
   it('rejects supplier allocation above payable before cashbook mutation', async () => {

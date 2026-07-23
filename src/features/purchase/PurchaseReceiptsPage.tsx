@@ -1772,12 +1772,6 @@ export function PurchaseReceiptsPage({
 
   async function cancelSelectedReceipt() {
     if (!selectedReceipt || selectedReceipt.status === 'cancelled') return
-    const hasSupplierPayments = selectedReceipt.paid_amount > 0 || selectedReceipt.supplier_payments.some((payment) => payment.status === 'posted')
-    if (hasSupplierPayments) {
-      setError('Phiếu đã có thanh toán NCC, không thể hủy trực tiếp.')
-      setCancelReceiptOpen(false)
-      return
-    }
 
     setCancelingReceipt(true)
     setError(null)
@@ -2463,7 +2457,10 @@ export function PurchaseReceiptsPage({
         confirmLabel="Hủy phiếu"
         message={(
           <>
-            Hủy phiếu nhập <strong>{selectedReceipt?.code}</strong>? Phiếu sẽ chuyển sang trạng thái Đã hủy và không còn tính tồn kho/công nợ NCC.
+            Hủy phiếu nhập <strong>{selectedReceipt?.code}</strong>? Hệ thống sẽ chuyển phiếu sang Đã hủy và đảo tồn kho/công nợ NCC.
+            {selectedReceipt && (selectedReceipt.paid_amount > 0 || selectedReceipt.supplier_payments.some((payment) => payment.status === 'posted'))
+              ? ' Các phiếu trả NCC và sổ quỹ liên quan cũng sẽ chuyển sang Đã hủy, lịch sử vẫn được giữ.'
+              : null}
           </>
         )}
         loading={cancelingReceipt}

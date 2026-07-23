@@ -44,10 +44,11 @@ type PurchaseTransactionDeps = {
   insertCashbook(pool: pg.Pool, organizationId: string, entry: CashbookEntryData): Promise<void>
   recomputeBalances(pool: pg.Pool, organizationId: string, productIds: Set<string>): Promise<void>
   recomputeSupplier(pool: pg.Pool, organizationId: string, supplierId: string): Promise<void>
-  deleteMovements(pool: pg.Pool, organizationId: string, sourceType: string, sourceCode: string): Promise<Set<string>>
+  reverseMovements(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData): Promise<Set<string>>
+  cancelSupplierPaymentCashbook(pool: pg.Pool, organizationId: string, receiptId: string): Promise<void>
 }
 export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:PurchaseTransactionDeps):Pick<ServerRepository,'postPurchaseReceipt'|'cancelPurchaseReceipt'|'paySupplier'>{
- const {ensureSnapshots,ensureStock,ensureCatalog,ensureSalesFinance,loadReceipt,replaceMovements,updateCosts,cashEntry,insertCashbook,recomputeBalances,recomputeSupplier,deleteMovements}=deps
+  const {ensureSnapshots,ensureStock,ensureCatalog,ensureSalesFinance,loadReceipt,replaceMovements,updateCosts,cashEntry,insertCashbook,recomputeBalances,recomputeSupplier,reverseMovements,cancelSupplierPaymentCashbook}=deps
  return {
     async postPurchaseReceipt(input) {
       await ensureSnapshots(connectionPool)
@@ -131,6 +132,7 @@ export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:Pu
       pool.query = client.query.bind(client) as pg.Pool['query']
       try {
         await client.query('begin')
+        await client.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipt:${input.organizationId}:${input.id}`])
         const existing = await loadReceipt(pool, input.organizationId, input.id)
         if (!existing) {
           await client.query('rollback')
@@ -140,19 +142,22 @@ export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:Pu
           await client.query('rollback')
           return existing
         }
-        if (existing.paid_amount > 0 || (existing.supplier_payments as Array<{ status: string }>).some((payment) => payment.status === 'posted')) {
-          throw new Error('PURCHASE_RECEIPT_HAS_PAYMENTS')
-        }
 
         const cancelledAt = new Date().toISOString()
+        await cancelSupplierPaymentCashbook(pool, input.organizationId, existing.id)
+        const cancelledPayments = (existing.supplier_payments as Array<Record<string, unknown>>)
+          .map((payment) => ({ ...payment, status: 'cancelled' as const })) as PurchaseReceiptData['supplier_payments']
         const cancelledReceipt = {
           ...existing,
           status: 'cancelled' as const,
           paid_amount: 0,
           remaining_amount: 0,
           updated_at: cancelledAt,
-        } satisfies PurchaseReceiptData
-        const affectedProducts = await deleteMovements(pool, input.organizationId, 'purchase_receipt', existing.code)
+          supplier_payments: cancelledPayments,
+        } as PurchaseReceiptData
+        const affectedProducts = existing.status === 'posted'
+          ? await reverseMovements(pool, input.organizationId, existing)
+          : new Set<string>()
         await client.query(
           `
             update purchase_receipt_snapshots

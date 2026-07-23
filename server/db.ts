@@ -110,7 +110,7 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
   const purchaseReceiptSaveRepository = createPurchaseReceiptSaveRepository(pool, { ensureSnapshots: ensureImportedSnapshotTables, safeCode: purchaseReceiptWithSafeCode, recomputeSupplier: recomputeSupplierPurchaseTotals })
 
-  const purchaseReceiptTransactions = createPurchaseReceiptTransactions(pool, { ensureSnapshots: ensureImportedSnapshotTables, ensureStock: ensureStockMovementsTable, ensureCatalog: ensureProductCatalogSchema, ensureSalesFinance: ensureSalesFinanceTables, loadReceipt: loadPurchaseReceiptSnapshot, replaceMovements: replacePurchaseReceiptStockMovements, updateCosts: updateLatestPurchaseCostsFromReceipt, cashEntry: purchaseSupplierCashbookEntry, insertCashbook: insertCashbookEntry, recomputeBalances: recomputeStockMovementBalances, recomputeSupplier: recomputeSupplierPurchaseTotals, deleteMovements: deleteStockMovementsForDocument })
+  const purchaseReceiptTransactions = createPurchaseReceiptTransactions(pool, { ensureSnapshots: ensureImportedSnapshotTables, ensureStock: ensureStockMovementsTable, ensureCatalog: ensureProductCatalogSchema, ensureSalesFinance: ensureSalesFinanceTables, loadReceipt: loadPurchaseReceiptSnapshot, replaceMovements: replacePurchaseReceiptStockMovements, updateCosts: updateLatestPurchaseCostsFromReceipt, cashEntry: purchaseSupplierCashbookEntry, insertCashbook: insertCashbookEntry, recomputeBalances: recomputeStockMovementBalances, recomputeSupplier: recomputeSupplierPurchaseTotals, reverseMovements: reversePurchaseReceiptStockMovements, cancelSupplierPaymentCashbook: cancelPurchaseReceiptSupplierPaymentCashbook })
 
   const purchaseImportCleanupRepository = createPurchaseImportCleanupRepository(pool, { ensureSnapshots: ensureImportedSnapshotTables, ensureStock: ensureStockMovementsTable, deleteMovements: deleteStockMovementsForDocuments, recompute: recomputeStockMovementBalances })
 
@@ -1293,6 +1293,80 @@ async function replacePurchaseReceiptStockMovements(pool: pg.Pool, organizationI
     })
   }
   return affectedProducts
+}
+
+async function reversePurchaseReceiptStockMovements(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData) {
+  await ensureStockMovementsTable(pool)
+  const originals = await pool.query<{
+    id: string
+    product_id: string
+    quantity_delta: number
+    transaction_price: number | null
+    cost_price: number | null
+    partner_name: string | null
+  }>(
+    `
+      select id::text, product_id::text, quantity_delta, transaction_price, cost_price, partner_name
+      from stock_movements
+      where organization_id = $1
+        and document_type = 'purchase_receipt'
+        and document_code = $2
+      order by created_at, id
+    `,
+    [organizationId, receipt.code],
+  )
+  const affectedProducts = new Set<string>()
+  const reversedAt = new Date().toISOString()
+  for (const original of originals.rows) {
+    const quantityDelta = -Number(original.quantity_delta)
+    if (quantityDelta === 0) continue
+    affectedProducts.add(String(original.product_id))
+    await insertStockMovement(pool, organizationId, {
+      id: stableUuidFromText(`stock-movement-purchase-cancellation-${receipt.id}-${original.id}`),
+      productId: String(original.product_id),
+      movementType: 'purchase_reversal',
+      quantityDelta,
+      endingQty: null,
+      documentType: 'purchase_receipt_cancellation',
+      documentCode: receipt.code,
+      transactionPrice: original.transaction_price === null ? null : Number(original.transaction_price),
+      costPrice: original.cost_price === null ? null : Number(original.cost_price),
+      partnerName: original.partner_name,
+      createdAt: reversedAt,
+    })
+  }
+  return affectedProducts
+}
+
+async function cancelPurchaseReceiptSupplierPaymentCashbook(pool: pg.Pool, organizationId: string, receiptId: string) {
+  await ensureSalesFinanceTables(pool)
+  const linkedEntries = await pool.query<{ id: string; allocations: Array<{ order_id?: string }> }>(
+    `
+      select id::text, allocations
+      from cashbook_entries
+      where organization_id = $1
+        and status = 'posted'
+        and source_type = 'purchase_supplier_payment'
+        and allocations @> jsonb_build_array(jsonb_build_object('order_id', $2))
+      for update
+    `,
+    [organizationId, receiptId],
+  )
+  const sharedEntry = linkedEntries.rows.find((entry) => (
+    !Array.isArray(entry.allocations)
+    || entry.allocations.some((allocation) => String(allocation.order_id ?? '') !== receiptId)
+  ))
+  if (sharedEntry) throw new Error('PURCHASE_RECEIPT_SHARED_PAYMENT_REQUIRES_ALLOCATION_REVERSAL')
+  if (linkedEntries.rows.length === 0) return
+  await pool.query(
+    `
+      update cashbook_entries
+      set status = 'cancelled'
+      where organization_id = $1
+        and id = any($2::uuid[])
+    `,
+    [organizationId, linkedEntries.rows.map((entry) => entry.id)],
+  )
 }
 
 async function updateLatestPurchaseCostsFromReceipt(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData) {

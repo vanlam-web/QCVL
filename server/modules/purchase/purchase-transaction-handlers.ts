@@ -168,8 +168,8 @@ export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){cons
             id,
           })
         } catch (error) {
-          if (error instanceof Error && error.message === 'PURCHASE_RECEIPT_HAS_PAYMENTS') {
-            throw validation(400, 'VALIDATION_ERROR', 'Cannot cancel a purchase receipt with supplier payments.')
+          if (error instanceof Error && error.message === 'PURCHASE_RECEIPT_SHARED_PAYMENT_REQUIRES_ALLOCATION_REVERSAL') {
+            throw validation(400, 'VALIDATION_ERROR', 'Phiếu trả NCC đang phân bổ cho nhiều phiếu nhập, cần đảo từng phân bổ trước khi hủy.')
           }
           throw error
         }
