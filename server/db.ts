@@ -1347,7 +1347,7 @@ async function cancelPurchaseReceiptSupplierPaymentCashbook(pool: pg.Pool, organ
       where organization_id = $1
         and status = 'posted'
         and source_type = 'purchase_supplier_payment'
-        and allocations @> jsonb_build_array(jsonb_build_object('order_id', $2))
+        and allocations @> jsonb_build_array(jsonb_build_object('order_id', $2::text))
       for update
     `,
     [organizationId, receiptId],
