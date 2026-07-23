@@ -26,6 +26,12 @@ export interface CustomerDebtTotalsRow {
 
 export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}) {
   const customerFilter = options.singleCustomer ? 'where dc.customer_id = $2' : ''
+  const liveInvoiceCustomerFilter = options.singleCustomer ? 'and o.customer_id = $2' : ''
+  const adjustmentCustomerFilter = options.singleCustomer ? 'and customer_id = $2' : ''
+  const paymentCustomerFilter = options.singleCustomer
+    ? "and coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) = $2"
+    : ''
+  const linkedSupplierCustomerFilter = options.singleCustomer ? "and s.data->>'linked_customer_id' = $2" : ''
   return `
     with live_invoice_debt as (
       select
@@ -46,6 +52,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         and o.order_type = 'invoice'
         and o.status <> 'cancelled'
         and o.customer_id is not null
+        ${liveInvoiceCustomerFilter}
       group by o.customer_id
     ),
     customer_adjustment_debt as (
@@ -63,6 +70,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
         max(created_at) as last_activity_at
       from customer_debt_adjustments
       where organization_id = $1
+        ${adjustmentCustomerFilter}
       group by customer_id
     ),
     customer_payment_debt as (
@@ -93,6 +101,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
           )
         )
         and coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id) is not null
+        ${paymentCustomerFilter}
       group by coalesce(nullif(cbe.source->>'customer_id', ''), o.customer_id, cs.id)
     ),
     linked_supplier_debt as (
@@ -117,6 +126,7 @@ export function customerDebtTotalsSql(options: { singleCustomer?: boolean } = {}
       where s.organization_id = $1
         and coalesce(s.data->>'linked_customer_id', '') <> ''
         and pr.data->>'status' = 'posted'
+        ${linkedSupplierCustomerFilter}
       group by s.data->>'linked_customer_id'
     ),
     debt_customers as (
