@@ -45,7 +45,15 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list",
-    "import:kiotviet-products": "node scripts/import-kiotviet-products.mjs"
+    "import:kiotviet-products": "node scripts/import-kiotviet-products.mjs",
+    "deploy:nas:lan": "node scripts/deploy-nas-lan.mjs",
+    "deploy:nas:two-slot": "node scripts/deploy-nas-two-slot.mjs",
+    "rollback:nas": "node scripts/rollback-nas.mjs",
+    "bootstrap:nas:two-slot": "node scripts/bootstrap-nas-two-slot.mjs",
+    "build:nas:image": "node scripts/build-nas-image.mjs",
+    "deploy:nas:image": "node scripts/deploy-nas-image.mjs",
+    "rollback:nas:image": "node scripts/rollback-nas-image.mjs",
+    "deploy:nas:image:status": "node scripts/deploy-nas-image-status.mjs"
   },
   "dependencies": {
     "@sentry/react": "^10.63.0",

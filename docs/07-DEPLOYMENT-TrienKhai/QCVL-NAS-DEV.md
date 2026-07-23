@@ -594,3 +594,55 @@ Nếu UI báo `Máy chủ gặp lỗi... Mã lỗi: req-...`:
 
 - Header hoa don POS dung ten hien thi cua user dang nhap.
 - Ngay va gio hoa don co the sua trong input `date` + `time`; backend luu `created_at` theo ngay gio da sua neu payload hop le.
+
+## Immutable Docker Image Deploy — 2026-07-23
+
+> [!IMPORTANT]
+> New target deploy path is immutable image release. Legacy `deploy:nas` and two-slot source
+> deploy remain fallback only until first image cutover rehearsal passes.
+
+### Runtime model
+
+- NAS app must use `QCVL_APP_IMAGE_REF=qcvl-app:<UTC>-<commit>` from `active-image.env`.
+- Never use `latest`.
+- Docker Compose must use the repository [docker-compose.nas.yml](file:///D:/phan%20mem/QCVL/docker-compose.nas.yml),
+  not Node image plus `/app` source bind mount.
+- Image contains production dependencies, `dist`, `dist-server`, migrations, and migration script.
+- `.env`, PostgreSQL data, and NAS Docker Compose state stay outside image and Git.
+- Rollback image restores application code only. It never rolls back PostgreSQL schema/data.
+
+### Required NAS setup before first cutover
+
+1. Owner creates verified PostgreSQL checkpoint/backup and knows restore procedure.
+2. Owner permits non-interactive restricted SSH commands only for `docker load`,
+   `docker image inspect`, `docker inspect`, and `docker compose ... up/run` for QCVL.
+3. Owner copies `active-image.env.example` to NAS `active-image.env` after first image load.
+4. Owner backs up NAS `docker-compose.yml` before replacing it with image Compose file.
+
+### Commands
+
+```powershell
+# No NAS mutation; prints release and intended image/archive paths.
+$env:QCVL_ALLOW_DIRTY_RELEASE='true' # only when testing uncommitted work
+npm run deploy:nas:image
+Remove-Item Env:\QCVL_ALLOW_DIRTY_RELEASE -ErrorAction SilentlyContinue
+
+# Build local immutable image after clean commit.
+npm run build:nas:image
+
+# Production deployment: requires SSH capability and approved maintenance window.
+$env:QCVL_NAS_IMAGE_DEPLOY_CONFIRM='true'
+$env:QCVL_NAS_SSH_TARGET='adminnas@192.168.1.188'
+$env:QCVL_NAS_SSH_KEY="$env:USERPROFILE\.ssh\qcvl_nas_ed25519"
+npm run deploy:nas:image
+
+# Roll back app image only. PostgreSQL schema/data remain unchanged.
+$env:QCVL_NAS_IMAGE_ROLLBACK_CONFIRM='true'
+npm run rollback:nas:image
+```
+
+Deploy script builds `qcvl-app:<UTC>-<commit>`, creates archive checksum, copies archive to
+NAS staging, loads/inspects image, runs migration from that image, recreates `qcvl-app`, then
+requires PostgreSQL health. If `QCVL_SMOKE_PASSWORD` is present, it runs authenticated NAS smoke.
+On app start/health/smoke failure, it recreates previous image. It does not automatically reverse
+database migrations.
