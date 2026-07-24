@@ -265,7 +265,11 @@ function AdminRoute() {
 
   return (
     <AppShell currentUser={currentUser} onSignOut={() => void signOut()}>
-      <FoundationAdminPage service={service} onOpenDashboard={() => navigate(appRoutes.dashboard)} />
+      <FoundationAdminPage
+        service={service}
+        currentUserPermissions={currentUser.permissions}
+        onOpenDashboard={() => navigate(appRoutes.dashboard)}
+      />
     </AppShell>
   )
 }

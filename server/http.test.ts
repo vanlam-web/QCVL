@@ -603,6 +603,55 @@ describe('createHttpHandler', () => {
     expect(body.error.code).toBe('PERMISSION_DENIED')
   })
 
+  test('denies admin user and workstation routes before repository access without exact permission', async () => {
+    const passwordHash = await hashPassword('ChangeMe123!')
+    const base = repository(passwordHash)
+    const listUsers = vi.fn(async () => [])
+    const listWorkstations = vi.fn(async () => [])
+    const createUser = vi.fn(async () => {
+      throw new Error('must not create user')
+    })
+    const handler = createHttpHandler({
+      repository: {
+        ...base,
+        listUsers,
+        listWorkstations,
+        createUser,
+        async getSessionUser(token, workstationId) {
+          const session = await base.getSessionUser(token, workstationId)
+          return session ? { ...session, permissions: [] } : null
+        },
+      },
+    })
+    const login = await handler(
+      new Request('http://api.local/api/v1/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'admin@qc-oms.local', password: 'ChangeMe123!' }),
+      }),
+    )
+    const loginBody = await login.json() as { data: { access_token: string } }
+    const headers = { authorization: `Bearer ${loginBody.data.access_token}`, 'content-type': 'application/json' }
+    const requests = [
+      new Request('http://api.local/api/v1/permissions', { headers }),
+      new Request('http://api.local/api/v1/users', { headers }),
+      new Request('http://api.local/api/v1/users/user-2', { headers }),
+      new Request('http://api.local/api/v1/users', { method: 'POST', headers, body: JSON.stringify({}) }),
+      new Request('http://api.local/api/v1/users/user-2', { method: 'PATCH', headers, body: JSON.stringify({}) }),
+      new Request('http://api.local/api/v1/users/user-2/permissions', { method: 'PUT', headers, body: JSON.stringify({ permissions: [] }) }),
+      new Request('http://api.local/api/v1/workstations', { headers }),
+      new Request('http://api.local/api/v1/workstations', { method: 'POST', headers, body: JSON.stringify({}) }),
+    ]
+
+    for (const request of requests) {
+      const response = await handler(request)
+      expect(response.status).toBe(403)
+      expect((await response.json()).error.code).toBe('PERMISSION_DENIED')
+    }
+    expect(listUsers).not.toHaveBeenCalled()
+    expect(listWorkstations).not.toHaveBeenCalled()
+    expect(createUser).not.toHaveBeenCalled()
+  })
+
   test('logs in with username or phone instead of requiring an email address', async () => {
     const handler = createHttpHandler({ repository: repository(await hashPassword('ChangeMe123!')) })
 
@@ -4923,7 +4972,7 @@ describe('createHttpHandler', () => {
       new Request(`http://api.local/api/v1/sales-documents/${checkoutBody.data.order.id}`, {
         method: 'PATCH',
         headers: { authorization },
-        body: JSON.stringify({ status: 'cancelled' }),
+        body: JSON.stringify({ status: 'cancelled', cancel_reason_type: 'customer_changed_mind' }),
       }),
     )
     const productsResponse = await handler(

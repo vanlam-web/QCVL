@@ -829,24 +829,16 @@ export interface ServerRepository {
   }): Promise<StocktakeDetailData | null>
   createMaterialOpening?(input: {
     organizationId: string
-    input: {
-      product_id: string
-      inventory_shape: 'normal' | 'roll' | 'sheet'
-      opened_unit_id?: string
-      opened_qty?: number
-      old_remaining_qty?: number
-      old_inventory_roll_id?: string
-      old_remaining_length_m?: number
-      old_inventory_sheet_id?: string
-      old_remaining_width_m?: number
-      discard_old_sheet?: boolean
-      note?: string
-    }
+    inventory_shape: 'normal'
+    opened_unit_id?: string
+    opened_qty?: number
+    old_remaining_qty?: number
+    note?: string
   }): Promise<{
     id: string
     product_id: string
-    inventory_shape: 'normal' | 'roll' | 'sheet'
-    source_type: 'manual_normal' | 'standard_object' | 'kiotviet_provisional'
+    inventory_shape: 'normal'
+    source_type: 'manual_normal'
     opened_unit_id: string | null
     opened_qty: number | null
     opened_stock_qty: number | null
@@ -2986,6 +2978,12 @@ function serializeError(error: unknown) {
   return error
 }
 
+function requirePermission(currentUser: CurrentUserData, permission: `perm.${string}`) {
+  if (!currentUser.permissions.includes(permission)) {
+    throw new HttpError(403, 'PERMISSION_DENIED', `Missing permission ${permission}.`)
+  }
+}
+
 export async function hashPassword(password: string) {
   const salt = randomBytes(16).toString('hex')
   const key = await scrypt(password, salt, 64, { N: 16384, r: 8, p: 1 })
@@ -3008,9 +3006,11 @@ async function getDevApiResponse(
   if (method === 'POST' && /^\/api\/v1\/me\/devices\/[^/]+\/sign-out$/.test(path)) return { found: true, data: [] }
 
   if (method === 'GET' && path === '/api/v1/workstations') {
+    requirePermission(currentUser, 'perm.access_admin_panel')
     return { found: true, data: await repository.listWorkstations(currentUser.organization.id) }
   }
   if ((method === 'POST' && path === '/api/v1/workstations') || (method === 'PATCH' && /^\/api\/v1\/workstations\/[^/]+$/.test(path))) {
+    requirePermission(currentUser, 'perm.access_admin_panel')
     const body = await readJson(request)
     return { found: true, data: { id: getIdFromPath(path) ?? randomUUID(), code: body.code ?? 'POS-NEW', name: body.name ?? 'May moi', status: body.status ?? 'active' } }
   }
@@ -3022,9 +3022,7 @@ async function getDevApiResponse(
     }
   }
   if (method === 'PATCH' && path === '/api/v1/organization/bill-settings') {
-    if (!currentUser.permissions.includes('perm.access_admin_panel')) {
-      throw new HttpError(403, 'PERMISSION_DENIED', 'Missing permission perm.access_admin_panel.')
-    }
+    requirePermission(currentUser, 'perm.access_admin_panel')
     const body = await readJson(request)
     const patch = parseOrganizationBillSettingsPatch(body)
     if (repository.updateOrganizationBillSettings) {
@@ -3043,19 +3041,25 @@ async function getDevApiResponse(
     }
   }
 
-  if (method === 'GET' && path === '/api/v1/permissions') return { found: true, data: allPermissions }
+  if (method === 'GET' && path === '/api/v1/permissions') {
+    requirePermission(currentUser, 'perm.manage_users')
+    return { found: true, data: allPermissions }
+  }
   if (method === 'GET' && path === '/api/v1/users') {
+    requirePermission(currentUser, 'perm.manage_users')
     const items = await repository.listUsers?.({ organizationId: currentUser.organization.id, url })
       ?? [toUserListItem(currentUser)]
     return { found: true, data: { items, total: items.length } }
   }
   if (method === 'GET' && /^\/api\/v1\/users\/[^/]+$/.test(path)) {
+    requirePermission(currentUser, 'perm.manage_users')
     const id = getIdFromPath(path)
     const items = await repository.listUsers?.({ organizationId: currentUser.organization.id, url })
       ?? [toUserListItem(currentUser)]
     return { found: true, data: items.find((item) => item.id === id) ?? toUserListItem(currentUser) }
   }
   if (method === 'POST' && path === '/api/v1/users') {
+    requirePermission(currentUser, 'perm.manage_users')
     const body = await readJson(request)
     const username = requiredString(body.username, 'username')
     const contactEmail = nullableString(body.email)
@@ -3092,6 +3096,7 @@ async function getDevApiResponse(
     return { found: true, data: created, status: 201 }
   }
   if (method === 'PATCH' && /^\/api\/v1\/users\/[^/]+$/.test(path)) {
+    requirePermission(currentUser, 'perm.manage_users')
     const body = await readJson(request)
     const id = getIdFromPath(path) ?? ''
     const username = typeof body.username === 'string' ? body.username.trim() : undefined
@@ -3127,6 +3132,7 @@ async function getDevApiResponse(
     return { found: true, data: updated ?? { ...toUserListItem(currentUser), ...body } }
   }
   if (method === 'PUT' && /^\/api\/v1\/users\/[^/]+\/permissions$/.test(path)) {
+    requirePermission(currentUser, 'perm.manage_users')
     const body = await readJson(request)
     const id = getIdFromPath(path) ?? ''
     const updated = await repository.replaceUserPermissions?.({

@@ -121,9 +121,9 @@ it('loads user and permission administration data from the API service', async (
   expect(screen.getByRole('heading', { name: 'Thiết lập' }).closest('.management-page-header')).not.toBeNull()
   const sidebar = screen.getByRole('navigation', { name: 'Menu thiết lập' })
   expect(sidebar).toHaveClass('admin-settings-menu')
-  expect(within(sidebar).getByPlaceholderText('Tìm kiếm thiết lập')).toBeInTheDocument()
+  expect(within(sidebar).queryByPlaceholderText('Tìm kiếm thiết lập')).not.toBeInTheDocument()
   expect(within(sidebar).getByRole('button', { name: 'Quản lý người dùng' })).toHaveAttribute('aria-current', 'page')
-  expect(within(sidebar).getByRole('heading', { name: 'Cửa hàng' })).toBeInTheDocument()
+  expect(within(sidebar).getByRole('heading', { name: 'Danh mục' })).toBeInTheDocument()
   expect(await screen.findByRole('region', { name: 'Tài khoản người dùng' })).toHaveClass('management-list-surface')
   expect(document.querySelector('.admin-grid')).toBeNull()
   expect(document.querySelector('.admin-form')).toBeNull()
@@ -209,6 +209,28 @@ it('sorts admin user and role tables from shared column headers', async () => {
 
   expect(within(roleTable).getAllByRole('row')[1]).toHaveTextContent('Quản trị')
   expect(within(roleTable).getByRole('columnheader', { name: 'Số tài khoản' })).toHaveAttribute('aria-sort', 'descending')
+})
+
+it('does not load or render user management controls without perm.manage_users', async () => {
+  const service = makeService()
+  render(
+    <FoundationAdminPage
+      service={service}
+      currentUserPermissions={['perm.access_admin_panel']}
+      onOpenDashboard={vi.fn()}
+    />,
+  )
+
+  expect(service.listUsers).not.toHaveBeenCalled()
+  expect(service.listPermissions).not.toHaveBeenCalled()
+  expect(screen.queryByRole('tab', { name: 'Tài khoản người dùng' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('tab', { name: 'Quản lý vai trò' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Quản lý người dùng' })).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Thông tin cửa hàng' })).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByRole('heading', { name: 'Thông tin cửa hàng' })).toBeInTheDocument()
+
+  await userEvent.click(screen.getByRole('button', { name: 'Quản lý mẫu in' }))
+  expect(await screen.findByRole('heading', { name: 'Quản lý mẫu in' })).toBeInTheDocument()
 })
 
 it('shows an error when admin data cannot be loaded', async () => {

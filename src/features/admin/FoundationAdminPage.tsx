@@ -59,6 +59,7 @@ type UserDialogMode = 'create' | 'edit'
 type AdminUserSortKey = 'display_name' | 'username' | 'phone' | 'role' | 'status'
 type AdminRoleSortKey = 'name' | 'description' | 'userCount' | 'status'
 type AdminSettingsPanel = 'users' | 'roles' | 'shop' | 'bill-templates'
+type AdminSettingsMenuItem = 'Thông tin cửa hàng' | 'Quản lý mẫu in' | 'Quản lý người dùng'
 
 const internalStaffDefaultPermissions = [
   permissions.createOrder,
@@ -185,10 +186,13 @@ function parseRequiredFieldFromMessage(message: string) {
 
 export function FoundationAdminPage({
   service,
+  currentUserPermissions,
 }: {
   service: FoundationService
   onOpenDashboard: () => void
+  currentUserPermissions?: readonly Permission['code'][]
 }) {
+  const canManageUsers = currentUserPermissions === undefined || currentUserPermissions.includes(permissions.manageUsers)
   const [state, setState] = useState<AdminState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [userFormNotice, setUserFormNotice] = useState<string | null>(null)
@@ -203,7 +207,7 @@ export function FoundationAdminPage({
   const [selectedRoleId, setSelectedRoleId] = useState<string | null>(null)
   const [roleDialogOpen, setRoleDialogOpen] = useState(false)
   const [roleForm, setRoleForm] = useState({ name: '', description: '', permissions: [] as Permission['code'][] })
-  const [activeTab, setActiveTab] = useState<AdminSettingsPanel>('users')
+  const [activeTab, setActiveTab] = useState<AdminSettingsPanel>(canManageUsers ? 'users' : 'shop')
   const [savingUser, setSavingUser] = useState(false)
   const [billSettings, setBillSettings] = useState(() => readOrganizationBillSettingsCache())
   const [billSettingsNotice, setBillSettingsNotice] = useState<{
@@ -307,6 +311,7 @@ export function FoundationAdminPage({
   }
 
   useEffect(() => {
+    if (!canManageUsers) return
     let active = true
 
     async function loadInitialData() {
@@ -325,7 +330,7 @@ export function FoundationAdminPage({
     return () => {
       active = false
     }
-  }, [service])
+  }, [canManageUsers, service])
 
   useEffect(() => {
     if (userDialogOpen) createUserDisplayNameRef.current?.focus()
@@ -572,31 +577,32 @@ export function FoundationAdminPage({
   })
   const selectedRole = roleRows.find((role) => role.id === selectedRoleId) ?? null
   const permissionsByModule = useMemo(() => groupAdminPermissionsByModule(state?.permissions ?? []), [state?.permissions])
-
   return (
     <ManagementPage
       title="Thiết lập"
       actions={
-        <div className="admin-header-tabs">
-          <div aria-label="Quản lý người dùng" className="inline-detail-tabs" role="tablist">
-            <button
-              aria-selected={activeTab === 'users'}
-              role="tab"
-              type="button"
-              onClick={() => openSettingsPanel('users')}
-            >
-              Tài khoản người dùng
-            </button>
-            <button
-              aria-selected={activeTab === 'roles'}
-              role="tab"
-              type="button"
-              onClick={() => openSettingsPanel('roles')}
-            >
-              Quản lý vai trò
-            </button>
+        canManageUsers ? (
+          <div className="admin-header-tabs">
+            <div aria-label="Quản lý người dùng" className="inline-detail-tabs" role="tablist">
+              <button
+                aria-selected={activeTab === 'users'}
+                role="tab"
+                type="button"
+                onClick={() => openSettingsPanel('users')}
+              >
+                Tài khoản người dùng
+              </button>
+              <button
+                aria-selected={activeTab === 'roles'}
+                role="tab"
+                type="button"
+                onClick={() => openSettingsPanel('roles')}
+              >
+                Quản lý vai trò
+              </button>
+            </div>
           </div>
-        </div>
+        ) : null
       }
       filter={
         <AdminSettingsMenu
@@ -610,8 +616,9 @@ export function FoundationAdminPage({
           onSelect={(item) => {
             if (item === 'Thông tin cửa hàng') openSettingsPanel('shop')
             else if (item === 'Quản lý mẫu in') openSettingsPanel('bill-templates')
-            else if (item === 'Quản lý người dùng') openSettingsPanel('users')
+            else if (canManageUsers) openSettingsPanel('users')
           }}
+          canManageUsers={canManageUsers}
         />
       }
     >
@@ -1236,59 +1243,38 @@ export function FoundationAdminPage({
 
 function AdminSettingsMenu({
   activeItem,
+  canManageUsers,
   onSelect,
 }: {
   activeItem: string
-  onSelect: (item: string) => void
+  canManageUsers: boolean
+  onSelect: (item: AdminSettingsMenuItem) => void
 }) {
+  const items: AdminSettingsMenuItem[] = [
+    'Thông tin cửa hàng',
+    'Quản lý mẫu in',
+    ...(canManageUsers ? ['Quản lý người dùng' as const] : []),
+  ]
+
   return (
     <nav aria-label="Menu thiết lập" className="admin-settings-menu">
-      <label className="admin-settings-search">
-        <Search aria-hidden="true" size={15} />
-        <span className="sr-only">Tìm kiếm thiết lập</span>
-        <input placeholder="Tìm kiếm thiết lập" />
-      </label>
-      <AdminSettingsGroup title="Tiện ích" items={['Giao hàng', 'Thanh toán', 'Gửi SMS', 'Zalo']} />
-      <AdminSettingsGroup
-        title="Cửa hàng"
-        activeItem={activeItem}
-        items={['Thông tin cửa hàng', 'Quản lý mẫu in', 'Quản lý tiền tệ', 'Quản lý người dùng', 'Quản lý chi nhánh', 'Bảo mật']}
-        onSelect={onSelect}
-      />
-      <AdminSettingsGroup title="Dữ liệu" items={['Khóa sổ', 'Lịch sử thao tác', 'Xóa dữ liệu gian hàng']} />
-      <AdminSettingsGroup title="Thiết bị" items={['Cân điện tử']} />
+      <section aria-label="Thiết lập đang dùng" className="admin-settings-group">
+        <h2>Danh mục</h2>
+        <div>
+          {items.map((item) => (
+            <button
+              key={item}
+              aria-current={item === activeItem ? 'page' : undefined}
+              type="button"
+              onClick={() => onSelect(item)}
+            >
+              <Settings aria-hidden="true" size={15} />
+              <span>{item}</span>
+            </button>
+          ))}
+        </div>
+      </section>
     </nav>
-  )
-}
-
-function AdminSettingsGroup({
-  title,
-  items,
-  activeItem,
-  onSelect,
-}: {
-  title: string
-  items: string[]
-  activeItem?: string
-  onSelect?: (item: string) => void
-}) {
-  return (
-    <section aria-label={title} className="admin-settings-group">
-      <h2>{title}</h2>
-      <div>
-        {items.map((item) => (
-          <button
-            key={item}
-            aria-current={item === activeItem ? 'page' : undefined}
-            type="button"
-            onClick={onSelect ? () => onSelect(item) : undefined}
-          >
-            <Settings aria-hidden="true" size={15} />
-            <span>{item}</span>
-          </button>
-        ))}
-      </div>
-    </section>
   )
 }
 
