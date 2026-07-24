@@ -1,141 +1,94 @@
-# QCVL Codex Working Rules
+# Quy tắc làm việc QCVL
 
-Version: 2026-07-18
+Cập nhật: `2026-07-24`
 
-Read [docs/WORKER-START-HERE.md](docs/WORKER-START-HERE.md) first, then this file before working in this repo.
+Đọc [WORKER-START-HERE.md](docs/WORKER-START-HERE.md) trước, rồi đọc file này trước khi làm việc.
 
-## 1. Preflight Gate
+## 1. Gate trước khi làm
 
-Run this before editing, testing, building, or deploying:
+Chạy trước khi sửa, test, build hoặc deploy:
 
 ```powershell
 git pull --ff-only
 npm run preflight
 ```
 
-`preflight` checks the required current docs:
+`preflight` kiểm tra các tài liệu bắt buộc: `WORKER-START-HERE`, `AI_TEAM_RULES`, `PROJECT-COORDINATION`,
+`DOCUMENT_RULES`, `CURRENT-DATA-SOURCE`. Trước khi sửa, nêu scope: module, file, page/API, môi trường.
+Cập nhật `Y:\TeamAI\WORKER-NOW.md` khi có thể trước/sau mỗi task.
 
-- `docs/WORKER-START-HERE.md`
-- `AI_TEAM_RULES.md`
-- `docs/PROJECT-COORDINATION.md`
-- `docs/DOCUMENT_RULES.md`
-- `docs/CURRENT-DATA-SOURCE.md`
+## 2. Runtime hiện hành
 
-After reading them, state the scope you are taking in chat: module, files, page/API, and environment.
+- QCVL; local dev UI `3202`, local dev API `3100`, NAS release target duy nhất `3200`.
+- React/Vite frontend, Node API ở `server/`, PostgreSQL NAS.
+- Không dùng Supabase cho runtime.
+- `main` trên `origin` là source chung trừ khi Owner chỉ định khác.
 
-Also read and update `Y:\TeamAI\WORKER-NOW.md` before editing files. When you finish a task, read it again before starting next task so you pick up new pull / restart / overlap notes. `preflight` validates that board outside CI.
+## 3. Thứ tự nguồn sự thật
 
-## 2. Current Project
+1. Quyết định mới nhất của Owner trong chat.
+2. Tài liệu active đã cập nhật theo quyết định đó.
+3. Code/runtime hiện hành.
+4. Git history chỉ dùng làm evidence/bối cảnh.
 
-- Project: QCVL.
-- Dev UI: `http://127.0.0.1:3202`.
-- Dev API: `http://127.0.0.1:3100`.
-- NAS runtime: `http://100.84.228.125:3200`.
-- Stack: React/Vite frontend, Node API in `server/`, PostgreSQL on NAS.
-- Runtime does not use Supabase.
+Code lệch quyết định Owner là drift: xác minh rồi sửa hoặc báo rõ.
 
-## 3. Source Of Truth Order
+## 4. Ownership và phối hợp
 
-Use this order when chat, docs, code, and old plans differ:
+- Đọc `PROJECT-COORDINATION.md`, claim file/module trước khi sửa.
+- Không chồng claim active. Có overlap, pull fail hoặc local change lạ: dừng và điều phối lại.
+- Commit/push/deploy sau khi scope hoàn tất, checklist đóng và verification pass; không cần Owner xác nhận deploy riêng.
+- NAS release target duy nhất là `3200`; dùng `npm run deploy:nas:image` từ máy có NAS access. Image deploy phải có commit sạch, migration safety, health, smoke và rollback.
+- Mutation destructive, migration phá vỡ tương thích hoặc repair dữ liệu vẫn cần checklist riêng: source freeze, allow-list, checkpoint, dry-run, Owner approval, transaction, post-audit và rollback evidence.
+- `3202` chỉ là local development; không là staging/promotion target. Không dùng local process để suy diễn NAS runtime.
+- `logs/dev-memory-state.json` chỉ là state local, không copy lên NAS.
 
-1. Latest Owner decision in the current chat.
-2. Current docs updated for that decision.
-3. Current code.
-4. Old plans/history only for context.
+## 6. Dữ liệu và database
 
-If code and Owner decision differ, treat it as drift and fix or report it.
+PostgreSQL là runtime source of truth cho bán hàng, tài chính, công nợ, kho, import state và người dùng.
 
-## 4. Two-Machine Rule
-
-Owner works with exactly two Codex workers:
-
-- outside-LAN worker: this thread
-- inside-LAN worker: direct LAN/NAS work
-
-Every worker must:
-
-- run `git pull --ff-only` before edits
-- read `docs/PROJECT-COORDINATION.md`
-- state scope before touching files
-- avoid editing the same feature/module/files as the other worker
-- stop and report if overlap appears
-- commit and push only when Owner asks
-
-`main` on `origin` is the shared Source of Truth unless Owner explicitly assigns a branch.
-
-## 5. Dev And NAS Parity
-
-- Keep `3202` and `3200` aligned.
-- Build/test on `3202` first.
-- outside-LAN worker must not deploy NAS, copy files to NAS paths, run `db:migrate` against NAS, or restart/reset `qcvl-app`. outside-LAN worker pushes Git only, then asks inside-LAN worker to pull and deploy.
-- inside-LAN worker owns all NAS deploy/copy/migrate/restart/health/smoke work.
-- Deploy to `3200` only through `npm run deploy:nas` from the inside-LAN worker.
-- If `3200` fails but `3202` works, check migration/schema/data parity before UI workaround.
-- If `3202` points to NAS PostgreSQL, writes on `3202` also affect `3200`.
-- `logs/dev-memory-state.json` is local test state only. Do not copy it to NAS.
-
-Deploy command:
-
-```powershell
-$env:QCVL_NAS_DEPLOY_CONFIRM='true'
-npm run deploy:nas
-Remove-Item Env:\QCVL_NAS_DEPLOY_CONFIRM
-```
-
-## 6. Data And DB Rules
-
-PostgreSQL is runtime source of truth for sales, finance, customer debt, stock, import state, and users.
-
-For DB-affecting work:
-
-- add SQL migration in `database/migrations`
-- keep read/list APIs free of schema guard work
-- run migration dry-run/status before deploy
-- do not change money, debt, inventory, invoice, or import behavior without doc/test
-
-Useful command:
+Thay đổi DB phải có migration trong `database/migrations`, dry-run/status trước deploy, test/doc cho hành vi tiền,
+nợ, kho, hóa đơn, import. Không đưa schema guard vào read/list API.
 
 ```powershell
 npm run db:migrate:dry-run
 ```
 
-## 7. Work Style
+## 7. Cách làm
 
-- Read relevant feature docs before code.
-- Keep changes scoped.
-- Prefer existing patterns and shared components.
-- Separate UI shell from business/data logic.
-- Do not refactor unrelated code.
-- Do not revert user changes unless explicitly requested.
-- Ask Owner before changing business behavior that affects money, debt, inventory, invoices, imports, or permissions.
+- Đọc tài liệu domain trước code; dùng pattern/shared component sẵn có.
+- Tách UI shell khỏi business/data logic. Không refactor ngoài scope hoặc revert thay đổi Owner.
+- Hành vi ảnh hưởng tiền, nợ, kho, hóa đơn, import, quyền cần Owner quyết định khi chưa có contract rõ.
+- Chữ tiếng Việt phải là UTF-8 thật; sau khi sửa quét mojibake.
+- Mở plan/scope nào phải làm đến điều kiện đóng và verification pass trước khi báo xong.
+  Chỉ được `Blocked` khi có evidence exact cần Owner quyết; không đổi scope để bỏ dở bước an toàn.
 
-Vietnamese encoding:
+## 8. Dọn triệt để, không giữ rác
 
-- Do not copy Vietnamese text from terminal output into source files.
-- Type real UTF-8 text directly in patches.
-- After touching Vietnamese text, scan changed files for mojibake markers such as broken `C`/`A` accented sequences from PowerShell output.
+1. Chạm module nào audit module đó: dead code/import, helper trùng, legacy path, expired flag, fixture/script vô dụng.
+2. Audit cả tài liệu/rule/plan/script liên quan: xóa nội dung stale, mâu thuẫn hoặc không còn giá trị.
+3. Một business rule chỉ có một contract chung; chuyển mọi caller trong scope.
+4. Rule thay thế phải cập nhật entrypoint, feature docs, board và plan liên quan.
+5. Không giữ legacy path “phòng hờ”; rollback dùng Git/checkpoint/migration rollback.
+6. Historical evidence dùng Git history hoặc archive đánh dấu rõ, không để chỉ dẫn workflow active.
+7. Scope cleanup rộng: tạo plan con có evidence/checklist/điều kiện đóng rồi quay plan cha.
+8. Không xóa code có caller, migration history, audit evidence hoặc public contract khi chưa truy nguồn/caller và có replace path.
+9. Closing report nêu rõ thứ đã xóa/chuẩn hóa hoặc evidence không cần cleanup.
 
-## 8. Verification
+## 9. Checklist là gate bắt buộc
 
-Before saying work is done, run focused verification and report exact result.
+1. Mọi scope phải có checklist Markdown, item atomic, owner/evidence/điều kiện pass rõ khi cần.
+2. Không dùng prose, `Proposed Changes`, `Verification Plan`, trạng thái hay câu “đã làm” để thay checklist.
+3. Mỗi hành động phải đi qua trạng thái: `[ ]` chưa làm → `[~]` đang làm → `[x]` xong có evidence, hoặc `[!] Blocked` có evidence exact và quyết định Owner cần thiết.
+4. Không sửa/execute item sau khi scope chưa được checklist hóa. Không báo xong, không đóng plan, không chuyển plan cha khi còn `[ ]`, `[~]`, hoặc `[!] Blocked` chưa có quyết định Owner.
+5. Checklist bắt buộc có tối thiểu: scope/source, thay đổi, verification, post-audit nếu data/runtime, cập nhật docs/plan/walkthrough và điều kiện đóng.
+6. Với destructive operation: checklist riêng cho source freeze, allow-list, checkpoint, dry-run, Owner approval, transaction, post-audit, rollback evidence.
+7. Tài liệu active mô tả quy trình phải dùng checklist khi có bước thao tác; không diễn đạt requirement thao tác chỉ bằng đoạn văn.
+8. Khi phát hiện checklist thiếu hoặc tài liệu/plan lệch rule: dừng scope liên quan, sửa checklist/rule trước, rồi tiếp tục.
 
-Common commands:
+## 10. Xác minh và Git
 
-```powershell
-npm run api:build
-npx vitest run <focused tests>
-npm run env:status
-npm run health:nas
-```
-
-For UI changes, verify in browser when feasible. For deploy work, verify build, migration, health, and touched pages/APIs.
-
-## 9. Git
-
-- Do not commit or push unless Owner asks.
-- Do not include secrets, DB dumps, backups, or temp logs.
-- After pushing, report commit hash so the other machine can pull.
-
-## 10. Standing Rule
-
-Build and test on `3202`. Deploy to `3200` only after Owner approval. Any DB change must go through migration so NAS does not lag behind dev.
+- Trước khi kết luận xong, chạy focused verification và nêu kết quả chính xác.
+- UI: kiểm tra browser khi khả thi. Release `3200`: commit sạch, build/typecheck/focused test/preflight, migration safety, health và smoke route/page đã chạm.
+- Commit/push verified scope rồi release direct `3200`; báo commit hash, active image, health/smoke result.
+- Nếu release fail: đọc full log, xác nhận rollback image/health; không che lỗi hoặc tự deploy lại khi chưa biết nguyên nhân.

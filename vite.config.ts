@@ -8,9 +8,9 @@ export const pwaOptions = {
   registerType: 'autoUpdate',
   includeAssets: ['pwa-icon.svg', 'brand-logo.png'],
   manifest: {
-    name: 'QC-OMS',
-    short_name: 'QC-OMS',
-    description: 'QC-OMS operations app shell',
+    name: 'QCVL',
+    short_name: 'QCVL',
+    description: 'Ứng dụng vận hành QCVL',
     start_url: '/',
     scope: '/',
     display: 'standalone',
