@@ -72,7 +72,8 @@ export function mapKiotVietCashbookRows(rows: KiotVietRawCashbookRow[]) {
     const sourceCode = text(valueByHeader(row, 'Mã phiếu', 'Ma phieu'))
     const amount = number(valueByHeader(row, 'Giá trị', 'Gia tri'))
     const bookType = text(valueByHeader(row, 'Loại sổ quỹ', 'Loai so quy')) ?? 'Tiền mặt'
-    const accountType = mapAccountType(bookType)
+    const paymentMethod = text(valueByHeader(row, 'Phương thức', 'Phuong thuc'))
+    const accountType = mapAccountType(`${bookType} ${paymentMethod ?? ''}`)
     if (!sourceCode && amount === null) continue
 
     const accountName = accountType === 'cash'
@@ -190,7 +191,8 @@ function accountKeys(rows: KiotVietCashbookImportRow[]) {
 }
 
 function mapAccountType(value: string) {
-  return normalize(value).includes('ngan hang') ? 'bank' : 'cash'
+  const normalized = normalize(value)
+  return normalized.includes('ngan hang') || normalized.includes('chuyen khoan') ? 'bank' : 'cash'
 }
 
 function mapStatus(value: string | null): KiotVietCashbookStatus {

@@ -94,6 +94,16 @@ describe('KiotViet cashbook import', () => {
     })
   })
 
+  test('maps transfer-only bank export without Loại sổ quỹ', () => {
+    const mapped = mapKiotVietCashbookRows([{
+      rowNumber: 2, 'Mã phiếu': 'TTHD011329', 'Thời gian': 46226.729166666664,
+      'Loại thu chi': 'Phiếu thu Tiền khách trả', 'Phương thức': 'Chuyển khoản',
+      'Tên tài khoản': 'van viet phuong lam', 'Số tài khoản': '0947900909', 'Giá trị': 218400,
+    }])
+    expect(mapped.invalid).toEqual([])
+    expect(mapped.valid[0]).toMatchObject({ account_type: 'bank', account_name: 'van viet phuong lam', account_number: '0947900909' })
+  })
+
   test('previews account upserts and signed totals', async () => {
     const mapped = mapKiotVietCashbookRows([
       { rowNumber: 2, 'Mã phiếu': 'PT1', 'Giá trị': 1000, 'Loại sổ quỹ': 'Tiền mặt', 'Trạng thái': 'Đã thanh toán' },
