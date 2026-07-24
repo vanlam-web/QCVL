@@ -2163,8 +2163,8 @@ function cashbookFinanceAccountFromFinanceAccount(account: FinanceAccountData): 
 
 function nextManualCashbookVoucherCode(entries: readonly CashbookEntryData[], direction: CashbookEntryData['direction'], accountType: FinanceAccountData['account_type']) {
   const prefix = direction === 'in'
-    ? accountType === 'cash' ? 'TTM' : 'PTNH'
-    : accountType === 'cash' ? 'CTM' : 'PCNH'
+    ? accountType === 'cash' ? 'PTTM' : 'PTNH'
+    : accountType === 'cash' ? 'PCTM' : 'PCNH'
   let maxSeq = 0
   for (const entry of entries) {
     const match = entry.code.trim().toUpperCase().match(new RegExp(`^${prefix}(\\d{6})$`))
