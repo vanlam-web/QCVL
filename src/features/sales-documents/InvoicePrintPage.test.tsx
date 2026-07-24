@@ -115,6 +115,24 @@ it('renders invoice bill preview from saved snapshot data', async () => {
   expect(screen.getByText(/Tổng thanh toán bằng chữ:/)).toBeInTheDocument()
 })
 
+it('prints invoice remaining debt when customer debt snapshot is stale', async () => {
+  const staleCustomerDebt = {
+    ...invoiceDetail,
+    paid_amount: 0,
+    debt_amount: 600000,
+    payment_status: 'unpaid' as const,
+    customer: { ...invoiceDetail.customer, total_debt_amount: 0 },
+  }
+
+  render(<InvoicePrintPage documentId="invoice-1" service={makeService(staleCustomerDebt)} onClose={vi.fn()} />)
+
+  const totals = await screen.findByRole('region', { name: 'Tổng hóa đơn' })
+  expect(within(totals).getByText('Tổng nợ')).toBeInTheDocument()
+  expect(within(totals).getByText('Nợ cũ')).toBeInTheDocument()
+  expect(within(totals).getAllByText('600 000')).toHaveLength(2)
+  expect(within(totals).getAllByText('0').length).toBeGreaterThan(0)
+})
+
 it('calls browser print from the invoice print action', async () => {
   const print = vi.fn()
   vi.stubGlobal('print', print)

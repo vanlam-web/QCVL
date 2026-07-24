@@ -27,6 +27,7 @@ export interface PurchaseRouteHandlers {
   updateReceipt(): RouteResult
   postReceipt(): RouteResult
   cancelReceipt(): RouteResult
+  repairShiftedPayment(): RouteResult
 }
 
 export function handlePurchaseRoute(context: PurchaseRouteContext, handlers: PurchaseRouteHandlers): RouteResult {
@@ -58,6 +59,7 @@ export function handlePurchaseRoute(context: PurchaseRouteContext, handlers: Pur
   if (method === 'POST' && pathname === '/api/v1/purchase/receipts') return handlers.createReceipt()
   if (method === 'PATCH' && /^\/api\/v1\/purchase\/receipts\/[^/]+$/.test(pathname)) return handlers.updateReceipt()
   if (method === 'POST' && /^\/api\/v1\/purchase\/receipts\/[^/]+\/post$/.test(pathname)) return handlers.postReceipt()
+  if (method === 'POST' && pathname === '/api/v1/purchase/receipts/repair-shifted-payment') return handlers.repairShiftedPayment()
   if (method === 'POST' && /^\/api\/v1\/purchase\/receipts\/[^/]+\/cancel$/.test(pathname)) return handlers.cancelReceipt()
 
   return Promise.resolve({ found: false })

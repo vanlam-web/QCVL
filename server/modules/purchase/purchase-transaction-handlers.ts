@@ -6,7 +6,18 @@ type Allocation={purchase_receipt_id?:unknown;amount?:number}
 type ReceiptRow=PurchaseReceiptData
 type Paged<T>={items:T[];page:number;page_size:number;total:number}
 type PurchaseHandlerDeps={request:Request;currentUser:CurrentUserData;repository:ServerRepository;path:string;url:URL;readJson(request:Request):Promise<Record<string,unknown>>;getSupplierIdFromPath(path:string):string;getIdFromPath(path:string):string|undefined;purchaseReceipts:PurchaseReceiptData[];suppliers:SupplierListData[];products:ProductListData[];cashbookEntries:CashbookEntryData[];purchaseReceiptQueryHandlers:Record<string,()=>RouteResult>;purchaseImportHandlers:Record<string,()=>RouteResult>;filterPurchaseReceipts(url:URL):PurchaseReceiptData[];sortPurchaseReceiptsForRequest(items:PurchaseReceiptData[],url:URL):PurchaseReceiptData[];purchaseReceiptListSummary(items:PurchaseReceiptData[]):unknown;paged<T>(items:T[],page:number,pageSize:number):Paged<T>;makeManualPurchaseReceipt(input:{body:PurchaseReceiptInputBody;currentUser:CurrentUserData;existing?:PurchaseReceiptData|null;existingReceipts:readonly PurchaseReceiptData[];suppliers:readonly SupplierListData[];products:readonly ProductListData[]}):PurchaseReceiptData;syncSupplierTotalsFromPurchaseReceipts():void;validation(status:number,code:'VALIDATION_ERROR'|'RESOURCE_NOT_FOUND'|'RESOURCE_CONFLICT',message:string):Error;randomUUID():string;runtimeIso():string}
+const shiftedPaymentRepairs={
+  PCPN000690:{receiptId:'PN000690',legacyCashbookCode:'PCPN000690',expectedAmount:2040000},
+  PCPN000692:{receiptId:'PN000692',legacyCashbookCode:'PCPN000692',expectedAmount:60000},
+} as const
 export function createPurchaseTransactionHandlers(deps:PurchaseHandlerDeps){const {request,currentUser,repository,path,url,readJson,getSupplierIdFromPath,getIdFromPath,purchaseReceipts,suppliers,products,cashbookEntries,purchaseReceiptQueryHandlers,purchaseImportHandlers,filterPurchaseReceipts,sortPurchaseReceiptsForRequest,purchaseReceiptListSummary,paged,makeManualPurchaseReceipt,syncSupplierTotalsFromPurchaseReceipts,validation,randomUUID,runtimeIso}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
+    repairShiftedPayment: async () => {
+      const body=await readJson(request)
+      const code=typeof body.legacy_cashbook_code==='string'?body.legacy_cashbook_code:''
+      const repair=shiftedPaymentRepairs[code as keyof typeof shiftedPaymentRepairs]
+      if (!repair || !repository.repairShiftedSupplierPayment) throw validation(400,'VALIDATION_ERROR','Repair payment không thuộc tập đối soát đã xác minh.')
+      return {found:true,data:await repository.repairShiftedSupplierPayment({organizationId:currentUser.organization.id,repair})}
+    },
     paySupplier: async () => {
       const body = await readJson(request)
       const operationId = typeof body.operation_id === 'string' ? body.operation_id.trim() : ''

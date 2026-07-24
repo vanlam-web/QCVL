@@ -630,15 +630,11 @@ export function CustomersPage({
     loadCustomerDebtLedger(customer, { force: true })
   }
 
-  async function collectCustomerDebt(customer: Customer, form: CustomerDebtPaymentForm, currentDebt: number, paymentRows: CustomerDebtPaymentRow[] = []) {
+  async function collectCustomerDebt(customer: Customer, form: CustomerDebtPaymentForm, paymentRows: CustomerDebtPaymentRow[] = []) {
     if (!financeService?.collectCustomerDebt) return
     const amount = parseMoneyInput(form.amount)
     if (amount <= 0) {
       setDebtPaymentError('Số tiền thu phải lớn hơn 0.')
-      return
-    }
-    if (amount > currentDebt) {
-      setDebtPaymentError('Số tiền thu không được lớn hơn công nợ hiện tại.')
       return
     }
     if (form.method === 'bank_transfer' && form.bankAccountId.trim() === '') {
@@ -649,7 +645,7 @@ export function CustomersPage({
     setDebtPaymentError(null)
     try {
       const paidAt = parseQcvDateTimeInputToStoredIso(form.paidAt)
-      const result = await financeService.collectCustomerDebt({
+      await financeService.collectCustomerDebt({
         customer_id: customer.id,
         amount,
         ...(paidAt ? { created_at: paidAt } : {}),
@@ -669,12 +665,12 @@ export function CustomersPage({
       })
       setState((current) => {
         if (!current) return current
-        const nextDebt = (current.summary?.total_debt_amount ?? 0) - result.allocated_amount
+        const nextDebt = (current.summary?.total_debt_amount ?? 0) - amount
         return {
           ...current,
           customers: current.customers.map((item) => (
             item.id === customer.id
-              ? { ...item, total_debt_amount: (item.total_debt_amount ?? 0) - result.allocated_amount }
+              ? { ...item, total_debt_amount: (item.total_debt_amount ?? 0) - amount }
               : item
           )),
           summary: current.summary
@@ -1295,7 +1291,7 @@ export function CustomersPage({
           canSave={Boolean(financeService?.collectCustomerDebt)}
           onChange={setDebtPaymentForm}
           onClose={() => setDebtPaymentCustomer(null)}
-          onSubmit={(form, currentDebt, paymentRows) => void collectCustomerDebt(debtPaymentCustomer, form, currentDebt, paymentRows)}
+          onSubmit={(form, _currentDebt, paymentRows) => void collectCustomerDebt(debtPaymentCustomer, form, paymentRows)}
         />
       ) : null}
       <CustomerImportDialog

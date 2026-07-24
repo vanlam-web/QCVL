@@ -120,8 +120,7 @@ export function CustomerDebtPaymentDialog({
     : []
   const summaryRows = buildCustomerDebtSummaryRows(invoiceRows, ledgerRows, currentDebt)
   const hasManualInvoicePayments = Object.values(form.invoicePayments).some((value) => parseMoneyInput(value) > 0)
-  const manualPaymentAmount = summaryRows.reduce((sum, row) => sum + Math.min(parseMoneyInput(form.invoicePayments[row.id] ?? ''), row.remaining_debt), 0)
-  const paymentAmount = hasManualInvoicePayments ? manualPaymentAmount : parseMoneyInput(form.amount)
+  const paymentAmount = parseMoneyInput(form.amount)
   const paymentRows = hasManualInvoicePayments
     ? summaryRows.map((row) => ({
         ...row,
@@ -154,12 +153,16 @@ export function CustomerDebtPaymentDialog({
       const rawValue = summaryRow.id === row.id ? nextInvoicePayments[summaryRow.id] : form.invoicePayments[summaryRow.id] ?? ''
       return sum + Math.min(parseMoneyInput(rawValue), summaryRow.remaining_debt)
     }, 0)
-    onChange({ ...form, amount: nextTotal > 0 ? formatMoney(nextTotal) : '', invoicePayments: nextInvoicePayments })
+    const nextCurrentAmount = parseMoneyInput(form.amount)
+    onChange({
+      ...form,
+      amount: nextCurrentAmount > 0 ? formatMoney(Math.max(nextCurrentAmount, nextTotal)) : nextTotal > 0 ? formatMoney(nextTotal) : '',
+      invoicePayments: nextInvoicePayments,
+    })
   }
   const canSubmit = canSave
     && !saving
     && paymentAmount > 0
-    && paymentAmount <= currentDebt
     && debt !== undefined
     && debt !== 'loading'
     && debt !== 'error'

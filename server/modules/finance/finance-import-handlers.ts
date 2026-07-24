@@ -33,11 +33,23 @@ export function createFinanceImportHandlers(context: FinanceImportHandlerContext
   return {
     previewKiotVietCashbookImport: async (): RouteResult => {
       const { mapped } = await readCashbook()
-      return { found: true, data: await previewKiotVietCashbookImport({ organizationId, repository: repository as CashbookImportRepository, rows: mapped.valid, invalidRows: mapped.invalid }) }
+      return { found: true, data: await previewKiotVietCashbookImport({
+        organizationId,
+        repository: repository as CashbookImportRepository,
+        rows: mapped.valid,
+        invalidRows: mapped.invalid,
+        createdBy: { id: currentUser.user.id, name: currentUser.user.display_name },
+      }) }
     },
     importKiotVietCashbook: async (): RouteResult => {
       const { mapped } = await readCashbook()
-      return { found: true, data: await applyKiotVietCashbookImport({ organizationId, repository: repository as CashbookImportRepository, rows: mapped.valid, invalidRows: mapped.invalid }) }
+      return { found: true, data: await applyKiotVietCashbookImport({
+        organizationId,
+        repository: repository as CashbookImportRepository,
+        rows: mapped.valid,
+        invalidRows: mapped.invalid,
+        createdBy: { id: currentUser.user.id, name: currentUser.user.display_name },
+      }) }
     },
     deleteImportedKiotVietCashbook: async (): RouteResult => {
       const result = await repository.deleteImportedKiotVietCashbook?.({ organizationId }) ?? { deleted: 0, blocked: 0 }

@@ -379,7 +379,11 @@ export function areaPieceCount(line: CheckoutCartLine) {
 }
 
 export function areaQuantity(widthM: number, heightM: number, pieceCount: number) {
-  return roundMeasure(widthM * heightM * pieceCount)
+  return roundAreaQuantity(widthM * heightM * pieceCount)
+}
+
+export function roundAreaQuantity(value: number) {
+  return Math.round(value * 100) / 100
 }
 
 export function roundMeasure(value: number) {

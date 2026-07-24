@@ -12,7 +12,11 @@ const row = (productCode: string, rowNumber: number) => ({
 
 function setup(products: Record<string, { id: string; factor: number; product_kind: string; track_inventory: boolean; latest_purchase_cost: number | null }>) {
   const movements: Array<{ productId: string; quantityDelta: number }> = []
-  const pool = { query: async () => ({ rows: [] }) } as unknown as pg.Pool
+  const query = async () => ({ rows: [] })
+  const pool = {
+    query,
+    connect: async () => ({ query, release: () => undefined }),
+  } as unknown as pg.Pool
   const repository = createSalesImportRepository(pool, {
     ensureTables: async () => undefined,
     ensureMovements: async () => undefined,

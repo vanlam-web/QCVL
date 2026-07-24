@@ -741,6 +741,10 @@ export interface ServerRepository {
     allocations: Array<{ purchase_receipt_id: string; amount: number }>
     currentUser: CurrentUserData
   }): Promise<{ supplier_payment_id: string; code: string; amount: number; cashbook_voucher_id: string }>
+  repairShiftedSupplierPayment?(input: {
+    organizationId: string
+    repair: { receiptId: string; legacyCashbookCode: string; expectedAmount: number }
+  }): Promise<{ receipt_id: string; receipt_code: string; cashbook_code: string; status: 'cancelled' }>
   findPurchaseReceiptsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   listStockMovements?(input: { organizationId: string; url: URL }): Promise<StockMovementData[]>
   upsertImportedKiotVietPurchaseReceipts?(input: {
@@ -892,6 +896,7 @@ export interface ServerRepository {
   upsertImportedKiotVietCashbook?(input: {
     organizationId: string
     rows: KiotVietCashbookImportRow[]
+    createdBy: { id: string; name: string }
   }): Promise<{
     accounts_created: number
     accounts_updated: number
@@ -2166,8 +2171,8 @@ function cashbookFinanceAccountFromFinanceAccount(account: FinanceAccountData): 
 
 function nextManualCashbookVoucherCode(entries: readonly CashbookEntryData[], direction: CashbookEntryData['direction'], accountType: FinanceAccountData['account_type']) {
   const prefix = direction === 'in'
-    ? accountType === 'cash' ? 'PTTM' : 'PTNH'
-    : accountType === 'cash' ? 'PCTM' : 'PCNH'
+    ? accountType === 'cash' ? 'TTM' : 'PTNH'
+    : accountType === 'cash' ? 'CTM' : 'PCNH'
   let maxSeq = 0
   for (const entry of entries) {
     const match = entry.code.trim().toUpperCase().match(new RegExp(`^${prefix}(\\d{6})$`))
@@ -2379,9 +2384,12 @@ async function validatePosCart(repository: ServerRepository, organizationId: str
 
     const safeQuantity = quantity ?? 0
     const safeUnitPrice = unitPrice ?? 0
+    const pricedQuantity = sellMethod === 'area_m2'
+      ? Math.round(safeQuantity * (width ?? 0) * (height ?? 0) * 100) / 100
+      : safeQuantity
     const lineTotal =
       sellMethod === 'area_m2'
-        ? safeQuantity * (width ?? 0) * (height ?? 0) * safeUnitPrice
+        ? pricedQuantity * safeUnitPrice
         : sellMethod === 'linear_m'
           ? safeQuantity * (linear ?? 0) * safeUnitPrice
           : safeQuantity * safeUnitPrice
@@ -3263,7 +3271,7 @@ async function getDevApiResponse(
 
   const purchaseImportHandlers = createPurchaseImportHandlers({ request, currentUser, repository, readJson, supplierRowsFromBody: supplierImportRowsFromBody, receiptRowsFromBody: purchaseReceiptImportRowsFromBody })
   const purchaseReceiptQueryHandlers = createPurchaseReceiptQueryHandlers({ currentUser, repository, path, fallbackReceipts: purchaseReceipts, fallbackDetail: purchaseReceipt, getSupplierId: getSupplierIdFromPath, getId: getIdFromPath, filterReceipts: filterPurchaseReceipts })
-  const purchaseTransactionHandlers = createPurchaseTransactionHandlers({ request, currentUser, repository, path, url, readJson, getSupplierIdFromPath, getIdFromPath, purchaseReceipts, suppliers, products, cashbookEntries, purchaseReceiptQueryHandlers, purchaseImportHandlers, filterPurchaseReceipts, sortPurchaseReceiptsForRequest, purchaseReceiptListSummary, paged, makeManualPurchaseReceipt, syncSupplierTotalsFromPurchaseReceipts, validation: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_NOT_FOUND', message: string) => new HttpError(status, code, message), randomUUID, runtimeIso })
+  const purchaseTransactionHandlers = createPurchaseTransactionHandlers({ request, currentUser, repository, path, url, readJson, getSupplierIdFromPath, getIdFromPath, purchaseReceipts, suppliers, products, cashbookEntries, purchaseReceiptQueryHandlers, purchaseImportHandlers, filterPurchaseReceipts, sortPurchaseReceiptsForRequest, purchaseReceiptListSummary, paged, makeManualPurchaseReceipt, syncSupplierTotalsFromPurchaseReceipts, validation: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_NOT_FOUND' | 'RESOURCE_CONFLICT', message: string) => new HttpError(status, code, message), randomUUID, runtimeIso })
   const purchaseSupplierHandlers = createPurchaseSupplierHandlers({ request, url, currentUser, repository, path, readJson, getIdFromPath, suppliers, customers, purchaseImportHandlers, filterSuppliers, sortSuppliersForRequest, supplierListSummary, paged, requiredString, nullableString, supplierPatchFromBody, randomUUID, nowIso, httpError: (status: number, code: 'VALIDATION_ERROR' | 'RESOURCE_CONFLICT', message: string, fields?: Record<string, string[]>) => new HttpError(status, code, message, fields) })
   const purchaseRoute = await handlePurchaseRoute(
     { request, url, currentUser, repository },
@@ -3286,6 +3294,7 @@ async function getDevApiResponse(
       updateReceipt: purchaseTransactionHandlers.updateReceipt,
       postReceipt: purchaseTransactionHandlers.postReceipt,
       cancelReceipt: purchaseTransactionHandlers.cancelReceipt,
+      repairShiftedPayment: purchaseTransactionHandlers.repairShiftedPayment,
     },
   )
   if (purchaseRoute.found) return purchaseRoute
@@ -3317,7 +3326,7 @@ async function getDevApiResponse(
   const financeAccountHandlers = createFinanceAccountHandlers({ request, currentUser, repository, url, path, fallbackAccounts: financeAccounts, readJson, fromBody: financeAccountFromBody, getId: getIdFromPath })
   const financeDebtQueryHandlers = createFinanceDebtQueryHandlers({ currentUser, repository, url, page, pageSize, getCustomerId: getFinanceCustomerId, path, paged, fallbackList: () => filterCustomerDebts(url), fallbackDetail: makeCustomerDebtDetail, sliceOpen: sliceCustomerOpenDebtsOldestFirst })
   const financeDebtMutationHandlers = createFinanceDebtMutationHandlers({ request, currentUser, repository, readJson, optionalIsoDateTime, collectCustomerDebtFallback: collectCustomerDebt, path, getIdFromPath, updateAdjustmentFallback: updateCustomerDebtAdjustmentInMemory })
-  const financeCashbookMutationHandlers = createFinanceCashbookMutationHandlers({ request, url, currentUser, repository, path, getIdFromPath, readJson, cashbookEntries, financeAccounts, salesDocuments, filterCashbookEntries, sortCashbookEntriesForRequest, cashbookEntriesUrl, cashbookSummarySourceUrl, cashbookListSummary, paged, enrichCashbookEntryDetail, optionalIsoDateTime, nullableString, manualCashbookVoucherRequestFromBody, makeManualCashbookVoucherEntry, cashbookVoucherListItem, validation: (message: string, details?: Record<string, string[]>) => new HttpError(400, 'VALIDATION_ERROR', message, details) })
+  const financeCashbookMutationHandlers = createFinanceCashbookMutationHandlers({ request, url, currentUser, repository, path, getIdFromPath, readJson, cashbookEntries, financeAccounts, salesDocuments, filterCashbookEntries, sortCashbookEntriesForRequest, cashbookEntriesUrl, cashbookSummarySourceUrl, cashbookListSummary, paged, enrichCashbookEntryDetail, optionalIsoDateTime, nullableString, manualCashbookVoucherRequestFromBody, nextManualCashbookVoucherCode, makeManualCashbookVoucherEntry, cashbookVoucherListItem, validation: (message: string, details?: Record<string, string[]>) => new HttpError(400, 'VALIDATION_ERROR', message, details) })
   const financeRoute = await handleFinanceRoute(
     { request, url, currentUser, repository },
     {
@@ -3339,6 +3348,7 @@ async function getDevApiResponse(
       listCashbook: financeCashbookMutationHandlers.listCashbook,
       getCashbookEntry: financeCashbookMutationHandlers.getCashbookEntry,
       updateCashbookEntry: financeCashbookMutationHandlers.updateCashbookEntry,
+      previewCashbookVoucherCode: financeCashbookMutationHandlers.previewCashbookVoucherCode,
       createCashbookVoucher: financeCashbookMutationHandlers.createCashbookVoucher,
       cancelCashbookVoucher: financeCashbookMutationHandlers.cancelCashbookVoucher,
       reviseCashbookVoucher: financeCashbookMutationHandlers.reviseCashbookVoucher,

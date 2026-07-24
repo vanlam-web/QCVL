@@ -908,7 +908,11 @@ it('expands customer details directly under the selected row and closes on secon
   await userEvent.type(within(paymentDialog).getByLabelText('Số tiền'), '250000')
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010985')).toHaveValue('150 000')
   expect(within(paymentDialog).getByLabelText('Tiền thu HD010986')).toHaveValue('100 000')
+  await userEvent.clear(within(paymentDialog).getByLabelText('Tiền thu HD010985'))
+  await userEvent.type(within(paymentDialog).getByLabelText('Tiền thu HD010985'), '150000')
+  expect(within(paymentDialog).getByLabelText('Số tiền')).toHaveValue('250 000')
   expect(within(paymentDialog).getByText('Tiền chưa phân bổ:')).toBeInTheDocument()
+  expect(within(paymentDialog.querySelector('.customer-debt-payment-unallocated') as HTMLElement).getByText('100 000')).toBeInTheDocument()
   await userEvent.click(within(paymentDialog).getByRole('button', { name: 'Bỏ qua' }))
   expect(screen.queryByRole('dialog', { name: 'Thanh toán công nợ KH000123' })).not.toBeInTheDocument()
 

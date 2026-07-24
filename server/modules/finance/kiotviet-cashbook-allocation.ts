@@ -121,6 +121,25 @@ function matchSupplier(
   ))?.supplier ?? null
 }
 
+function strictShiftedPcpnReceipt(
+  row: KiotVietCashbookAllocationRow,
+  receipts: AllocatablePurchaseReceipt[],
+) {
+  if (!/^PCPN\d+(?:\.\d+)?$/i.test(row.source_code) || row.direction !== 'out') return null
+  const supplier = matchSupplier(row, receipts)
+  if (!supplier) return null
+  const entryTime = Date.parse(row.entry_time ?? '')
+  const amount = Math.abs(row.amount_delta)
+  const candidates = receipts.filter((receipt) => (
+    receipt.status === 'posted'
+    && receipt.remaining_amount === amount
+    && (receipt.supplier.id === supplier.id || normalize(receipt.supplier.code) === normalize(supplier.code))
+    && Number.isFinite(entryTime)
+    && Math.abs(Date.parse(receipt.received_at) - entryTime) <= 12 * 60 * 60 * 1000
+  ))
+  return candidates.length === 1 ? candidates[0] : null
+}
+
 function allocateDirectCustomerPayment(
   row: KiotVietCashbookAllocationRow,
   invoice: AllocatableInvoice | null,
@@ -253,10 +272,11 @@ export function allocateImportedCashbookRow(
 
   const directReceiptCode = linkedPurchaseReceiptCodeFromCashbookCode(row.source_code)
   if (directReceiptCode !== null && row.direction === 'out') {
-    return allocateDirectSupplierPayment(
-      row,
-      receipts.find((receipt) => receipt.code.toUpperCase() === directReceiptCode) ?? null,
-    )
+    const directReceipt = receipts.find((receipt) => receipt.code.toUpperCase() === directReceiptCode) ?? null
+    const strictFallback = directReceipt?.status === 'posted' && directReceipt.remaining_amount > 0
+      ? null
+      : strictShiftedPcpnReceipt(row, receipts)
+    return allocateDirectSupplierPayment(row, directReceipt?.status === 'posted' ? directReceipt : strictFallback)
   }
 
   if (isKiotVietDelayedCustomerPayment(row)) return allocateFifoCustomerPayment(row, invoices)

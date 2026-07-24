@@ -18,6 +18,7 @@ import {
   readPositiveMoney,
   removeCompletedInvoiceTab,
   initialQuotePayloadToTabs,
+  lineSubtotal,
   saleUnitStockQtyPerUnit,
 } from './pos-core'
 
@@ -48,6 +49,19 @@ describe('pos-core', () => {
     const line = makeCartLine({ id: 'line-1', product: areaProduct, unitPrice: 600000, priceSource: 'manual' })
 
     expect(clampLineDiscount({ ...line, discountAmount: 999999 }).discountAmount).toBe(600000)
+  })
+
+  it('calculates area money from raw measurements, not rounded display area', () => {
+    const line = {
+      ...makeCartLine({ id: 'line-history', product: areaProduct, unitPrice: 60000, priceSource: 'manual' }),
+      width_m: 0.42,
+      height_m: 0.297,
+      pieceCount: 2,
+      quantity: areaQuantity(0.42, 0.297, 2),
+    }
+
+    expect(line.quantity).toBe(0.25)
+    expect(lineSubtotal(line)).toBe(15000)
   })
 
   it('builds checkout totals without UI state doing payment math', () => {

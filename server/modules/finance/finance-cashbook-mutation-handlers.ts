@@ -1,12 +1,12 @@
 import type { CashbookEntryData, CurrentUserData, FinanceAccountData, SalesDocumentData, ServerRepository } from '../../http.js'
 type Paged<T>={items:T[];page:number;page_size:number;total:number}
 type VoucherRequest={financeAccountId:string;counterpartyType:string;counterpartyId?:string;counterpartyName?:string;counterpartyPhone?:string|null;[key:string]:unknown}
-type CashbookDeps={request:Request;url:URL;currentUser:CurrentUserData;repository:ServerRepository;path:string;getIdFromPath(path:string):string|undefined;readJson(request:Request):Promise<Record<string,unknown>>;cashbookEntries:CashbookEntryData[];financeAccounts:FinanceAccountData[];salesDocuments:SalesDocumentData[];filterCashbookEntries(url:URL):CashbookEntryData[];sortCashbookEntriesForRequest(items:CashbookEntryData[],url:URL):CashbookEntryData[];cashbookEntriesUrl(url:URL):URL;cashbookSummarySourceUrl(url:URL):URL|null;cashbookListSummary(items:CashbookEntryData[],options:unknown):unknown;paged<T>(items:T[],page:number,pageSize:number):Paged<T>;enrichCashbookEntryDetail(entry:CashbookEntryData,resolver:(code:string)=>Promise<SalesDocumentData|null>):Promise<unknown>;optionalIsoDateTime(value:unknown,field:string):string|undefined;nullableString(value:unknown):string|null;manualCashbookVoucherRequestFromBody(body:Record<string,unknown>):VoucherRequest;makeManualCashbookVoucherEntry(request:VoucherRequest,account:FinanceAccountData,user:CurrentUserData,entries:CashbookEntryData[]):CashbookEntryData;cashbookVoucherListItem(entry:CashbookEntryData):unknown;validation(message:string,fields?:Record<string,string[]>):Error}
+type CashbookDeps={request:Request;url:URL;currentUser:CurrentUserData;repository:ServerRepository;path:string;getIdFromPath(path:string):string|undefined;readJson(request:Request):Promise<Record<string,unknown>>;cashbookEntries:CashbookEntryData[];financeAccounts:FinanceAccountData[];salesDocuments:SalesDocumentData[];filterCashbookEntries(url:URL):CashbookEntryData[];sortCashbookEntriesForRequest(items:CashbookEntryData[],url:URL):CashbookEntryData[];cashbookEntriesUrl(url:URL):URL;cashbookSummarySourceUrl(url:URL):URL|null;cashbookListSummary(items:CashbookEntryData[],options:unknown):unknown;paged<T>(items:T[],page:number,pageSize:number):Paged<T>;enrichCashbookEntryDetail(entry:CashbookEntryData,resolver:(code:string)=>Promise<SalesDocumentData|null>):Promise<unknown>;optionalIsoDateTime(value:unknown,field:string):string|undefined;nullableString(value:unknown):string|null;manualCashbookVoucherRequestFromBody(body:Record<string,unknown>):VoucherRequest;nextManualCashbookVoucherCode(entries:CashbookEntryData[],direction:CashbookEntryData['direction'],accountType:FinanceAccountData['account_type']):string;makeManualCashbookVoucherEntry(request:VoucherRequest,account:FinanceAccountData,user:CurrentUserData,entries:CashbookEntryData[]):CashbookEntryData;cashbookVoucherListItem(entry:CashbookEntryData):unknown;validation(message:string,fields?:Record<string,string[]>):Error}
 export function createFinanceCashbookMutationHandlers(deps:CashbookDeps){type CashbookRow=CashbookEntryData
 type SalesRow=SalesDocumentData
 type AccountRow=FinanceAccountData
 type ContactRow={id:string;name:string;phone?:string|null}
-const {request,url,currentUser,repository,path,getIdFromPath,readJson,cashbookEntries,financeAccounts,salesDocuments,filterCashbookEntries,sortCashbookEntriesForRequest,cashbookEntriesUrl,cashbookSummarySourceUrl,cashbookListSummary,paged,enrichCashbookEntryDetail,optionalIsoDateTime,nullableString,manualCashbookVoucherRequestFromBody,makeManualCashbookVoucherEntry,cashbookVoucherListItem,validation}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
+  const {request,url,currentUser,repository,path,getIdFromPath,readJson,cashbookEntries,financeAccounts,salesDocuments,filterCashbookEntries,sortCashbookEntriesForRequest,cashbookEntriesUrl,cashbookSummarySourceUrl,cashbookListSummary,paged,enrichCashbookEntryDetail,optionalIsoDateTime,nullableString,manualCashbookVoucherRequestFromBody,nextManualCashbookVoucherCode,makeManualCashbookVoucherEntry,cashbookVoucherListItem,validation}=deps;const page=Number(url.searchParams.get('page') ?? '1');const pageSize=Number(url.searchParams.get('page_size') ?? '20');return{
     listCashbook: async () => {
       const entriesUrl = cashbookEntriesUrl(url)
       const usesDefaultDatabaseSort = !url.searchParams.get('sort_key')
@@ -110,6 +110,31 @@ const {request,url,currentUser,repository,path,getIdFromPath,readJson,cashbookEn
         payment_method: nextFinanceAccount.account_type === 'bank' ? 'bank_transfer' : 'cash',
       }
       return { found: true, data: await enrichCashbookEntryDetail(cashbookEntries[index], async (code: string) => salesDocuments.find((document: SalesRow) => document.code === code) ?? null) }
+    },
+    previewCashbookVoucherCode: async () => {
+      const direction = url.searchParams.get('direction')
+      if (direction !== 'in' && direction !== 'out') {
+        throw validation('direction must be in or out.', { direction: ['Choose Phiếu thu or Phiếu chi.'] })
+      }
+      const financeAccountId = url.searchParams.get('finance_account_id') ?? ''
+      const accountRows = repository.listFinanceAccounts
+        ? await repository.listFinanceAccounts({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/finance/accounts?is_active=true') })
+        : financeAccounts
+      const account = accountRows.find((item: AccountRow) => item.id === financeAccountId)
+      if (!account) {
+        throw validation('finance_account_id is invalid.', { finance_account_id: ['Choose an active finance account.'] })
+      }
+      const entries = repository.listCashbookEntries
+        ? await repository.listCashbookEntries({ organizationId: currentUser.organization.id, url: new URL('http://api.local/api/v1/finance/cashbook') })
+        : cashbookEntries
+      return {
+        found: true,
+        data: {
+          code: nextManualCashbookVoucherCode(entries, direction, account.account_type),
+          direction,
+          finance_account_id: account.id,
+        },
+      }
     },
     createCashbookVoucher: async () => {
       const body = await readJson(request) as Record<string, unknown>

@@ -3,12 +3,14 @@ import type { ServerRepository } from '../../http-types.js'
 type ImportRow=Parameters<NonNullable<ServerRepository['upsertImportedKiotVietCashbook']>>[0]['rows'][number]
 type ImportAccount={id:string;code:string;name:string;account_type:string;is_default_cash:boolean;is_active:boolean;account_number?:string|null;account_holder?:string|null;opening_balance?:number;note?:string|null;notify_on_transaction?:boolean}
 type Snapshot={id:string}
-type CashbookImportDeps={ensureAccounts(pool:pg.Pool):Promise<void>;ensureTables(pool:pg.Pool):Promise<void>;ensureSnapshots(pool:pg.Pool):Promise<void>;preferPosted(rows:ImportRow[]):ImportRow[];accountFromRow(row:ImportRow):ImportAccount;linkedInvoiceCode(sourceCode:string):string|null;customerByCode(pool:pg.Pool,table:string,organizationId:string,code:string):Promise<Snapshot|null>;hash(value:string):string;rebuildAllocations(pool:pg.Pool,organizationId:string):Promise<void>;invalidate(organizationId:string):void}
-export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportDeps):Pick<ServerRepository,'upsertImportedKiotVietCashbook'|'deleteImportedKiotVietCashbook'>{const {ensureAccounts,ensureTables,ensureSnapshots,preferPosted,accountFromRow,linkedInvoiceCode,customerByCode,hash,rebuildAllocations,invalidate}=deps;return{
+type CashbookImportDeps={ensureAccounts(pool:pg.Pool|pg.PoolClient):Promise<void>;ensureTables(pool:pg.Pool|pg.PoolClient):Promise<void>;ensureSnapshots(pool:pg.Pool|pg.PoolClient):Promise<void>;preferPosted(rows:ImportRow[]):ImportRow[];accountFromRow(row:ImportRow):ImportAccount;linkedInvoiceCode(sourceCode:string):string|null;customerByCode(pool:pg.Pool|pg.PoolClient,table:string,organizationId:string,code:string):Promise<Snapshot|null>;hash(value:string):string;rebuildAllocations(pool:pg.Pool|pg.PoolClient,organizationId:string):Promise<void>;invalidate(organizationId:string):void}
+export function createCashbookImportRepository(rootPool:pg.Pool,deps:CashbookImportDeps):Pick<ServerRepository,'upsertImportedKiotVietCashbook'|'deleteImportedKiotVietCashbook'>{const {ensureAccounts,ensureTables,ensureSnapshots,preferPosted,accountFromRow,linkedInvoiceCode,customerByCode,hash,rebuildAllocations,invalidate}=deps;return{
     async upsertImportedKiotVietCashbook(input) {
-      await ensureAccounts(pool)
-      await ensureTables(pool)
-      await ensureSnapshots(pool)
+      const pool = await rootPool.connect()
+      try {
+       await ensureAccounts(pool)
+       await ensureTables(pool)
+       await ensureSnapshots(pool)
       let accountsCreated = 0
       let accountsUpdated = 0
       let entriesCreated = 0
@@ -93,7 +95,7 @@ export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportD
                 counterparty, note, source_type, source, allocations, is_business_accounted, created_by, created_at
               )
               values (
-                $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, 'kiotviet_cashbook', $10::jsonb, '[]'::jsonb, true, null, coalesce($11::timestamptz, now())
+                $1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9, 'kiotviet_cashbook', $10::jsonb, '[]'::jsonb, true, $11::jsonb, coalesce($12::timestamptz, now())
               )
               on conflict (organization_id, code)
               do update set
@@ -106,6 +108,7 @@ export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportD
                 source_type = 'kiotviet_cashbook',
                 source = excluded.source,
                 allocations = '[]'::jsonb,
+                created_by = excluded.created_by,
                 created_at = excluded.created_at
             `,
             [
@@ -143,11 +146,14 @@ export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportD
                 counterparty_code: row.counterparty_code,
                 counterparty_address: row.counterparty_address,
               }),
+              JSON.stringify(input.createdBy),
               row.entry_time,
             ],
           )
         }
-        await rebuildAllocations(pool, input.organizationId)
+        if (input.rows.some((row) => /^(?:TTHD\d|TT\d|PCPN\d)/i.test(row.source_code))) {
+          await rebuildAllocations(pool, input.organizationId)
+        }
         invalidate(input.organizationId)
         await pool.query('commit')
         return {
@@ -161,11 +167,16 @@ export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportD
         await pool.query('rollback')
         throw error
       }
+      } finally {
+        pool.release()
+      }
     },
 
     async deleteImportedKiotVietCashbook(input) {
-      await ensureTables(pool)
-      await ensureSnapshots(pool)
+      const pool = await rootPool.connect()
+      try {
+       await ensureTables(pool)
+       await ensureSnapshots(pool)
       await pool.query('begin')
       try {
         const result = await pool.query(
@@ -182,6 +193,9 @@ export function createCashbookImportRepository(pool:pg.Pool,deps:CashbookImportD
       } catch (error) {
         await pool.query('rollback')
         throw error
+      }
+      } finally {
+        pool.release()
       }
     },
 

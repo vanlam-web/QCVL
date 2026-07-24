@@ -1079,13 +1079,17 @@ export function SalesDocumentsPage({
     />
     {cancelOpen && selected ? (
       <div className="management-modal-backdrop">
-        <section aria-label="Hủy hóa đơn" aria-modal="true" className="management-modal-dialog management-modal-dialog-compact" role="dialog">
+        <section aria-label={selected.order_type === 'quote' ? 'Hủy báo giá' : 'Hủy hóa đơn'} aria-modal="true" className="management-modal-dialog management-modal-dialog-compact" role="dialog">
           <header className="management-modal-header">
-            <h2>Hủy hóa đơn</h2>
-            <button aria-label="Đóng Hủy hóa đơn" className="management-icon-button" disabled={canceling} type="button" onClick={() => setCancelOpen(false)}><X aria-hidden="true" size={18} /></button>
+            <h2>{selected.order_type === 'quote' ? 'Hủy báo giá' : 'Hủy hóa đơn'}</h2>
+            <button aria-label={selected.order_type === 'quote' ? 'Đóng Hủy báo giá' : 'Đóng Hủy hóa đơn'} className="management-icon-button" disabled={canceling} type="button" onClick={() => setCancelOpen(false)}><X aria-hidden="true" size={18} /></button>
           </header>
           <form onSubmit={submitCancellation}>
-            <p>Hủy <strong>{selected.code}</strong> sẽ đảo tồn kho, tiền đã thu và công nợ. Lịch sử hóa đơn, phiếu thu và bút toán vẫn được giữ lại.</p>
+            {selected.order_type === 'quote' ? (
+              <p>Hủy <strong>{selected.code}</strong> sẽ chuyển báo giá sang trạng thái đã hủy. Báo giá chưa phát sinh tồn kho, tiền thu hoặc công nợ.</p>
+            ) : (
+              <p>Hủy <strong>{selected.code}</strong> sẽ đảo tồn kho, tiền đã thu và công nợ. Lịch sử hóa đơn, phiếu thu và bút toán vẫn được giữ lại.</p>
+            )}
             <label className="management-field-label" htmlFor="sales-cancel-reason">Lý do hủy</label>
             <select id="sales-cancel-reason" value={cancelReasonCode} onChange={(event) => setCancelReasonCode(event.target.value as typeof cancelReasonCode)}>
               <option value="wrong_price">Sai giá</option><option value="wrong_size">Sai kích thước</option><option value="wrong_customer">Sai khách</option><option value="customer_changed_mind">Khách đổi ý</option><option value="other">Khác</option>
@@ -1094,7 +1098,7 @@ export function SalesDocumentsPage({
             <textarea id="sales-cancel-note" value={cancelReasonNote} onChange={(event) => setCancelReasonNote(event.target.value)} />
             <footer className="management-modal-footer">
               <button className="button button-secondary" disabled={canceling} type="button" onClick={() => setCancelOpen(false)}>Bỏ qua</button>
-              <button className="button button-primary" disabled={canceling} type="submit">{canceling ? 'Đang xử lý' : 'Hủy hóa đơn'}</button>
+              <button className="button button-primary" disabled={canceling} type="submit">{canceling ? 'Đang xử lý' : selected.order_type === 'quote' ? 'Hủy báo giá' : 'Hủy hóa đơn'}</button>
             </footer>
           </form>
         </section>

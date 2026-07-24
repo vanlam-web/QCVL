@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { Download, Search } from 'lucide-react'
 import {
   ManagementCompactCreateAction,
@@ -11,7 +11,8 @@ interface FinanceFiltersPanelProps {
   search: string
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   onSearchChange: (value: string) => void
-  onCreateVoucher: () => void
+  onCreateReceipt: () => void
+  onCreatePayment: () => void
   onExportCashbook: () => void | Promise<void>
   onOpenImport: () => void
 }
@@ -20,10 +21,18 @@ export function FinanceFiltersPanel({
   search,
   onSubmit,
   onSearchChange,
-  onCreateVoucher,
+  onCreateReceipt,
+  onCreatePayment,
   onExportCashbook,
   onOpenImport,
 }: FinanceFiltersPanelProps) {
+  const [createMenuOpen, setCreateMenuOpen] = useState(false)
+
+  function chooseCreate(action: () => void) {
+    setCreateMenuOpen(false)
+    action()
+  }
+
   return (
     <div className="finance-page-actions">
       <ManagementCompactToolbar ariaLabel="Lọc sổ quỹ" onSubmit={onSubmit}>
@@ -33,7 +42,18 @@ export function FinanceFiltersPanel({
           value={search}
           leadingIcon={<Search aria-hidden="true" size={16} />}
           trailingAction={
-            <ManagementCompactCreateAction ariaLabel="Tạo phiếu thu chi" onClick={onCreateVoucher} />
+            <span className="management-compact-create-menu">
+              <ManagementCompactCreateAction
+                ariaLabel="Tạo phiếu thu hoặc phiếu chi"
+                onClick={() => setCreateMenuOpen((current) => !current)}
+              />
+              {createMenuOpen ? (
+                <span aria-label="Chọn loại phiếu" className="management-compact-create-menu-options" role="menu">
+                  <button role="menuitem" type="button" onClick={() => chooseCreate(onCreateReceipt)}>Phiếu thu</button>
+                  <button role="menuitem" type="button" onClick={() => chooseCreate(onCreatePayment)}>Phiếu chi</button>
+                </span>
+              ) : null}
+            </span>
           }
           onChange={onSearchChange}
         />

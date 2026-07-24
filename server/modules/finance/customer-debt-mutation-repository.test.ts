@@ -81,18 +81,20 @@ describe('customer debt transaction client', () => {
     expect(client.queries.some((query) => query.startsWith('update customer_debt_entries'))).toBe(false)
   })
 
-  it('rolls back before mutations when collection exceeds canonical debt', async () => {
-    const { pool, client } = makePool(50)
-    const repository = makeRepository(pool)
+  it('records full customer overpayment while allocation remains capped at open debt', async () => {
+    const debtRow = { debt_id: 'debt-1', remaining_debt: 50, order_id: 'order-1', order_code: 'HD000001', order_created_at: new Date('2026-07-23T01:00:00.000Z'), paid_amount: 0, total_amount: 50, customer_snapshot: { name: 'Customer', phone: null } }
+    const { pool, client } = makePool(50, [debtRow])
+    const entries: Array<{ amount_delta?: number; allocations?: Array<{ allocated_amount: number }> }> = []
+    const repository = makeRepository(pool, entries)
 
-    await expect(repository.collectCustomerDebt?.({ organizationId: 'org-1', customerId: 'customer-1', amount: 100, cashAmount: 100, bankAmount: 0 })).rejects.toMatchObject({
-      name: 'CustomerDebtOverCollectionError',
-      requestedAmount: 100,
-      availableDebt: 50,
-    })
-    expect(client.queries[0]).toBe('begin')
-    expect(client.queries.at(-1)).toBe('rollback')
-    expect(client.queries.some((query) => query.startsWith('insert into payment_receipts'))).toBe(false)
+    const result = await repository.collectCustomerDebt?.({ organizationId: 'org-1', customerId: 'customer-1', amount: 100, cashAmount: 100, bankAmount: 0 })
+
+    expect(result).toEqual({ payment_receipt_id: expect.stringMatching(/^TT\d{6}$/), allocated_amount: 50 })
+    expect(entries).toHaveLength(1)
+    expect(entries[0]?.amount_delta).toBe(100)
+    expect(entries[0]?.allocations?.[0]?.allocated_amount).toBe(50)
+    expect(client.queries.some((query) => query.startsWith('insert into payment_receipts'))).toBe(true)
+    expect(client.queries.at(-1)).toBe('commit')
     expect(client.released).toBe(true)
   })
 

@@ -257,6 +257,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
   const [voucherCounterpartyCreateCode, setVoucherCounterpartyCreateCode] = useState('')
   const [creatingVoucherCounterparty, setCreatingVoucherCounterparty] = useState(false)
   const [voucherReason, setVoucherReason] = useState('')
+  const [voucherNextCode, setVoucherNextCode] = useState('')
   const [savingVoucher, setSavingVoucher] = useState(false)
   const [collectAmount, setCollectAmount] = useState('')
   const [cashAmount, setCashAmount] = useState('')
@@ -366,6 +367,24 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     }
   }, [service, voucherCounterpartyName, voucherCounterpartyType, voucherMode])
 
+  useEffect(() => {
+    if (voucherMode === null || !voucherAccountId) {
+      setVoucherNextCode('')
+      return undefined
+    }
+    let active = true
+    service.previewCashbookVoucherCode({ direction: voucherMode, finance_account_id: voucherAccountId })
+      .then(({ code }) => {
+        if (active) setVoucherNextCode(code)
+      })
+      .catch(() => {
+        if (active) setVoucherNextCode('')
+      })
+    return () => {
+      active = false
+    }
+  }, [service, voucherAccountId, voucherMode])
+
   function openVoucherForm(direction: CashbookDirection) {
     const options = voucherTypeOptions(direction)
     const defaultAccount = pinnedBankAccount ?? sortedActiveAccounts[0]
@@ -389,6 +408,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
     setVoucherCounterpartyCreatePhone('')
     setVoucherCounterpartyCreateCode('')
     setVoucherReason('')
+    setVoucherNextCode('')
     setError(null)
     setMessage(null)
   }
@@ -1207,7 +1227,14 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
       title="Sổ quỹ"
       actions={
         <FinanceFiltersPanel
-          search={cashbookSearch}          onCreateVoucher={() => openVoucherForm('in')}          onExportCashbook={exportCashbook}          onOpenImport={() => setCashbookImportOpen(true)}          onSearchChange={changeCashbookSearch}          onSubmit={filterCashbook}        />
+          search={cashbookSearch}
+          onCreateReceipt={() => openVoucherForm('in')}
+          onCreatePayment={() => openVoucherForm('out')}
+          onExportCashbook={exportCashbook}
+          onOpenImport={() => setCashbookImportOpen(true)}
+          onSearchChange={changeCashbookSearch}
+          onSubmit={filterCashbook}
+        />
       }      kpis={
         <MetricGrid ariaLabel="Tổng quan sổ quỹ">
           <MetricCard label="Quỹ đầu kỳ" value={<MoneyText value={cashbookSummary.opening_balance} />} hint="Theo bộ lọc" tone="neutral" />
@@ -1423,7 +1450,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
               <div className="management-modal-form-grid">
                 <label>
                   Mã phiếu
-                  <input placeholder="Tự động" readOnly value="" />
+                  <input aria-label="Mã phiếu tự sinh" placeholder="Đang tính mã..." readOnly value={voucherNextCode} />
                 </label>
                 <label className="management-input-with-icon">
                   Thời gian
@@ -1746,7 +1773,7 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                       <ManagementSortableHeader
                         key={column}                        kind={column === 'amount_delta' ? 'number' : column === 'created_at' ? 'date' : 'text'}                        sortKey={column}                        sortState={cashbookSortState}                        onSort={requestCashbookSort}                      >
                         {cashbookColumnLabel(column)}                      </ManagementSortableHeader>
-                    ))}                  </tr>
+                    ))}</tr>
                 </thead>
                 <tbody>
                   {pagedVisibleCashbookEntries.map((entry) => (
@@ -1778,16 +1805,16 @@ export function FinancePage({ service, currentUserName = '' }: { service: Financ
                           const text = typeof content === 'string' ? content : undefined
                           return (
                             <td className={cashbookCellClassName(column)} key={column} title={column === 'note' ? text : undefined}>
-                              {column === 'note' ? <span className="management-table-cell-truncate-content">{content}</span> : content}                            </td>
+                              {column === 'note' ? <span className="management-table-cell-truncate-content">{content}</span> : content}</td>
                           )
-                        })}                      </tr>
+                        })}</tr>
                       {selectedCashbookEntry?.id === entry.id ? (
                         <ManagementDetailRow colSpan={visibleCashbookColumns.length + 2} label={`Chi tiết sổ quỹ ${entry.code}`}>
                           <FinanceDetailPanel
                             detail={cashbookDetail}                            currentUserName={currentUserName}                            onDeleteRequest={setCashbookDeleteTarget}                            onEditRequest={openCashbookDetailEdit}                          />
                         </ManagementDetailRow>
-                      ) : null}                    </Fragment>
-                  ))}                </tbody>
+                      ) : null}</Fragment>
+                  ))}</tbody>
               </table>
             </ManagementTableViewport>
             <ManagementTableFooter

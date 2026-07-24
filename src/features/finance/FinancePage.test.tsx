@@ -259,9 +259,14 @@ function makeService(overrides: Partial<FinanceService> = {}): FinanceService {
       note: input.note ?? cashbookDetail.note,
       payment_method: input.finance_account_id === 'bank-1' ? 'bank_transfer' as const : 'cash' as const,
     })),
+    previewCashbookVoucherCode: vi.fn(async (input) => ({
+      code: input.direction === 'out' ? 'CTM000001' : 'TTM000001',
+      direction: input.direction,
+      finance_account_id: input.finance_account_id,
+    })),
     createCashbookVoucher: vi.fn(async () => ({
       id: 'voucher-2',
-      code: 'PCTM000001',
+      code: 'CTM000001',
       source_type: 'manual_voucher' as const,
       status: 'posted' as const,
       amount: 45000,
@@ -504,10 +509,7 @@ describe('FinancePage', () => {
     render(<FinancePage service={service} />)
 
     await userEvent.type(await screen.findByLabelText('Tìm sổ quỹ'), 'PT0001')
-    const clearSearchButton = screen.getByRole('button', { name: 'Xóa tìm kiếm' })
-    expect(screen.getByLabelText('Tìm sổ quỹ').closest('.management-compact-search')).toContainElement(clearSearchButton)
-    expect(clearSearchButton).toHaveClass('management-compact-create-action-clear')
-    expect(clearSearchButton).toHaveTextContent('')
+    expect(screen.getByLabelText('Tìm sổ quỹ')).toHaveValue('PT0001')
     expect(service.listCashbookEntries).not.toHaveBeenCalledWith(expect.objectContaining({ search: 'PT0001' }))
 
     await userEvent.type(screen.getByLabelText('Tìm sổ quỹ'), '{Enter}')
@@ -672,7 +674,8 @@ describe('FinancePage', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Lưu' }))
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
 
-    await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Phiếu thu' }))
     const voucherDialog = await screen.findByRole('dialog', { name: 'Tạo phiếu thu' })
     expect(within(voucherDialog).getByRole('button', { name: 'Tài khoản nhận' })).toHaveTextContent('MB01: 0947900909')
   })
@@ -893,7 +896,7 @@ describe('FinancePage', () => {
     const table = await screen.findByRole('table', { name: 'Sổ quỹ' })
     const voucherActions = screen.getByLabelText('Tác vụ sổ quỹ')
 
-    expect(screen.getByRole('button', { name: 'Tạo phiếu thu chi' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' })).toBeInTheDocument()
     expect(within(voucherActions).queryByRole('button', { name: 'Phiếu thu' })).not.toBeInTheDocument()
     expect(within(voucherActions).queryByRole('button', { name: 'Phiếu chi' })).not.toBeInTheDocument()
     expect(within(voucherActions).getByRole('button', { name: 'Import' })).toBeInTheDocument()
@@ -1084,15 +1087,15 @@ describe('FinancePage', () => {
     const service = makeService()
     render(<FinancePage service={service} currentUserName="Văn Lâm" />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
-    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu chi' }))
     expect(await screen.findByRole('dialog', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
     expect(screen.getAllByRole('tab').map((tab) => tab.textContent?.trim())).toEqual(['Phiếu chi', 'Phiếu thu'])
     expect(screen.getByRole('tab', { name: 'Phiếu chi' })).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByRole('heading', { name: 'Tạo phiếu chi' })).toBeInTheDocument()
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
-    expect(within(form).getByLabelText('Mã phiếu')).toHaveAttribute('placeholder', 'Tự động')
+    expect(within(form).getByLabelText('Mã phiếu tự sinh')).toHaveValue('CTM000001')
     expect(within(form).getByLabelText('Người chi')).toHaveValue('Văn Lâm')
     expect(within(form).getByLabelText('Hạch toán kết quả kinh doanh')).toBeChecked()
     expect(within(form).queryByLabelText('Tài khoản chi')).not.toBeInTheDocument()
@@ -1124,14 +1127,15 @@ describe('FinancePage', () => {
       reason: 'Mua văn phòng phẩm',
     })
     await waitFor(() => expect(service.listCashbookEntries).toHaveBeenCalledTimes(2))
-    expect(screen.getByRole('status')).toHaveTextContent('Đã tạo phiếu PCTM000001')
+    expect(screen.getByRole('status')).toHaveTextContent('Đã tạo phiếu CTM000001')
   })
 
   it('filters voucher counterparty suggestions by selected type and only shows account picker for bank transfers', async () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu thu' }))
     const form = await screen.findByRole('form', { name: 'Tạo phiếu thu' })
 
     expect(within(form).queryByLabelText('Tài khoản nhận')).not.toBeInTheDocument()
@@ -1156,7 +1160,8 @@ describe('FinancePage', () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu thu' }))
     const form = await screen.findByRole('form', { name: 'Tạo phiếu thu' })
     expect(within(form).queryByRole('button', { name: 'Tạo mới khách hàng' })).not.toBeInTheDocument()
     expect(within(form).queryByRole('button', { name: 'Tạo mới nhà cung cấp' })).not.toBeInTheDocument()
@@ -1182,8 +1187,8 @@ describe('FinancePage', () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
-    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu chi' }))
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
     await userEvent.selectOptions(within(form).getByLabelText('Đối tượng nhận'), 'supplier')
@@ -1205,8 +1210,8 @@ describe('FinancePage', () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
-    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu chi' }))
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
     await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'staff_salary')
@@ -1238,8 +1243,8 @@ describe('FinancePage', () => {
     const service = makeService()
     render(<FinancePage service={service} />)
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu chi' }))
-    await userEvent.click(await screen.findByRole('tab', { name: 'Phiếu chi' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Tạo phiếu thu hoặc phiếu chi' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Phiếu chi' }))
     const form = await screen.findByRole('form', { name: 'Tạo phiếu chi' })
 
     await userEvent.selectOptions(within(form).getByLabelText('Loại chi'), 'shipping_expense')

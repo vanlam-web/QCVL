@@ -27,6 +27,7 @@ export interface FinanceRouteHandlers {
   listCashbook(): RouteResult
   getCashbookEntry(): RouteResult
   updateCashbookEntry(): RouteResult
+  previewCashbookVoucherCode(): RouteResult
   createCashbookVoucher(): RouteResult
   cancelCashbookVoucher(): RouteResult
   reviseCashbookVoucher(): RouteResult
@@ -53,6 +54,7 @@ export function handleFinanceRoute(context: FinanceRouteContext, handlers: Finan
   if (method === 'POST' && pathname === '/api/v1/finance/customer-debt-adjustments/import/kiotviet/preview') return handlers.previewKiotVietCustomerDebtAdjustmentImport()
   if (method === 'POST' && pathname === '/api/v1/finance/customer-debt-adjustments/import/kiotviet') return handlers.importKiotVietCustomerDebtAdjustments()
   if (method === 'GET' && pathname === '/api/v1/finance/cashbook') return handlers.listCashbook()
+  if (method === 'GET' && pathname === '/api/v1/finance/cashbook-vouchers/next-code') return handlers.previewCashbookVoucherCode()
   if (method === 'GET' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(pathname)) return handlers.getCashbookEntry()
   if (method === 'PATCH' && /^\/api\/v1\/finance\/cashbook\/[^/]+$/.test(pathname)) return handlers.updateCashbookEntry()
   if (method === 'POST' && pathname === '/api/v1/finance/cashbook-vouchers') return handlers.createCashbookVoucher()

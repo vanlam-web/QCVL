@@ -497,6 +497,11 @@
 }
 
 .management-list-surface {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: auto;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
@@ -1819,14 +1824,6 @@
 .management-date-picker-grid .management-date-picker-day-selected {
   background: var(--color-accent);
   color: var(--color-on-primary);
-}
-
-.management-list-surface {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  overflow-x: auto;
 }
 
 .management-compact-toolbar {
@@ -3201,6 +3198,47 @@ th[aria-sort='descending'] .management-sort-header-indicator {
 .finance-page-actions .management-compact-toolbar {
   flex: 1 1 28rem;
   width: auto;
+}
+
+.management-compact-create-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.management-compact-create-menu-options {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: grid;
+  min-width: 9.5rem;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.management-compact-create-menu-options button {
+  min-height: 2.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+  padding: 0 var(--space-3);
+  text-align: left;
+  cursor: pointer;
+}
+
+.management-compact-create-menu-options button:last-child {
+  border-bottom: 0;
+}
+
+.management-compact-create-menu-options button:hover,
+.management-compact-create-menu-options button:focus-visible {
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+  outline: none;
 }
 
 .finance-voucher-actions {

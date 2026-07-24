@@ -217,6 +217,10 @@ export function createFinanceService(api: FinanceApiRequester) {
       }
     },
     listCashbookVouchers: () => api.request<CashbookVoucherListResponse>('/api/v1/finance/cashbook/vouchers'),
+    previewCashbookVoucherCode: (input: { direction: CashbookDirection; finance_account_id: string }) => {
+      const params = new URLSearchParams(input)
+      return api.request<{ code: string; direction: CashbookDirection; finance_account_id: string }>(`/api/v1/finance/cashbook-vouchers/next-code?${params.toString()}`)
+    },
     createCashbookVoucher: (input: CreateCashbookVoucherInput) =>
       api.request<CashbookVoucher>('/api/v1/finance/cashbook-vouchers', {
         method: 'POST',

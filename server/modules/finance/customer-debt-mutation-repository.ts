@@ -122,9 +122,6 @@ export function createCustomerDebtMutationRepository(connectionPool:pg.Pool,deps
         ])
 
         const canonicalDebtBefore = totalsBefore.rows[0] ? mapCustomerDebtTotalsRow(totalsBefore.rows[0]).total_debt : 0
-        if (input.amount > canonicalDebtBefore) {
-          throw new CustomerDebtOverCollectionError(input.amount, canonicalDebtBefore)
-        }
 
         const requestedAllocations = (input.allocations ?? [])
           .map((allocation) => ({
@@ -305,7 +302,7 @@ export function createCustomerDebtMutationRepository(connectionPool:pg.Pool,deps
             insert into payment_receipts (id, organization_id, code, customer_id, order_id, total_received_amount, note, created_at)
             values ($1, $2, $3, $4, $5, $6, $7, $8::timestamptz)
           `,
-          [receiptId, input.organizationId, receiptCode, input.customerId, receiptOrderId, allocatedAmount, note, createdAt],
+          [receiptId, input.organizationId, receiptCode, input.customerId, receiptOrderId, input.amount, note, createdAt],
         )
 
         const entries: CashbookEntryData[] = []

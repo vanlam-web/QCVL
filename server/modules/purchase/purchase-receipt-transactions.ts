@@ -47,7 +47,8 @@ type PurchaseTransactionDeps = {
   reverseMovements(pool: pg.Pool, organizationId: string, receipt: PurchaseReceiptData): Promise<Set<string>>
   cancelSupplierPaymentCashbook(pool: pg.Pool, organizationId: string, receiptId: string): Promise<void>
 }
-export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:PurchaseTransactionDeps):Pick<ServerRepository,'postPurchaseReceipt'|'cancelPurchaseReceipt'|'paySupplier'>{
+type SupplierPaymentRepair={receiptId:string;legacyCashbookCode:string;expectedAmount:number}
+export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:PurchaseTransactionDeps):Pick<ServerRepository,'postPurchaseReceipt'|'cancelPurchaseReceipt'|'paySupplier'|'repairShiftedSupplierPayment'>{
   const {ensureSnapshots,ensureStock,ensureCatalog,ensureSalesFinance,loadReceipt,replaceMovements,updateCosts,cashEntry,insertCashbook,recomputeBalances,recomputeSupplier,reverseMovements,cancelSupplierPaymentCashbook}=deps
  return {
     async postPurchaseReceipt(input) {
@@ -176,6 +177,39 @@ export function createPurchaseReceiptTransactions(connectionPool:pg.Pool,deps:Pu
       } finally {
         client.release()
       }
+    },
+
+    async repairShiftedSupplierPayment(input: { organizationId:string; repair:SupplierPaymentRepair }) {
+      await ensureSnapshots(connectionPool)
+      await ensureSalesFinance(connectionPool)
+      const client = await connectionPool.connect()
+      const pool = Object.create(connectionPool) as pg.Pool
+      pool.query = client.query.bind(client) as pg.Pool['query']
+      try {
+        await client.query('begin')
+        await client.query('select pg_advisory_xact_lock(hashtext($1))', [`purchase-receipt:${input.organizationId}:${input.repair.receiptId}`])
+        const receipt = await loadReceipt(pool, input.organizationId, input.repair.receiptId)
+        if (!receipt || receipt.status !== 'posted') throw new SupplierPaymentValidationError('Phiếu nhập không hợp lệ để repair payment.')
+        const entryResult = await client.query<{ id:string; amount_delta:string|number; allocations:Array<{order_id?:string;allocated_amount?:number}> }>(`
+          select id::text, amount_delta, allocations from cashbook_entries
+          where organization_id=$1 and code=$2 and status='posted' and source_type='purchase_supplier_payment' for update
+        `,[input.organizationId,input.repair.legacyCashbookCode])
+        const entry=entryResult.rows[0]
+        if (!entry || Number(entry.amount_delta)!==-input.repair.expectedAmount
+          || !Array.isArray(entry.allocations)
+          || entry.allocations.length!==1
+          || entry.allocations[0]?.order_id!==receipt.id
+          || Number(entry.allocations[0]?.allocated_amount??0)!==input.repair.expectedAmount) {
+          throw new SupplierPaymentValidationError('Payment legacy không khớp receipt hoặc số tiền đã xác minh.')
+        }
+        if (receipt.paid_amount < input.repair.expectedAmount) throw new SupplierPaymentValidationError('Số đã trả của phiếu nhập không đủ để đảo payment.')
+        await client.query(`update cashbook_entries set status='cancelled' where organization_id=$1 and id=$2`,[input.organizationId,entry.id])
+        const repaired={...receipt,paid_amount:receipt.paid_amount-input.repair.expectedAmount,remaining_amount:receipt.remaining_amount+input.repair.expectedAmount,updated_at:new Date().toISOString()} as PurchaseReceiptData
+        await client.query(`update purchase_receipt_snapshots set data=$3::jsonb,updated_at=now() where organization_id=$1 and id=$2`,[input.organizationId,receipt.id,JSON.stringify(repaired)])
+        await recomputeSupplier(pool,input.organizationId,receipt.supplier_id)
+        await client.query('commit')
+        return { receipt_id:receipt.id,receipt_code:receipt.code,cashbook_code:input.repair.legacyCashbookCode,status:'cancelled' as const }
+      } catch(error) { await client.query('rollback'); throw error } finally { client.release() }
     },
 
     async paySupplier(input) {

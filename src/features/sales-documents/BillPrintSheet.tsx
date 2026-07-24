@@ -34,12 +34,15 @@ export function BillPrintSheet({
   const isQuote = document.order_type === 'quote'
   const remainingDebt = Math.max(0, document.total_amount - document.paid_amount)
   const surplus = Math.max(0, document.paid_amount - document.total_amount)
-  // Nợ khách hiện tại từ master (không đổi công thức sổ nợ). Nợ cũ ≈ tổng nợ − còn lại chứng từ này.
+  // Customer master debt can be stale during a normal checkout. Printed total debt
+  // must never be below debt remaining on this very invoice.
   const customerDebt = typeof document.customer.total_debt_amount === 'number'
     ? Math.max(0, document.customer.total_debt_amount)
     : null
-  const oldDebt = customerDebt !== null ? Math.max(0, customerDebt - remainingDebt) : null
-  const totalDebt = customerDebt !== null ? customerDebt : remainingDebt > 0 ? remainingDebt : null
+  const totalDebt = customerDebt !== null
+    ? Math.max(customerDebt, remainingDebt)
+    : remainingDebt > 0 ? remainingDebt : null
+  const oldDebt = totalDebt !== null ? Math.max(0, totalDebt - remainingDebt) : null
   const amountInWords = vietnameseMoneyInWords(
     isQuote ? document.total_amount : (totalDebt ?? (remainingDebt || document.total_amount)),
   )

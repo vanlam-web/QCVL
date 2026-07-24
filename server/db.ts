@@ -1496,18 +1496,19 @@ async function draftBomComponentsByProductId(pool: pg.Pool, organizationId: stri
 
 async function snapshotByCode<T>(pool: pg.Pool, tableName: 'customer_snapshots' | 'supplier_snapshots', organizationId: string, code: string) {
   const importCode = baseKiotVietImportCode(code)
+  const lookupCodes = [...new Set([code, importCode])]
   const result = await pool.query(
     `
       select data
       from ${tableName}
       where organization_id = $1
         and (
-          lower(code) = lower($2)
+          lower(code) = any($2::text[])
           or id = any($3::text[])
         )
       limit 1
     `,
-    [organizationId, importCode, snapshotImportIds(tableName, importCode)],
+    [organizationId, lookupCodes.map((value) => value.toLowerCase()), snapshotImportIds(tableName, importCode)],
   )
   return result.rows[0]?.data as T | null ?? null
 }
@@ -2552,6 +2553,7 @@ async function ensureSalesFinanceTables(pool: pg.Pool) {
   `)
   await pool.query('alter table cashbook_entries add column if not exists created_by jsonb null')
   await pool.query('alter table cashbook_entries add column if not exists source jsonb not null default \'{}\'::jsonb')
+  await pool.query("update cashbook_entries set source = '{}'::jsonb where source is null")
   await pool.query('alter table cashbook_entries add column if not exists allocations jsonb not null default \'[]\'::jsonb')
   await pool.query('alter table cashbook_entries add column if not exists created_at timestamptz not null default now()')
   await pool.query('create index if not exists cashbook_entries_org_created_idx on cashbook_entries (organization_id, created_at desc)')
@@ -3521,7 +3523,7 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
         select id, code, data
         from purchase_receipt_snapshots
         where organization_id = $1
-          and id like 'purchase-receipt-kv-%'
+          and (id like 'purchase-receipt-kv-%' or data->>'status' = 'posted')
       `,
       [organizationId],
     ),
@@ -3533,10 +3535,11 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
       amount_delta: string | number
       status: string
       source: Record<string, unknown> | null
+      allocations: unknown
       counterparty: { name?: string; phone?: string | null } | null
     }>(
       `
-        select id, code, created_at, direction, amount_delta, status, source, counterparty
+        select id, code, created_at, direction, amount_delta, status, source, allocations, counterparty
         from cashbook_entries
         where organization_id = $1
           and source_type = 'kiotviet_cashbook'
@@ -3577,13 +3580,18 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
     supplier_id: row.data?.supplier_id,
   }))
 
+  const invoiceById = new Map(invoiceResult.rows.map((row) => [String(row.id), row]))
+  const receiptById = new Map(receiptResult.rows.map((row) => [String(row.id), row]))
+  const cashbookById = new Map(cashbookResult.rows.map((row) => [String(row.id), row]))
+
   const rebuilt = rebuildKiotVietCashbookAllocations({
     invoices,
     receipts,
+    shouldResetReceipt: (receipt) => receipt.id.startsWith('purchase-receipt-kv-'),
     cashbookRows: cashbookResult.rows.map((row) => ({
       id: String(row.id),
       source_code: String(row.code),
-      entry_time: row.created_at.toISOString(),
+      entry_time: typeof row.source?.source_created_at === 'string' ? row.source.source_created_at : row.created_at.toISOString(),
       direction: row.direction,
       amount_delta: Number(row.amount_delta),
       status: String(row.status),
@@ -3594,6 +3602,10 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
   })
 
   for (const invoice of rebuilt.invoices) {
+    const current = invoiceById.get(invoice.id)
+    if (current !== undefined
+      && Number(current.paid_amount) === invoice.paid_amount
+      && Number(current.debt_amount) === invoice.debt_amount) continue
     const paymentStatus = invoicePaymentStatus(invoice.paid_amount, invoice.debt_amount)
     await pool.query(
       `
@@ -3642,6 +3654,10 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
   }
 
   for (const receipt of rebuilt.receipts) {
+    const current = receiptById.get(receipt.id)
+    if (current !== undefined
+      && Number(current.data?.paid_amount ?? 0) === receipt.paid_amount
+      && Number(current.data?.remaining_amount ?? 0) === receipt.remaining_amount) continue
     await pool.query(
       `
         update purchase_receipt_snapshots
@@ -3658,11 +3674,16 @@ async function rebuildImportedKiotVietCashbookAllocations(pool: pg.Pool, organiz
   }
 
   for (const entry of rebuilt.cashbookAllocations) {
+    const current = cashbookById.get(entry.id)
+    const currentOrderCode = typeof current?.source?.order_code === 'string' ? current.source.order_code : null
+    const currentAllocations = JSON.stringify(current?.allocations ?? [])
+    const nextAllocations = JSON.stringify(entry.allocations)
+    if (current !== undefined && currentOrderCode === entry.order_code && currentAllocations === nextAllocations) continue
     await pool.query(
       `
         update cashbook_entries
         set allocations = $3::jsonb,
-            source = jsonb_set(coalesce(source, '{}'::jsonb), '{order_code}', to_jsonb($4::text), true)
+            source = jsonb_set(coalesce(source, '{}'::jsonb), '{order_code}', coalesce(to_jsonb($4::text), 'null'::jsonb), true)
         where organization_id = $1
           and id = $2
       `,

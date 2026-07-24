@@ -42,6 +42,7 @@ export interface CashbookImportRepository {
   upsertImportedKiotVietCashbook?(input: {
     organizationId: string
     rows: KiotVietCashbookImportRow[]
+    createdBy: { id: string; name: string }
   }): Promise<{
     accounts_created: number
     accounts_updated: number
@@ -56,6 +57,7 @@ export interface CashbookImportInput {
   repository: CashbookImportRepository
   rows: KiotVietCashbookImportRow[]
   invalidRows: KiotVietInvalidCashbookRow[]
+  createdBy: { id: string; name: string }
 }
 
 export function parseKiotVietCashbookWorkbookBuffer(buffer: Buffer): KiotVietRawCashbookRow[] {
@@ -156,6 +158,7 @@ export async function applyKiotVietCashbookImport(input: CashbookImportInput) {
   const result = await input.repository.upsertImportedKiotVietCashbook?.({
     organizationId: input.organizationId,
     rows: input.rows,
+    createdBy: input.createdBy,
   }) ?? { accounts_created: 0, accounts_updated: 0, entries_created: 0, entries_updated: 0, skipped_rows: input.rows.length }
 
   return {
