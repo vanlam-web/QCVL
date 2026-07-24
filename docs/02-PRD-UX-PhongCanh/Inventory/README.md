@@ -1,8 +1,8 @@
 # INVENTORY — Kho hàng & Hàng hóa
 
-> Index cho đặc tả UI Inventory. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI Inventory. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
-> Nguồn tham khảo UI: KiotViet Hàng hóa; QC-OMS điều chỉnh theo nghiệp vụ cuộn/tấm/tấm lỡ riêng.
+> Nguồn tham khảo UI: KiotViet Hàng hóa; QCVL điều chỉnh theo nghiệp vụ cuộn/tấm/tấm lỡ riêng.
 
 ## Entry Chính
 

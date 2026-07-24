@@ -1,7 +1,7 @@
 # SALES — Nghiệp vụ Bán hàng
 
-> Index nghiệp vụ bán hàng. Queue sản phẩm: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).  
-> Tiến độ chỉnh lý docs: [../../DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
+> Nguồn sự thật nghiệp vụ bán hàng. Điều phối công việc: [PROJECT-COORDINATION.md](../../PROJECT-COORDINATION.md).
+> Tiến độ chỉnh lý tài liệu: [Quy tắc tài liệu](../../DOCUMENT_RULES.md).
 >
 > Cách đọc trừ kho/BOM: **SoT** ≠ **runtime từng path** (bảng dưới).
 
@@ -80,7 +80,7 @@ BOM KV: migrate `0008` + path Import khẩn ghi `active` — [BOM README](../BOM
 | Báo giá → `BG…` | **Có** | Qua POS |
 | Phiếu thu/chi thủ công Sổ quỹ | **Có** | Prefix `PT*` / `PC*` riêng (khác nhiều mã KV) |
 | Tạo nhanh KH/NCC từ phiếu thu/chi | **Có** (UI) | Nút `Tạo mới` → `POST /customers` / `POST /suppliers` |
-| Bill Preview / in HD·BG | **Đã xong / đóng tạm** (Owner 2026-07-22) | A4 gần KV, K80, quản lý mẫu, multi-tick theo khách, QR/STK, nợ hiển thị, `print_place`. **Không** mở Zalo ảnh / máy in / HTML editor — [freeze](../../superpowers/plans/2026-07-22-bill-area-freeze.md) · [SoT](./POS-BILL-PRINT-MESSAGING.md) |
+| Bill Preview / in HD·BG | **Đã xong / đóng tạm** (Owner 2026-07-22) | A4 gần KV, K80, quản lý mẫu, multi-tick theo khách, QR/STK, nợ hiển thị, `print_place`. **Không** mở Zalo ảnh / máy in / HTML editor — [freeze ](../../PROJECT-COORDINATION.md) · [SoT](./POS-BILL-PRINT-MESSAGING.md) |
 | Phiếu nhập → `PN…` | **Có** (hàng thường) | Draft/post Postgres; P4 object cuộn/tấm vẫn đóng băng — [Purchase README](../Purchase/README.md) |
 | Tạo NCC mới | **Có** | `POST /suppliers` persist `supplier_snapshots` manual; mã trống → `NCC…`; trùng → 409 |
 | Tạo hàng hóa mới | **Có** | `POST /products` persist Postgres/dev-memory; trùng mã → 409; combo/service ép `track_inventory=false` theo KV |
@@ -137,7 +137,7 @@ Chi tiết rule: [POS-ORDER-LIFECYCLE.md](./POS-ORDER-LIFECYCLE.md). Khi đọc 
 - [PRD-UX POS](../../02-PRD-UX-PhongCanh/POS/)
 - [Database Sales](../../04-DATABASE/Sales/)
 - [Backend POS](../../05-BACKEND-MayChu/POS/)
-- [DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md)
+- [Quy tắc tài liệu](../../DOCUMENT_RULES.md)
 
 ---
 

@@ -6,14 +6,12 @@
 
 ## Cập nhật hiện tại
 
-Updated: 2026-07-21
+Cập nhật: `2026-07-24`
 
-- Quyết định thiết kế kế tiếp cho form phiếu thu/chi thủ công nằm ở `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
-- Trạng thái: planned, chưa xem là đã triển khai đủ trong code.
-- Tóm tắt: form chỉ chọn `Phiếu thu` hoặc `Phiếu chi`; `Phương thức TT` quyết định tiền mặt/chuyển khoản; `Loại thu/chi` quyết định nhóm đối tượng nộp/nhận; chỉ `Khác` được nhập tự do, các nhóm còn lại phải chọn hoặc tạo nhanh bản ghi master data.
-- Nhóm đối tượng planned: `Khách hàng`, `Nhà cung cấp`, `Nhân viên`, `Đối tác giao hàng`, `Khác`.
-- Thêm/lưu đối tượng planned: khách hàng/NCC tạo nhanh vào master data riêng; nhân viên chỉ chọn từ danh sách có sẵn; đối tác giao hàng lưu ở `delivery_partners`; `Khác` là nhóm duy nhất lưu text tự do trên phiếu.
-- Thao tác phiếu thu/chi planned theo KiotViet: tạo phiếu, lưu, lưu & in, xem, cập nhật/sửa, hủy mềm, in, tìm kiếm/lọc/sắp xếp/xuất file. `Xóa` trong QCVL là hủy mềm, không xóa vật lý.
+- Contract form phiếu thu/chi thủ công hiện hành: chỉ chọn `Phiếu thu` hoặc `Phiếu chi`; `Phương thức TT` quyết định tiền mặt/chuyển khoản; `Loại thu/chi` quyết định nhóm đối tượng nộp/nhận; chỉ `Khác` được nhập tự do, các nhóm còn lại phải chọn hoặc tạo nhanh bản ghi master data.
+- Nhóm đối tượng dự kiến: `Khách hàng`, `Nhà cung cấp`, `Nhân viên`, `Đối tác giao hàng`, `Khác`.
+- Thêm/lưu đối tượng dự kiến: khách hàng/NCC tạo nhanh vào master data riêng; nhân viên chỉ chọn từ danh sách có sẵn; đối tác giao hàng lưu ở `delivery_partners`; `Khác` là nhóm duy nhất lưu text tự do trên phiếu.
+- Thao tác phiếu thu/chi theo KiotViet: tạo phiếu, lưu, lưu & in, xem, cập nhật/sửa, hủy mềm, in, tìm kiếm/lọc/sắp xếp/xuất file. `Xóa` trong QCVL là hủy mềm, không xóa vật lý.
 
 ---
 
@@ -47,7 +45,7 @@ Quan sát bổ sung ngày `05/07/2026` từ KiotViet đang mở và file xuất 
 - Bảng mặc định gồm `Mã phiếu`, `Thời gian`, `Loại thu chi`, `Người nộp/nhận`, `Giá trị`.
 - Chọn cột có thêm: `Thời gian tạo`, `Người tạo`, `Nhân viên`, `Chi nhánh`, `Tên tài khoản`, `Số tài khoản`, `Mã người nộp/nhận`, `Số điện thoại`, `Địa chỉ`, `Nội dung chuyển khoản`, `Ghi chú`, `Loại sổ quỹ`, `Trạng thái`.
 - File xuất 1 tháng có 241 dòng, cột xuất tối thiểu: `Mã phiếu`, `Thời gian`, `Loại thu chi`, `Người nộp/nhận`, `Giá trị`.
-- File xuất CSV của QC-OMS phải có UTF-8 BOM để Excel mở trực tiếp không lỗi dấu tiếng Việt.
+- File xuất CSV của QCVL phải có UTF-8 BOM để Excel mở trực tiếp không lỗi dấu tiếng Việt.
 - File xuất tháng 06/2026 có các nhóm thực tế:
   - `Phiếu thu Tiền khách trả`: 143 dòng
   - `Phiếu chi Lương NV`: 21 dòng
@@ -117,13 +115,13 @@ Quan sát trước đó ngày `01/07/2026`:
 - Form tạo phiếu chi tiền mặt có cấu trúc tương tự, đổi thành loại chi/người chi/đối tượng nhận/người nhận.
 - Loại chi KV thấy được gồm nhóm hệ thống và các mục: `Chi phí khác`, `Chuyển/Rút`, `Chi phí điện`, `Chi phí hội nghị, sự kiện, công tác phí`, `Chi phí nhân công`, `Chi phí nước`, `Chi phí phần mềm, dịch vụ quản trị, tư vấn`, `Chi phí quảng cáo`, cùng các loại thực tế từ file xuất như lương, vận chuyển, vật tư, tiền trả NCC, tiền nhà, rác, thuế, hoa hồng, VAT cho khách.
 
-Áp dụng cho QC-OMS:
+Áp dụng cho QCVL:
 
 - Tìm theo mã phiếu phải mở rộng/bỏ filter thời gian nếu filter hiện tại che kết quả.
 - Phiếu thu từ hóa đơn/thu nợ phải hiển thị liên kết chứng từ gốc và phân bổ vào hóa đơn.
 - Phiếu chi thủ công cần lưu cờ có tính vào báo cáo kinh doanh hay không.
 - Người nộp/nhận có thể là khách hàng, nhà cung cấp, nhân viên hoặc đối tượng tự do.
-- `Ví điện tử` có trong KiotViet nhưng QC-OMS MVP vẫn chưa đưa vào nếu Owner chưa chốt nghiệp vụ riêng; cần thiết kế mở để thêm sau.
+- `Ví điện tử` có trong KiotViet nhưng QCVL MVP vẫn chưa đưa vào nếu Owner chưa chốt nghiệp vụ riêng; cần thiết kế mở để thêm sau.
 
 Tham khảo tài liệu KiotViet online rà lại ngày `21/07/2026`:
 
@@ -137,7 +135,7 @@ Hiện trạng detail inline sau ngày `06/07/2026`:
 
 - Click bất kỳ vùng dữ liệu nào trên dòng sổ quỹ sẽ mở sub-panel ngay dưới dòng, cùng pattern với trang chứng từ bán hàng. Click lại chính dòng đang mở sẽ đóng sub-panel. Mã phiếu và người nộp/nhận vẫn hiển thị dạng link, nhưng hành vi mở/đóng detail là của cả dòng.
 - Dòng đang mở detail dùng trạng thái selected chung của bảng quản trị; checkbox chọn dòng và sao ưu tiên không làm bung detail.
-- Panel có tab `Thông tin`, tiêu đề `Phiếu thu/chi <mã>`, chip `Đã thanh toán/Đã hủy`, chip `Có hạch toán/Không hạch toán`. QC-OMS không hiển thị `Chi nhánh trung tâm` vì MVP không quản lý theo chi nhánh.
+- Panel có tab `Thông tin`, tiêu đề `Phiếu thu/chi <mã>`, chip `Đã thanh toán/Đã hủy`, chip `Có hạch toán/Không hạch toán`. QCVL không hiển thị `Chi nhánh trung tâm` vì MVP không quản lý theo chi nhánh.
 - Detail dùng shared shell của các trang quản trị: `ManagementDetailPanel`, `ManagementInlineDetailTabs`, `ManagementDetailHeader`, `ManagementDetailInfoList`, `ManagementDetailInlineNote`, `ManagementDetailActionFooter`. Tiêu đề nằm trong header detail, `Người tạo` và `Thời gian` nằm trong grid meta, không dùng dòng log riêng. Với dữ liệu import KV, `Người tạo` ưu tiên người tạo gốc trong file sổ quỹ; trong QCVL người tạo phiếu cũng chính là người thu/chi nên không hiển thị `Người thu`/`Người chi` riêng.
 - Grid thong tin chinh trong detail dung shared `management-detail-meta-grid-three`, hien thi 2 hang x 3 cot khi du cho; neu mot o bi chat thi ca grid trong detail do chuyen sang 2 hang label tren, value duoi. Tat ca label/value luon canh trai. Cac truong giu nguyen: nguoi tao, thoi gian, so tien, loai thu/chi, phuong thuc thanh toan, nguoi nop/nhan. Khong hien thi rieng `Doi tuong nop/nhan` vi KV So Quy khong co loai doi tuong du tin cay; chi hien thi ten/SDT nguoi nop/nhan dang text thuong, khong link/button. Khong hien thi rieng dong `Tu quy` trong detail vi trung voi phuong thuc/tai khoan thanh toan. `Phuong thuc thanh toan` phai hien du lieu cu the: `Tien mat` cho quy tien mat, hoac ten ngan hang viet tat + so tai khoan nhu `MBBank: 0947900909` cho tai khoan ngan hang.
 - Ghi chú hiển thị phía trên khối chứng từ liên kết. Ghi chú hệ thống dạng `Checkout HD...` không hiển thị như ghi chú thủ công; mã hóa đơn trong chuỗi này chỉ dùng để suy luận chứng từ liên kết khi API chưa trả `allocations`.
@@ -163,11 +161,11 @@ Hiện trạng sau các slice sổ quỹ ngày `06/07/2026`:
 - Summary `Quỹ đầu kỳ`, `Tổng thu`, `Tổng chi`, `Tồn quỹ` nằm trong khu vực chính bên phải, ngay trên bảng sổ quỹ, và lấy từ `summary` của API sổ quỹ theo filter.
 - `Tồn quỹ` dùng `summary.ending_balance`, không dùng tổng số dư hiện tại của tất cả tài khoản.
 - Bộ lọc sổ quỹ tự áp dụng khi chọn giá trị; không có nút `Lọc sổ` hoặc `Đặt lại bộ lọc`.
-- Bảng dùng layout KiotViet-like nhưng màu sắc/border/spacing theo design system QC-OMS, không copy màu KiotViet: có checkbox chọn dòng, cột đánh dấu sao, mã phiếu dạng link, thời gian, người tạo, loại thu chi, số tài khoản, người nộp/nhận, giá trị và ghi chú. `Người tạo` lấy từ `source.source_creator_name` của file So Quy KV trước, fallback `created_by.name`; `Số tài khoản` chỉ hiện mã/số tài khoản ngân hàng, tiền mặt hiện `-`. Header sổ quỹ giữ đúng chữ thường/chữ hoa theo label nghiệp vụ như `Người nộp/nhận`, không ép uppercase toàn bộ. Cột người nộp/nhận lấy `counterparty` từ API list sổ quỹ; nếu có tên thì hiển thị dạng button mở inline detail cùng dòng, nếu chưa có thì hiển thị `-`; riêng khách mặc định `Khách lẻ` hiển thị trong bảng là `khách lẻ`, dùng typography thân bảng thay vì link xanh đậm để nhẹ nhãn, dữ liệu lưu và detail không đổi. Với dòng phiếu thu từ `payment_receipt_method` hoặc KV `kiotviet_cashbook` dạng `TTHD...` mà list chưa trả `counterparty` hoặc trả tên rỗng, frontend được phép hydrate nền từ detail hoặc hóa đơn liên kết `HD...` để điền người nộp trước khi người dùng click mở detail. Các ô text dài trong bảng, đặc biệt `Ghi chú`, phải dùng helper ellipsis chung để hiển thị một dòng kèm `...`, không làm cao dòng hoặc đẩy cột; detail/title vẫn giữ đủ nội dung từ DB. Click cả hàng mở detail; sao từng dòng lưu ưu tiên cục bộ và không làm bung detail; sao ở header lọc các dòng ưu tiên trong trang hiện tại.
+- Bảng dùng layout KiotViet-like nhưng màu sắc/border/spacing theo design system QCVL, không copy màu KiotViet: có checkbox chọn dòng, cột đánh dấu sao, mã phiếu dạng link, thời gian, người tạo, loại thu chi, số tài khoản, người nộp/nhận, giá trị và ghi chú. `Người tạo` lấy từ `source.source_creator_name` của file So Quy KV trước, fallback `created_by.name`; `Số tài khoản` chỉ hiện mã/số tài khoản ngân hàng, tiền mặt hiện `-`. Header sổ quỹ giữ đúng chữ thường/chữ hoa theo label nghiệp vụ như `Người nộp/nhận`, không ép uppercase toàn bộ. Cột người nộp/nhận lấy `counterparty` từ API list sổ quỹ; nếu có tên thì hiển thị dạng button mở inline detail cùng dòng, nếu chưa có thì hiển thị `-`; riêng khách mặc định `Khách lẻ` hiển thị trong bảng là `khách lẻ`, dùng typography thân bảng thay vì link xanh đậm để nhẹ nhãn, dữ liệu lưu và detail không đổi. Với dòng phiếu thu từ `payment_receipt_method` hoặc KV `kiotviet_cashbook` dạng `TTHD...` mà list chưa trả `counterparty` hoặc trả tên rỗng, frontend được phép hydrate nền từ detail hoặc hóa đơn liên kết `HD...` để điền người nộp trước khi người dùng click mở detail. Các ô text dài trong bảng, đặc biệt `Ghi chú`, phải dùng helper ellipsis chung để hiển thị một dòng kèm `...`, không làm cao dòng hoặc đẩy cột; detail/title vẫn giữ đủ nội dung từ DB. Click cả hàng mở detail; sao từng dòng lưu ưu tiên cục bộ và không làm bung detail; sao ở header lọc các dòng ưu tiên trong trang hiện tại.
 - Tất cả button trong màn sổ quỹ phải ưu tiên CSS/component chung: `button button-primary`, `button button-secondary`, `management-compact-create-action`, `ManagementRowActionButton`, `ManagementDetailActionFooter`. Không tạo style riêng cho từng trang nếu chỉ khác text/icon; chỉ thêm class riêng tại nơi dùng khi nút có hành vi hoặc trạng thái thật sự đặc biệt.
 - Surface bảng dùng viền/padding ngoài mỏng để bảng sát khung hơn; vẫn giữ border và hover theo design system.
 
-MVP của QC-OMS hỗ trợ:
+MVP của QCVL hỗ trợ:
 
 - tiền mặt
 - tài khoản ngân hàng
@@ -211,7 +209,7 @@ Ghi chú:
 
 - Filter hiện tại tự gọi lại danh sách sổ quỹ khi đổi thời gian, quỹ tiền, loại chứng từ, trạng thái, hạch toán KQKD.
 - `Trạng thái` trong bộ lọc là trạng thái phiếu thu/chi (`posted/cancelled`), khác với trạng thái thanh toán hóa đơn trong bảng chứng từ liên kết của detail.
-- UI filter dùng hình thái giống KiotViet cho những phần đã đủ API: quỹ tiền là radio list, loại chứng từ/trạng thái là checkbox group, hạch toán KQKD là segmented tabs. Màu sắc vẫn theo design system QC-OMS.
+- UI filter dùng hình thái giống KiotViet cho những phần đã đủ API: quỹ tiền là radio list, loại chứng từ/trạng thái là checkbox group, hạch toán KQKD là segmented tabs. Màu sắc vẫn theo design system QCVL.
 - Khi chọn `Ngân hàng`, bảng lọc ngay theo `finance_account_type = bank` để thấy tất cả tài khoản ngân hàng. Frontend vẫn giữ guard theo `finance_account.account_type = bank` trước khi render/export để tránh API cũ hoặc response stale làm lẫn dòng `Tiền mặt`. Khối `Tài khoản` hiện nút `Thêm` ở góc phải tiêu đề và ô `Chọn tài khoản`; click ô này xổ dropdown danh sách tài khoản dạng 3 dòng: số tài khoản, ngân hàng/tên tài khoản, chủ tài khoản. Tài khoản import có mã `{DEL}` được đánh `inactive` và không hiện trong picker active. Mỗi dòng tài khoản có action hover `Sửa` và `Ghim`; khi đã ghim thì icon ghim luôn hiển thị cả khi không rê chuột. Tài khoản ghim được lưu cục bộ, đưa lên đầu danh sách và dùng làm mặc định cho mọi nơi cần chọn tài khoản ngân hàng như lọc sổ quỹ, tạo phiếu thu/chi chuyển khoản, thu nợ chuyển khoản. Chọn dòng mới lọc sổ quỹ theo `finance_account_id`.
 - Import sổ quỹ KV dùng `Mã phiếu` làm khóa, nhưng nếu cùng một file có trùng mã gồm một dòng `Đã thanh toán` và một dòng `Đã hủy`, QCVL giữ dòng `Đã thanh toán` để tránh dòng audit hủy ghi đè phiếu thật. Với filter `Ngân hàng` chung không chọn tài khoản cụ thể, các dòng thuộc tài khoản `{DEL}` đã có tài khoản active thay thế được loại khỏi tổng thu/chi để không cộng lặp chuyển quỹ nội bộ; khi chọn đúng tài khoản `{DEL}` thì vẫn xem được lịch sử cũ.
 - Quản lý đa tài khoản giai đoạn hiện tại là bản nhẹ ngay trong picker tài khoản: thêm, sửa local, ghim mặc định. Khi backend có endpoint quản lý tài khoản quỹ, nâng cấp thành màn quản lý riêng trong `Quản trị` hoặc tab con `Sổ quỹ > Tài khoản` để bật/tắt, xóa/ngừng dùng, đối soát và phân quyền.
@@ -268,7 +266,7 @@ Xuất file tối thiểu phải có các cột giống file KV mẫu:
 - người nộp/nhận
 - giá trị
 
-Sau đó thêm các cột QC-OMS cần đối soát: quỹ/tài khoản, trạng thái, ghi chú, người tạo, hạch toán KQKD.
+Sau đó thêm các cột QCVL cần đối soát: quỹ/tài khoản, trạng thái, ghi chú, người tạo, hạch toán KQKD.
 
 Hiện trạng UI: nút `Xuất file` nằm ở cụm tác vụ sổ quỹ bên phải; nút `+` trong ô `Tìm sổ quỹ` mở popup tạo phiếu thu/chi khi ô rỗng, còn khi đang nhập thì nút xoay thành `x` để xóa tìm kiếm.
 
@@ -322,7 +320,7 @@ Form tối thiểu:
 
 ### Mapping đối tượng planned
 
-Theo tham chiếu KiotViet, QCVL chọn loại thu/chi trước, rồi mới chọn nhóm người nộp/nhận phù hợp. Chi tiết mapping nằm trong `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
+Theo tham chiếu KiotViet, QCVL chọn loại thu/chi trước, rồi mới chọn nhóm người nộp/nhận phù hợp. Bảng dưới là mapping contract hiện hành.
 
 | Loại thu/chi | Nhóm đối tượng chính |
 |---|---|

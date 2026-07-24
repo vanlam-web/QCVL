@@ -1,13 +1,13 @@
-﻿# Legacy QuanLyXuong - Ngu canh de QC-OMS hieu he cu
+# Legacy QuanLyXuong - Ngu canh de QCVL hieu he cu
 
 > Trang thai: tai lieu ngu canh di tru - 2026-06-28
-> Pham vi: mo ta he QuanLyXuong cu nhu mot legacy external system. Khong phai kien truc muc tieu cua QC-OMS.
+> Pham vi: mo ta he QuanLyXuong cu nhu mot legacy external system. Khong phai kien truc muc tieu cua QCVL.
 
 ---
 
 ## 1. Muc dich
 
-File nay giup QC-OMS va cac session AI sau hieu he thong QuanLyXuong hien tai dang lam gi, phan nao can hoc lai, va phan nao se bi thay the.
+File nay giup QCVL va cac session AI sau hieu he thong QuanLyXuong hien tai dang lam gi, phan nao can hoc lai, va phan nao se bi thay the.
 
 QuanLyXuong cu la nguon thuc te ve:
 
@@ -109,7 +109,7 @@ Luong hien tai:
 9. Gui bill hoac tin nhan cho Zalo khach/nhom bang OpenClaw.
 10. Cap nhat `zalo_sent = 1` trong SQLite.
 
-Phan co gia tri de dua sang QC-OMS:
+Phan co gia tri de dua sang QCVL:
 
 - Parser ten file.
 - Mapping ma khach, chat lieu, hang hoa.
@@ -125,36 +125,36 @@ Phan khong nen be nguyen:
 
 ---
 
-## 5. Cach QC-OMS nen hieu he cu
+## 5. Cach QCVL nen hieu he cu
 
-QC-OMS can xem QuanLyXuong cu la legacy integration trong giai doan di tru:
+QCVL can xem QuanLyXuong cu la legacy integration trong giai doan di tru:
 
 ```text
 QuanLyXuong SQLite / event cu
   -> bridge tam thoi
-  -> QC-OMS production_* tables
+  -> QCVL production_* tables
 ```
 
 Muc tieu khong phai dong bo hai chieu lau dai. Muc tieu la dung bridge de:
 
-- Doi chieu du lieu cu voi du lieu QC-OMS.
+- Doi chieu du lieu cu voi du lieu QCVL.
 - Kiem chung parser va trang thai may.
-- Xay man hinh san xuat trong QC-OMS ma chua cat he cu qua som.
-- Chuyen tung may sang agent moi khi QC-OMS on dinh.
+- Xay man hinh san xuat trong QCVL ma chua cat he cu qua som.
+- Chuyen tung may sang agent moi khi QCVL on dinh.
 
 Sau khi agent moi chay tot:
 
 ```text
-May san xuat -> QC-OMS API -> production_* tables
+May san xuat -> QCVL API -> production_* tables
 ```
 
 Luc do QuanLyXuong client/server/Dashboard/Auto_CRM cu duoc tat.
 
 ---
 
-## 6. Huong thay the trong QC-OMS
+## 6. Huong thay the trong QCVL
 
-Bang du lieu muc tieu nen nam trong cung PostgreSQL/backend cu da go cua QC-OMS, tach module:
+Bang du lieu muc tieu nen nam trong cung PostgreSQL/backend cu da go cua QCVL, tach module:
 
 ```text
 sales_*       = POS, don hang, hoa don, thanh toan, cong no
@@ -175,7 +175,7 @@ POST /api/v1/production-queue/{id}/restore
 Man hinh muc tieu thay Dashboard cu:
 
 ```text
-QC-OMS / San xuat / Trang thai may
+QCVL / San xuat / Trang thai may
 ```
 
 Man hinh nay hien thi may dang chay, file dang chay, file DONE, file ket, so lan in lai, ping may va canh bao log.
@@ -184,7 +184,7 @@ Man hinh nay hien thi may dang chay, file dang chay, file DONE, file ket, so lan
 
 ## 7. Ranh gioi voi tai lieu khac
 
-- Muc tieu cuoi cung cua san pham: [Target State QC-OMS](../../01-VISION-TamNhin/02-TARGET-STATE-QC-OMS.md)
+- Muc tieu cuoi cung cua san pham: [Target State QCVL](../../01-VISION-TamNhin/02-TARGET-STATE-QCVL.md)
 - UI hang doi may POS: [K02-D Hang doi](../../02-PRD-UX-PhongCanh/POS/K02/04-K02D-HANG-DOI.md)
 - Backend workflow noi bo se duoc mo ta o tang `05-BACKEND-MayChu`.
 - Database schema thuc te se duoc mo ta o tang `04-DATABASE`.

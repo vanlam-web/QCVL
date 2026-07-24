@@ -1,6 +1,6 @@
 # BOM — Định mức vật tư và combo
 
-> Index SoT BOM/combo. Queue sống: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index SoT BOM/combo. Queue sống: .
 > Nguồn: cột `Hàng thành phần` KiotViet, PRD K02-A.
 >
 > Cách đọc tài liệu này (tránh lệch docs ↔ code):
@@ -95,7 +95,7 @@ Chi tiết rule: [BOM-RULES.md](./BOM-RULES.md).
 - Không viết lại “nháp chờ duyệt” cho BOM KV trừ khi trong mục Lịch sử / superseded.
 - Field `draft_bom` = **tên tương thích**; không dùng chữ “nháp” trong UI khi SoT đã chốt dùng ngay.
 
-**Owner 2026-07-20 (tóm tắt):** BOM KV dùng ngay (`active`); bán combo chỉ trừ thành phần. SoT: [BOM-RULES.md](./BOM-RULES.md) · trừ kho: [Sales README](../Sales/README.md) · checklist: [../../DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md). Owner 2026-07-21: P4/hướng dài đóng băng — bản dùng được tạm.
+**Owner 2026-07-20 (tóm tắt):** BOM KV dùng ngay (`active`); bán combo chỉ trừ thành phần. SoT: [BOM-RULES.md](./BOM-RULES.md) · trừ kho: [Sales README](../Sales/README.md) · checklist: [Quy tắc tài liệu](../../DOCUMENT_RULES.md). Owner 2026-07-21: P4/hướng dài đóng băng — bản dùng được tạm.
 
 ---
 

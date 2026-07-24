@@ -1,4 +1,4 @@
-﻿# 01-SALES-DOCUMENT-LIST — Danh sách chứng từ bán hàng
+# 01-SALES-DOCUMENT-LIST — Danh sách chứng từ bán hàng
 
 > **Phase hiện tại:** Đã có readonly list/detail cho `HD...` và `BG...`; báo giá active mở lại được vào POS draft; hóa đơn hoàn thành có nút Sửa mở POS revision draft riêng
 > **Tham khảo:** KiotViet `Đơn hàng > Hóa đơn`; không dùng mô hình `Đặt hàng/Giao hàng`
@@ -16,7 +16,7 @@ Quan sát ngày `01/07/2026`:
 - Danh sách có dòng tổng phía trên và các cột chính: mã hóa đơn, thời gian, mã trả hàng, mã khách hàng, khách hàng, tổng tiền hàng, giảm giá, tổng sau giảm giá, khách đã trả.
 - POS QCVL phải sinh mã chứng từ giống KiotViet: hóa đơn `HD` + 6 số, báo giá `BG` + 6 số, lấy số kế tiếp theo mã đang có. Dạng `HD-POS...`/`BG-POS...` chỉ là mã lịch sử/test cũ, không dùng cho chứng từ mới. Sau cleanup ngày `2026-07-14`, 7 hóa đơn POS/test `HD-POS-021...` đã được xóa khỏi `3202`; backup nằm tại `backups/dev-memory-state-before-delete-approved-fake-data-2026-07-14T15-44-30-303Z.json`.
 
-Áp dụng cho QC-OMS:
+Áp dụng cho QCVL:
 
 - Tìm theo mã chứng từ phải ưu tiên trả đúng chứng từ, không bị filter thời gian/trạng thái mặc định che mất.
 - Empty state cần phân biệt `không có dữ liệu` với `đang bị lọc`.
@@ -70,7 +70,7 @@ Ngoài phạm vi hiện tại:
 
 - in/xem báo giá mẫu mặc định cho `BG...`
 
-QC-OMS chỉ làm luồng **bán đứt**:
+QCVL chỉ làm luồng **bán đứt**:
 
 - không có `Đặt hàng` kiểu KiotViet
 - không có đơn giao hàng/vận đơn/COD
@@ -109,7 +109,7 @@ QC-OMS chỉ làm luồng **bán đứt**:
 | Thanh toán | Checkbox nhiều chọn: Chưa thanh toán, Thanh toán một phần, Đã thanh toán. Mặc định chọn cả ba. API nhận `payment_status=unpaid,partial,paid`. |
 | Phương thức TT | Tất cả, Tiền mặt, Chuyển khoản, Kết hợp nếu có dữ liệu |
 | Khách hàng | Chọn khách hoặc nhập nhanh tên/mã/SĐT |
-| Người bán/người tạo | Trong QC-OMS hiện tại hai khái niệm này dùng cùng tài khoản tạo/chốt chứng từ; UI chỉ cần một filter người bán/người tạo |
+| Người bán/người tạo | Trong QCVL hiện tại hai khái niệm này dùng cùng tài khoản tạo/chốt chứng từ; UI chỉ cần một filter người bán/người tạo |
 | Bảng giá | Giá chung hoặc bảng giá theo nhóm khách |
 
 Không có bộ lọc giao hàng, COD, đối tác giao hàng, kênh bán, HĐĐT, VAT, trạng thái giao hàng, trạng thái vận đơn hoặc trạng thái đồng bộ sàn.
@@ -118,7 +118,7 @@ Các nhóm checkbox trong sidebar tự áp dụng ngay khi đổi lựa chọn, 
 
 Khi người dùng tìm đúng mã chứng từ, hệ thống phải tìm trên toàn bộ lịch sử hoặc tự bỏ các filter thời gian/trạng thái đang che kết quả.
 
-Nếu filter tồn tại ở KiotViet nhưng QC-OMS chưa có schema/dữ liệu thật, không hiển thị filter đó ở UI. Không tạo filter rỗng chỉ để giống KiotViet.
+Nếu filter tồn tại ở KiotViet nhưng QCVL chưa có schema/dữ liệu thật, không hiển thị filter đó ở UI. Không tạo filter rỗng chỉ để giống KiotViet.
 
 ---
 
@@ -136,7 +136,7 @@ Nếu filter tồn tại ở KiotViet nhưng QC-OMS chưa có schema/dữ liệu
 | Khách cần trả | Số tiền phải thu của chứng từ |
 | Khách đã trả | Tiền đã thu cho hóa đơn này |
 | Còn nợ | Chỉ hiển thị với hóa đơn còn nợ |
-| Người bán | Tài khoản tạo/chốt chứng từ; không tách riêng người tạo/người bán trong QC-OMS hiện tại |
+| Người bán | Tài khoản tạo/chốt chứng từ; không tách riêng người tạo/người bán trong QCVL hiện tại |
 | Trạng thái | Báo giá, Hoàn thành, Đã hủy |
 | Ghi chú | Ghi chú đơn |
 

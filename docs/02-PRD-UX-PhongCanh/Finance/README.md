@@ -1,8 +1,8 @@
 # FINANCE — Sổ quỹ, công nợ và đối soát
 
-> Index cho đặc tả UI Finance. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI Finance. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
-> Nguồn tham khảo UI: KiotViet Sổ quỹ; QC-OMS điều chỉnh theo nghiệp vụ công nợ theo hóa đơn và đối soát từng tài khoản.
+> Nguồn tham khảo UI: KiotViet Sổ quỹ; QCVL điều chỉnh theo nghiệp vụ công nợ theo hóa đơn và đối soát từng tài khoản.
 
 ## Entry Chính
 

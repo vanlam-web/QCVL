@@ -1,6 +1,6 @@
 # FINANCE — Schema thanh toán, công nợ và sổ quỹ
 
-> Index schema tài chính. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index schema tài chính. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 > Nguồn: Business Sales Checkout, Customer Debt và Finance Cashbook 2026-06-30.
 
 ---

@@ -1,4 +1,4 @@
-# Quy ước triển khai và vận hành QC-OMS
+# Quy ước triển khai và vận hành QCVL
 
 Tuân theo [DOCUMENT_RULES.md](../DOCUMENT_RULES.md), [ARCHITECTURE.md](../ARCHITECTURE.md) và [_RULES.md](./_RULES.md).
 
@@ -8,16 +8,10 @@ Deployment quyết định kiến trúc triển khai và vận hành, không quy
 
 ## 2. Môi trường
 
-- Tách biệt `dev`, `staging` và `prod`.
-- Không dùng chung Database, secret hoặc tài nguyên nhạy cảm giữa các môi trường.
-- Mọi cấu hình khác nhau theo môi trường phải được tài liệu hóa.
-
-## 2.1 Quyền triển khai NAS theo máy
-
-- Máy ngoài LAN không được deploy NAS, copy vào share NAS, chạy migrate NAS, hoặc restart/reset `qcvl-app`.
-- Máy ngoài LAN chỉ được build/test/push Git, sau đó ghi rõ commit để máy trong LAN kéo về.
-- Máy trong LAN chịu trách nhiệm deploy NAS, migrate, restart, health check và smoke test.
-- Nếu lỡ copy dở từ máy ngoài LAN, dừng ở mức ghi trạng thái; máy trong LAN phải kéo `origin/main` và deploy sạch lại.
+- Local dev và NAS release `3200` là hai môi trường có vai trò riêng.
+- Không có staging/preview promotion target; `3202` chỉ dùng local development, không dùng làm gate deploy.
+- Local dev không là evidence NAS runtime; release verification chạy tại `3200`.
+- Cấu hình NAS release khác local phải được tài liệu hóa.
 
 ## 3. Secret và Security
 
@@ -34,10 +28,10 @@ Deployment quyết định kiến trúc triển khai và vận hành, không quy
 
 ## 5. CI/CD
 
-- Production deployment phải qua pipeline và bước phê duyệt phù hợp.
-- Pipeline tối thiểu gồm build, test, security check và deploy.
-- Mỗi lần deploy phải ghi version, thời gian, người thực hiện và thay đổi chính.
-- Phải có phương án rollback trước khi deploy.
+- Scope verified, commit sạch release direct `3200` qua image deploy; không cần approval deploy riêng.
+- Pipeline/release tối thiểu gồm typecheck, focused tests, preflight, image build, migration safety, health, smoke và rollback.
+- Mỗi release ghi version/commit, thời gian, người thực hiện và thay đổi chính.
+- Destructive data hoặc migration phá vỡ tương thích vẫn cần checkpoint Owner riêng trước release.
 
 ## 6. Backup, Restore và Disaster Recovery
 
@@ -77,7 +71,7 @@ Log vận hành nên có timestamp, service, level, trace ID và message; không
 
 ```text
 Environment: dev, staging, prod
-Image:       qc-oms-api, qc-oms-web, qc-oms-worker
+Image:       QCVL-api, QCVL-web, QCVL-worker
 Container:   api, web, worker, redis, postgres
 ```
 

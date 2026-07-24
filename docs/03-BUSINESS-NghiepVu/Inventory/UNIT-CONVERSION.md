@@ -6,7 +6,7 @@
 
 ## 1. Mục tiêu
 
-Tài liệu này chốt cách QC-OMS hiểu đơn vị tính trong kho và bán hàng.
+Tài liệu này chốt cách QCVL hiểu đơn vị tính trong kho và bán hàng.
 
 Nguyên tắc chính:
 
@@ -63,7 +63,7 @@ Bán 50 tờ sẽ quy đổi thành `0.1 ram` nếu tồn chính là ram.
 
 Các giá trị như `Khổ 91`, `Khổ 127`, `500 Tờ`, `1000 Tờ`, `5 kg`, `10 kg`, `Tấm CNC`, `Tấc CNC` không nên mặc định là đơn vị chuẩn.
 
-QC-OMS tách 4 lớp dữ liệu, không gộp vào một trường:
+QCVL tách 4 lớp dữ liệu, không gộp vào một trường:
 
 - loại hàng: hàng thường, dịch vụ, vật tư phụ, combo/BOM
 - loại tồn: tổng thường, cuộn vật lý, tấm/tấm lỡ
@@ -83,7 +83,7 @@ Cách tính bán = cách POS hiểu số lượng khách mua.
 
 Ví dụ:
 
-| Dữ liệu KiotViet | QC-OMS nên hiểu |
+| Dữ liệu KiotViet | QCVL nên hiểu |
 |---|---|
 | `Khổ 91` | quy cách khổ rộng, không phải đơn vị |
 | `Tấm CNC` | tấm + loại xử lý/gia công CNC |
@@ -142,7 +142,7 @@ Bán `1 m tới` nghĩa là bán phần:
 1m x 1.22m
 ```
 
-Để thao tác xưởng đơn giản, QC-OMS có thể dùng khổ thao tác/làm tròn khi bán và trừ tồn, ví dụ `1.2m x 2.4m` thay vì bắt nhân viên thao tác theo khổ thật `1.22m x 2.44m`.
+Để thao tác xưởng đơn giản, QCVL có thể dùng khổ thao tác/làm tròn khi bán và trừ tồn, ví dụ `1.2m x 2.4m` thay vì bắt nhân viên thao tác theo khổ thật `1.22m x 2.44m`.
 
 Nguyên tắc:
 

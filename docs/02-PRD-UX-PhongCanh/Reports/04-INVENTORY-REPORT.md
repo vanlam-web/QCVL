@@ -1,6 +1,6 @@
 # 04-INVENTORY-REPORT — Báo cáo hàng hóa và tồn kho
 
-> **Nguồn:** Inventory cuộn/tấm/tấm lỡ của QC-OMS, không copy tồn tổng m2 của KiotViet
+> **Nguồn:** Inventory cuộn/tấm/tấm lỡ của QCVL, không copy tồn tổng m2 của KiotViet
 
 ---
 
@@ -8,7 +8,7 @@
 
 Báo cáo hàng hóa/tồn kho giúp kiểm tra tồn, hàng bán nhiều, hàng sắp hết, tồn âm và tình trạng cuộn/tấm vật lý.
 
-Điểm quan trọng của QC-OMS: báo cáo tồn không chỉ là tổng m2, mà phải xem được cuộn/tấm/tấm lỡ khi cần.
+Điểm quan trọng của QCVL: báo cáo tồn không chỉ là tổng m2, mà phải xem được cuộn/tấm/tấm lỡ khi cần.
 
 ---
 

@@ -31,7 +31,7 @@ Quan sát KiotViet ngày `2026-07-03`:
 - Tab `Lịch sử bán/trả hàng` hiển thị bảng gọn: mã hóa đơn, thời gian, người bán, tổng cộng, trạng thái.
 - Tab `Nợ cần thu từ khách` hiển thị bảng gọn: mã phiếu, thời gian, loại, giá trị, dư nợ khách hàng.
 
-QC-OMS MVP chỉ lấy cấu trúc vận hành này, không bê toàn bộ trường phụ của KiotViet. Detail mở trong danh sách không dùng avatar/chữ cái đầu tên khách; dòng đầu phải giống KV: tên khách + mã khách, dưới đó là `Người tạo`, `Ngày tạo`, `Nhóm khách`.
+QCVL MVP chỉ lấy cấu trúc vận hành này, không bê toàn bộ trường phụ của KiotViet. Detail mở trong danh sách không dùng avatar/chữ cái đầu tên khách; dòng đầu phải giống KV: tên khách + mã khách, dưới đó là `Người tạo`, `Ngày tạo`, `Nhóm khách`.
 
 ---
 
@@ -123,7 +123,7 @@ Bấm mã chứng từ mở chi tiết tại module SalesDocuments.
 
 Không hiển thị dòng tổng kiểu `13 chứng từ gần đây` trong UI chi tiết để tránh rối; nếu cần tổng/phân trang lịch sử sẽ thiết kế riêng sau. Bảng lịch sử dùng layout 5 cột cố định, chia đều chiều ngang để cột thời gian không giãn quá mức.
 
-KiotViet hiển thị lịch sử bán/trả hàng chung. QC-OMS MVP trong tab này giữ hai lát rõ ràng là `Hóa đơn` và `Báo giá`; trả hàng bán nằm ngoài phạm vi MVP hiện tại.
+KiotViet hiển thị lịch sử bán/trả hàng chung. QCVL MVP trong tab này giữ hai lát rõ ràng là `Hóa đơn` và `Báo giá`; trả hàng bán nằm ngoài phạm vi MVP hiện tại.
 
 Nguồn dữ liệu chuẩn là Sales Documents lọc theo `customer_id` và `type = invoice | quote`. Nếu API danh sách chứng từ chưa hỗ trợ filter này, không được dựng dữ liệu giả; UI có thể ẩn tab lịch sử bán trong lát đó và phải ghi rõ ngoài phạm vi.
 
@@ -170,10 +170,10 @@ Trong mục tiêu hiện tại là hoàn thiện `Hàng hóa` để tồn vận 
 
 ## 7. Các tab ngoài phạm vi MVP
 
-KiotViet có thêm nhiều tab như lịch sử đặt hàng, công nợ, lịch sử mua dịch vụ, lịch sử tích điểm. QC-OMS MVP không làm riêng nếu không có nghiệp vụ tương ứng:
+KiotViet có thêm nhiều tab như lịch sử đặt hàng, công nợ, lịch sử mua dịch vụ, lịch sử tích điểm. QCVL MVP không làm riêng nếu không có nghiệp vụ tương ứng:
 
 - xuất hóa đơn/HĐĐT/VAT: bỏ khỏi scope hiện tại; không tạo tab hoặc luồng phát hành hóa đơn điện tử
-- địa chỉ nhận hàng/giao hàng nhiều cấp: bỏ khỏi MVP vì QC-OMS không làm vận đơn, COD hoặc bán giao hàng; chỉ giữ địa chỉ hồ sơ một dòng ở tab thông tin
+- địa chỉ nhận hàng/giao hàng nhiều cấp: bỏ khỏi MVP vì QCVL không làm vận đơn, COD hoặc bán giao hàng; chỉ giữ địa chỉ hồ sơ một dòng ở tab thông tin
 - lịch sử đặt hàng: bỏ theo mô hình KiotViet; nếu cần gửi giá trước thì dùng Báo giá, không phải đơn đặt hàng
 - lịch sử mua dịch vụ: bỏ
 - lịch sử tích điểm: bỏ

@@ -1,6 +1,6 @@
 # INVENTORY — API kho vật tư
 
-> Index API kho vật tư. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index API kho vật tư. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 
 ---
 

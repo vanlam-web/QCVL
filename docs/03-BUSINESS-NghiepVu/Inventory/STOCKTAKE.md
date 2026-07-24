@@ -7,7 +7,7 @@
 
 ## 0. Căn cứ KiotViet
 
-KiotViet được dùng làm tham khảo nghiệp vụ, nhưng QC-OMS không sao chép 100%.
+KiotViet được dùng làm tham khảo nghiệp vụ, nhưng QCVL không sao chép 100%.
 
 Quan sát ngày `01/07/2026`:
 
@@ -15,7 +15,7 @@ Quan sát ngày `01/07/2026`:
 - Khi mở rộng khoảng `01/07/2016 - 01/07/2026`, có `332 giao dịch`.
 - Nhiều phiếu có ghi chú `Phiếu kiểm kho được tạo tự động khi cập nhật Hàng hóa:<Mã hàng>`.
 
-Kết luận nghiệp vụ cho QC-OMS:
+Kết luận nghiệp vụ cho QCVL:
 
 - Kiểm kho là nghiệp vụ lõi, không xếp vào nhóm bỏ/lược như các màn trả hàng/xuất nội bộ ít dữ liệu.
 - Luồng sửa tồn trực tiếp trong Hàng hóa phải tạo phiếu kiểm kho tự động để truy vết.

@@ -12,7 +12,7 @@ Màn này giúp quản lý tồn kho theo đối tượng vật lý:
 - tấm dở
 - tấm lỡ/tấm thừa
 
-Đây là điểm khác lớn giữa QC-OMS và KiotViet, vì QC-OMS không quản lý cuộn bằng tổng m2 gộp.
+Đây là điểm khác lớn giữa QCVL và KiotViet, vì QCVL không quản lý cuộn bằng tổng m2 gộp.
 
 Cuộn/tấm object-level là phase bắt buộc trước khi POS bán thật các mặt hàng cuộn/tấm. Nếu chưa có object-level, hệ thống chỉ biết tồn tổng/tồn tạm nên không biết cuộn nào hoặc tấm nào còn bao nhiêu sau khi cắt, khui hoặc kiểm kho.
 

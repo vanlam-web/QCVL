@@ -2,14 +2,14 @@
 
 > Source of Truth cho quy tắc nghiệp vụ, workflow, điều kiện áp dụng, công thức và acceptance criteria.
 >
-> File này chỉ là index. Việc đang làm / queue hiện tại nằm ở [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md).
+> File này chỉ là index. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md).
 
 ## Đọc Trước Khi Sửa Business
 
 | Cần biết | File |
 |---|---|
 | Quy tắc tầng Business | [_RULES.md](./_RULES.md) |
-| Việc đang làm / queue hiện tại | [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md) |
+| Việc đang làm / queue hiện tại | [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md) |
 | Vision và MVP scope | [../01-VISION-TamNhin/README.md](../01-VISION-TamNhin/README.md) |
 | PRD/UX liên quan | [../02-PRD-UX-PhongCanh/README.md](../02-PRD-UX-PhongCanh/README.md) |
 

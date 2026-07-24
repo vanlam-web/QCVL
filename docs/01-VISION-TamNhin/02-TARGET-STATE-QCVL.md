@@ -1,33 +1,33 @@
-﻿# TARGET STATE QC-OMS - He thong duy nhat
+# TARGET STATE QCVL - He thong duy nhat
 
 > Trang thai: Da chot dinh huong theo Owner - 2026-06-28
-> Source of Truth: muc tieu san pham cuoi cung cua QC-OMS.
+> Source of Truth: muc tieu san pham cuoi cung cua QCVL.
 
 ---
 
 ## 1. Dinh huong cuoi cung
 
-QC-OMS khong phai ban web cua QuanLyXuong cu.
+QCVL khong phai ban web cua QuanLyXuong cu.
 
 Muc tieu cuoi cung la chi con mot he thong chinh:
 
 ```text
-QC-OMS = ke toan + POS + quan ly xuong + giam sat may san xuat + cong no + bao cao + ho tro gui khach
+QCVL = ke toan + POS + quan ly xuong + giam sat may san xuat + cong no + bao cao + ho tro gui khach
 ```
 
 QuanLyXuong cu, Dashboard cu va Auto_CRM chi duoc xem la he thong legacy de hoc luong van hanh thuc te va di tru dan. Khong giu lau kien truc:
 
 ```text
-QuanLyXuong cu + Dashboard cu + Auto_CRM + QC-OMS rieng le
+QuanLyXuong cu + Dashboard cu + Auto_CRM + QCVL rieng le
 ```
 
-Khi QC-OMS du nang luc thay the, QuanLyXuong cu phai duoc tat han.
+Khi QCVL du nang luc thay the, QuanLyXuong cu phai duoc tat han.
 
 ---
 
 ## 2. Nguyen tac san pham
 
-QC-OMS phai la phan mem quan tri xuong thuc thu, khong chi la man hinh theo doi may.
+QCVL phai la phan mem quan tri xuong thuc thu, khong chi la man hinh theo doi may.
 
 He thong can phan tach ro ba mien du lieu:
 
@@ -35,9 +35,9 @@ He thong can phan tach ro ba mien du lieu:
 |---|---|---|
 | POS / Ke toan | Nhan vien nhap don, thu ngan, quan ly | Don hang, hoa don, thanh toan, cong no, doanh thu |
 | San xuat | May in, may cat, agent doc log/file | File san xuat, trang thai may, thoi gian chay, lan in lai |
-| Doi soat | QC-OMS tinh tu POS va San xuat | Chenh lech, hao hut thuc, canh bao, bao cao |
+| Doi soat | QCVL tinh tu POS va San xuat | Chenh lech, hao hut thuc, canh bao, bao cao |
 
-Hai mien POS va San xuat duoc thiet ke doc lap ve nghia vu va quyen ghi, nhung nen nam trong cung PostgreSQL/backend cu da go cua QC-OMS de doi soat an toan.
+Hai mien POS va San xuat duoc thiet ke doc lap ve nghia vu va quyen ghi, nhung nen nam trong cung PostgreSQL/backend cu da go cua QCVL de doi soat an toan.
 
 Khong nen tach thanh hai database vat ly khac nhau neu chua co ly do van hanh bat buoc. Cach dung dung la tach schema/bang/module:
 
@@ -47,7 +47,7 @@ production_*  = du lieu may san xuat
 reconcile_*   = du lieu doi soat / hao hut
 ```
 
-Neu may san xuat can chay khi mat mang, agent tren may co the dung local cache tam thoi, nhung Source of Truth van la QC-OMS.
+Neu may san xuat can chay khi mat mang, agent tren may co the dung local cache tam thoi, nhung Source of Truth van la QCVL.
 
 ---
 
@@ -60,12 +60,12 @@ Nhan vien nhap don
 May san xuat gui event
   -> production jobs / machine events / queue
 
-QC-OMS doi soat
+QCVL doi soat
   -> so sanh don nhap voi thuc te may chay
   -> tinh hao hut thuc
   -> hien thi canh bao va bao cao
 
-QC-OMS bill
+QCVL bill
   -> in / preview / ho tro gui Zalo, nhom Zalo, Facebook neu khach cau hinh
 ```
 
@@ -75,10 +75,10 @@ Trong giai doan dau, gui tin cho khach nen la co che ho tro nhan vien: sinh anh 
 
 ## 4. Man hinh may dang van hanh
 
-Man hinh Dashboard cu phai duoc thay bang man hinh trong QC-OMS:
+Man hinh Dashboard cu phai duoc thay bang man hinh trong QCVL:
 
 ```text
-QC-OMS / San xuat / Trang thai may
+QCVL / San xuat / Trang thai may
 ```
 
 Man hinh nay can hien thi:
@@ -93,15 +93,15 @@ Man hinh nay can hien thi:
 - Tong m2 theo ca, ngay, may va khach.
 - Canh bao log may khong cap nhat.
 
-Man hinh nay khong doc truc tiep SQLite cu. Du lieu can di qua bang `production_*` cua QC-OMS.
+Man hinh nay khong doc truc tiep SQLite cu. Du lieu can di qua bang `production_*` cua QCVL.
 
 ---
 
 ## 5. Doi soat va hao hut thuc
 
-Day la diem khac biet chinh giua QC-OMS va QuanLyXuong cu.
+Day la diem khac biet chinh giua QCVL va QuanLyXuong cu.
 
-QC-OMS phai so sanh duoc:
+QCVL phai so sanh duoc:
 
 ```text
 POS ghi nhan: khach dat 10 m2
@@ -124,14 +124,14 @@ He thong can phat hien cac truong hop:
 
 Thu tu thay the QuanLyXuong cu:
 
-1. Tao DB san xuat trong QC-OMS.
-2. Viet bridge doc du lieu QuanLyXuong cu va day vao QC-OMS de kiem chung.
-3. Lam man hinh giam sat may trong QC-OMS.
-4. Lam POS / hoa don nhap trong QC-OMS.
+1. Tao DB san xuat trong QCVL.
+2. Viet bridge doc du lieu QuanLyXuong cu va day vao QCVL de kiem chung.
+3. Lam man hinh giam sat may trong QCVL.
+4. Lam POS / hoa don nhap trong QCVL.
 5. Cho hang doi may bam `[+]` dua vao hoa don nhap.
 6. Lam doi soat POS voi san xuat.
 7. Tinh hao hut thuc.
-8. Viet agent may san xuat moi gui truc tiep ve QC-OMS.
+8. Viet agent may san xuat moi gui truc tiep ve QCVL.
 9. Tat han QuanLyXuong cu, Dashboard cu va Auto_CRM cu.
 
 ---

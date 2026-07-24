@@ -1,44 +1,40 @@
-# AUTH & PERMISSIONS
+# Schema xác thực và quyền QCVL
 
-> Runtime QCVL hien tai: Node API + PostgreSQL.
+Cập nhật: `2026-07-24`
+Nguồn runtime: [schema.sql](../../../database/schema.sql), [auth-routes.ts](../../../server/modules/auth/auth-routes.ts).
 
-## Nguyen Tac
+## Nguồn sự thật
 
-- Dang nhap dung bang `users` trong PostgreSQL cua QCVL.
-- Session dung bang `sessions`.
-- Permission luu theo quan he nhieu-nhieu trong `user_permissions`.
-- Khong luu mang permission trong user/profile.
-- Thay doi permission phai di qua Backend API va can co audit khi mo rong production.
-- MVP co the seed admin/noi bo voi day du quyen van hanh chinh.
+Node API và PostgreSQL QCVL là runtime. Không dùng Supabase, `auth.users`, Realtime hoặc profile client làm nguồn xác thực/quyền.
 
-## Bang Runtime Toi Thieu
+## Bảng runtime
 
-Schema runtime toi thieu nam trong [../../../database/schema.sql](../../../database/schema.sql).
-
-| Bang | Vai tro |
+| Bảng | Vai trò |
 |---|---|
-| `organizations` | Tenant/to chuc; bill settings: `shop_name`, `shop_address`, `shop_phone`, `default_bill_template` (`a4`\|`k80`) — migration `0009` |
-| `users` | Tai khoan dang nhap, password hash, display name, status |
-| `workstations` | May/quay su dung POS |
-| `permissions` | Danh muc ma quyen |
-| `user_permissions` | Gan quyen cho user |
-| `sessions` | Token dang nhap va han dung |
+| `organizations` | Organization/tenant. |
+| `users` | Login (`email`/`username`), password hash scrypt, display name, `active`/`inactive`. |
+| `workstations` | Máy/quầy POS theo organization, `active`/`inactive`. |
+| `permissions` | Danh mục mã `perm.*`, module, mô tả, trạng thái. |
+| `user_permissions` | Quan hệ nhiều-nhiều user/quyền; khóa `(user_id, permission_code)`. |
+| `sessions` | Token đăng nhập, user sở hữu, expiry UTC. |
 
-## Seed Toi Thieu
+## Ràng buộc chính
 
-Migration/seed phai tao:
+- `users`: email unique không phân biệt hoa/thường; username unique trong organization nếu có giá trị.
+- `workstations`: code unique trong organization.
+- `permissions.code` phải khớp `perm.[a-z0-9_]+`.
+- Session bị xóa khi user bị xóa; `expires_at` là instant UTC.
+- Mọi lookup/route protected cần user session hợp lệ; workstation được truyền qua `X-Workstation-Id` khi endpoint yêu cầu context máy/quầy.
 
-1. Organization `VAN-LAM`.
-2. Danh muc permission can cho POS/admin/finance/inventory.
-3. It nhat mot workstation active.
-4. It nhat mot admin active duoc gan day du permission can thiet.
+## Seed và quản trị
 
-Khong ghi password bootstrap vao repository.
+- Bootstrap cần organization, tối thiểu một workstation active, permission runtime và admin active.
+- Password bootstrap không được ghi vào repository/tài liệu active.
+- Cấp/thu quyền đi qua admin flow/repository có audit khi mở rộng production; không ghi mảng quyền vào profile/client state.
+- Preset Owner/Admin, nhân viên nội bộ, restricted chỉ là cách cấp nhanh; không thay role cứng hoặc quan hệ `user_permissions`.
 
-## Preset Goi Y
+## Tham chiếu
 
-| Preset | Cach luu MVP | Ghi chu |
-|---|---|---|
-| Owner/Admin | Gan toan bo active permissions | Bat buoc co `perm.manage_users` |
-| Internal Staff | Gan quyen van hanh MVP chinh | POS, khach hang, bang gia, kho, tai chinh |
-| Restricted | Gan thu cong theo ngoai le | Dung cho tai khoan thue ngoai/thu viec |
+- [Auth API](../../05-BACKEND-MayChu/POS/AUTH.md)
+- [Schema runtime](../../../database/schema.sql)
+- [Quy ước backend](../../05-BACKEND-MayChu/BACKEND_CONVENTIONS.md)

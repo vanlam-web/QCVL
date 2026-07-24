@@ -8,7 +8,7 @@
 
 Màn Công nợ giúp nhân viên xem nợ theo khách hàng và thu nợ ngoài checkout POS.
 
-QC-OMS quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo một số tổng.
+QCVL quản lý công nợ theo từng hóa đơn còn nợ, không chỉ theo một số tổng.
 
 Số tổng công nợ hiển thị chính phải lấy từ công thức canonical ở [Business Finance CUSTOMER-DEBT.md](../../03-BUSINESS-NghiepVu/Finance/CUSTOMER-DEBT.md). Không tự cộng riêng hóa đơn mở trong frontend.
 

@@ -1,4 +1,4 @@
-﻿# 02-SALES-DOCUMENT-DETAIL — Chi tiết chứng từ bán hàng
+# 02-SALES-DOCUMENT-DETAIL — Chi tiết chứng từ bán hàng
 
 > **Phase hiện tại:** Readonly detail cho `HD...`/`BG...`; báo giá active mở lại được vào POS draft
 
@@ -9,18 +9,18 @@
 Quan sát hóa đơn `HD010985` ngày `30/06/2026`:
 
 - Chi tiết nằm ngay dưới dòng hóa đơn trong danh sách.
-- Tab `Thông tin` của KiotViet có khách hàng, mã hóa đơn, trạng thái, người tạo, người bán, ngày bán, kênh bán, bảng giá và chi nhánh. Với hóa đơn QC-OMS, chip trạng thái chính hiển thị trạng thái thanh toán, không hiển thị lifecycle nội bộ.
+- Tab `Thông tin` của KiotViet có khách hàng, mã hóa đơn, trạng thái, người tạo, người bán, ngày bán, kênh bán, bảng giá và chi nhánh. Với hóa đơn QCVL, chip trạng thái chính hiển thị trạng thái thanh toán, không hiển thị lifecycle nội bộ.
 - Dòng hàng có mã hàng, tên hàng, số lượng, đơn giá, giá bán và thành tiền.
 - Một số dòng in/kích thước thể hiện ngay trong dòng hàng, ví dụ `2.5m x 3.3m x 1`, số lượng tính thành `8.25`.
 - Tổng cuối chứng từ gồm tổng tiền hàng, giảm giá hóa đơn, khách cần trả, khách đã trả.
 - Hóa đơn có thể `Hoàn thành` nhưng `Khách đã trả = 0`, nghĩa là chi tiết chứng từ phải thể hiện công nợ theo hóa đơn.
 
-Áp dụng cho QC-OMS:
+Áp dụng cho QCVL:
 
 - Chi tiết chứng từ ưu tiên đọc nhanh ngay trong trang danh sách hoặc trang detail riêng đều được, miễn giữ đủ snapshot.
 - Kích thước/m2/mét tới phải là dữ liệu có cấu trúc trong dòng hàng, không chỉ là text trang trí.
 - `Bảng giá` và người bán phải lưu snapshot theo chứng từ.
-- QC-OMS không lưu/hiển thị kênh bán trong MVP vì chỉ có bán trực tiếp tại xưởng.
+- QCVL không lưu/hiển thị kênh bán trong MVP vì chỉ có bán trực tiếp tại xưởng.
 
 ---
 
@@ -83,7 +83,7 @@ Hiển thị:
 - Loại chứng từ: Báo giá hoặc Hóa đơn.
 - Trạng thái.
 - Khách hàng snapshot tại thời điểm lưu.
-- Người bán: tài khoản tạo/chốt chứng từ. QC-OMS hiện tại không tách riêng `người tạo` và `người bán`.
+- Người bán: tài khoản tạo/chốt chứng từ. QCVL hiện tại không tách riêng `người tạo` và `người bán`.
 - Bảng giá đã áp dụng.
 - Chi nhánh không hiển thị trong MVP vì hiện chỉ có một chi nhánh ngầm; chỉ bổ sung nếu sau này thật sự vận hành nhiều chi nhánh/kho.
 - Ghi chú đơn có thể sửa trực tiếp trong detail; lưu qua `PATCH /api/v1/sales-documents/{id}` body `{ "note": "..." }`.

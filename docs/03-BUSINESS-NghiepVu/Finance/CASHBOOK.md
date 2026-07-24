@@ -8,10 +8,9 @@
 
 ## Cập nhật hiện tại
 
-Updated: 2026-07-21
+Cập nhật: `2026-07-24`
 
-- Thiết kế planned cho đối tượng nộp/nhận khi tạo phiếu thu/chi thủ công: `docs/superpowers/specs/2026-07-21-finance-voucher-counterparty-design.md`.
-- Quy tắc chốt: `Phiếu thu`/`Phiếu chi` là hướng phiếu; `Tiền mặt`/`Chuyển khoản` là `Phương thức TT`; loại thu/chi quyết định người nộp/nhận có thể là khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng hoặc khác.
+- Contract hiện hành cho đối tượng nộp/nhận khi tạo phiếu thu/chi thủ công: `Phiếu thu`/`Phiếu chi` là hướng phiếu; `Tiền mặt`/`Chuyển khoản` là `Phương thức TT`; loại thu/chi quyết định người nộp/nhận có thể là khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng hoặc khác.
 - `Người thu`, `Người chi`, `Người tạo`, `Người bán` là tài khoản đăng nhập.
 - Chỉ nhóm `Khác` được nhập tự do; khách hàng, nhà cung cấp, nhân viên, đối tác giao hàng phải chọn hoặc tạo nhanh bản ghi master data trước khi lưu phiếu.
 - Chức năng phiếu thu/chi cần đủ: tạo, lưu, lưu & in, xem, sửa bằng bản mới, hủy mềm, in, tìm/lọc/sắp xếp/xuất file. `Xóa` không xóa vật lý.
@@ -23,7 +22,7 @@ Updated: 2026-07-21
 Quan sát bổ sung ngày `05/07/2026`:
 
 - KiotViet có 4 nhóm quỹ hiển thị: `Tiền mặt`, `Ngân hàng`, `Ví điện tử`, `Tổng quỹ`.
-- QC-OMS MVP vẫn chốt `cash` và `bank`; `Ví điện tử` là khả năng mở rộng, chưa làm nếu chưa có nghiệp vụ riêng.
+- QCVL MVP vẫn chốt `cash` và `bank`; `Ví điện tử` là khả năng mở rộng, chưa làm nếu chưa có nghiệp vụ riêng.
 - Sổ quỹ cần lọc được theo `Công nợ đối tác`: tính vào công nợ, không tính vào công nợ, không có công nợ.
 - Phiếu thu/chi có cờ `Hạch toán kết quả kinh doanh`; dòng không hạch toán vẫn vào sổ quỹ nhưng không tính vào báo cáo kinh doanh.
 - Phiếu thu tự động từ hóa đơn có bảng gắn hóa đơn/phân bổ.
@@ -37,7 +36,7 @@ Quan sát ngày `01/07/2026`:
 - Phiếu thu tự động từ hóa đơn hiển thị liên kết hóa đơn và bảng phân bổ thu vào hóa đơn.
 - Phiếu chi thủ công có thông tin có/không hạch toán kết quả kinh doanh, người chi, người nhận, phương thức thanh toán và ghi chú.
 
-Kết luận nghiệp vụ cho QC-OMS:
+Kết luận nghiệp vụ cho QCVL:
 
 - Sổ quỹ là nghiệp vụ lõi, phục vụ thu/chi, công nợ và đối soát cuối ngày.
 - Tìm phiếu theo mã phải tìm được lịch sử dài hạn, không bị bộ lọc tháng hiện tại che mất.
@@ -48,7 +47,7 @@ Kết luận nghiệp vụ cho QC-OMS:
 
 ## 1. Mục đích
 
-Tài liệu này là Source of Truth cho nghiệp vụ sổ quỹ của QC-OMS:
+Tài liệu này là Source of Truth cho nghiệp vụ sổ quỹ của QCVL:
 
 - quỹ tiền mặt và tài khoản ngân hàng
 - phiếu thu và phiếu chi

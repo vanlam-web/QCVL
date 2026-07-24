@@ -2,15 +2,14 @@
 
 > Source of Truth cho màn hình, luồng thao tác, bố cục, trạng thái UI và hành vi người dùng.
 >
-> File này chỉ là index. Trạng thái sống / queue hiện tại nằm ở [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md).
+> File này chỉ là index. Trạng thái sống / queue hiện tại nằm ở [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md).
 
 ## Đọc Trước Khi Sửa PRD/UX
 
 | Cần biết | File |
 |---|---|
 | Quy tắc tầng PRD/UX | [_RULES.md](./_RULES.md) |
-| Trạng thái sống / queue hiện tại | [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md) |
-| Quy ước phối hợp Spec / Implement / Review | [../WORKFLOW-SPEC-IMPLEMENT.md](../WORKFLOW-SPEC-IMPLEMENT.md) |
+| Trạng thái sống / queue hiện tại | [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md) |
 | UI shell, token, layout quản lý dùng chung | [System/00-UI-SHELL-V1.md](./System/00-UI-SHELL-V1.md) |
 
 ## Module Chính

@@ -98,7 +98,7 @@ Tham khảo chính thức KV + thẻ kho xưởng:
 3. Giá vốn combo = tổng giá vốn thành phần.  
 4. Không hỗ trợ đặt hàng nhập / nhập hàng trực tiếp cho loại Combo – Đóng gói.
 
-| # | Câu hỏi trước đó | Chốt theo KV → QC-OMS |
+| # | Câu hỏi trước đó | Chốt theo KV → QCVL |
 |---|---|---|
 | 1 | Skip parent theo gì? | **Không trừ tồn mã combo.** Gate: `track_inventory === false` **hoặc** `product_kind` ∈ (`combo`, `service`). Khớp KV: combo/đóng gói **không quản lý tồn riêng**; dịch vụ cũng không tồn. |
 | 2 | Cùng lúc BOM `active`? | KV dùng thành phần **ngay khi bán**, không nháp duyệt. **Slice POS:** sửa skip parent trước; **vẫn trừ BOM `draft`\|`active`** cho đến khi migrate import → `active` (PR BOM riêng). Không chuyển “chỉ active” trước migrate — sẽ mất trừ thành phần. |
@@ -120,4 +120,4 @@ Tham khảo chính thức KV + thẻ kho xưởng:
 
 ---
 
-← [Sales README](./README.md) · [DOC-CLEANUP-CHECKLIST](../../DOC-CLEANUP-CHECKLIST.md)
+← [Sales README](./README.md) · [DOC-CLEANUP-CHECKLIST ](../../DOCUMENT_RULES.md)

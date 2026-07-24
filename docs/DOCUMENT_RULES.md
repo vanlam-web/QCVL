@@ -1,81 +1,67 @@
-# Document Rules
+# Quy tắc tài liệu QCVL
 
-Updated: 2026-07-18
+Cập nhật: `2026-07-24`
 
-This file governs `docs/`. Keep docs useful for future AI work: short, current-first, linked to deeper sources.
+Tài liệu phải tiếng Việt UTF-8, ngắn, current-first và dẫn tới source sâu hơn thay vì chép timeline.
 
-## Priority Order
+## Thứ tự ưu tiên
 
-When sources disagree, use this order:
-
-1. Latest Owner decision in chat.
+1. Quyết định mới nhất của Owner.
 2. `AI_TEAM_RULES.md`.
-3. `docs/WORKER-START-HERE.md`.
-4. This file.
-5. `docs/ARCHITECTURE.md` and layer `_RULES.md`.
-6. Feature docs.
-7. Old plans/history.
+3. `WORKER-START-HERE.md`.
+4. File này.
+5. `ARCHITECTURE.md`, layer `_RULES.md`, feature docs.
+6. Git history chỉ làm evidence.
 
-Old plans under `docs/superpowers/plans/` are historical unless Owner explicitly says to follow one.
+## Hình dạng bắt buộc
 
-## Required Shape
+Tài liệu active cần có mục đích, ngày cập nhật, rule/fact hiện hành trước, link source sâu hơn. README chỉ điều
+hướng. Xóa stale doc không còn evidence; evidence ở Git history hoặc archive ghi rõ. Không để tracker/plan/log
+superseded chỉ dẫn workflow active.
 
-Every living doc should start with:
-
-- purpose
-- updated date
-- current rule/status first
-- links to deeper files instead of repeated history
-
-Keep long timelines out of first-read docs. If history matters, summarize the latest fact and link to the original evidence.
-
-During the 2026-07 docs cleanup wave, track open cleanup items in [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) (temporary). Prefer module README “3 lớp” over repeating status in many satellite files.
-
-## Editing Rule
-
-Before changing docs:
+## Trước khi sửa
 
 ```powershell
 npm run preflight
 ```
 
-Then:
+Đọc file hiện tại và source link trực tiếp, giữ một source-of-truth cho mỗi fact, kiểm link và `git diff`.
 
-- read the current file
-- read directly linked rule/source files
-- update only the scope Owner asked for
-- keep one source of truth for each fact
-- check links and `git diff`
+## Phân lớp
 
-## What Goes Where
+| Nội dung | Nơi sở hữu |
+|---|---|
+| Quy tắc làm việc | `AI_TEAM_RULES.md` |
+| Điểm vào worker | `WORKER-START-HERE.md` |
+| Điều phối scope | `PROJECT-COORDINATION.md` |
+| Nguồn dữ liệu runtime | `CURRENT-DATA-SOURCE.md` |
+| UI/UX | `02-PRD-UX-PhongCanh/` |
+| Nghiệp vụ | `03-BUSINESS-NghiepVu/` |
+| Schema/migration | `04-DATABASE/`, `database/migrations/` |
+| API/server | `05-BACKEND-MayChu/` |
+| Triển khai/vận hành | `07-DEPLOYMENT-TrienKhai/` |
 
-| Content | File area |
-| --- | --- |
-| AI working rules | `AI_TEAM_RULES.md` |
-| short worker entry | `docs/WORKER-START-HERE.md` |
-| two-machine coordination | `docs/PROJECT-COORDINATION.md` |
-| runtime data truth | `docs/CURRENT-DATA-SOURCE.md` |
-| UI/UX behavior | `docs/02-PRD-UX-PhongCanh/` |
-| business rules | `docs/03-BUSINESS-NghiepVu/` |
-| schema | `docs/04-DATABASE/` and `database/migrations/` |
-| API/server behavior | `docs/05-BACKEND-MayChu/` |
-| deploy/ops | `docs/07-DEPLOYMENT-TrienKhai/` |
+## Cấm
 
-## Do Not
+- Không chép log/timeline dài vào first-read docs.
+- Không link giả, secret, dump DB, backup hoặc log tạm.
+- Không mô tả hành vi code chưa hỗ trợ như đã triển khai.
+- Không để tài liệu tầng dưới override Owner/rule active.
 
-- Do not copy huge old logs into first-read docs.
-- Do not use fake links like `http://FILE.md`.
-- Do not put runtime secrets, DB dumps, backups, or temp logs in docs.
-- Do not document a business behavior that code does not support unless marked as planned.
-- Do not let a lower-level doc override Owner decision or `AI_TEAM_RULES.md`.
+## Checklist quy trình bắt buộc
 
-## Verification
+Tài liệu active có workflow/operation phải dùng checklist Markdown, không chỉ mô tả bằng prose.
 
-For doc-only changes, run:
+- `[ ]` chưa làm; `[~]` đang làm; `[x]` hoàn tất kèm evidence; `[!] Blocked` chỉ khi có evidence exact và quyết định Owner cần thiết.
+- Mỗi checklist workflow phải có source input, thao tác, guard/allow-list, verification, post-audit khi chạm runtime/data, update tài liệu/plan và điều kiện đóng.
+- Không publish một quy trình khi checklist còn item mở; không thay checklist bằng heading “Phase”, “MVP”, “Proposed Changes” hoặc paragraph.
+- Khi rule/tài liệu không tuân: sửa checklist/rule trước khi dùng quy trình đó.
+
+## Xác minh
 
 ```powershell
 npm run preflight
 npx vitest run scripts/preflight.test.mjs scripts/test-script-scope.test.mjs
 ```
 
-If Vietnamese text changed, also scan changed files for mojibake.
+Sau khi sửa tiếng Việt, quét mojibake. Khi xóa/đổi tên tài liệu, chạy link audit toàn repo. Checklist scope chỉ được đánh `[x]` sau verification đã ghi evidence.

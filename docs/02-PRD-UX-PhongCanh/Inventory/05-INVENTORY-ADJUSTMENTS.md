@@ -8,7 +8,7 @@
 
 Màn/luồng này giúp ghi nhận vật tư bị bỏ, hỏng, dùng nội bộ hoặc tấm lỡ cần giữ lại/sửa/xóa mà không tạo một module phiếu phức tạp như KiotViet.
 
-QC-OMS ưu tiên thao tác nhanh:
+QCVL ưu tiên thao tác nhanh:
 
 - không làm Xuất dùng nội bộ riêng
 - không làm Xuất hủy riêng
@@ -76,7 +76,7 @@ UI hiển thị bằng tiếng Việt dễ hiểu:
 - Hủy hỏng
 - Khác
 
-`Dùng nội bộ` không hiển thị như module/lý do mặc định trong QC-OMS hiện tại vì KiotViet không có dữ liệu thực tế và Owner chưa có nhu cầu rõ. Nếu sau này phát sinh, dùng `Khác` kèm ghi chú trước khi mở reason riêng.
+`Dùng nội bộ` không hiển thị như module/lý do mặc định trong QCVL hiện tại vì KiotViet không có dữ liệu thực tế và Owner chưa có nhu cầu rõ. Nếu sau này phát sinh, dùng `Khác` kèm ghi chú trước khi mở reason riêng.
 
 ---
 

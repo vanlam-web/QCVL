@@ -8,7 +8,7 @@
 
 ## 1. Nguyên tắc UX
 
-QC-OMS tham khảo KiotViet nhưng đơn giản hơn:
+QCVL tham khảo KiotViet nhưng đơn giản hơn:
 
 - một màn danh sách nhà cung cấp
 - một màn danh sách phiếu nhập
@@ -22,7 +22,7 @@ Ghi nhận từ KiotViet:
 - `Nhà cung cấp` có tìm theo mã/tên/số điện thoại, cột mã NCC, tên, điện thoại, email, nợ hiện tại, tổng mua.
 - `Nhập hàng` có danh sách phiếu theo mã phiếu, thời gian, mã NCC, nhà cung cấp, cần trả NCC, trạng thái.
 - Form nhập hàng có tìm hàng theo mã/tên, chọn/tạo nhanh NCC, mã phiếu tự động, số hóa đơn/chứng từ đầu vào dạng text, dòng hàng gồm số lượng, đơn giá, giảm giá, thành tiền.
-- QC-OMS giữ các phần này, nhưng bỏ đặt hàng nhập, trả hàng nhập, VAT/HĐĐT và hiệu lực phức tạp trong lát cắt đầu.
+- QCVL giữ các phần này, nhưng bỏ đặt hàng nhập, trả hàng nhập, VAT/HĐĐT và hiệu lực phức tạp trong lát cắt đầu.
 
 Các danh sách quản trị trong module Purchase phải dùng chung layout `management-*` giống Customers:
 
@@ -73,7 +73,7 @@ Email không hiện ở bảng chính; chỉ hiển thị trong form/chi tiết 
 
 Nhóm NCC không hiện ở bảng chính. Nếu sau này cần hiển thị ở detail, dùng field chuẩn bị dữ liệu; còn hiện tại import/file chưa có nhóm thật thì để trống, không dựng nhóm giả.
 
-Nếu `Nợ cần trả hiện tại < 0`, UI không mặc định hiểu là trả trước NCC. Trong nghiệp vụ QC-OMS, NCC có thể đồng thời là khách hàng; số âm là tín hiệu cần đối soát với hồ sơ khách hàng liên kết.
+Nếu `Nợ cần trả hiện tại < 0`, UI không mặc định hiểu là trả trước NCC. Trong nghiệp vụ QCVL, NCC có thể đồng thời là khách hàng; số âm là tín hiệu cần đối soát với hồ sơ khách hàng liên kết.
 
 ---
 
@@ -159,7 +159,7 @@ Nguồn UX tham chiếu:
 - POS `K03-A`: khi chưa chọn khách thì hiện ô `Tìm khách hàng (F4)` và gợi ý; khi đã chọn khách thì ô tìm được thay bằng khối `Khách đã chọn`.
 - Purchase áp dụng cùng pattern: khi chưa chọn NCC thì hiện ô `Tìm NCC`; khi đã chọn NCC thì ô tìm được thay bằng khối `Nhà cung cấp đã chọn`.
 - KiotViet `Nhập hàng` hướng dẫn chọn NCC bằng ô `Tìm nhà cung cấp (F4)` hoặc nhấn biểu tượng `+` để thêm NCC mới ngay trong phiếu nhập.
-- KiotViet `Nhà cung cấp` cũng ghi nhận có thể thêm nhanh NCC trong quá trình tạo phiếu `Nhập hàng`/`Đặt hàng nhập`/`Trả hàng nhập`; QC-OMS chỉ làm trong `Nhập hàng` trước.
+- KiotViet `Nhà cung cấp` cũng ghi nhận có thể thêm nhanh NCC trong quá trình tạo phiếu `Nhập hàng`/`Đặt hàng nhập`/`Trả hàng nhập`; QCVL chỉ làm trong `Nhập hàng` trước.
 
 Trạng thái bắt buộc:
 
@@ -197,7 +197,7 @@ Quy tắc thêm nhanh NCC:
 - SĐT, email, địa chỉ, MST, ghi chú là tùy chọn.
 - Sau khi lưu NCC mới thành công, tự chọn NCC đó vào phiếu đang tạo và chuyển sang khối `Nhà cung cấp đã chọn`.
 - Nếu đang nhập dở dòng hàng, thêm nhanh NCC không làm mất dòng hàng.
-- QC-OMS không làm `Đặt hàng nhập`/`Trả hàng nhập` trong lát cắt này, nên nút thêm nhanh chỉ áp dụng cho `/receipts/new`.
+- QCVL không làm `Đặt hàng nhập`/`Trả hàng nhập` trong lát cắt này, nên nút thêm nhanh chỉ áp dụng cho `/receipts/new`.
 
 Trạng thái runtime 2026-07-21:
 

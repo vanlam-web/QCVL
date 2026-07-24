@@ -97,7 +97,7 @@ src/
 
 > Database reference: `04-DATABASE/Sales/POS-TABLES.md`
 
-Khi Store thay đổi (debounce 300ms), ghi xuống LocalStorage (key: `qc-oms.pos.invoice-tabs.v1`):
+Khi Store thay đổi (debounce 300ms), ghi xuống LocalStorage (key: `QCVL.pos.invoice-tabs.v1`):
 
 | Vùng dữ liệu | Ghi chú |
 |---|---|
@@ -112,7 +112,7 @@ Khi Store thay đổi (debounce 300ms), ghi xuống LocalStorage (key: `qc-oms.p
 ```
 Bất kỳ thay đổi nào trong Store (addRow, setNote, setCustomer...)
     ↓ (Debounce 300ms)
-Ghi xuống LocalStorage (key: `qc-oms.pos.invoice-tabs.v1`)
+Ghi xuống LocalStorage (key: `QCVL.pos.invoice-tabs.v1`)
     ↓
 Sập nguồn / F5 / Đóng tab trình duyệt → Dữ liệu vẫn còn nguyên
     ↓
@@ -126,7 +126,7 @@ Dữ liệu CHỈ bị xóa sạch khỏi LocalStorage khi:
 ### 2.3. Lưu ý an toàn
 
 - Không lưu thông tin nhạy cảm (mật khẩu, token bí mật) — chỉ lưu state làm việc.
-- Khi version schema thay đổi, tăng suffix key `qc-oms.pos.invoice-tabs.v1` → `v2` để tránh crash do dữ liệu cũ.
+- Khi version schema thay đổi, tăng suffix key `QCVL.pos.invoice-tabs.v1` → `v2` để tránh crash do dữ liệu cũ.
 
 ---
 

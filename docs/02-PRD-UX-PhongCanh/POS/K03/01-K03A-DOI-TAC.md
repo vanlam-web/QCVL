@@ -1,4 +1,4 @@
-﻿# 01-K03A-DOI-TAC.md — K03-A: HỒ SƠ ĐỐI TÁC & BỘ LỌC GIÁ
+# 01-K03A-DOI-TAC.md — K03-A: HỒ SƠ ĐỐI TÁC & BỘ LỌC GIÁ
 
 > **Phần:** 2.1
 > **Trở về:** [01-POS-LAYOUT.md](../01-POS-LAYOUT.md)
@@ -73,7 +73,7 @@
   - Email.
   - Nút cấu hình gửi tin nhắn/bill cho khách.
   - Ghi chú.
-- Không sử dụng ảnh khách hàng, chi nhánh, ngày sinh hoặc giới tính trong hồ sơ khách hàng QC-OMS.
+- Không sử dụng ảnh khách hàng, chi nhánh, ngày sinh hoặc giới tính trong hồ sơ khách hàng QCVL.
 - Các trường tùy chọn được đặt trong phần **Thông tin thêm** để thao tác thêm nhanh vẫn gọn.
 - SĐT là thông tin tùy chọn. Nếu có nhập thì phải hợp lệ sau chuẩn hóa và không được trùng với khách khác.
 - Tên khách không được trùng khách khác trong cùng tổ chức sau khi chuẩn hóa khoảng trắng và hoa/thường; không thể tạo thêm biến thể của `Khách lẻ`.
@@ -142,14 +142,14 @@
 
 ### V.1. Thông tin pháp lý nội bộ
 
-- QC-OMS không làm hóa đơn điện tử/VAT trong scope hiện tại.
+- QCVL không làm hóa đơn điện tử/VAT trong scope hiện tại.
 - Không có tab `Thông tin xuất hóa đơn` riêng trong POS.
 - Nếu xưởng cần lưu tên đơn vị, mã số thuế hoặc địa chỉ pháp lý để tham khảo nội bộ, đặt trong tab **Thông tin** hoặc ghi chú khách hàng.
 - Không có nút tra cứu MST, phát hành HĐĐT hoặc kiểm tra trường bắt buộc cho HĐĐT.
 
 ### V.2. Tab Lịch sử bán hàng
 
-- QC-OMS không có nghiệp vụ trả hàng; không hiển thị trạng thái trả hàng, số lượng trả hoặc chức năng trả hàng trong tab này.
+- QCVL không có nghiệp vụ trả hàng; không hiển thị trạng thái trả hàng, số lượng trả hoặc chức năng trả hàng trong tab này.
 - Danh sách được sắp xếp theo thời gian mới nhất ở trên cùng.
 - Bảng gồm các cột:
   - Mã hóa đơn.

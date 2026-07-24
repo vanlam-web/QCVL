@@ -1,7 +1,7 @@
 # FINANCE — Nghiệp vụ tài chính
 
-> Index SoT tài chính. Queue: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).  
-> Checklist docs: [../../DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
+> Điều phối công việc: [PROJECT-COORDINATION.md](../../PROJECT-COORDINATION.md).
+> Checklist tài liệu: [Quy tắc tài liệu](../../DOCUMENT_RULES.md).
 >
 > Công thức công nợ khách: [CUSTOMER-DEBT.md](./CUSTOMER-DEBT.md) · POS debt: [../Sales/POS-CUSTOMER-DEBT.md](../Sales/POS-CUSTOMER-DEBT.md) · PRD [../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md](../../02-PRD-UX-PhongCanh/Finance/03-CUSTOMER-DEBT.md).
 

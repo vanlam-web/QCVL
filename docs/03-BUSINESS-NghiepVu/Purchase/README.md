@@ -1,7 +1,7 @@
 # Purchase/Supplier — Nghiệp vụ nhà cung cấp và nhập hàng
 
-> Index SoT Purchase. Queue sản phẩm: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).  
-> Tiến độ chỉnh lý docs: [../../DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
+> Nguồn sự thật nghiệp vụ nhập hàng. Điều phối công việc: [PROJECT-COORDINATION.md](../../PROJECT-COORDINATION.md).
+> Tiến độ chỉnh lý tài liệu: [Quy tắc tài liệu](../../DOCUMENT_RULES.md).
 >
 > Cách đọc: **SoT** ≠ **runtime** (bảng dưới). “Đã merge” trong slice cũ có thể chỉ là UI/import — không đồng nghĩa live create/post đã persist.
 

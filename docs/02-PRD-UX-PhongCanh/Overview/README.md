@@ -1,6 +1,6 @@
 # Overview — Tổng Quan Vận Hành
 
-> Index cho đặc tả UI Overview. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI Overview. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
 > Tham khảo: KiotViet `Tổng quan`, lược bỏ trả hàng, chấm công, vay vốn và marketing widget.
 

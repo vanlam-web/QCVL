@@ -1,41 +1,33 @@
-# PHAN 7: TRIEN KHAI (DEPLOYMENT)
+# Phần 7 — Triển khai và vận hành
 
-> Source of Truth cho moi truong, build/deploy, van hanh, backup/restore va rollback.
+Lớp này là nguồn sự thật cho môi trường, build/deploy, backup/restore, rollback và vận hành QCVL.
 
-## Doc Truoc Khi Sua Deployment
+## Đọc trước khi sửa hoặc deploy
 
-| Can biet | File |
+| Mục đích | Tài liệu |
 |---|---|
-| Quy tac tang Deployment | [_RULES.md](./_RULES.md) |
-| Quy uoc trien khai chung | [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) |
-| NAS dev hien tai | [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) |
+| Quy tắc tầng triển khai | [_RULES.md](./_RULES.md) |
+| Quy ước triển khai | [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) |
+| Runbook NAS hiện hành | [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) |
+| Nguồn dữ liệu runtime | [CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) |
 
 ## Runtime QCVL
 
-QCVL runtime hien tai la Node API + PostgreSQL tren NAS.
+- Release target duy nhất là `3200`; `3202` chỉ local development, không là staging/promotion target.
+- Scope đã verified và commit sạch release qua `npm run deploy:nas:image`; image deploy có migration, health, smoke và rollback tự động.
+- Destructive data/migration risk cần checklist checkpoint riêng.
 
-- Doc [../CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) truoc khi sua/deploy cac luong hoa don, bao gia, cong no, thu no, so quy.
-- Docker duoc giu cho NAS app/PostgreSQL containers.
-- Khong dung Supabase cho auth, API, realtime, seed data, test, hoac local dev.
-- Khong dung Docker local de chay Supabase.
-- Neu can demo/test data, ghi vao PostgreSQL/API runtime cua QCVL.
-- Docs chi giu o workspace local/git. NAS chi giu runtime app, build output, source/config can cho container build/start, PostgreSQL data va env runtime.
+## Tài liệu chính
 
-## Entry Chinh
-
-| File | Vai tro |
+| Tài liệu | Vai trò |
 |---|---|
-| [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) | Trang thai trien khai NAS dev hien tai cua QCVL |
-| [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) | Quy uoc Docker NAS, CI/CD, backup, monitoring |
-| [PRODUCTION.md](./PRODUCTION.md) | Van hanh production, smoke test, rollback, monitoring |
-| [BACKUP-RESTORE.md](./BACKUP-RESTORE.md) | Chinh sach backup, RPO/RTO va restore drill |
+| [QCVL-NAS-DEV.md](./QCVL-NAS-DEV.md) | Runbook deploy NAS hiện hành. |
+| [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md) | Quy ước Docker NAS, CI/CD, backup và monitoring. |
+| [PRODUCTION.md](./PRODUCTION.md) | Vận hành production, smoke test và rollback. |
+| [BACKUP-RESTORE.md](./BACKUP-RESTORE.md) | Backup, RPO/RTO và restore drill. |
 
-## Pham Vi Tang
+## Ranh giới
 
-| Loai | Ghi o Deployment |
-|---|---|
-| Chi ghi | Deployment architecture, environment, CI/CD, monitoring, logging, backup/restore, rollback |
-| Chi tham chieu | Business, database, backend/API, integration |
-| Khong ghi | Vision, feature spec, UI/wireframe, business rule, schema chi tiet, frontend/backend source code |
+Ghi ở lớp này: Giữ môi trường, build/release direct `3200`, CI/CD, monitoring/logging, backup/restore, rollback và incident runbook. Không giữ feature spec, UI, business rule, schema chi tiết hoặc source code. Release cần commit sạch, verification, health/smoke và rollback path; destructive data/migration risk giữ checkpoint riêng.
 
-<- [Quay ve README chinh](../README.md)
+← [Quay về tài liệu chính](../README.md)

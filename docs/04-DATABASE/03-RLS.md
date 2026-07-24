@@ -1,30 +1,30 @@
-# Data Access Guard
+# Bảo vệ truy cập dữ liệu QCVL
 
-> QCVL hien tai dung Node API + PostgreSQL. Khong co client ghi truc tiep vao database.
+Cập nhật: `2026-07-24`
 
-## Nguyen Tac
+## Runtime hiện hành
 
-- Frontend chi goi Node API.
-- Client khong duoc tu cung cap `organization_id` lam nguon tin cay.
-- Moi thao tac ghi di qua Backend API sau khi kiem tra permission.
-- Tenant filter va permission guard nam o Backend.
-- Policy database khong thay the validation va authorization trong use case.
+QCVL dùng Node API và PostgreSQL. Client không đọc/ghi trực tiếp database; không có PostgreSQL RLS/policy runtime được khai báo trong migration hiện hành.
 
-## Foundation/System
+## Quy tắc bắt buộc
 
-| Bang | Client doc truc tiep | Ghi truc tiep |
-|---|---|---|
-| `organizations` | Khong | Khong |
-| `users` | Khong | Khong |
-| `workstations` | Khong | Khong |
-| `permissions` | Khong | Khong |
-| `user_permissions` | Khong | Khong |
+- Frontend chỉ gọi Node API.
+- `organization_id` lấy từ session/current user ở server; không tin `organization_id` do client tự gửi.
+- Mỗi query/mutation dữ liệu tenant phải scope `organization_id`.
+- Endpoint protected phải xác thực session, workstation khi cần và permission phù hợp trước khi truy cập repository.
+- Database constraint/index hỗ trợ toàn vẹn nhưng không thay validation/authorization của use case.
+- Client không được tạo/sửa session, permission, user permission hoặc organization bằng đường ghi database trực tiếp.
 
-Trang quan tri tai khoan goi `/api/v1/users`; Backend kiem tra `perm.manage_users`.
+## Test tối thiểu
 
-## Test Bat Buoc
+1. User chỉ nhận dữ liệu organization của session.
+2. Request cross-organization bị từ chối hoặc không trả dữ liệu.
+3. User thiếu quyền không mutation được dữ liệu protected.
+4. Client payload không thể đổi tenant scope/permission source.
+5. Repository mutation luôn nhận organization scope từ server context.
 
-1. User chi nhan du lieu dung organization.
-2. User khong doc duoc du lieu organization khac.
-3. User khong tu ghi permission.
-4. Backend chi cho thao tac sau permission guard.
+## Tham chiếu
+
+- [Schema auth và quyền](./System/AUTH-PERMISSIONS.md)
+- [Auth API](../05-BACKEND-MayChu/POS/AUTH.md)
+- [Quy ước backend](../05-BACKEND-MayChu/BACKEND_CONVENTIONS.md)

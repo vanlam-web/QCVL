@@ -1,4 +1,4 @@
-﻿# POS-CUSTOMER — Nghiệp vụ khách hàng POS
+# POS-CUSTOMER — Nghiệp vụ khách hàng POS
 
 > **Nguồn:** Chốt từ draft Git history
 

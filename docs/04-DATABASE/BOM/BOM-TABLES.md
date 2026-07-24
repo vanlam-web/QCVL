@@ -2,7 +2,7 @@
 
 > **Vai trò:** Thiết kế dữ liệu mục tiêu + ghi chú runtime.
 > **Business:** [BOM-RULES.md](../../03-BUSINESS-NghiepVu/BOM/BOM-RULES.md) · [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md)
-> **Trừ kho bán:** [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · [DOC-CLEANUP-CHECKLIST](../../DOC-CLEANUP-CHECKLIST.md)
+> **Trừ kho bán:** [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · [DOC-CLEANUP-CHECKLIST ](../../DOCUMENT_RULES.md)
 
 ---
 

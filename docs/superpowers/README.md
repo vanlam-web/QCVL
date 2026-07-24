@@ -1,11 +1,10 @@
-# Superpowers History Policy
+# Chính sách tài liệu lịch sử
 
-This folder no longer keeps historical draft/spec/plan files in the repo.
+Thư mục này không chứa kế hoạch, đặc tả hoặc bản nháp lịch sử trong working tree.
 
-Current rules:
+Quy tắc hiện hành:
 
-- Source of Truth lives in `docs/01-*` through `docs/07-*`.
-- Workflow/governance lives in `AI_TEAM_RULES.md` and `docs/WORKFLOW-*.md`.
-- Old plans/specs are kept only in Git history when trace is needed.
-- Do not recreate `docs/superpowers/plans/` or `docs/superpowers/specs/` unless Owner explicitly asks.
-- Do not follow old docs that mention Supabase, local Supabase Docker, or the removed legacy backend.
+- Nguồn sự thật nằm ở các lớp `docs/01-*` đến `docs/07-*`, code hiện tại và quyết định mới nhất của Owner.
+- Quy tắc workflow/điều phối nằm ở `AI_TEAM_RULES.md`, `docs/WORKER-START-HERE.md` và `docs/PROJECT-COORDINATION.md`.
+- Khi cần bằng chứng chính xác, truy Git history; không khôi phục kế hoạch/spec cũ vào working tree.
+- Không dùng tài liệu cũ có Supabase, local Supabase Docker hoặc backend legacy đã xóa làm hướng dẫn hiện hành.

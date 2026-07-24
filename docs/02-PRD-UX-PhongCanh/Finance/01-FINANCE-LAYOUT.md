@@ -13,7 +13,7 @@ Module Tài chính giúp nhân viên:
 - xem và thu công nợ khách hàng
 - đối soát cuối ngày
 
-QC-OMS giữ bố cục quen thuộc từ KiotViet: filter bên trái, vùng dữ liệu chính bên phải, bảng sổ quỹ là bề mặt chính. Điểm khác là QC-OMS dùng màu/spacing chung của dự án và đưa summary sổ quỹ vào cột filter để giữ vùng bảng gọn.
+QCVL giữ bố cục quen thuộc từ KiotViet: filter bên trái, vùng dữ liệu chính bên phải, bảng sổ quỹ là bề mặt chính. Điểm khác là QCVL dùng màu/spacing chung của dự án và đưa summary sổ quỹ vào cột filter để giữ vùng bảng gọn.
 
 ---
 

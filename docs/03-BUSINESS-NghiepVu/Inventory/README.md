@@ -1,6 +1,6 @@
 # INVENTORY — Nghiệp vụ kho vật tư
 
-> Index SoT kho. Queue sống: [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index SoT kho. Queue sống: .
 > Nguồn: phân tích KiotViet + Owner (2026-06-30 trở đi).
 >
 > Cách đọc (tránh lệch docs ↔ code) — cùng quy ước với BOM:

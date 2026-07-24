@@ -1,77 +1,53 @@
-# QCVL Worker Start Here
+# Bắt đầu làm việc QCVL
 
-Updated: 2026-07-18
+Cập nhật: `2026-07-24`
 
-This is the first file for any Codex worker. Keep it short and current.
+Đây là file đầu tiên cho mọi worker. Giữ ngắn và đúng hiện hành.
 
-## Current Reality
+## Runtime và điều phối
 
-- Only two Codex workers are active:
-  - outside-LAN worker: this thread
-  - inside-LAN worker: direct LAN/NAS work
-- Shared branch: `main`.
-- Shared Source of Truth: `origin/main`.
-- Shared live coordination board: `Y:\TeamAI\WORKER-NOW.md`.
-- Dev surface: `http://127.0.0.1:3202`.
-- NAS surface: `http://100.84.228.125:3200`.
-- Runtime data source: PostgreSQL on NAS.
-- Runtime does not use Supabase.
-- For local `3202` bugs, verify actual `3100`/`3202` process command lines before editing; API and UI can be running from different repo folders.
+- Branch chung: `main`; source chung: `origin/main`.
+- Board: `Y:\TeamAI\WORKER-NOW.md` khi truy cập được.
+- Local dev: `http://127.0.0.1:3202`; NAS release target duy nhất: `http://100.84.228.125:3200`.
+- Runtime source: PostgreSQL NAS; không dùng Supabase.
+- Claim scope/file trên board trước khi sửa, không overlap claim active.
+- Scope hoàn tất, commit sạch và verification pass sẽ release direct `3200`; không cần Owner xác nhận deploy riêng. Destructive data workflow giữ checkpoint/Owner approval riêng.
 
-## Start Every Task
+## Bắt đầu task
 
 ```powershell
 git pull --ff-only
 npm run preflight
 ```
 
-Then state:
-
-- worker location: outside LAN or inside LAN
-- scope: module, files, page/API
-- target: `3202`, `3200`, docs only, or deploy
-
-If target is `3202`, run:
+Nêu module, file, page/API và target (`3200`, docs hoặc local dev). Với lỗi local, kiểm tra process thật:
 
 ```powershell
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match '3100|3202|server/index|vite|tsx' } | Select-Object ProcessId,CommandLine
 ```
 
-Patch/pull/restart the repo that is actually serving `3100`; do not assume it matches the current shell folder.
+Sửa đúng repo đang phục vụ `3100`; không giả định nó là thư mục shell hiện tại.
 
-Before editing files, read and update `Y:\TeamAI\WORKER-NOW.md` with your active scope. After finishing a task, read it again before starting the next task so new pull / restart / overlap notes are not missed. `preflight` also validates this board so a missing or malformed shared status file blocks local test/build/deploy scripts.
+## Thứ tự đọc
 
-## Read Order
+1. `AI_TEAM_RULES.md`.
+2. `docs/AI/README.md`.
+3. `docs/PROJECT-COORDINATION.md`.
+4. `docs/CURRENT-DATA-SOURCE.md`.
+5. Tài liệu feature của page/API chạm.
+6. Code hiện hành.
+7. Audit callers, duplicate/dead/obsolete code, rule, docs, plan và script liên quan.
 
-1. `AI_TEAM_RULES.md`
-2. `docs/AI/README.md`
-3. `docs/PROJECT-COORDINATION.md`
-4. `docs/CURRENT-DATA-SOURCE.md`
-5. feature docs for touched page/API
-6. current code
+Kế hoạch/spec lịch sử chỉ truy bằng Git history khi cần evidence; không coi là workflow hiện hành.
 
-Old plans under `docs/superpowers/plans/` are historical context only unless Owner explicitly says to follow one.
+## Dừng trước khi đổi
 
-## Current Work Split
+Dừng và xin quyết định Owner khi chưa có contract rõ cho tiền, nợ, lifecycle hóa đơn, kho, import, quyền,
+schema không migration, destructive data operation hoặc file đang thuộc claim khác. Release code đã verified lên `3200` không cần gate riêng.
 
-- Outside-LAN worker owns this slice: preflight gate and concise worker docs.
-- Inside-LAN worker owns direct LAN/NAS runtime checks unless Owner hands off another scope.
-- Do not edit the same module/file from both machines at the same time.
+## Kết thúc tốt
 
-## Stop Before Changing
-
-Stop and ask Owner before changing:
-
-- money, debt, invoice lifecycle, inventory, import semantics, permissions
-- NAS deploy behavior
-- DB schema without migration
-- files already changed by the other worker
-
-## Good Finish
-
-Before final report:
-
-- run focused tests
-- run `git status --short`
-- commit and push only if Owner asked
-- report commit hash when pushed
+- Chạy focused tests/verification.
+- Dọn duplicate/dead/stale scope đã chạm hoặc tạo plan con có link.
+- Kiểm tra `git status --short`; commit verified scope, push và release direct `3200` qua `npm run deploy:nas:image`.
+- Ghi commit hash, active image, health PostgreSQL và smoke result. Nếu release fail, ghi rollback evidence.

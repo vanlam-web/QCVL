@@ -1,6 +1,6 @@
 # POS — MÀN HÌNH BÁN HÀNG
 
-> Index cho đặc tả màn hình POS. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả màn hình POS. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 
 ## Entry Chính
 

@@ -1,6 +1,6 @@
 # STOCKTAKE — UX phiếu kiểm kho
 
-> **Nguồn tham khảo UI:** KiotViet tính năng Kiểm kho; điều chỉnh theo object-level stocktake của QC-OMS.
+> **Nguồn tham khảo UI:** KiotViet tính năng Kiểm kho; điều chỉnh theo object-level stocktake của QCVL.
 
 ---
 
@@ -8,7 +8,7 @@
 
 KiotViet có dữ liệu kiểm kho thực tế khi mở rộng thời gian `01/07/2016 - 01/07/2026`: `332 giao dịch`.
 
-Các quan sát dùng cho QC-OMS:
+Các quan sát dùng cho QCVL:
 
 - Màn mặc định lọc `Năm nay` để thấy dữ liệu kiểm kho gần đây hơn; khi cần xem toàn bộ lịch sử KV 2016-2026 thì chọn `Toàn thời gian`.
 - Danh sách hiển thị các trạng thái `Phiếu tạm`, `Đã cân bằng kho`, `Đã hủy`.
@@ -32,7 +32,7 @@ Trạng thái MVP hiện tại: ưu tiên xem lịch sử KiotViet **đã import
 
 **Owner 2026-07-20:** đợt import KiotViet đã xong — không mở thêm import file kiểm kho/hàng hóa KV làm việc tiếp theo. Mốc mở (nếu có) chọn từ phiếu **đã có trong hệ thống**.
 
-QC-OMS phải hỗ trợ kiểm kho theo tổng cho hàng thường và theo từng cuộn/tấm cho hàng cuộn/tấm.
+QCVL phải hỗ trợ kiểm kho theo tổng cho hàng thường và theo từng cuộn/tấm cho hàng cuộn/tấm.
 
 Kiểm kho khác với khui vật tư:
 

@@ -1,6 +1,6 @@
 # Customers — Quản Lý Khách Hàng
 
-> Index cho đặc tả UI Customers. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI Customers. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
 > Phạm vi: danh sách khách hàng, hồ sơ khách, nhóm khách, lịch sử bán và công nợ.
 

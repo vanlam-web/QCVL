@@ -1,62 +1,44 @@
-# Project Coordination
+# Điều phối dự án QCVL
 
-Updated: 2026-07-18
+Cập nhật: `2026-07-24`
 
-Use this board to avoid overlap between the two active Codex workers.
+Dùng board này để tránh overlap. Claim theo scope, không theo vị trí máy.
 
-## Workers
+## Claim scope
 
-| Worker | Role now | Default surface |
-| --- | --- | --- |
-| Outside LAN | Current thread. Owns docs/preflight coordination slice. | `100.84.228.125:3200` for observation, repo edits local |
-| Inside LAN | Direct LAN/NAS worker. Owns runtime checks unless Owner assigns otherwise. | `192.168.1.188:3200` / NAS LAN |
+Claim active phải nêu owner, file/module, môi trường, trạng thái, bước tiếp, blocker. Release `3200` chạy sau khi scope có commit sạch và verification pass; destructive data/migration risk vẫn cần checklist checkpoint riêng.
 
-No other Codex workers are active.
-
-## Start Rule
-
-Before editing:
+Trước khi sửa:
 
 ```powershell
 git pull --ff-only
 npm run preflight
 ```
 
-Then state scope in chat:
+Nêu scope trong chat và cập nhật `Y:\TeamAI\WORKER-NOW.md` khi truy cập được.
 
-- worker: outside LAN or inside LAN
-- module/files
-- page/API
-- target environment
+## Xung đột
 
-Also read and update `Y:\TeamAI\WORKER-NOW.md` with the scope you took before changing files.
+- Không sửa file/module có active claim chồng lấn.
+- `git pull --ff-only` fail hoặc có local change lạ: dừng, báo và điều phối lại.
+- Handoff phải cập nhật owner và next step.
 
-## Conflict Rule
+## Board active
 
-- Do not edit the same module/file from both workers at once.
-- If `git pull --ff-only` fails, stop and report.
-- If local changes appear in files you did not touch, stop and report.
-- If Owner assigns a handoff, write the new owner and next step here.
+### DOC-LIFECYCLE-QCVL-2026-07-24
 
-## Active Board
-
-### DOC-GATE-2026-07-18
-
-- Owner: outside-LAN worker.
-- Scope: `scripts/preflight.mjs`, `scripts/preflight.test.mjs`, `package.json`, `AI_TEAM_RULES.md`, `docs/WORKER-START-HERE.md`, `docs/PROJECT-COORDINATION.md`, `docs/DOCUMENT_RULES.md`, `docs/README.md`.
-- Goal: force a light preflight and make AI docs short/current-first.
-- Status: completed; waiting for commit/push.
-- Next: inside-LAN worker pulls after push.
-- Risk: low; docs/scripts only.
+- Owner: worker hiện tại.
+- Scope: lifecycle docs/rules, tiếng Việt UTF-8, QCVL display identity, stale/mojibake/link cleanup.
+- Trạng thái: active.
+- Bước tiếp: tiếp tục audit contract active còn English/stale, commit và release `3200` sau verification.
+- Rủi ro: docs/PWA metadata; mutation runtime/data chỉ theo checklist an toàn riêng.
 
 ### RUNTIME-PERF-3200
 
-- Owner: unassigned until Owner gives scope.
-- Current fact: `2179dc8 perf: cut 3200 route hot paths` is on `main`.
-- Known hotspots from LAN scan: `/sales-documents`, `/products`, `/inventory`, some detail routes.
-- Rule: do not continue runtime perf edits from this docs slice without new scope.
+- Owner: chưa phân công.
+- Rule: đo mới trước khi sửa; không gộp vào scope documentation.
 
-## Handoff Template
+## Mẫu handoff
 
 ```text
 Worker:

@@ -1,6 +1,6 @@
 # INVENTORY — Schema kho vật tư
 
-> Index schema kho vật tư. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index schema kho vật tư. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 > Nguồn: Business Inventory 2026-06-30.
 
 ---

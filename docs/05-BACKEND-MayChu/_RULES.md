@@ -1,32 +1,5 @@
-# RULES — 05-BACKEND-MayChu
+# Quy tắc lớp backend
 
-Tuân theo [DOCUMENT_RULES.md](../DOCUMENT_RULES.md), [ARCHITECTURE.md](../ARCHITECTURE.md) và [BACKEND_CONVENTIONS.md](./BACKEND_CONVENTIONS.md).
+Tuân theo [quy tắc tài liệu](../DOCUMENT_RULES.md), [kiến trúc tài liệu](../ARCHITECTURE.md) và [quy ước backend](./BACKEND_CONVENTIONS.md).
 
-## Mục đích
-
-Source of Truth cho cách hệ thống thực thi nghiệp vụ.
-
-## Được ghi
-
-- API Specification và Request/Response Model
-- Application Service, Use Case và workflow thực thi
-- Validation và Error Handling
-- Authentication, Authorization và Permission
-- Event Handler
-- log và metric do Backend phát ra
-- queue xử lý nghiệp vụ nội bộ
-
-## Không được ghi
-
-- Vision, UI, Wireframe hoặc Feature Specification đầy đủ
-- Business Rule gốc
-- Database Schema hoặc SQL chi tiết
-- Frontend code hoặc hạ tầng triển khai
-
-## Ranh giới
-
-- Mỗi API và Use Case có một Source of Truth.
-- Backend hiện thực Business Rule và tham chiếu cấu trúc tại 04-DATABASE; không sao chép lại.
-- Backend sở hữu queue nghiệp vụ nội bộ, không sở hữu queue kết nối hệ thống ngoài.
-- Backend định nghĩa log/metric phát ra; việc thu thập, lưu giữ và cảnh báo thuộc 07-DEPLOYMENT.
-- Không thiết kế Backend trước Business.
+Giữ route/API, request/response, validation, permission, transaction, error handling, server workflow và observability phát ra. Không giữ vision, UX/wireframe, business rule gốc, schema/SQL chi tiết hoặc deploy infrastructure. Backend hiện thực business rule và tham chiếu schema; mỗi route/use case chỉ có một contract active.

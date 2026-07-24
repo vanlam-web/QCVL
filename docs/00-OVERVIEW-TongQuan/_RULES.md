@@ -1,29 +1,5 @@
-# RULES — 00-OVERVIEW-TongQuan
+# Quy tắc lớp tổng quan
 
-## Mục đích
-Folder này chứa các tài liệu tổng quan về dự án QC-OMS — bản đồ điều hướng, giới thiệu, mục lục tổng.
+Tuân theo [quy tắc tài liệu](../DOCUMENT_RULES.md) và [kiến trúc tài liệu](../ARCHITECTURE.md).
 
-## CHỈ GHI
-
-✓ README tổng quan dự án
-
-✓ Mục lục (Table of Contents) liên kết đến tất cả folder con
-
-✓ Sơ đồ tổng quan (high-level map)
-
-✓ Giới thiệu ngắn về dự án
-
-## KHÔNG GHI
-
-✗ Vision (thuộc 01-VISION-TamNhin)
-
-✗ PRD/UX (thuộc 02-PRD-UX-PhongCanh)
-
-✗ Business Rule (thuộc 03-BUSINESS-NghiepVu)
-
-✗ Database, API, Code
-
-## Nguyên tắc
-- File trong folder này phải đọc được trong 2 phút.
-- Mọi thay đổi cấu trúc thư mục phải cập nhật 00-OVERVIEW-TongQuan trước.
-- 00-OVERVIEW-TongQuan là điểm vào duy nhất cho người mới.
+Lớp này chỉ giữ bức tranh hệ thống, glossary, bản đồ tài liệu và điểm vào. Không giữ feature spec, business rule, schema, API, code, tracker hoặc timeline dài. Mỗi fact phải link tới lớp sở hữu.

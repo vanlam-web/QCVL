@@ -1,7 +1,7 @@
 # PRODUCTION — Vận hành môi trường thật
 
 > **Vai trò:** Baseline trước production.
-> **Phạm vi:** Nguyên tắc vận hành production QC-OMS, không thay thế checklist deploy chi tiết.
+> **Phạm vi:** Nguyên tắc vận hành production QCVL, không thay thế checklist deploy chi tiết.
 
 ---
 
@@ -19,17 +19,15 @@ Nguyên tắc:
 
 ## 2. Điều kiện trước khi promote production
 
-Một commit chỉ được promote production khi:
+Một commit được release `3200` khi:
 
-1. Đã merge vào `main`.
-2. CI pass đầy đủ.
-3. Staging deploy đúng commit cần promote.
-4. Smoke test staging pass.
-5. Nếu có migration, migration đã chạy sạch trên môi trường test/staging.
-6. Owner hoặc người được giao đã chấp nhận bản staging nếu thay đổi ảnh hưởng workflow chính.
-7. Đã có phương án rollback app và corrective migration nếu cần.
+1. Scope checklist đã đóng và thay đổi đã commit vào `main`.
+2. Git working tree sạch.
+3. Typecheck, focused tests và preflight pass.
+4. Migration đã review; destructive data/migration có checkpoint Owner riêng.
+5. Image deploy có rollback path.
 
-Không promote từ code local chưa qua pipeline.
+Không release code local chưa commit hoặc working tree dirty. `3202` không là staging/promotion environment.
 
 ---
 
@@ -134,6 +132,5 @@ Nhật ký có thể bắt đầu trong issue/PR/release note, sau này tách ru
 
 ## 9. Tham chiếu
 
-- [ENVIRONMENTS-CI.md](./ENVIRONMENTS-CI.md)
 - [BACKUP-RESTORE.md](./BACKUP-RESTORE.md)
 - [DEPLOYMENT_CONVENTIONS.md](./DEPLOYMENT_CONVENTIONS.md)

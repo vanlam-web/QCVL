@@ -1,28 +1,5 @@
-# RULES — 04-DATABASE
+# Quy tắc lớp dữ liệu
 
-Tuân theo [DOCUMENT_RULES.md](../DOCUMENT_RULES.md) và [ARCHITECTURE.md](../ARCHITECTURE.md).
+Tuân theo [quy tắc tài liệu](../DOCUMENT_RULES.md), [kiến trúc tài liệu](../ARCHITECTURE.md) và migration trong `database/migrations/`.
 
-## Mục đích
-
-Source of Truth cho cấu trúc và ràng buộc dữ liệu của QC-OMS.
-
-## Được ghi
-
-- Table, Column, Data Type
-- Constraint, Relationship, Index
-- Enum, View, Function, Trigger
-- Migration, ERD và Data Dictionary
-
-## Không được ghi
-
-- UI, Wireframe hoặc User Flow
-- Feature Specification hoặc Business Workflow đầy đủ
-- API Specification hoặc Backend Workflow
-- code ứng dụng hoặc hạ tầng triển khai
-
-## Ranh giới
-
-- Mỗi cấu trúc dữ liệu chỉ có một Source of Truth.
-- Chỉ mô tả dữ liệu và ràng buộc; nghiệp vụ phải liên kết sang 03-BUSINESS.
-- Không thiết kế Database trước Business.
-- Khi cấu trúc thay đổi, rà soát Backend, Integration, migration và dữ liệu hiện có.
+Giữ bảng, cột, type, constraint, index, quan hệ, migration và invariant dữ liệu. Không giữ UX, business narrative dài hoặc API implementation. Schema change cần migration, rollback/impact rõ và cập nhật mọi consumer contract.

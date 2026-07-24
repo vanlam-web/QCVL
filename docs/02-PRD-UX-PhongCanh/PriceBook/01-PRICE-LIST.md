@@ -11,7 +11,7 @@ Trang danh sách bảng giá giúp quản lý các bảng giá đang dùng cho k
 
 Trong PriceBook MVP, công thức giá chỉ dùng `giá nhập cuối` từ `products.latest_purchase_cost`. Trước khi Purchase/Supplier hoàn chỉnh, giá này có thể được nhập/import hoặc sửa có kiểm soát trong Product admin/API. Giá bán chính thức vẫn là giá đã lưu trong bảng giá; công thức chỉ đổi giá khi người dùng preview và áp dụng.
 
-KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QC-OMS phải được thiết kế theo cách xưởng muốn vận hành, không copy nguyên cách KiotViet nếu cách đó không đúng mong muốn.
+KiotViet chỉ là nguồn import/tham khảo ban đầu. Luồng giá của QCVL phải được thiết kế theo cách xưởng muốn vận hành, không copy nguyên cách KiotViet nếu cách đó không đúng mong muốn.
 
 ---
 
@@ -113,7 +113,7 @@ KiotViet `Hàng hóa > Thiết lập giá` hiển thị bảng giá theo dạng 
 - có import/export và ẩn hiện cột
 - màn đang thấy `496 hàng hóa`
 
-KiotViet có thể hiển thị nhiều bảng giá ngang như `BG1`, `BG2`, `BG3`. QC-OMS dùng lưới bảng giá có cột bảng giá động để nhân viên xem các bảng giá đang active trên cùng một mặt bằng, nhưng không hard-code riêng `25/26/30/35/40`.
+KiotViet có thể hiển thị nhiều bảng giá ngang như `BG1`, `BG2`, `BG3`. QCVL dùng lưới bảng giá có cột bảng giá động để nhân viên xem các bảng giá đang active trên cùng một mặt bằng, nhưng không hard-code riêng `25/26/30/35/40`.
 
 Export KiotViet ngày `2026-07-01` có các cột bảng giá thật:
 
@@ -130,20 +130,20 @@ Quy tắc hiển thị tên bảng giá:
 - UI QCVL phải hiển thị bảng giá mặc định là `Giá chung` thông qua helper dùng chung, không so chuỗi riêng trong từng page.
 - POS, hóa đơn, báo giá in, import preview và PriceBook phải dùng cùng mapping này để không lệch nhãn.
 
-Các nhóm khách trong export Khách hàng cũng dùng đúng các nhãn `25`, `26`, `30`, `35`, `40`, nên QC-OMS có thể import/migrate ban đầu theo các bảng giá này. UI vẫn nên cho đặt tên dễ hiểu hơn nếu Owner đổi tên sau.
+Các nhóm khách trong export Khách hàng cũng dùng đúng các nhãn `25`, `26`, `30`, `35`, `40`, nên QCVL có thể import/migrate ban đầu theo các bảng giá này. UI vẫn nên cho đặt tên dễ hiểu hơn nếu Owner đổi tên sau.
 
-QC-OMS ưu tiên:
+QCVL ưu tiên:
 
 - danh sách bảng giá riêng
 - mở một bảng giá để sửa chi tiết
 - POS tự resolve giá theo khách/nhóm khách
 - lịch sử 5 giá gần đây theo khách + sản phẩm là nút gợi ý trong POS, không phải 5 cột trong bảng giá
 
-KiotViet `Khuyến mại` có dữ liệu thật dạng `Hàng hóa - Giá bán theo số lượng mua` cho một số vật tư PVC/CPVC. QC-OMS MVP không làm module khuyến mại/campaign riêng. Nếu sau này cần bán theo bậc số lượng, đặc tả lại như quy tắc giá trong PriceBook, không kéo nguyên module marketing/khuyến mại retail vào POS.
+KiotViet `Khuyến mại` có dữ liệu thật dạng `Hàng hóa - Giá bán theo số lượng mua` cho một số vật tư PVC/CPVC. QCVL MVP không làm module khuyến mại/campaign riêng. Nếu sau này cần bán theo bậc số lượng, đặc tả lại như quy tắc giá trong PriceBook, không kéo nguyên module marketing/khuyến mại retail vào POS.
 
-Giá vốn trong KiotViet hiển thị để tham khảo trên lưới thiết lập giá. QC-OMS MVP hiển thị `Giá nhập cuối` trên lưới và không cho sửa giá này trực tiếp trong ô bảng giá.
+Giá vốn trong KiotViet hiển thị để tham khảo trên lưới thiết lập giá. QCVL MVP hiển thị `Giá nhập cuối` trên lưới và không cho sửa giá này trực tiếp trong ô bảng giá.
 
-Export bảng giá có nhiều dòng `Bảng giá chung = 0` và một dòng giá nhóm `26 = 0`. Theo quyết định hiện tại, giá `0` là giá hợp lệ nếu được khai báo; fallback về giá chung chỉ xảy ra khi dòng giá không tồn tại/để trống trong schema QC-OMS, không phải vì giá bằng `0`.
+Export bảng giá có nhiều dòng `Bảng giá chung = 0` và một dòng giá nhóm `26 = 0`. Theo quyết định hiện tại, giá `0` là giá hợp lệ nếu được khai báo; fallback về giá chung chỉ xảy ra khi dòng giá không tồn tại/để trống trong schema QCVL, không phải vì giá bằng `0`.
 
 Công thức giá theo nhóm hàng là hướng cần giữ cho phase PriceBook nâng cao, nhưng slice MVP đầu chưa thêm schema/filter nhóm hàng:
 
@@ -153,7 +153,7 @@ Công thức giá theo nhóm hàng là hướng cần giữ cho phase PriceBook 
 - khi giá nhập cuối thay đổi, hệ thống tính lại giá theo công thức để tạo giá mới/giá đề xuất
 - giá POS chỉ đổi khi công thức được áp dụng theo chính sách đã cấu hình; mặc định nên có bước xem/xác nhận áp dụng trước khi cập nhật hàng loạt
 
-## 7. Hướng thiết kế riêng cho QC-OMS
+## 7. Hướng thiết kế riêng cho QCVL
 
 Phần giá cần tách thành 3 lớp để đúng nghiệp vụ quảng cáo:
 
@@ -174,13 +174,13 @@ Nguyên tắc đề xuất:
 
 ## 8. Công thức giá 2 tầng
 
-QC-OMS chốt hướng công thức giá rộng hơn KiotViet. KiotViet chỉ cho kiểu:
+QCVL chốt hướng công thức giá rộng hơn KiotViet. KiotViet chỉ cho kiểu:
 
 ```text
 Giá mới = Giá hiện tại +/- số tiền hoặc %
 ```
 
-QC-OMS cần công thức nhiều bước, lưu mặc định theo nhóm hàng/sản phẩm để dùng lâu dài.
+QCVL cần công thức nhiều bước, lưu mặc định theo nhóm hàng/sản phẩm để dùng lâu dài.
 
 ### Tầng 1: Giá nền trước lợi nhuận
 
@@ -259,7 +259,7 @@ Các kiểu làm tròn khác như `5,000đ`, `10,000đ` hoặc không làm tròn
 
 Đã chốt:
 
-- PriceBook QC-OMS phải hỗ trợ công thức giá nhiều bước, không chỉ cộng/trừ như KiotViet.
+- PriceBook QCVL phải hỗ trợ công thức giá nhiều bước, không chỉ cộng/trừ như KiotViet.
 - Công thức lưu mặc định theo nhóm hàng/sản phẩm để dùng lâu dài.
 - Công thức có tầng giá nền trước lợi nhuận và tầng giá bán theo bảng giá.
 - Giá nhập cuối thay đổi thì hệ thống tính lại được giá theo công thức.

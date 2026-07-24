@@ -8,7 +8,7 @@
 
 Báo cáo tài chính giúp xem dòng tiền và tình hình phải thu ở mức quản trị xưởng.
 
-Đây không phải báo cáo kế toán/thuế. QC-OMS không làm VAT/HĐĐT/thuế kế toán trong scope hiện tại.
+Đây không phải báo cáo kế toán/thuế. QCVL không làm VAT/HĐĐT/thuế kế toán trong scope hiện tại.
 
 ---
 
@@ -103,7 +103,7 @@ Nếu lệch, nhân viên tạo phiếu thu/chi thủ công có lý do; báo cá
 2. Tổng thu/chi khớp với Sổ quỹ trong cùng kỳ.
 3. Thu nợ cũ khớp với phân bổ công nợ theo hóa đơn.
 4. Bấm mã phiếu mở chi tiết Sổ quỹ.
-5. Không hiển thị VAT/HĐĐT/thuế kế toán như tính năng QC-OMS.
+5. Không hiển thị VAT/HĐĐT/thuế kế toán như tính năng QCVL.
 
 ---
 

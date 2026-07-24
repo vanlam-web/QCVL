@@ -1,6 +1,6 @@
 # System — Tài Khoản, Quyền Và Máy Trạm
 
-> Index cho đặc tả UI System. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI System. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
 > Nguồn: [POS/AUTH.md](../../05-BACKEND-MayChu/POS/AUTH.md), [AUTH-PERMISSIONS.md](../../04-DATABASE/System/AUTH-PERMISSIONS.md).
 
@@ -8,7 +8,7 @@
 
 ## 1. Phạm vi
 
-System trong QC-OMS chỉ làm phần cần để vận hành:
+System trong QCVL chỉ làm phần cần để vận hành:
 
 - thông tin cửa hàng/xưởng
 - tài khoản nhân viên

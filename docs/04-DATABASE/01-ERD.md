@@ -1,4 +1,4 @@
-# ERD — Sơ đồ quan hệ dữ liệu QC-OMS
+# ERD — Sơ đồ quan hệ dữ liệu QCVL
 
 > **Vai trò:** Sơ đồ dữ liệu tổng, cập nhật theo từng phase.
 > **Đã chốt:** Foundation/System, Sales, Inventory foundation, Finance foundation, Production queue foundation.

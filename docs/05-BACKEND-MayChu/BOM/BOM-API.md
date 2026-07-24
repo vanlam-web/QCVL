@@ -3,7 +3,7 @@
 > **Vai trò:** Contract mục tiêu + hiện trạng runtime.
 > **Business:** [BOM-RULES.md](../../03-BUSINESS-NghiepVu/BOM/BOM-RULES.md)
 >
-> **Runtime 2026-07-21 (đã lên `main`):** `GET` + `POST|PUT /api/v1/products/{id}/bom` nối Postgres/dev-memory (lưu `active`). Path Import khẩn ghi BOM `active`; dữ liệu đã có → migrate `0008` (**không** re-import). SoT: [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md) · trừ kho: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · [DOC-CLEANUP-CHECKLIST](../../DOC-CLEANUP-CHECKLIST.md).
+> **Runtime 2026-07-21 (đã lên `main`):** `GET` + `POST|PUT /api/v1/products/{id}/bom` nối Postgres/dev-memory (lưu `active`). Path Import khẩn ghi BOM `active`; dữ liệu đã có → migrate `0008` (**không** re-import). SoT: [BOM README](../../03-BUSINESS-NghiepVu/BOM/README.md) · trừ kho: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · [DOC-CLEANUP-CHECKLIST ](../../DOCUMENT_RULES.md).
 
 ---
 

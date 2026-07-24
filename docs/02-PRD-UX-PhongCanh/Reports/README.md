@@ -1,6 +1,6 @@
 # Reports — Báo Cáo Và Phân Tích
 
-> Index cho đặc tả UI Reports. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI Reports. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
 > Tham khảo: KiotViet `Phân tích/Báo cáo`.
 
@@ -10,7 +10,7 @@
 
 Reports giúp chủ xưởng và nhân viên quản lý nhìn nhanh tình hình bán hàng, dòng tiền, công nợ và tồn kho.
 
-QC-OMS làm báo cáo đủ để quản trị xưởng, nhưng không copy toàn bộ chiều phân tích retail của KiotViet.
+QCVL làm báo cáo đủ để quản trị xưởng, nhưng không copy toàn bộ chiều phân tích retail của KiotViet.
 
 ---
 

@@ -2,7 +2,7 @@
 
 > **Mốc chốt:** V1 đủ test theo chốt Owner ngày `2026-07-03`; chức năng nâng cao nằm ngoài phạm vi hiện tại.
 > **Tham khảo:** KiotViet `Khách hàng > Khách hàng`
-> **Owner 2026-07-20:** đã import hết khách KV cần dùng — không mở import mới. Công nợ: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · checklist docs [DOC-CLEANUP-CHECKLIST.md](../../DOC-CLEANUP-CHECKLIST.md).
+> **Owner 2026-07-20:** đã import hết khách KV cần dùng — không mở import mới. Công nợ: [Sales README](../../03-BUSINESS-NghiepVu/Sales/README.md) · checklist docs [Quy tắc tài liệu](../../DOCUMENT_RULES.md).
 > Search SoT chung: [SEARCH-RANKING-PERFORMANCE](../../03-BUSINESS-NghiepVu/SEARCH-RANKING-PERFORMANCE.md).
 
 ---
@@ -124,7 +124,7 @@ Quyết định Owner ngày `2026-07-03`:
 - Nếu khách không có nhóm khách, hệ thống áp dụng `Giá chung`.
 - Chi tiết khách tham khảo KiotViet nhưng chỉ giữ phần cần vận hành: thông tin chính, bảng giá áp dụng, lịch sử bán nếu có API đúng, và nợ cần thu.
 
-QC-OMS MVP lược bỏ:
+QCVL MVP lược bỏ:
 
 - giới tính, sinh nhật
 - điểm thưởng/thẻ thành viên

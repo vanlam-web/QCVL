@@ -1,6 +1,6 @@
 # SYSTEM — Dữ liệu nền tảng
 
-> Index dữ liệu nền tảng. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index dữ liệu nền tảng. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 
 ## Nội dung
 

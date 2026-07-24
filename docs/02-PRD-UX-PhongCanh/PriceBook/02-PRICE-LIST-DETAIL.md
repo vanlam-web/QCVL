@@ -1,4 +1,4 @@
-﻿# 02-PRICE-LIST-DETAIL — Chi tiết bảng giá
+# 02-PRICE-LIST-DETAIL — Chi tiết bảng giá
 
 
 ---
@@ -37,7 +37,7 @@ Trang chi tiết bảng giá cho phép xem và sửa giá bán của từng sả
 | Giá bảng này | Ô nhập giá áp dụng cho bảng hiện tại |
 | Trạng thái hàng | Đang bán hoặc ngưng bán |
 
-Gợi ý từ KiotViet: có thể cho nhập giá trực tiếp trên lưới để thao tác nhanh, nhưng mỗi màn chỉ nên tập trung một bảng giá đang sửa. Không trải nhiều bảng giá nhóm thành nhiều cột ngang trong QC-OMS MVP.
+Gợi ý từ KiotViet: có thể cho nhập giá trực tiếp trên lưới để thao tác nhanh, nhưng mỗi màn chỉ nên tập trung một bảng giá đang sửa. Không trải nhiều bảng giá nhóm thành nhiều cột ngang trong QCVL MVP.
 
 Giá vốn là dữ liệu tham khảo lấy từ Purchase/Supplier hoặc tồn vật lý khi module đó đã có. Người dùng không sửa giá vốn tại màn bảng giá.
 
@@ -101,7 +101,7 @@ Giá 35 = Giá nền + 35,000/tấm
 
 Khi giá nhập cuối hoặc giá vốn bình quân thay đổi, hệ thống tính lại giá theo công thức và hiển thị chênh lệch. Mặc định người dùng phải bấm áp dụng thì giá đã lưu trong bảng giá mới thay đổi; POS chỉ dùng giá đã lưu.
 
-Vì Owner đã xác nhận cách giá của KiotViet chưa đúng mong muốn, màn chi tiết bảng giá không được khóa thiết kế theo lưới export KiotViet. KiotViet chỉ dùng để import dữ liệu ban đầu và đối chiếu nhóm giá hiện có. Luồng chuẩn của QC-OMS cần ưu tiên:
+Vì Owner đã xác nhận cách giá của KiotViet chưa đúng mong muốn, màn chi tiết bảng giá không được khóa thiết kế theo lưới export KiotViet. KiotViet chỉ dùng để import dữ liệu ban đầu và đối chiếu nhóm giá hiện có. Luồng chuẩn của QCVL cần ưu tiên:
 
 - sửa giá chính thức nhanh cho từng bảng giá
 - thấy giá vốn/giá nhập cuối để tham khảo

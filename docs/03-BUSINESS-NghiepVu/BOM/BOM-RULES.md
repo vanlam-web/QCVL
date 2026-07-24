@@ -8,7 +8,7 @@
 
 ## 1. Mục tiêu
 
-BOM giúp QC-OMS biết một sản phẩm/combo cần tiêu hao những vật tư nào khi bán hàng.
+BOM giúp QCVL biết một sản phẩm/combo cần tiêu hao những vật tư nào khi bán hàng.
 
 Ví dụ:
 
@@ -170,7 +170,7 @@ Export KiotViet có cột `Hàng thành phần` dạng text, ví dụ:
 DCS:0.6|F5:0.3
 ```
 
-QC-OMS parse cột này thành BOM chuẩn (`active`) khi import; không dùng text này làm schema chính.
+QCVL parse cột này thành BOM chuẩn (`active`) khi import; không dùng text này làm schema chính.
 
 Quy tắc import (Owner 2026-07-20):
 

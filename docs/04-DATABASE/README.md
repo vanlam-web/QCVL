@@ -1,48 +1,33 @@
-# PHAN 4: CO SO DU LIEU (DATABASE)
+# Phần 4 — Cơ sở dữ liệu QCVL
 
-> Source of Truth cho schema, quan he bang, constraint va du lieu luu tru tren PostgreSQL cua QCVL.
+Nguồn sự thật cho schema PostgreSQL, quan hệ, constraint, migration và invariant dữ liệu.
 
-## Doc Truoc Khi Sua Database
+## Đọc trước khi sửa
 
-| Can biet | File |
+| Mục đích | Tài liệu |
 |---|---|
-| Quy tac tang Database | [_RULES.md](./_RULES.md) |
-| Nghiep vu nguon | [../03-BUSINESS-NghiepVu/README.md](../03-BUSINESS-NghiepVu/README.md) |
-| Backend/API dung schema | [../05-BACKEND-MayChu/README.md](../05-BACKEND-MayChu/README.md) |
+| Quy tắc tầng dữ liệu | [_RULES.md](./_RULES.md) |
+| Nghiệp vụ nguồn | [03-BUSINESS-NghiepVu](../03-BUSINESS-NghiepVu/README.md) |
+| API sử dụng schema | [05-BACKEND-MayChu](../05-BACKEND-MayChu/README.md) |
+| Source runtime | [CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) |
 
-## Runtime QCVL
+## Runtime
 
-QCVL dung PostgreSQL qua Node API.
+QCVL dùng PostgreSQL qua Node API. Schema runtime: [database/schema.sql](../../database/schema.sql); container NAS:
+[docker-compose.nas.yml](../../docker-compose.nas.yml). Không tạo migration/test cho backend đã bỏ.
 
-- Doc [../CURRENT-DATA-SOURCE.md](../CURRENT-DATA-SOURCE.md) truoc khi sua sales/finance data.
-- Khong ghi seed/demo data vao backend cu da go.
-- Khong tao migration/test cho backend cu.
-- Schema runtime toi thieu hien nam o [../../database/schema.sql](../../database/schema.sql).
-- NAS PostgreSQL container duoc cau hinh trong [../../docker-compose.nas.yml](../../docker-compose.nas.yml).
+## Điểm vào schema
 
-## Nen Tang Chung
-
-| File | Vai tro |
+| Domain | Tài liệu |
 |---|---|
-| [01-ERD.md](./01-ERD.md) | ERD tong quan va quan he theo giai doan |
-| [03-RLS.md](./03-RLS.md) | Nguyen tac bao ve du lieu neu can ap dung o PostgreSQL |
-| [System/AUTH-PERMISSIONS.md](./System/AUTH-PERMISSIONS.md) | Organization, user, workstation, permission |
+| Tổng quan | [01-ERD.md](./01-ERD.md) |
+| Sales | [Sales](./Sales/README.md) |
+| Kho | [Inventory](./Inventory/README.md) |
+| Tài chính | [Finance](./Finance/README.md) |
+| Nhập hàng | [Purchase](./Purchase/PURCHASE-TABLES.md) |
+| BOM | [BOM](./BOM/BOM-TABLES.md) |
+| Hệ thống/quyền | [System](./System/README.md) |
 
-## Domain Schema
+Schema chỉ mô tả dữ liệu; nghiệp vụ/API link về lớp sở hữu.
 
-| Domain | Diem vao | Noi dung |
-|---|---|---|
-| Sales | [Sales/README.md](./Sales/README.md) | Customers, pricing, products, quotes/orders, order snapshots |
-| Inventory | [Inventory/README.md](./Inventory/README.md) | Units, stock settings, conversions, movements, rolls, sheets, stocktakes |
-| Finance | [Finance/README.md](./Finance/README.md) | Payment receipts, debt allocations, cashbook, reconciliation |
-| Purchase | [Purchase/PURCHASE-TABLES.md](./Purchase/PURCHASE-TABLES.md) | Suppliers, purchase receipts, supplier payments, purchase roll/sheet objects |
-| BOM | [BOM/BOM-TABLES.md](./BOM/BOM-TABLES.md) | BOM/combo vat tu |
-| System | [System/README.md](./System/README.md) | Auth, profile, workstation, permission |
-
-## Quy Uoc
-
-- Database chi mo ta schema, quan he, constraint va du lieu luu.
-- Khong copy nghiep vu day du; link sang tang 03 khi can.
-- Khong copy API workflow; link sang tang 05 khi can.
-
-<- [Quay ve README chinh](../README.md)
+← [Quay về tài liệu chính](../README.md)

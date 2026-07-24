@@ -1,6 +1,6 @@
 # SalesDocuments — Chứng từ bán hàng
 
-> Index cho đặc tả UI SalesDocuments. Việc đang làm / queue hiện tại nằm ở [../../PHASE-CHECKLIST.md](../../PHASE-CHECKLIST.md).
+> Index cho đặc tả UI SalesDocuments. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../../PROJECT-COORDINATION.md).
 >
 > Phạm vi dài hạn: danh sách và chi tiết báo giá/hóa đơn sau khi rời màn hình POS.
 

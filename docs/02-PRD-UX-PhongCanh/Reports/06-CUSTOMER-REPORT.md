@@ -1,4 +1,4 @@
-﻿# 06-CUSTOMER-REPORT — Báo cáo khách hàng
+# 06-CUSTOMER-REPORT — Báo cáo khách hàng
 
 > **Tham khảo:** KiotViet `Phân tích > Khách hàng`, đã lược bỏ kênh bán và nhân khẩu học retail
 

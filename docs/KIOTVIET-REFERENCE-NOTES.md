@@ -1,6 +1,6 @@
 # KiotViet Reference Notes
 
-> **Vai trò:** Ghi chú ý tưởng UX tham khảo từ KiotViet phù hợp QC-OMS, không copy module retail không liên quan.
+> **Vai trò:** Ghi chú ý tưởng UX tham khảo từ KiotViet phù hợp QCVL, không copy module retail không liên quan.
 > **Cập nhật:** 2026-07-05.
 
 ---
@@ -14,7 +14,7 @@
 
 ---
 
-## Phần Phù Hợp QC-OMS
+## Phần Phù Hợp QCVL
 
 Nguồn tham khảo public đã xem:
 
@@ -25,7 +25,7 @@ Nguồn tham khảo public đã xem:
 - Debt report: https://www.kiotviet.vn/wiki-ki-ot-viet/bao-cao-wiki/wiki-bao-cao-cong-no/
 - Combo/BOM-like goods: https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/huong-dan-bar-cafe-nha-hang/danh-muc-hang-hoa-web-fnb/
 
-QC-OMS nên giữ các nhóm báo cáo đã có:
+QCVL nên giữ các nhóm báo cáo đã có:
 
 - báo cáo cuối ngày
 - báo cáo bán hàng
@@ -86,4 +86,4 @@ Bộ lọc báo cáo nên ưu tiên:
 - Loyalty/campaign.
 - HR/payroll/commission.
 - Retail barcode/đổi trả nâng cao.
-- Module quá sâu nếu QC-OMS chưa có dữ liệu hoặc workflow tương ứng.
+- Module quá sâu nếu QCVL chưa có dữ liệu hoặc workflow tương ứng.

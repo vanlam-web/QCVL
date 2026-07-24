@@ -8,7 +8,7 @@
 
 Báo cáo công nợ giúp theo dõi khách còn nợ, hóa đơn còn nợ, lịch sử thu nợ và rủi ro nợ kéo dài.
 
-QC-OMS quản lý công nợ theo từng hóa đơn, không chỉ một số tổng.
+QCVL quản lý công nợ theo từng hóa đơn, không chỉ một số tổng.
 
 ---
 

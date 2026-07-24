@@ -2,7 +2,7 @@
 
 > Source of Truth cho kết nối với hệ thống bên ngoài, import/export, webhook, printer, QR, banking, Zalo/SMS/email và AI/LLM.
 >
-> File này chỉ là index. Việc đang làm / queue hiện tại nằm ở [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md).
+> File này chỉ là index. Việc đang làm / queue hiện tại nằm ở [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md).
 
 ## Đọc Trước Khi Sửa Integration
 
@@ -10,7 +10,7 @@
 |---|---|
 | Quy tắc tầng Integration | [_RULES.md](./_RULES.md) |
 | Quy ước integration chung | [INTEGRATION_CONVENTIONS.md](./INTEGRATION_CONVENTIONS.md) |
-| Việc đang làm / queue hiện tại | [../PHASE-CHECKLIST.md](../PHASE-CHECKLIST.md) |
+| Việc đang làm / queue hiện tại | [Điều phối công việc hiện tại](../PROJECT-COORDINATION.md) |
 | Nghiệp vụ nguồn | [../03-BUSINESS-NghiepVu/README.md](../03-BUSINESS-NghiepVu/README.md) |
 | Backend/API nguồn | [../05-BACKEND-MayChu/README.md](../05-BACKEND-MayChu/README.md) |
 

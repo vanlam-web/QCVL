@@ -1,35 +1,34 @@
-# Tài Liệu Dự Án QCVL
+# Tài liệu dự án QCVL
 
-Updated: 2026-07-18
+Cập nhật: `2026-07-24`
 
-This file is navigation only. Start with the short current-state worker guide.
+File này chỉ điều hướng. Không dùng README làm tracker hoặc nơi giữ timeline dài.
 
-## Read First
+## Đọc trước
 
-| Need | File |
-| --- | --- |
-| First entry for Codex workers | [WORKER-START-HERE.md](./WORKER-START-HERE.md) |
-| AI working rules | [../AI_TEAM_RULES.md](../AI_TEAM_RULES.md) |
-| Two-machine coordination | [PROJECT-COORDINATION.md](./PROJECT-COORDINATION.md) |
-| Runtime data source | [CURRENT-DATA-SOURCE.md](./CURRENT-DATA-SOURCE.md) |
-| Document rules | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
-| Current phase/checklist | [PHASE-CHECKLIST.md](./PHASE-CHECKLIST.md) |
-| Doc cleanup checklist (temporary) | [DOC-CLEANUP-CHECKLIST.md](./DOC-CLEANUP-CHECKLIST.md) |
-| Performance log | [PERFORMANCE-FIX-LOG.md](./PERFORMANCE-FIX-LOG.md) |
+| Mục đích | Tài liệu |
+|---|---|
+| Bắt đầu công việc | [WORKER-START-HERE.md](./WORKER-START-HERE.md) |
+| Quy tắc làm việc | [AI_TEAM_RULES.md](../AI_TEAM_RULES.md) |
+| Điều phối scope hiện hành | [PROJECT-COORDINATION.md](./PROJECT-COORDINATION.md) |
+| Nguồn dữ liệu runtime | [CURRENT-DATA-SOURCE.md](./CURRENT-DATA-SOURCE.md) |
+| Quy tắc tài liệu | [DOCUMENT_RULES.md](./DOCUMENT_RULES.md) |
+| Triển khai và vận hành | [07-DEPLOYMENT-TrienKhai/README.md](./07-DEPLOYMENT-TrienKhai/README.md) |
 
-## Source Of Truth By Layer
+## Nguồn sự thật theo lớp
 
-| Layer | Content | Entry |
-| --- | --- | --- |
-| 0 | Overview | [00-OVERVIEW-TongQuan/README.md](./00-OVERVIEW-TongQuan/README.md) |
-| 1 | Vision and MVP | [01-VISION-TamNhin/README.md](./01-VISION-TamNhin/README.md) |
-| 2 | PRD / UX / screens | [02-PRD-UX-PhongCanh/README.md](./02-PRD-UX-PhongCanh/README.md) |
-| 3 | Business rules | [03-BUSINESS-NghiepVu/README.md](./03-BUSINESS-NghiepVu/README.md) |
-| 4 | Database / schema | [04-DATABASE/README.md](./04-DATABASE/README.md) |
-| 5 | Backend / API | [05-BACKEND-MayChu/README.md](./05-BACKEND-MayChu/README.md) |
-| 6 | Integration | [06-INTEGRATION-KetHop/README.md](./06-INTEGRATION-KetHop/README.md) |
-| 7 | Deploy / ops | [07-DEPLOYMENT-TrienKhai/README.md](./07-DEPLOYMENT-TrienKhai/README.md) |
+| Lớp | Nội dung | Điểm vào |
+|---|---|---|
+| 0 | Tổng quan | [00-OVERVIEW-TongQuan/README.md](./00-OVERVIEW-TongQuan/README.md) |
+| 1 | Tầm nhìn và phạm vi | [01-VISION-TamNhin/README.md](./01-VISION-TamNhin/README.md) |
+| 2 | Yêu cầu, UX, màn hình | [02-PRD-UX-PhongCanh/README.md](./02-PRD-UX-PhongCanh/README.md) |
+| 3 | Quy tắc nghiệp vụ | [03-BUSINESS-NghiepVu/README.md](./03-BUSINESS-NghiepVu/README.md) |
+| 4 | Schema và migration | [04-DATABASE/README.md](./04-DATABASE/README.md) |
+| 5 | API và server | [05-BACKEND-MayChu/README.md](./05-BACKEND-MayChu/README.md) |
+| 6 | Tích hợp ngoài | [06-INTEGRATION-KetHop/README.md](./06-INTEGRATION-KetHop/README.md) |
+| 7 | Triển khai, vận hành | [07-DEPLOYMENT-TrienKhai/README.md](./07-DEPLOYMENT-TrienKhai/README.md) |
 
-## Rule
+## Quy tắc
 
-Do not use old long plans as current instructions unless Owner explicitly points to them. Current docs and current code win over historical plans.
+Quyết định hiện hành nằm ở Owner, code/runtime đang chạy, rule active và tài liệu source-of-truth.
+Tracker, kế hoạch và log đã supersede được truy bằng Git history khi cần evidence.

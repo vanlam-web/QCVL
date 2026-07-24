@@ -8,13 +8,24 @@
 
 Trang này giúp chủ xưởng/quản trị tạo tài khoản nhân viên và cấp quyền đúng phần việc.
 
-QC-OMS dùng permission-based access control:
+QCVL dùng permission-based access control:
 
 - không dùng role cứng làm nguồn authorization
 - mỗi tài khoản được tick các quyền cụ thể
-- backend vẫn kiểm tra quyền trên mọi API
+- các route quản trị user/permission/workstation có guard server theo permission exact
 
-Quyết định MVP 2026-07-01:
+## Runtime V1 đã có
+
+- `perm.manage_users`: xem/tạo/sửa user và thay permission.
+- `perm.access_admin_panel`: vào Settings, xem/tạo/sửa workstation và sửa thông tin cửa hàng/mẫu in.
+- UI Settings ẩn control quản trị user khi session không có `perm.manage_users`; server vẫn trả `403 PERMISSION_DENIED` cho direct API.
+- UI user hiện có: tải/lỗi, tìm theo tên/email/điện thoại, lọc trạng thái, tạo/sửa, active/inactive, cấp permission và focus/validation trong dialog.
+- Mẫu in và thông tin cửa hàng không phụ thuộc `perm.manage_users`; chúng dùng `perm.access_admin_panel`.
+
+> [!NOTE]
+> Role/preset trong UI hiện là shortcut tick permission. Chúng không phải role persisted hoặc lớp authorization riêng.
+
+## Quyết định MVP 2026-07-01:
 
 - Permission system vẫn giữ làm nền tảng kỹ thuật.
 - Vận hành xưởng nhỏ/nội bộ không chia nhỏ quyền quá mức.
@@ -36,8 +47,8 @@ Ghi chú từ KiotViet audit ngày `2026-07-01`:
 - `Bảng lương` có 23 bảng lương nhưng tổng lương/đã trả/còn cần trả đang là `0`, chủ yếu trạng thái tạm tính.
 - `Bảng hoa hồng` có cấu hình theo hàng hóa/nhân viên áp dụng nhưng không có kết quả phù hợp trong lượt rà.
 - `Thiết lập nhân viên` gồm khởi tạo, chấm công, tính lương, ngày làm/nghỉ, Zalo mini app và máy chấm công.
-- QC-OMS chỉ lấy phần cần cho đăng nhập, quyền và ghi nhận người thao tác. Không copy các trường HR/kế toán nhân sự như mã chấm công, CMND/CCCD, nợ/tạm ứng, phòng ban/chức danh nếu chưa có nghiệp vụ rõ.
-- QC-OMS có thể dùng preset/vai trò để tick quyền nhanh, nhưng authorization vẫn dựa trên permission cụ thể.
+- QCVL chỉ lấy phần cần cho đăng nhập, quyền và ghi nhận người thao tác. Không copy các trường HR/kế toán nhân sự như mã chấm công, CMND/CCCD, nợ/tạm ứng, phòng ban/chức danh nếu chưa có nghiệp vụ rõ.
+- QCVL có thể dùng preset/vai trò để tick quyền nhanh, nhưng authorization vẫn dựa trên permission cụ thể.
 
 ---
 
@@ -114,7 +125,7 @@ Quy tắc:
 - Email phai hop le va chua ton tai.
 - Thông tin khác và ghi chú là không bắt buộc; nếu nhập thì lưu thật vào profile nhân viên khi tạo tài khoản.
 - Mật khẩu tạm không hiển thị lại sau khi lưu.
-- Sau khi tạo, admin gửi mật khẩu tạm cho nhân viên bằng kênh nội bộ; QC-OMS không tự gửi email trong MVP/current scope.
+- Sau khi tạo, admin gửi mật khẩu tạm cho nhân viên bằng kênh nội bộ; QCVL không tự gửi email trong MVP/current scope.
 
 ---
 
@@ -131,57 +142,18 @@ Quy tắc sửa nhanh:
 - Bấm `Lưu` cập nhật thông tin tài khoản qua `PATCH /users/{id}`, sau đó cập nhật vai trò/quyền qua `PUT /users/{id}/permissions`.
 - Sau khi lưu thành công, hộp thoại đóng và bảng tài khoản reload từ API.
 
-Chi tiết gồm các tab:
+### Quyền tài khoản hiện có
 
-- Thông tin
-- Quyền
-- Lịch sử đổi quyền
+- Mở icon quyền của từng user để tick/untick permission; lưu qua `PUT /api/v1/users/{id}/permissions`.
+- Danh sách permission do server trả qua `GET /api/v1/permissions`.
+- Thay đổi permission chỉ được current user có `perm.manage_users` thực hiện.
 
-### Tab Thông tin
+### Roadmap, chưa có V1
 
-- email chỉ đọc
-- tên hiển thị
-- trạng thái active/inactive
-
-Không xóa vật lý tài khoản đã có lịch sử. Khi nhân viên nghỉ hoặc không dùng nữa, chuyển inactive.
-
-### Tab Quyền
-
-Hiển thị permission theo nhóm:
-
-| Nhóm | Ví dụ quyền |
-|---|---|
-| POS | tạo hóa đơn, áp bảng giá/chiết khấu, sửa/hủy chứng từ đã chốt nếu Owner tách quyền riêng |
-| Hàng hóa/Kho | quản lý hàng hóa, kiểm kho, điều chỉnh vật tư |
-| Tài chính | sổ quỹ, thu nợ, phiếu thu/chi, đối soát |
-| Bảng giá | sửa bảng giá |
-| Báo cáo | xem báo cáo |
-| Hệ thống | quản lý tài khoản và máy trạm |
-
-UI có thể có preset gợi ý như `Thu ngân`, `Kho`, `Quản lý`, nhưng preset chỉ là thao tác tick nhanh. Nguồn quyền cuối cùng vẫn là danh sách permission cụ thể.
-
-Trong MVP, preset khuyến nghị đơn giản hơn:
-
-| Preset | Mục đích | Quy tắc |
-|---|---|---|
-| Chủ xưởng/Quản trị | Toàn quyền, quản lý user/quyền/cấu hình | Có toàn bộ quyền active |
-| Nhân viên nội bộ | Dùng hằng ngày tại xưởng | Có đủ quyền POS, giảm giá thủ công, xem chứng từ, khách hàng, bảng giá, hàng hóa/kho, kiểm kho, công nợ cơ bản, sổ quỹ và thao tác finance/inventory thường ngày trong MVP |
-| Kế toán/Kho | Chỉ tạo nếu vận hành thật sự cần tách | Preset tùy chọn, gom nhanh quyền finance/inventory; không bắt buộc trong MVP |
-| Hạn chế đặc biệt | Tài khoản thuê ngoài/thử việc | Admin tự bỏ tick quyền không muốn cấp |
-
-Các permission nhỏ như `perm.apply_discount`, `perm.manage_inventory`, `perm.edit_price_book` vẫn có thể tồn tại để backend kiểm soát và mở rộng sau này, nhưng MVP không dùng chúng để tạo trải nghiệm vận hành quá rời rạc cho nhân viên nội bộ.
-
-### Tab Lịch sử đổi quyền
-
-Mỗi dòng hiển thị:
-
-- thời gian
-- người thay đổi
-- quyền trước
-- quyền sau
-- hành động: grant, revoke, replace
-
-Không cho sửa/xóa lịch sử.
+- Tab lịch sử đổi quyền.
+- Persisted audit trail trước/sau/người thay đổi cho permission.
+- Chặn vô hiệu hóa/gỡ `perm.manage_users` khỏi quản trị cuối cùng.
+- Refetch realtime và 2FA/xác thực lại trước tác vụ nhạy cảm.
 
 ---
 

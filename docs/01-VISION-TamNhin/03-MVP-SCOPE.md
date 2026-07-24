@@ -1,14 +1,14 @@
-﻿# MVP SCOPE - Pham vi QC-OMS hien tai
+# MVP SCOPE - Pham vi QCVL hien tai
 
 > Trang thai: Da chot dinh huong theo Owner - 2026-07-01
 > Source of Truth: pham vi san pham hien tai de tranh copy du KiotViet.
-> Doc cleanup / SoT vs runtime: [../DOC-CLEANUP-CHECKLIST.md](../DOC-CLEANUP-CHECKLIST.md). Owner 2026-07-20: da import het KV — khong mo import moi.
+> Doc cleanup / SoT vs runtime: [Quy tắc tài liệu](../DOCUMENT_RULES.md). Owner 2026-07-20: da import het KV — khong mo import moi.
 
 ---
 
 ## 1. Nguyen tac chung
 
-QC-OMS tham khao KiotViet de hoc cach to chuc thao tac va du lieu, nhung khong copy 100%.
+QCVL tham khao KiotViet de hoc cach to chuc thao tac va du lieu, nhung khong copy 100%.
 
 Pham vi MVP uu tien luong van hanh thuc te cua xuong:
 
@@ -16,7 +16,7 @@ Pham vi MVP uu tien luong van hanh thuc te cua xuong:
 POS ban dut -> hoa don -> tru kho -> thu tien/cong no -> so quy -> doi soat -> bao cao quan tri
 ```
 
-Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/online/thue se bi loai khoi QC-OMS hien tai tru khi Owner yeu cau phat trien lai sau.
+Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/online/thue se bi loai khoi QCVL hien tai tru khi Owner yeu cau phat trien lai sau.
 
 ---
 
@@ -43,20 +43,20 @@ Nhung man hinh KiotViet khong co du lieu thuc te, it dung, hoac thuoc retail/onl
 
 | Nhom | Quyet dinh |
 |---|---|
-| Dat hang KiotViet | Khong lam trong QC-OMS hien tai. QC-OMS chi ban dut; bao gia khong phai don dat hang |
+| Dat hang KiotViet | Khong lam trong QCVL hien tai. QCVL chi ban dut; bao gia khong phai don dat hang |
 | Giao hang/van don | Khong lam van don, doi tac giao hang, trang thai giao hang, khu vuc giao hang |
 | COD/ban giao hang | Khong lam COD, phi giao hang, doi soat giao hang |
-| Ban online | Khong lam website ban hang, Zalo shop, don online, thong ke truy cap website trong QC-OMS hien tai |
-| Ban da kenh/TMDT/MXH | Khong ket noi/dong bo Shopee, Tiktok Shop, Lazada, Tiki, Facebook, Instagram, Zalo OA trong QC-OMS hien tai |
-| Tra hang ban | Khong lam trong QC-OMS hien tai; hoa don sai xu ly bang sua chung tu `MaCu.01` va huy chung tu cu |
+| Ban online | Khong lam website ban hang, Zalo shop, don online, thong ke truy cap website trong QCVL hien tai |
+| Ban da kenh/TMDT/MXH | Khong ket noi/dong bo Shopee, Tiktok Shop, Lazada, Tiki, Facebook, Instagram, Zalo OA trong QCVL hien tai |
+| Tra hang ban | Khong lam trong QCVL hien tai; hoa don sai xu ly bang sua chung tu `MaCu.01` va huy chung tu cu |
 | Tra hang nhap | Khong lam trong lat cat Purchase dau tien; chi xem lai neu sau nay thuc te phat sinh |
-| Hoa don dien tu/VAT/thue | Khong phat hanh/quan ly HĐĐT, khong tinh VAT/thue ke toan trong QC-OMS hien tai |
-| So ke toan/to khai thue | Khong lam ho so ke khai thue, so ke toan thue, to khai thue trong QC-OMS hien tai |
+| Hoa don dien tu/VAT/thue | Khong phat hanh/quan ly HĐĐT, khong tinh VAT/thue ke toan trong QCVL hien tai |
+| So ke toan/to khai thue | Khong lam ho so ke khai thue, so ke toan thue, to khai thue trong QCVL hien tai |
 | Thuong hieu retail | Khong tao field/module/report rieng; neu can thi ghi trong ten/ma/nhom hang |
 | Diem thuong/loyalty | Khong lam tich diem, Zalo loyalty/onboarding, khuyen mai tu dong, sinh nhat/gioi tinh retail |
-| Khuyen mai retail | Khong lam module Campaign/Khuyen mai rieng trong QC-OMS hien tai; neu can gia theo so luong thi xem lai trong PriceBook sau |
+| Khuyen mai retail | Khong lam module Campaign/Khuyen mai rieng trong QCVL hien tai; neu can gia theo so luong thi xem lai trong PriceBook sau |
 | Nhan su cham cong | Khong lam lich lam viec, bang cham cong, bang luong, hoa hong/KPI |
-| Mua dich vu rieng | Xu ly bang phieu chi So quy neu can; khong tao module mua dich vu rieng trong QC-OMS hien tai |
+| Mua dich vu rieng | Xu ly bang phieu chi So quy neu can; khong tao module mua dich vu rieng trong QCVL hien tai |
 | Vi dien tu | Chua lam; hien tai chi tien mat va ngan hang |
 
 ---

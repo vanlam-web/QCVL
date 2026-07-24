@@ -12,7 +12,7 @@ Màn đối soát máy sản xuất giúp quản lý xem nhanh:
 ```text
 Máy sản xuất thực tế có thông báo/file gì
 vs
-QC-OMS đã có hóa đơn/bill gì
+QCVL đã có hóa đơn/bill gì
 ```
 
 MVP chỉ hiển thị chênh lệch để kiểm tra. Màn này không tự tạo hóa đơn, không tự trừ kho, không tự match file với bill và không tự sửa tồn kho.
@@ -86,7 +86,7 @@ Quy tắc hiển thị:
 Drawer chi tiết hiển thị hai cột song song:
 
 ```text
-Thông báo máy sản xuất | Hóa đơn QC-OMS
+Thông báo máy sản xuất | Hóa đơn QCVL
 ```
 
 Thông báo máy sản xuất:
@@ -98,7 +98,7 @@ Thông báo máy sản xuất:
 - parse status: `ok`, `error`, `pending`
 - payload parse nếu có: khách, hàng, dài/rộng, số lượng, m2
 
-Hóa đơn QC-OMS:
+Hóa đơn QCVL:
 
 - mã hóa đơn `HD...`
 - thời gian checkout
