@@ -829,6 +829,7 @@ export interface ServerRepository {
   }): Promise<StocktakeDetailData | null>
   createMaterialOpening?(input: {
     organizationId: string
+    product_id: string
     inventory_shape: 'normal'
     opened_unit_id?: string
     opened_qty?: number
