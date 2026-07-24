@@ -48,7 +48,7 @@ describe('mapKiotVietSupplierRows', () => {
         kiotviet_net_purchase: 30000000,
       }),
     ])
-    expect(result.valid[0].source_created_at).toBe('2026-06-05T09:20:05.967Z')
+    expect(result.valid[0].source_created_at).toBe('2026-06-05T02:20:05.967Z')
   })
 
   it('marks rows missing code or name as invalid', () => {

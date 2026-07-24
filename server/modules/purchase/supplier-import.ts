@@ -1,3 +1,4 @@
+import { parseBusinessTimeToUtc } from '../../date-filter.js'
 import { parseKiotVietProductWorkbookBuffer } from '../catalog/product-import.js'
 
 export type KiotVietSupplierStatus = 'active' | 'inactive'
@@ -169,12 +170,7 @@ function supplierAddress(address: string | null, wardName: string | null, areaNa
 }
 
 function supplierDate(value: unknown) {
-  if (typeof value === 'number') return excelSerialToIso(value)
-  return text(value)
-}
-
-function excelSerialToIso(value: number) {
-  return new Date(Math.round((value - 25569) * 86400 * 1000)).toISOString()
+  return parseBusinessTimeToUtc(value)
 }
 
 function valueByHeader(row: KiotVietRawSupplierRow, ...headers: string[]) {

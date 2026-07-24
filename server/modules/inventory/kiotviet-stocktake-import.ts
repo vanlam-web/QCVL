@@ -1,3 +1,5 @@
+import { parseBusinessTimeToUtc } from '../../date-filter.js'
+
 export interface KiotVietRawStocktakeRow {
   rowNumber: number
   [header: string]: unknown
@@ -110,13 +112,6 @@ export function mapKiotVietStocktakeRows(rows: KiotVietRawStocktakeRow[]): KiotV
   return { valid, invalid }
 }
 
-export function excelSerialToIso(value: unknown) {
-  const serial = number(value)
-  if (serial === null) return null
-  const timestamp = Math.round((serial - 25569) * 86400 * 1000)
-  return new Date(timestamp).toISOString()
-}
-
 export async function previewKiotVietStocktakeImport(input: KiotVietStocktakePreviewInput) {
   const productCodes = unique(input.rows.map((row) => row.product_code))
   const existingCodes = await input.repository.findProductsByCodes?.({
@@ -143,8 +138,7 @@ export async function previewKiotVietStocktakeImport(input: KiotVietStocktakePre
 }
 
 function stocktakeDate(value: unknown) {
-  if (typeof value === 'number') return excelSerialToIso(value)
-  return text(value)
+  return parseBusinessTimeToUtc(value)
 }
 
 function stocktakeFormulaValid(systemQty: number | null, actualQty: number | null, differenceQty: number | null) {

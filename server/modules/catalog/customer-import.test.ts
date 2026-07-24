@@ -65,8 +65,8 @@ describe('mapKiotVietCustomerRows', () => {
       kiotviet_total_sales: 500000,
       kiotviet_net_sales: 450000,
     })
-    expect(result.valid[0].source_created_at).toBe('2026-07-08T12:00:00.000Z')
-    expect(result.valid[0].last_transaction_at).toBe('2026-07-09T00:00:00.000Z')
+    expect(result.valid[0].source_created_at).toBe('2026-07-08T05:00:00.000Z')
+    expect(result.valid[0].last_transaction_at).toBe('2026-07-08T17:00:00.000Z')
     expect(result.valid[1]).toMatchObject({
       code: 'KH000002',
       name: 'A Cường',

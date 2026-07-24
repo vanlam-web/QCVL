@@ -1,4 +1,5 @@
 import { inflateRawSync } from 'node:zlib'
+import { parseBusinessTimeToUtc } from '../../date-filter.js'
 
 type ProductStatus = 'active' | 'inactive'
 type SellMethod = 'quantity' | 'area_m2' | 'linear_m' | 'sheet' | 'combo'
@@ -487,26 +488,7 @@ function normalizeSourceCreatedAt(value: string | null) {
   if (!value) return null
   const trimmed = value.trim()
   const serial = Number(trimmed)
-  if (Number.isFinite(serial) && serial > 0) {
-    const excelEpochOffsetDays = 25569
-    const date = new Date((serial - excelEpochOffsetDays) * 86400 * 1000)
-    return Number.isFinite(date.getTime()) ? date.toISOString() : null
-  }
-  const dateTimeMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/)
-  if (dateTimeMatch) {
-    const [, day, month, year, hour = '0', minute = '0'] = dateTimeMatch
-    const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute), 0, 0))
-    if (
-      date.getUTCFullYear() === Number(year)
-      && date.getUTCMonth() === Number(month) - 1
-      && date.getUTCDate() === Number(day)
-    ) {
-      return date.toISOString()
-    }
-    return null
-  }
-  const timestamp = Date.parse(trimmed)
-  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null
+  return Number.isFinite(serial) && serial > 0 ? parseBusinessTimeToUtc(serial) : parseBusinessTimeToUtc(trimmed)
 }
 
 function unique(values: string[]) {

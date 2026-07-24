@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { excelSerialToIso, mapKiotVietStocktakeRows, previewKiotVietStocktakeImport } from './kiotviet-stocktake-import'
+import { mapKiotVietStocktakeRows, previewKiotVietStocktakeImport } from './kiotviet-stocktake-import'
 
 describe('mapKiotVietStocktakeRows', () => {
   it('maps valid KiotViet stocktake rows and validates the difference formula', () => {
@@ -30,8 +30,8 @@ describe('mapKiotVietStocktakeRows', () => {
     expect(result.valid[0]).toMatchObject({
       rowNumber: 2,
       source_code: 'KK000333',
-      source_created_at: '10/07/2026 09:30',
-      source_balanced_at: '1970-01-01T12:00:00.000Z',
+      source_created_at: '2026-07-10T02:30:00.000Z',
+      source_balanced_at: '1970-01-01T05:00:00.000Z',
       status: 'balanced',
       product_code: 'HDA5',
       product_name: 'Hiflex 3m2',
@@ -108,14 +108,6 @@ describe('mapKiotVietStocktakeRows', () => {
       product_code: 'OLD-CODE{DEL}',
       is_deleted_product_code: true,
     })
-  })
-})
-
-describe('excelSerialToIso', () => {
-  it('converts Excel serial dates to UTC ISO timestamps', () => {
-    expect(excelSerialToIso(25569)).toBe('1970-01-01T00:00:00.000Z')
-    expect(excelSerialToIso(25569.5)).toBe('1970-01-01T12:00:00.000Z')
-    expect(excelSerialToIso('not-a-date')).toBeNull()
   })
 })
 

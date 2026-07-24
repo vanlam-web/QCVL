@@ -232,7 +232,7 @@ describe('product import server flow', () => {
       rows: [
         expect.objectContaining({
           code: 'A10T',
-          source_created_at: '2026-07-31T08:30:00.000Z',
+          source_created_at: '2026-07-31T01:30:00.000Z',
         }),
       ],
     })
@@ -257,7 +257,7 @@ describe('product import server flow', () => {
       rows: [
         expect.objectContaining({
           code: 'A10T',
-          source_created_at: '2026-07-01T10:07:10.253Z',
+          source_created_at: '2026-07-01T03:07:10.253Z',
         }),
       ],
     })
