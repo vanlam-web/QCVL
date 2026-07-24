@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { displayDateRangeMatches } from './date-filter.js'
 import { computeCustomerDebtTotal, sliceCustomerOpenDebtsOldestFirst } from './modules/finance/customer-debt.js'
+import { buildPriceFormulaPreview, selectedFormulaPrices } from './modules/catalog/price-formula-core.js'
 import {
   rebuildKiotVietCashbookAllocations,
   type AllocatableInvoice,
@@ -185,6 +186,31 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
       groupNamesById,
       searchSelectionStats,
     })
+  }
+
+  function previewDevMemoryPriceFormula(formula: Parameters<NonNullable<ServerRepository['previewPriceFormula']>>[0]['formula']) {
+    const priceLists = [...new Map([...priceListNames.values()].map((priceList) => [priceList.id, {
+      id: priceList.id,
+      name: priceList.name,
+      is_active: true,
+    }])).values()]
+    const pricesByProduct = new Map<string, Map<string, number>>()
+    for (const product of products.values()) {
+      pricesByProduct.set(product.id, new Map(Object.entries(priceListPricesForProduct(product.code, defaultSalePrices, priceListNames, namedSalePrices))))
+    }
+    return buildPriceFormulaPreview(
+      formula,
+      [...products.values()].map((product) => ({
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        status: product.status,
+        sell_method: product.sell_method,
+        latest_purchase_cost: product.latest_purchase_cost,
+      })),
+      priceLists,
+      pricesByProduct,
+    )
   }
 
   if (syncExactCustomerSupplierLinks(customers, suppliers) > 0) await persist()
@@ -699,6 +725,27 @@ export async function createDevMemoryRepository(options: { stateFile?: string } 
         })
       }
       return [...byId.values()].sort((left, right) => Number(right.is_default) - Number(left.is_default) || left.name.localeCompare(right.name, 'vi'))
+    },
+    async previewPriceFormula(input) {
+      return previewDevMemoryPriceFormula(input.formula)
+    },
+    async applyPriceFormula(input) {
+      const preview = previewDevMemoryPriceFormula(input.formula)
+      const selected = selectedFormulaPrices(preview, input.selectedItems)
+      for (const price of selected) {
+        const product = [...products.values()].find((item) => item.id === price.product_id)
+        const priceList = [...priceListNames.values()].find((item) => item.id === price.price_list_id)
+        if (!product || !priceList || product.status !== 'active') throw new Error('PRICE_FORMULA_SELECTION_STALE')
+        if (priceList.id === defaultPriceList.id) defaultSalePrices.set(product.code, price.unit_price)
+        else {
+          const key = priceListKey(priceList.name)
+          const rows = namedSalePrices.get(key) ?? new Map<string, number>()
+          rows.set(product.code, price.unit_price)
+          namedSalePrices.set(key, rows)
+        }
+      }
+      await persist()
+      return { formula_rule_id: randomUUID(), affected_count: selected.length }
     },
     async resolvePrices(input) {
       const customer = input.customerId

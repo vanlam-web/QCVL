@@ -22,6 +22,7 @@ import { createSupplierCrudRepository } from './modules/catalog/supplier-crud-re
 import { createProductCreateRepository } from './modules/catalog/product-create-repository.js'
 import { createPriceListQueryRepository } from './modules/catalog/price-list-query-repository.js'
 import { createResolvePricesRepository } from './modules/catalog/resolve-prices-repository.js'
+import { createPriceFormulaRepository } from './modules/catalog/price-formula-repository.js'
 import { createProductBomRepository } from './modules/catalog/product-bom-repository.js'
 import { createProductQueryRepository } from './modules/catalog/product-query-repository.js'
 import { createPurchaseReceiptQueryRepository } from './modules/purchase/purchase-receipt-repository.js'
@@ -175,6 +176,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
 
   const resolvePricesRepository = createResolvePricesRepository(pool, { ensureCatalog: ensureProductCatalogSchema, ensurePriceLists: ensurePriceListTables, ensureSnapshots: ensureImportedSnapshotTables, priceMap: priceListPriceMap })
 
+  const priceFormulaRepository = createPriceFormulaRepository(pool, { ensureCatalog: ensureProductCatalogSchema, ensurePriceLists: ensurePriceListTables })
+
   const productBomRepository = createProductBomRepository(pool, { ensureTables: ensureProductBomTables, load: loadProductBomDetail })
 
   const customerImportRepository = createCustomerImportRepository(pool, { ensureTables: ensureImportedSnapshotTables, hashText, priceListCode: priceListImportCode })
@@ -211,6 +214,8 @@ export function createPgRepository(databaseUrl: string): ServerRepository & { cl
     ...priceListQueryRepository,
 
     ...resolvePricesRepository,
+
+    ...priceFormulaRepository,
 
     ...customerQueryRepository,
 

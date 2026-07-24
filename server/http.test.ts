@@ -3312,6 +3312,46 @@ describe('createHttpHandler', () => {
     ])
   })
 
+  test('previews price formulas without mutation then persists selected formula prices for POS', async () => {
+    const handler = createHttpHandler({ repository: await createDevMemoryRepository() })
+    const authorization = 'Bearer dev-token'
+    await handler(new Request('http://api.local/api/v1/products/import/kiotviet', {
+      method: 'POST',
+      headers: { authorization, 'content-type': 'application/json' },
+      body: JSON.stringify({ cleanup_demo: false, rows: [{ rowNumber: 2, SKU: 'FORMULA-1', 'Tên hàng': 'Hàng công thức', ĐVT: 'Cái', 'Giá vốn': 100000, 'Bảng giá chung': 120000 }] }),
+    }))
+    const productsResponse = await handler(new Request('http://api.local/api/v1/products?search=FORMULA-1', { headers: { authorization } }))
+    const productId = (await productsResponse.json()).data.items[0].id as string
+    const priceListsResponse = await handler(new Request('http://api.local/api/v1/price-lists', { headers: { authorization } }))
+    const priceListId = (await priceListsResponse.json()).data.items.find((item: { is_default: boolean }) => item.is_default).id as string
+    const formula = {
+      name: 'Tăng giá',
+      product_filter: { status: 'active', code_contains: 'FORMULA-1' },
+      cost_formula: { type: 'fixed', amount: 10000 },
+      profit_formula: { type: 'fixed', amount: 5000 },
+      price_list_adjustments: {},
+    }
+    const previewResponse = await handler(new Request('http://api.local/api/v1/price-lists/formulas/preview', {
+      method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify(formula),
+    }))
+    const preview = await previewResponse.json()
+    expect(previewResponse.status).toBe(200)
+    expect(preview.data.items[0].computed_prices[0]).toEqual(expect.objectContaining({ current_unit_price: 120000, computed_unit_price: 115000 }))
+    const beforeApply = await handler(new Request('http://api.local/api/v1/pricing/resolve', {
+      method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify({ product_ids: [productId] }),
+    }))
+    expect((await beforeApply.json()).data.items[0].unit_price).toBe(120000)
+    const applyResponse = await handler(new Request('http://api.local/api/v1/price-lists/formulas/apply', {
+      method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify({ formula, selected_items: [{ product_id: productId, price_list_id: priceListId }] }),
+    }))
+    expect(applyResponse.status).toBe(200)
+    expect((await applyResponse.json()).data).toEqual(expect.objectContaining({ affected_count: 1 }))
+    const afterApply = await handler(new Request('http://api.local/api/v1/pricing/resolve', {
+      method: 'POST', headers: { authorization, 'content-type': 'application/json' }, body: JSON.stringify({ product_ids: [productId] }),
+    }))
+    expect((await afterApply.json()).data.items[0].unit_price).toBe(115000)
+  })
+
   test('sorts product list by created time by default instead of import time', async () => {
     const productRepository = await createDevMemoryRepository()
     await productRepository.upsertProductsByCode?.({

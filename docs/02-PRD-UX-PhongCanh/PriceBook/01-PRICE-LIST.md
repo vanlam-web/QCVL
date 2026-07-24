@@ -145,131 +145,57 @@ Giá vốn trong KiotViet hiển thị để tham khảo trên lưới thiết l
 
 Export bảng giá có nhiều dòng `Bảng giá chung = 0` và một dòng giá nhóm `26 = 0`. Theo quyết định hiện tại, giá `0` là giá hợp lệ nếu được khai báo; fallback về giá chung chỉ xảy ra khi dòng giá không tồn tại/để trống trong schema QCVL, không phải vì giá bằng `0`.
 
-Công thức giá theo nhóm hàng là hướng cần giữ cho phase PriceBook nâng cao, nhưng slice MVP đầu chưa thêm schema/filter nhóm hàng:
+## 6. Công thức giá hiện hành
 
-- mỗi nhóm hàng có thể có công thức riêng
-- nguồn tính giá trong MVP là `giá nhập cuối`; `giá vốn bình quân` chỉ xem lại sau khi Purchase/Inventory đủ dữ liệu và Owner chốt
-- công thức phải lưu được làm mặc định lâu dài cho nhóm hàng
-- khi giá nhập cuối thay đổi, hệ thống tính lại giá theo công thức để tạo giá mới/giá đề xuất
-- giá POS chỉ đổi khi công thức được áp dụng theo chính sách đã cấu hình; mặc định nên có bước xem/xác nhận áp dụng trước khi cập nhật hàng loạt
+Công thức giá là luồng operator-facing V1. Người dùng mở `Tạo công thức cho bộ lọc này`,
+nhập điều kiện rồi bấm `Xem trước`. Preview chỉ đọc dữ liệu; chưa ghi bảng giá và POS
+chưa đổi giá ở bước này.
 
-## 7. Hướng thiết kế riêng cho QCVL
+### Checklist thao tác V1
 
-Phần giá cần tách thành 3 lớp để đúng nghiệp vụ quảng cáo:
+- [x] Chọn điều kiện: mã hàng chứa, tên hàng chứa và cách bán.
+- [x] Chọn một trong hai cách cộng chi phí: số tiền cố định, hoặc số tiền + `% giá nhập cuối`.
+- [x] Chọn lợi nhuận cố định hoặc các tier theo `Giá nhập cuối` với toán tử `<`, `<=`, `>`, `>=`, `=`.
+- [x] Chọn điều chỉnh từng bảng giá active: số tiền hoặc phần trăm; giá trị âm hợp lệ nếu kết quả không âm.
+- [x] Bấm `Xem trước` để xem hàng khớp, giá hiện tại, giá đề xuất và chênh lệch.
+- [x] Bấm `Áp dụng công thức` để ghi **toàn bộ ô giá trong preview**. Server tính lại từ `products.latest_purchase_cost`; client không gửi giá đích để tránh sửa giá giả.
+- [x] Sau apply thành công, UI tải lại lưới. POS chỉ đọc giá đã lưu trong `price_list_items`, nên chỉ đổi sau apply thành công.
 
-| Lớp | Ý nghĩa | Ví dụ |
-|---|---|---|
-| Giá đã lưu | Giá chính thức POS dùng khi bán | Giá chung, bảng giá nhóm `25/30/35/40` |
-| Công thức gợi ý | Công thức tạo giá đề xuất theo bộ lọc sản phẩm | Giá nhập cuối + chi phí + lợi nhuận |
-| Lịch sử giá khách | Giá sửa tay từng bán cho khách + sản phẩm | 5 giá gần nhất để chọn lại trong POS |
-
-Nguyên tắc đề xuất:
-
-- POS luôn dùng giá đã lưu trong bảng giá làm mặc định.
-- Công thức không tự chạy ngầm làm đổi giá bán; người dùng phải bấm áp dụng/cập nhật.
-- Công thức có thể chạy theo nhóm hàng, không bắt buộc mọi sản phẩm dùng cùng một cách tính.
-- Một sản phẩm có thể cần giá theo `m2`, `m tới`, `tấm`, `cái` hoặc combo; công thức phải hiểu đúng cách bán của sản phẩm.
-- Giá vốn từ nhập hàng là dữ liệu tham khảo cho công thức, không phải giá bán.
-- Nếu nhân viên sửa giá trên POS, lịch sử giá theo khách + sản phẩm được lưu để gợi ý lần sau, không cập nhật ngược bảng giá.
-
-## 8. Công thức giá 2 tầng
-
-QCVL chốt hướng công thức giá rộng hơn KiotViet. KiotViet chỉ cho kiểu:
+### Công thức tính V1
 
 ```text
-Giá mới = Giá hiện tại +/- số tiền hoặc %
+chi phí = cố định
+hoặc chi phí = cố định + giá nhập cuối × phần trăm chi phí / 100
+
+giá nền = giá nhập cuối + chi phí + tổng tier lợi nhuận khớp
+
+giá bảng = giá nền + điều chỉnh số tiền
+hoặc giá bảng = giá nền × (1 + điều chỉnh phần trăm / 100)
 ```
 
-QCVL cần công thức nhiều bước, lưu mặc định theo nhóm hàng/sản phẩm để dùng lâu dài.
+- `Giá nhập cuối` null được tính là `0`.
+- Kết quả giữ tối đa hai chữ số thập phân; không có làm tròn ngầm lên `1.000đ`.
+- Kết quả âm, bảng giá inactive/mất, sản phẩm inactive/mất, lựa chọn trùng hoặc lựa chọn ngoài preview đều bị từ chối.
+- Apply dùng transaction; lỗi ở bất kỳ ô chọn nào rollback toàn bộ batch.
+- Giá `0` là giá hợp lệ. Fallback POS chỉ xảy ra khi dòng giá không tồn tại, không phải vì giá bằng `0`.
 
-### Tầng 1: Giá nền trước lợi nhuận
+### Giới hạn V1 và V2
 
-Giá nền là giá đã cộng các chi phí cần thiết trước khi tính lợi nhuận bán hàng.
+V1 **không** lưu rule để chạy lại, không tự đổi giá khi giá nhập cuối đổi, không áp dụng theo nhóm hàng thực thể, không có policy làm tròn, không có lịch sử/audit rule riêng và không có chọn thủ công từng ô trong preview. Đây là V2; chỉ làm sau khi Owner chốt rule, rounding, audit và chính sách tự áp dụng.
 
-Ví dụ nhóm hàng `Fomex`:
+## 7. Lớp giá đang dùng
 
-```text
-Giá nền = Giá nhập cuối
-        + 10% vận chuyển
-        + 8% thuế/phí
-        + 10% hao hụt
-```
+| Lớp | Hiện trạng |
+|---|---|
+| Giá đã lưu | `price_list_items`; POS resolve theo khách/nhóm khách và bảng giá mặc định. |
+| Preview công thức | Dữ liệu read-only, tính từ giá nhập cuối và filter V1. |
+| Lịch sử giá khách | Gợi ý trong POS, không cập nhật ngược bảng giá. |
 
-Có thể viết gọn:
+## 8. Acceptance checklist
 
-```text
-Giá nền = Giá nhập cuối * (1 + 10% + 8% + 10%)
-```
-
-Nguồn giá đầu vào MVP:
-
-- `giá nhập cuối` từ `products.latest_purchase_cost`
-
-Ngoài phạm vi MVP đầu:
-
-- chọn nguồn `giá vốn bình quân`
-- chọn nguồn giá khác khi Purchase/Inventory đủ dữ liệu
-
-### Tầng 2: Giá bán theo bảng giá
-
-Từ giá nền, mỗi bảng giá/nhóm khách có thể cộng lợi nhuận riêng.
-
-Ví dụ:
-
-```text
-Giá 40 = Giá nền + 40,000/tấm
-Giá 35 = Giá nền + 35,000/tấm
-Giá 30 = Giá nền + 30,000/tấm
-```
-
-Hoặc:
-
-```text
-Giá 40 = Giá nền * 1.25
-Giá 35 = Giá nền * 1.20
-Giá 30 = Giá nền * 1.15
-```
-
-Một công thức có thể áp dụng cho:
-
-- cả nhóm hàng, ví dụ `Fomex 5mm`
-- một nhóm hàng cha, ví dụ `Fomex`
-- một số sản phẩm được chọn thủ công
-- một bảng giá cụ thể hoặc tất cả bảng giá nhóm
-
-### Tự cập nhật khi giá nhập thay đổi
-
-Khi phiếu nhập hoặc thao tác admin được phép làm thay đổi `giá nhập cuối`, hệ thống phải tính lại được giá theo công thức đang lưu.
-
-Mặc định an toàn:
-
-- hệ thống tạo danh sách giá mới/giá đề xuất
-- Owner hoặc người có quyền xem chênh lệch và bấm áp dụng
-- POS chỉ dùng giá mới sau khi bảng giá đã được cập nhật
-
-Sau này có thể cho phép một số nhóm hàng tự áp dụng nếu Owner bật rõ chính sách đó.
-
-### Làm tròn
-
-Công thức MVP làm tròn giá sau cùng lên `1,000đ`.
-
-Các kiểu làm tròn khác như `5,000đ`, `10,000đ` hoặc không làm tròn nằm ngoài phạm vi hiện tại, chỉ mở khi Owner cần.
-
-### Trạng thái chốt
-
-Đã chốt:
-
-- PriceBook QCVL phải hỗ trợ công thức giá nhiều bước, không chỉ cộng/trừ như KiotViet.
-- Công thức lưu mặc định theo nhóm hàng/sản phẩm để dùng lâu dài.
-- Công thức có tầng giá nền trước lợi nhuận và tầng giá bán theo bảng giá.
-- Giá nhập cuối thay đổi thì hệ thống tính lại được giá theo công thức.
-- Mặc định không đổi POS âm thầm; phải có giá đề xuất/chênh lệch và thao tác áp dụng, trừ khi sau này Owner bật tự áp dụng cho nhóm hàng cụ thể.
-- Lưới bảng giá hiện tại đã có cột `Mã hàng`, `Tên hàng`, `Giá nhập cuối`, `Chi phí`, `Lợi nhuận` và các cột bảng giá active.
-- Trước preview, ô bảng giá hiển thị `Chưa xem`; sau preview hiển thị `Hiện tại ... -> ...`, `Mới ...` hoặc `Không khớp`.
-- Không hiển thị nhãn `Giá tay`/`Theo công thức` theo từng ô nếu API chưa trả `current_mode` theo từng `computed_prices[]`.
-
-Ngoài phạm vi hiện tại, cần chốt trước khi làm PriceBook nâng cao:
-
-- nhóm hàng nào cần công thức riêng
-- công thức tối thiểu cho từng nhóm hàng chính
-- từng bảng giá `25/26/30/35/40` dùng cộng tiền cố định, cộng %, hay kết hợp cả hai
+- [x] Preview không mutation.
+- [x] Apply chỉ ghi product/list nằm trong preview hiện hành.
+- [x] Apply tự tính lại server-side; không tin giá do trình duyệt gửi.
+- [x] Giá POS không đổi trước apply thành công.
+- [x] Lỗi validation/stale không ghi một phần batch.
+- [ ] V2: rule persisted, tự tính lại theo giá nhập, rounding policy, audit rule và chọn subset preview cần Owner decision.

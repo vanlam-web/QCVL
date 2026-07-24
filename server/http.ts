@@ -629,6 +629,15 @@ export interface ServerRepository {
   findProductsByCodes?(input: { organizationId: string; codes: string[] }): Promise<Set<string>>
   findDefaultPriceList?(input: { organizationId: string }): Promise<{ id: string; name: string } | null>
   listPriceLists?(input: { organizationId: string }): Promise<Array<{ id: string; code: string; name: string; is_default: boolean; is_active: boolean }>>
+  previewPriceFormula?(input: {
+    organizationId: string
+    formula: import('./modules/catalog/price-formula-core.js').PriceFormulaInput
+  }): Promise<import('./modules/catalog/price-formula-core.js').PriceFormulaPreview>
+  applyPriceFormula?(input: {
+    organizationId: string
+    formula: import('./modules/catalog/price-formula-core.js').PriceFormulaInput
+    selectedItems: import('./modules/catalog/price-formula-core.js').PriceFormulaSelection[]
+  }): Promise<import('./modules/catalog/price-formula-core.js').PriceFormulaApplyResult>
   resolvePrices?(input: {
     organizationId: string
     productIds: string[]

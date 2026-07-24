@@ -1,5 +1,6 @@
 import type { CurrentUserData, ProductGroupListData, ProductListData, ServerRepository } from '../../http.js'
 import type { RouteResult } from '../../route-types.js'
+import { PriceFormulaValidationError, parsePriceFormulaInput, parsePriceFormulaSelection } from './price-formula-core.js'
 type ProductCreateInput=Omit<Parameters<NonNullable<ServerRepository['createProduct']>>[0],'organizationId'>
 type Paged<T>={items:T[];page:number;page_size:number;total:number}
 type CatalogProductDeps={request:Request;url:URL;currentUser:CurrentUserData;repository:ServerRepository;path:string;readJson(request:Request):Promise<Record<string,unknown>>;getIdFromPath(path:string):string|undefined;products:ProductListData[];productGroups:ProductGroupListData[];priceLists:unknown[];catalogImportHandlers:{previewKiotVietProductImport():RouteResult;importKiotVietProducts():RouteResult;deleteImportedKiotVietProducts():RouteResult};catalogBomHandlers:{getProductBom():RouteResult;upsertProductBom():RouteResult};listProductsForRequest(url:URL,repository:ServerRepository,organizationId:string,userId:string):Promise<ProductListData[]>;countAllProductsForRequest(url:URL,repository:ServerRepository,organizationId:string,userId:string):Promise<number>;sortProductsForRequest(items:ProductListData[],url:URL):ProductListData[];paged<T>(items:T[],page:number,pageSize:number):Paged<T>;normalizeCreateProductInput(body:Record<string,unknown>):ProductCreateInput;randomUUID():string;nowIso:string;httpError(status:number,code:'VALIDATION_ERROR'|'RESOURCE_CONFLICT',message:string,fields?:Record<string,string[]>):Error}
@@ -117,6 +118,26 @@ export function createCatalogProductHandlers(deps:CatalogProductDeps){const {req
       found: true,
       data: { items: await repository.listPriceLists?.({ organizationId: currentUser.organization.id }) ?? priceLists },
     }),
-    previewPriceFormula: async () => ({ found: true, data: { affected_count: 1, items: [{ product_id: products[0].id, product_code: products[0].code, product_name: products[0].name, latest_purchase_cost: 250000, current_mode: 'manual', current_unit_price: 600000, computed_prices: [{ price_list_id: 'pl-default', price_list_name: 'Bang gia le', current_unit_price: 600000, computed_unit_price: 620000, delta: 20000 }] }] } }),
-    applyPriceFormula: async () => ({ found: true, data: { formula_rule_id: randomUUID(), affected_count: 1 } }),
+    previewPriceFormula: async () => {
+      try {
+        if (!repository.previewPriceFormula) throw httpError(503, 'VALIDATION_ERROR', 'Price formula persistence is unavailable.')
+        const formula = parsePriceFormulaInput(await readJson(request))
+        return { found: true, data: await repository.previewPriceFormula({ organizationId: currentUser.organization.id, formula }) }
+      } catch (error) {
+        if (error instanceof PriceFormulaValidationError) throw httpError(400, 'VALIDATION_ERROR', error.message)
+        throw error
+      }
+    },
+    applyPriceFormula: async () => {
+      try {
+        if (!repository.applyPriceFormula) throw httpError(503, 'VALIDATION_ERROR', 'Price formula persistence is unavailable.')
+        const body = await readJson(request)
+        const formula = parsePriceFormulaInput(body.formula)
+        const selectedItems = parsePriceFormulaSelection(body.selected_items)
+        return { found: true, data: await repository.applyPriceFormula({ organizationId: currentUser.organization.id, formula, selectedItems }) }
+      } catch (error) {
+        if (error instanceof PriceFormulaValidationError) throw httpError(400, 'VALIDATION_ERROR', error.message)
+        throw error
+      }
+    },
   }}

@@ -270,7 +270,7 @@ export function PriceBookPage({
     setApplyingFormula(true)
     setError(null)
     try {
-      await service.applyPriceFormula({
+      const result = await service.applyPriceFormula({
         formula: buildFormulaInput(),
         selected_items: formulaPreview.items.flatMap((item) =>
           item.computed_prices.map((price) => ({
@@ -281,6 +281,7 @@ export function PriceBookPage({
       })
       setFormulaPreview(null)
       await load()
+      setError(`Đã cập nhật ${result.affected_count} ô giá theo công thức.`)
     } catch (cause) {
       setError(formatApiError(cause, 'Không áp dụng được công thức.'))
     } finally {
