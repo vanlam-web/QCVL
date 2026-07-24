@@ -1,5 +1,7 @@
 .worktrees/
 .superpowers/
+.cursor/
+.nas-image/
 
 node_modules/
 dist/
