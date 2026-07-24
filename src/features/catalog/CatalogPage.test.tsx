@@ -125,8 +125,6 @@ function makeService(overrides: Partial<CatalogService> = {}): CatalogService {
       page_size: 15,
       total: 2,
     })),
-    listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
-    listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     adjustNormalProductStock: vi.fn(async () => ({
       id: 'stocktake-1',
       code: 'KK000001',
@@ -1152,58 +1150,23 @@ it('shows latest KiotViet stocktake evidence without replacing provisional stock
   expect(within(inventoryPanel).getByText('Chỉ là lịch sử đối soát, không thay tồn tạm hiện tại')).toBeInTheDocument()
 })
 
-it('shows roll objects in the product inventory detail tab instead of allowing total stock edits', async () => {
+it('allows total stock edits for roll catalog metadata in V1', async () => {
   const service = makeService({
     listProducts: vi.fn(async () => ({
-      items: [
-        {
-          id: 'p-roll',
-          code: 'BAT-32',
-          name: 'Bạt 3.2m',
-          status: 'active' as const,
-          unit_name: 'm²',
-          sell_method: 'linear_m' as const,
-          latest_purchase_cost: 50000,
-          inventory_shape: 'roll' as const,
-          product_kind: 'roll' as const,
-        },
-      ],
-      page: 1,
-      page_size: 15,
-      total: 1,
-    })),
-    listInventoryRolls: vi.fn(async () => ({
-      items: [
-        {
-          id: 'roll-1',
-          product_id: 'p-roll',
-          code: 'ROLL-001',
-          width_m: 3.2,
-          initial_length_m: 50,
-          remaining_length_m: 18,
-          initial_area_m2: 160,
-          remaining_area_m2: 57.6,
-          status: 'in_use' as const,
-          note: null,
-          created_at: '2026-07-07T00:00:00Z',
-        },
-      ],
-      page: 1,
-      page_size: 15,
-      total: 1,
+      items: [{
+        id: 'p-roll', code: 'BAT-32', name: 'Bạt 3.2m', status: 'active' as const,
+        unit_name: 'm²', sell_method: 'linear_m' as const, latest_purchase_cost: 50000,
+        inventory_shape: 'roll' as const, product_kind: 'roll' as const,
+      }],
+      page: 1, page_size: 15, total: 1,
     })),
   })
   render(<CatalogPage service={service} onOpenDashboard={vi.fn()} />)
 
   await userEvent.click(await screen.findByText('BAT-32'))
   const detail = screen.getByRole('region', { name: 'Chi tiết hàng hóa BAT-32' })
-
   await userEvent.click(within(detail).getByRole('tab', { name: 'Tồn kho' }))
 
-  expect(service.listInventoryRolls).toHaveBeenCalledWith({ product_id: 'p-roll', page: 1, page_size: 15 })
-  expect(within(detail).queryByRole('button', { name: 'Cập nhật tồn' })).not.toBeInTheDocument()
-  expect(within(detail).getByText('Sửa tồn tổng không áp dụng cho loại hàng này.')).toBeInTheDocument()
-  const table = await within(detail).findByRole('table', { name: 'Tồn theo cuộn tấm BAT-32' })
-  expect(within(table).getByText('ROLL-001')).toBeInTheDocument()
-  expect(within(table).getByText('57,6 m²')).toBeInTheDocument()
+  expect(within(detail).getByRole('form', { name: 'Cập nhật tồn BAT-32' })).toBeInTheDocument()
+  expect(within(detail).queryByRole('table', { name: 'Tồn theo cuộn tấm BAT-32' })).not.toBeInTheDocument()
 })

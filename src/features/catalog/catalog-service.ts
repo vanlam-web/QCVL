@@ -1,6 +1,5 @@
 import { createApiClient } from '../../lib/api/client'
 import { runtimeConfig } from '../../lib/config/runtime'
-import type { InventoryRollListResponse, InventorySheetListResponse } from '../inventory/types'
 import { parseKiotVietProductWorkbook } from './kiotviet-product-import'
 import type {
   Customer,
@@ -136,22 +135,6 @@ export function createCatalogService(api: CatalogApiRequester) {
       if (input.page_size) params.set('page_size', String(input.page_size))
       const query = params.toString()
       return api.request<ProductStockMovementListResponse>(`/api/v1/inventory/stock-movements${query ? `?${query}` : ''}`)
-    },
-    listInventoryRolls: (input: { product_id?: string; page?: number; page_size?: number } = {}) => {
-      const params = new URLSearchParams()
-      if (input.product_id) params.set('product_id', input.product_id)
-      if (input.page) params.set('page', String(input.page))
-      if (input.page_size) params.set('page_size', String(input.page_size))
-      const query = params.toString()
-      return api.request<InventoryRollListResponse>(`/api/v1/inventory/rolls${query ? `?${query}` : ''}`)
-    },
-    listInventorySheets: (input: { product_id?: string; page?: number; page_size?: number } = {}) => {
-      const params = new URLSearchParams()
-      if (input.product_id) params.set('product_id', input.product_id)
-      if (input.page) params.set('page', String(input.page))
-      if (input.page_size) params.set('page_size', String(input.page_size))
-      const query = params.toString()
-      return api.request<InventorySheetListResponse>(`/api/v1/inventory/sheets${query ? `?${query}` : ''}`)
     },
     adjustNormalProductStock: (productId: string, input: { actual_qty: number; reason: string }) =>
       api.request<ProductStocktake>(`/api/v1/inventory/products/${productId}/adjust-stock`, {

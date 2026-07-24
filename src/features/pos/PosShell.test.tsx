@@ -39,8 +39,6 @@ function makeCatalogService(overrides: Partial<CatalogService> = {}): CatalogSer
     importKiotVietProducts: vi.fn(),
     deleteImportedKiotVietProducts: vi.fn(async () => ({ deleted_rows: 0, blocked_rows: 0 })),
     listStockMovements: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
-    listInventoryRolls: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
-    listInventorySheets: vi.fn(async () => ({ items: [], page: 1, page_size: 15, total: 0 })),
     adjustNormalProductStock: vi.fn(),
     recordSearchSelection: vi.fn(),
     listCustomers: vi.fn(async () => ({

@@ -4,7 +4,6 @@ import { formatApiError } from '../../lib/api/error-message'
 import { parseDateTimeValue } from '../../lib/date-format'
 import { currentMonthRange, dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 import { formatMoney } from '../../lib/number-format'
-import type { InventoryRoll, InventorySheet } from '../inventory/types'
 import {
   ManagementCompactCreateAction,
   ManagementCompactSearch,
@@ -82,13 +81,6 @@ interface StockMovementState {
   page: number
   pageSize: number
   total: number
-  loading: boolean
-  error: string | null
-}
-
-interface ProductInventoryObjectState {
-  rolls: InventoryRoll[]
-  sheets: InventorySheet[]
   loading: boolean
   error: string | null
 }
@@ -220,7 +212,6 @@ export function CatalogPage({
   const [bomByProductId, setBomByProductId] = useState<Record<string, ProductBom | null>>({})
   const [bomForms, setBomForms] = useState<Record<string, BomFormLine[]>>({})
   const [stockMovementsByProductId, setStockMovementsByProductId] = useState<Record<string, StockMovementState>>({})
-  const [inventoryObjectsByProductId, setInventoryObjectsByProductId] = useState<Record<string, ProductInventoryObjectState>>({})
   const [stockAdjustForms, setStockAdjustForms] = useState<Record<string, StockAdjustForm>>({})
   const [stocktakeNotices, setStocktakeNotices] = useState<Record<string, StocktakeNotice>>({})
   const [createBomLines, setCreateBomLines] = useState<BomFormLine[]>([{ component_product_id: '', quantity: '1', notes: '' }])
@@ -716,43 +707,6 @@ export function CatalogPage({
     }
   }
 
-  async function loadInventoryObjects(product: Product) {
-    setInventoryObjectsByProductId((current) => ({
-      ...current,
-      [product.id]: {
-        rolls: current[product.id]?.rolls ?? [],
-        sheets: current[product.id]?.sheets ?? [],
-        loading: true,
-        error: null,
-      },
-    }))
-    try {
-      const [rollResult, sheetResult] = await Promise.all([
-        service.listInventoryRolls({ product_id: product.id, page: 1, page_size: 15 }),
-        service.listInventorySheets({ product_id: product.id, page: 1, page_size: 15 }),
-      ])
-      setInventoryObjectsByProductId((current) => ({
-        ...current,
-        [product.id]: {
-          rolls: rollResult.items,
-          sheets: sheetResult.items,
-          loading: false,
-          error: null,
-        },
-      }))
-    } catch (cause) {
-      setInventoryObjectsByProductId((current) => ({
-        ...current,
-        [product.id]: {
-          rolls: current[product.id]?.rolls ?? [],
-          sheets: current[product.id]?.sheets ?? [],
-          loading: false,
-          error: formatApiError(cause, 'Không tải được tồn theo cuộn/tấm.'),
-        },
-      }))
-    }
-  }
-
   function selectProductDetailTab(product: Product, tab: ProductDetailTab) {
     setSelectedDetailTab(tab)
     if (tab === 'bom' && bomForms[product.id] === undefined) {
@@ -760,9 +714,6 @@ export function CatalogPage({
     }
     if (tab === 'stock-card' && stockMovementsByProductId[product.id] === undefined) {
       void loadStockMovements(product)
-    }
-    if (tab === 'inventory' && (product.inventory_shape === 'roll' || product.inventory_shape === 'sheet') && inventoryObjectsByProductId[product.id] === undefined) {
-      void loadInventoryObjects(product)
     }
   }
 
@@ -1470,7 +1421,7 @@ export function CatalogPage({
                                     </ManagementRecordLink>
                                   </p>
                                 ) : null}
-                                {(product.inventory_shape ?? 'normal') === 'normal' && product.product_kind !== 'service' && product.product_kind !== 'combo' ? (
+                                {product.product_kind !== 'service' && product.product_kind !== 'combo' ? (
                                   <form
                                     aria-label={`Cập nhật tồn ${product.code}`}
                                     className="management-detail-form"
@@ -1511,60 +1462,8 @@ export function CatalogPage({
                                       Cập nhật tồn
                                     </button>
                                   </form>
-                                ) : product.inventory_shape === 'roll' || product.inventory_shape === 'sheet' ? (() => {
-                                  const objectState = inventoryObjectsByProductId[product.id]
-                                  return (
-                                    <>
-                                      <p>Sửa tồn tổng không áp dụng cho loại hàng này.</p>
-                                      {objectState?.loading ? <p>Đang tải tồn theo cuộn/tấm...</p> : null}
-                                      {objectState?.error ? <p role="alert">{objectState.error}</p> : null}
-                                      {!objectState?.loading && !objectState?.error ? (
-                                        <ManagementTableViewport>
-                                          <table aria-label={`Tồn theo cuộn tấm ${product.code}`} className="management-data-table">
-                                            <thead>
-                                              <tr>
-                                                <th>Loại</th>
-                                                <th>Mã đối tượng</th>
-                                                <th>Khổ rộng</th>
-                                                <th>Chiều dài</th>
-                                                <th>Diện tích</th>
-                                                <th>Trạng thái</th>
-                                              </tr>
-                                            </thead>
-                                            <tbody>
-                                              {(objectState?.rolls ?? []).map((roll) => (
-                                                <tr key={`roll-${roll.id}`}>
-                                                  <td>Cuộn</td>
-                                                  <td>{roll.code}</td>
-                                                  <td>{catalogQuantityText(roll.width_m)} m</td>
-                                                  <td>{catalogQuantityText(roll.remaining_length_m)} m</td>
-                                                  <td>{catalogQuantityText(roll.remaining_area_m2)} m²</td>
-                                                  <td>{roll.status}</td>
-                                                </tr>
-                                              ))}
-                                              {(objectState?.sheets ?? []).map((sheet) => (
-                                                <tr key={`sheet-${sheet.id}`}>
-                                                  <td>Tấm</td>
-                                                  <td>{sheet.code}</td>
-                                                  <td>{catalogQuantityText(sheet.width_m)} m</td>
-                                                  <td>{catalogQuantityText(sheet.length_m)} m</td>
-                                                  <td>{catalogQuantityText(sheet.area_m2)} m²</td>
-                                                  <td>{sheet.status}</td>
-                                                </tr>
-                                              ))}
-                                              {(objectState?.rolls.length ?? 0) === 0 && (objectState?.sheets.length ?? 0) === 0 ? (
-                                                <tr>
-                                                  <td colSpan={6}>Chưa có</td>
-                                                </tr>
-                                              ) : null}
-                                            </tbody>
-                                          </table>
-                                        </ManagementTableViewport>
-                                      ) : null}
-                                    </>
-                                  )
-                                })() : (
-                                  <p>Sửa tồn tổng không áp dụng cho loại hàng này.</p>
+                                ) : (
+                                  <p>Sản phẩm không theo dõi tồn kho.</p>
                                 )}
                               </section>
                             ) : null}
