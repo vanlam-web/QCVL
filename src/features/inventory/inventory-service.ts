@@ -5,8 +5,6 @@ import type {
   InventoryProduct,
   InventoryProductListResponse,
   InventoryProductStatusFilter,
-  InventoryRollListResponse,
-  InventorySheetListResponse,
   InventoryShape,
   KiotVietStocktakeImportPreview,
   KiotVietStocktakeImportResult,
@@ -100,24 +98,6 @@ export function createInventoryService(api: InventoryApiRequester) {
       api.request<KiotVietImportDeleteResult>('/api/v1/inventory/stocktakes/import/kiotviet', {
         method: 'DELETE',
       }),
-    listInventoryRolls: (input: { product_id?: string; status?: string; page?: number; page_size?: number } = {}) => {
-      const params = new URLSearchParams()
-      if (input.product_id) params.set('product_id', input.product_id)
-      if (input.status) params.set('status', input.status)
-      if (input.page) params.set('page', String(input.page))
-      if (input.page_size) params.set('page_size', String(input.page_size))
-      const query = params.toString()
-      return api.request<InventoryRollListResponse>(`/api/v1/inventory/rolls${query ? `?${query}` : ''}`)
-    },
-    listInventorySheets: (input: { product_id?: string; status?: string; page?: number; page_size?: number } = {}) => {
-      const params = new URLSearchParams()
-      if (input.product_id) params.set('product_id', input.product_id)
-      if (input.status) params.set('status', input.status)
-      if (input.page) params.set('page', String(input.page))
-      if (input.page_size) params.set('page_size', String(input.page_size))
-      const query = params.toString()
-      return api.request<InventorySheetListResponse>(`/api/v1/inventory/sheets${query ? `?${query}` : ''}`)
-    },
     adjustNormalProductStock: (productId: string, input: StockAdjustmentInput) =>
       api.request<Stocktake>(`/api/v1/inventory/products/${productId}/adjust-stock`, {
         method: 'POST',

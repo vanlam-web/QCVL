@@ -16,8 +16,6 @@ export interface InventoryRouteHandlers {
   stocktakes(): RouteResult
   getStocktake(): RouteResult
   updateStocktake(): RouteResult
-  rolls(): RouteResult
-  sheets(): RouteResult
   shortagePreview(): RouteResult
   previewKiotVietStocktakeImport(): RouteResult
   importKiotVietStocktakes(): RouteResult
@@ -37,8 +35,6 @@ export function handleInventoryRoute(context: InventoryRouteContext, handlers: I
   if (method === 'GET' && pathname === '/api/v1/inventory/stocktakes') return handlers.stocktakes()
   if (method === 'GET' && /^\/api\/v1\/inventory\/stocktakes\/[^/]+$/.test(pathname)) return handlers.getStocktake()
   if (method === 'PATCH' && /^\/api\/v1\/inventory\/stocktakes\/[^/]+$/.test(pathname)) return handlers.updateStocktake()
-  if (method === 'GET' && pathname === '/api/v1/inventory/rolls') return handlers.rolls()
-  if (method === 'GET' && pathname === '/api/v1/inventory/sheets') return handlers.sheets()
   if (method === 'POST' && pathname === '/api/v1/inventory/pos-shortage-preview') return handlers.shortagePreview()
   if (method === 'POST' && pathname === '/api/v1/inventory/stocktakes/import/kiotviet/preview') return handlers.previewKiotVietStocktakeImport()
   if (method === 'POST' && pathname === '/api/v1/inventory/stocktakes/import/kiotviet') return handlers.importKiotVietStocktakes()

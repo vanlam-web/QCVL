@@ -177,20 +177,4 @@ describe('inventory-service', () => {
     ])
   })
 
-  it('builds roll and sheet object inventory list filters', async () => {
-    const calls: Array<[string, RequestInit | undefined]> = []
-    const request: InventoryApiRequester['request'] = async <T>(path: string, init?: RequestInit) => {
-      calls.push([path, init])
-      return { items: [], page: 1, page_size: 15, total: 0 } as T
-    }
-    const service = createInventoryService({ request })
-
-    await service.listInventoryRolls({ product_id: 'p-roll', status: 'in_use', page: 1, page_size: 15 })
-    await service.listInventorySheets({ product_id: 'p-sheet', status: 'available', page: 2, page_size: 15 })
-
-    expect(calls).toEqual([
-      ['/api/v1/inventory/rolls?product_id=p-roll&status=in_use&page=1&page_size=15', undefined],
-      ['/api/v1/inventory/sheets?product_id=p-sheet&status=available&page=2&page_size=15', undefined],
-    ])
-  })
 })

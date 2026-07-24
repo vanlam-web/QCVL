@@ -150,45 +150,6 @@ function makeService(overrides: Partial<InventoryService> = {}): InventoryServic
       invalid_rows: [],
     })),
     deleteImportedKiotVietStocktakes: vi.fn(async () => ({ deleted_rows: 333, blocked_rows: 0 })),
-    listInventoryRolls: vi.fn(async () => ({
-      items: [
-        {
-          id: 'roll-1',
-          product_id: 'product-roll',
-          code: 'ROLL-001',
-          width_m: 3.2,
-          initial_length_m: 50,
-          remaining_length_m: 18,
-          initial_area_m2: 160,
-          remaining_area_m2: 57.6,
-          status: 'in_use' as const,
-          note: 'Cuộn đang dùng',
-          created_at: '2026-07-05T02:00:00Z',
-        },
-      ],
-      page: 1,
-      page_size: 15,
-      total: 1,
-    })),
-    listInventorySheets: vi.fn(async () => ({
-      items: [
-        {
-          id: 'sheet-1',
-          product_id: 'product-sheet',
-          code: 'SHEET-001',
-          sheet_kind: 'full' as const,
-          width_m: 1.22,
-          length_m: 2.44,
-          area_m2: 2.977,
-          status: 'available' as const,
-          note: 'Tấm nguyên',
-          created_at: '2026-07-05T02:00:00Z',
-        },
-      ],
-      page: 1,
-      page_size: 15,
-      total: 1,
-    })),
     adjustNormalProductStock: vi.fn(async () => stocktake),
     previewPosShortage: vi.fn(),
     getMaterialOpeningOptions: vi.fn(async () => ({
@@ -226,7 +187,6 @@ describe('InventoryPage', () => {
     expect(await screen.findByRole('heading', { name: 'Phiếu kiểm kho' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hàng hóa' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Phiếu kiểm kho' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Tồn theo cuộn/tấm' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Khui vật tư' })).toBeDisabled()
     expect(service.listStocktakes).toHaveBeenCalledWith(defaultStocktakeQuery)
   })

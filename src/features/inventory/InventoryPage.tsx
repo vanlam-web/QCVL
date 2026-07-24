@@ -28,7 +28,7 @@ import { managementSortStatesEqual, sortManagementItemsByDateDesc, type Manageme
 import { downloadManagementCsv } from '../../components/ui-shell/management-export'
 import { pageSizeForManagementViewport } from '../../lib/management-page-size'
 import { useManagementSearch } from '../../lib/use-management-search'
-import type { InventoryProduct, InventoryProductStatusFilter, InventoryRoll, InventoryShape, InventorySheet, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
+import type { InventoryProduct, InventoryProductStatusFilter, InventoryShape, StockMovement, Stocktake, StocktakeCreatorOption, StocktakeDetail } from './types'
 import type { InventoryService } from './inventory-service'
 import {
   dateText,
@@ -43,7 +43,7 @@ import {
 import { StocktakeImportDialog } from './StocktakeImportDialog'
 import { dateRangeFromItems, displayDateRangeForData, quickDateRange, type QuickDateRangePreset } from '../../lib/date-ranges'
 
-type InventoryView = 'products' | 'stocktakes' | 'objects'
+type InventoryView = 'products' | 'stocktakes'
 type StocktakeDateFilter = QuickDateRangePreset | 'custom'
 type StocktakeSortKey = 'code' | 'created_at' | 'product_code' | 'product_name' | 'product_system_qty' | 'product_actual_qty' | 'product_difference_qty' | 'status'
 const defaultStocktakeSortState: NonNullable<ManagementSortState<StocktakeSortKey>> = { key: 'created_at', direction: 'desc' }
@@ -124,19 +124,11 @@ export function InventoryPage({ service }: { service: InventoryService }) {
   const [stocktakeCancelling, setStocktakeCancelling] = useState(false)
   const [favoriteStocktakeIds, setFavoriteStocktakeIds] = useState<string[]>(readStocktakeFavoriteIds)
   const [showFavoriteStocktakesOnly, setShowFavoriteStocktakesOnly] = useState(false)
-  const [rolls, setRolls] = useState<InventoryRoll[]>([])
-  const [sheets, setSheets] = useState<InventorySheet[]>([])
   const [materialOpeningOpen, setMaterialOpeningOpen] = useState(false)
   const [materialOpeningProductId, setMaterialOpeningProductId] = useState('')
   const [materialOpeningUnitId, setMaterialOpeningUnitId] = useState('')
   const [materialOpeningQty, setMaterialOpeningQty] = useState('1')
   const [materialOpeningOldRemaining, setMaterialOpeningOldRemaining] = useState('0')
-  const [materialOpeningOldRollId, setMaterialOpeningOldRollId] = useState('')
-  const [materialOpeningOldRollLength, setMaterialOpeningOldRollLength] = useState('0')
-  const [materialOpeningOldSheetId, setMaterialOpeningOldSheetId] = useState('')
-  const [materialOpeningOldSheetWidth, setMaterialOpeningOldSheetWidth] = useState('')
-  const [materialOpeningOldSheetLength, setMaterialOpeningOldSheetLength] = useState('')
-  const [materialOpeningDiscardSheet, setMaterialOpeningDiscardSheet] = useState(false)
   const [materialOpeningNote, setMaterialOpeningNote] = useState('')
   const [materialOpeningOptions, setMaterialOpeningOptions] = useState<Awaited<ReturnType<InventoryService['getMaterialOpeningOptions']>> | null>(null)
   const [materialOpeningSaving, setMaterialOpeningSaving] = useState(false)
@@ -333,12 +325,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     setMaterialOpeningUnitId('')
     setMaterialOpeningQty('1')
     setMaterialOpeningOldRemaining('0')
-    setMaterialOpeningOldRollId('')
-    setMaterialOpeningOldRollLength('0')
-    setMaterialOpeningOldSheetId('')
-    setMaterialOpeningOldSheetWidth('')
-    setMaterialOpeningOldSheetLength('')
-    setMaterialOpeningDiscardSheet(false)
     setMaterialOpeningNote('')
     setMaterialOpeningOptions(null)
     setMaterialOpeningNotice(null)
@@ -349,12 +335,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
     setMaterialOpeningUnitId('')
     setMaterialOpeningOptions(null)
     setMaterialOpeningNotice(null)
-    setMaterialOpeningOldRollId('')
-    setMaterialOpeningOldRollLength('0')
-    setMaterialOpeningOldSheetId('')
-    setMaterialOpeningOldSheetWidth('')
-    setMaterialOpeningOldSheetLength('')
-    setMaterialOpeningDiscardSheet(false)
     if (!productId) return
     setError(null)
     try {
@@ -368,58 +348,24 @@ export function InventoryPage({ service }: { service: InventoryService }) {
 
   async function submitMaterialOpening(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const inventoryShape = materialOpeningOptions?.product.inventory_shape ?? 'normal'
     const openedQty = Number(materialOpeningQty)
     const oldRemainingQty = Number(materialOpeningOldRemaining)
-    const oldRollLength = Number(materialOpeningOldRollLength)
-    const oldSheetWidth = Number(materialOpeningOldSheetWidth)
-    const oldSheetLength = Number(materialOpeningOldSheetLength)
     const note = materialOpeningNote.trim()
-    if (!materialOpeningProductId) {
+    if (!materialOpeningProductId || !materialOpeningUnitId || !Number.isFinite(openedQty) || openedQty <= 0 || !Number.isFinite(oldRemainingQty) || oldRemainingQty < 0) {
       setError('Thông tin khui vật tư chưa hợp lệ.')
-      return
-    }
-    if (inventoryShape === 'normal' && (!materialOpeningUnitId || !Number.isFinite(openedQty) || openedQty <= 0 || !Number.isFinite(oldRemainingQty) || oldRemainingQty < 0)) {
-      setError('Thông tin khui vật tư chưa hợp lệ.')
-      return
-    }
-    if (inventoryShape === 'roll' && (!materialOpeningOldRollId.trim() || !Number.isFinite(oldRollLength) || oldRollLength < 0)) {
-      setError('Thông tin khui cuộn chưa hợp lệ.')
-      return
-    }
-    if (inventoryShape === 'sheet' && (!materialOpeningOldSheetId.trim() || (!materialOpeningDiscardSheet && (!Number.isFinite(oldSheetWidth) || oldSheetWidth <= 0 || !Number.isFinite(oldSheetLength) || oldSheetLength <= 0)))) {
-      setError('Thông tin khui tấm chưa hợp lệ.')
       return
     }
     setMaterialOpeningSaving(true)
     setError(null)
     try {
-      const result = inventoryShape === 'normal'
-        ? await service.createMaterialOpening({
-          product_id: materialOpeningProductId,
-          inventory_shape: 'normal',
-          opened_unit_id: materialOpeningUnitId,
-          opened_qty: openedQty,
-          old_remaining_qty: oldRemainingQty,
-          ...(note ? { note } : {}),
-        })
-        : inventoryShape === 'roll'
-          ? await service.createMaterialOpening({
-            product_id: materialOpeningProductId,
-            inventory_shape: 'roll',
-            old_inventory_roll_id: materialOpeningOldRollId.trim(),
-            old_remaining_length_m: oldRollLength,
-            ...(note ? { note } : {}),
-          })
-          : await service.createMaterialOpening({
-            product_id: materialOpeningProductId,
-            inventory_shape: 'sheet',
-            old_inventory_sheet_id: materialOpeningOldSheetId.trim(),
-            ...(materialOpeningDiscardSheet
-              ? { discard_old_sheet: true }
-              : { old_remaining_width_m: oldSheetWidth, old_remaining_length_m: oldSheetLength }),
-            ...(note ? { note } : {}),
-          })
+      const result = await service.createMaterialOpening({
+        product_id: materialOpeningProductId,
+        inventory_shape: 'normal',
+        opened_unit_id: materialOpeningUnitId,
+        opened_qty: openedQty,
+        old_remaining_qty: oldRemainingQty,
+        ...(note ? { note } : {}),
+      })
       setMaterialOpeningNotice(`Đã khui ${result.opened_stock_qty === null ? 'Chưa có' : numberText(result.opened_stock_qty)} ${materialOpeningOptions?.product.stock_unit.name ?? ''}.`)
       await loadProducts()
     } catch (cause) {
@@ -448,16 +394,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
           setStocktakeTotal(result.total)
           setStocktakePage(result.page)
           setStocktakePageSize(result.page_size)
-          return
-        }
-        if (view === 'objects') {
-          const [rollResult, sheetResult] = await Promise.all([
-            service.listInventoryRolls({ page: 1, page_size: defaultPageSize }),
-            service.listInventorySheets({ page: 1, page_size: defaultPageSize }),
-          ])
-          if (!active) return
-          setRolls(rollResult.items)
-          setSheets(sheetResult.items)
           return
         }
         const productResult = await service.listInventoryProducts({ status: 'active', page: 1, page_size: defaultPageSize })
@@ -651,7 +587,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
 
   return (
     <ManagementPage
-      title={view === 'stocktakes' ? 'Phiếu kiểm kho' : view === 'objects' ? 'Tồn theo cuộn/tấm' : 'Hàng hóa'}
+      title={view === 'stocktakes' ? 'Phiếu kiểm kho' : 'Hàng hóa'}
       actions={
         view === 'products' ? (
             <ManagementCompactToolbar ariaLabel="Lọc hàng hóa" onSubmit={filterProducts}>
@@ -673,7 +609,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 trailingAction={<ManagementCompactCreateAction ariaLabel="Tạo phiếu kiểm kho" onClick={() => undefined} />}
                 onChange={changeStocktakeSearch}
               />
-              <button className="button button-secondary" disabled type="button">Tồn theo cuộn/tấm</button>
               <button className="button button-secondary" disabled type="button">Khui vật tư</button>
               <ManagementImportButton onClick={() => setStocktakeImportOpen(true)}>Import</ManagementImportButton>
                 <button className="button button-secondary" type="button" onClick={() => void exportCurrentView()}>Xuất file</button>
@@ -682,12 +617,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                 Xuất file nhiều phiếu
               </button>
             </ManagementCompactToolbar>
-          ) : (
-            <div className="management-page-actions">
-              <button className="button button-secondary" type="button">+ Cuộn</button>
-              <button className="button button-secondary" type="button">+ Tấm</button>
-            </div>
-          )
+          ) : null
       }
       kpis={view === 'products' ? (
         <MetricGrid ariaLabel="Tổng quan hàng hóa">
@@ -819,17 +749,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               </select>
             </ManagementFilterGroup>
           </ManagementFilterSidebar>
-        ) : (
-          <ManagementFilterSidebar ariaLabel="Bộ lọc tồn theo cuộn tấm">
-            <ManagementFilterGroup title="Loại đối tượng">
-              <select aria-label="Loại đối tượng tồn" className="management-filter-select" defaultValue="all">
-                <option value="all">Tất cả</option>
-                <option value="roll">Cuộn</option>
-                <option value="sheet">Tấm</option>
-              </select>
-            </ManagementFilterGroup>
-          </ManagementFilterSidebar>
-        )
+        ) : null
       }
     >
       {view === 'stocktakes' ? (
@@ -944,57 +864,6 @@ export function InventoryPage({ service }: { service: InventoryService }) {
               onLast={() => void loadStocktakeList({ page: Math.max(1, Math.ceil(stocktakeTotal / stocktakePageSize)) })}
           />
         </ManagementListSurface>
-      ) : view === 'objects' ? (
-        <ManagementListSurface ariaLabel="Danh sách tồn theo cuộn tấm">
-          {error ? <p role="alert">{error}</p> : null}
-          <ManagementTableViewport>
-            <table aria-label="Danh sách tồn theo cuộn tấm" className="management-table">
-              <thead>
-                <tr>
-                  <th>Loại</th>
-                  <th>Mã đối tượng</th>
-                  <th>Sản phẩm</th>
-                  <th>Khổ rộng</th>
-                  <th>Chiều dài</th>
-                  <th>Diện tích</th>
-                  <th>Trạng thái</th>
-                  <th>Ghi chú</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rolls.map((roll) => (
-                  <tr key={`roll-${roll.id}`}>
-                    <td>Cuộn</td>
-                    <td><strong>{roll.code}</strong></td>
-                    <td>{roll.product_id}</td>
-                    <td>{numberText(roll.width_m)} m</td>
-                    <td>{numberText(roll.remaining_length_m)} m</td>
-                    <td>{numberText(roll.remaining_area_m2)} m²</td>
-                    <td><StatusChip tone={roll.status === 'empty' || roll.status === 'discarded' ? 'neutral' : 'success'}>{roll.status}</StatusChip></td>
-                    <td>{roll.note ?? ''}</td>
-                  </tr>
-                ))}
-                {sheets.map((sheet) => (
-                  <tr key={`sheet-${sheet.id}`}>
-                    <td>Tấm</td>
-                    <td><strong>{sheet.code}</strong></td>
-                    <td>{sheet.product_id}</td>
-                    <td>{numberText(sheet.width_m)} m</td>
-                    <td>{numberText(sheet.length_m)} m</td>
-                    <td>{numberText(sheet.area_m2)} m²</td>
-                    <td><StatusChip tone={sheet.status === 'discarded' || sheet.status === 'used' ? 'neutral' : 'success'}>{sheet.status}</StatusChip></td>
-                    <td>{sheet.note ?? ''}</td>
-                  </tr>
-                ))}
-                {rolls.length === 0 && sheets.length === 0 ? (
-                  <tr>
-                    <td colSpan={8}>Chưa có tồn theo cuộn/tấm.</td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </ManagementTableViewport>
-        </ManagementListSurface>
       ) : (
         <ManagementListSurface ariaLabel="Danh sách hàng hóa">
         {error ? <p role="alert">{error}</p> : null}
@@ -1080,7 +949,7 @@ export function InventoryPage({ service }: { service: InventoryService }) {
             </div>
           </dl>
 
-          {detail.inventory_shape === 'normal' ? (
+          {detail.inventory_shape !== undefined ? (
             <form aria-label="Cân bằng kho" className="management-detail-form" onSubmit={adjustStock}>
               <label>
                 Tồn thực tế
@@ -1160,124 +1029,50 @@ export function InventoryPage({ service }: { service: InventoryService }) {
                   onChange={(event) => void selectMaterialOpeningProduct(event.target.value)}
                 >
                   <option value="">Chọn vật tư</option>
-                  {(products ?? []).map((product) => (
+                  {(products ?? []).filter((product) => product.inventory_shape === 'normal').map((product) => (
                     <option key={product.product_id} value={product.product_id}>
                       {product.code} · {product.name} · {shapeText(product.inventory_shape)}
                     </option>
                   ))}
                 </select>
               </label>
-              {(materialOpeningOptions?.product.inventory_shape ?? 'normal') === 'normal' ? (
-                <>
-                  <label>
-                    Đơn vị khui
-                    <select
-                      aria-label="Đơn vị khui"
-                      value={materialOpeningUnitId}
-                      onChange={(event) => setMaterialOpeningUnitId(event.target.value)}
-                    >
-                      <option value="">Chọn đơn vị</option>
-                      {(materialOpeningOptions?.conversions ?? []).map((conversion) => (
-                        <option key={conversion.unit_id} value={conversion.unit_id}>
-                          {conversion.name} ({numberText(conversion.stock_qty_per_unit)} {materialOpeningOptions?.product.stock_unit.name})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Số lượng khui mới
-                    <input
-                      aria-label="Số lượng khui mới"
-                      min="0.001"
-                      step="0.001"
-                      type="number"
-                      value={materialOpeningQty}
-                      onChange={(event) => setMaterialOpeningQty(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Phần cũ còn lại
-                    <input
-                      aria-label="Phần cũ còn lại"
-                      min="0"
-                      step="0.001"
-                      type="number"
-                      value={materialOpeningOldRemaining}
-                      onChange={(event) => setMaterialOpeningOldRemaining(event.target.value)}
-                    />
-                  </label>
-                </>
-              ) : materialOpeningOptions?.product.inventory_shape === 'roll' ? (
-                <>
-                  <label>
-                    Cuộn cũ
-                    <input
-                      aria-label="Cuộn cũ"
-                      placeholder="ID cuộn cũ"
-                      value={materialOpeningOldRollId}
-                      onChange={(event) => setMaterialOpeningOldRollId(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    Dài cũ còn lại
-                    <input
-                      aria-label="Dài cũ còn lại"
-                      min="0"
-                      step="0.001"
-                      type="number"
-                      value={materialOpeningOldRollLength}
-                      onChange={(event) => setMaterialOpeningOldRollLength(event.target.value)}
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label>
-                    Tấm cũ
-                    <input
-                      aria-label="Tấm cũ"
-                      placeholder="ID tấm cũ"
-                      value={materialOpeningOldSheetId}
-                      onChange={(event) => setMaterialOpeningOldSheetId(event.target.value)}
-                    />
-                  </label>
-                  <label className="management-modal-checkbox-row">
-                    <input
-                      aria-label="Bỏ phần tấm cũ"
-                      checked={materialOpeningDiscardSheet}
-                      type="checkbox"
-                      onChange={(event) => setMaterialOpeningDiscardSheet(event.target.checked)}
-                    />
-                    Bỏ phần tấm cũ
-                  </label>
-                  {!materialOpeningDiscardSheet ? (
-                    <>
-                      <label>
-                        Rộng cũ còn lại
-                        <input
-                          aria-label="Rộng cũ còn lại"
-                          min="0.001"
-                          step="0.001"
-                          type="number"
-                          value={materialOpeningOldSheetWidth}
-                          onChange={(event) => setMaterialOpeningOldSheetWidth(event.target.value)}
-                        />
-                      </label>
-                      <label>
-                        Dài cũ còn lại
-                        <input
-                          aria-label="Dài tấm cũ còn lại"
-                          min="0.001"
-                          step="0.001"
-                          type="number"
-                          value={materialOpeningOldSheetLength}
-                          onChange={(event) => setMaterialOpeningOldSheetLength(event.target.value)}
-                        />
-                      </label>
-                    </>
-                  ) : null}
-                </>
-              )}
+              <label>
+                Đơn vị khui
+                <select
+                  aria-label="Đơn vị khui"
+                  value={materialOpeningUnitId}
+                  onChange={(event) => setMaterialOpeningUnitId(event.target.value)}
+                >
+                  <option value="">Chọn đơn vị</option>
+                  {(materialOpeningOptions?.conversions ?? []).map((conversion) => (
+                    <option key={conversion.unit_id} value={conversion.unit_id}>
+                      {conversion.name} ({numberText(conversion.stock_qty_per_unit)} {materialOpeningOptions?.product.stock_unit.name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Số lượng khui mới
+                <input
+                  aria-label="Số lượng khui mới"
+                  min="0.001"
+                  step="0.001"
+                  type="number"
+                  value={materialOpeningQty}
+                  onChange={(event) => setMaterialOpeningQty(event.target.value)}
+                />
+              </label>
+              <label>
+                Phần cũ còn lại
+                <input
+                  aria-label="Phần cũ còn lại"
+                  min="0"
+                  step="0.001"
+                  type="number"
+                  value={materialOpeningOldRemaining}
+                  onChange={(event) => setMaterialOpeningOldRemaining(event.target.value)}
+                />
+              </label>
               <label>
                 Ghi chú
                 <input

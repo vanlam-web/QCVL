@@ -132,47 +132,6 @@ export interface KiotVietImportDeleteResult {
   blocked_rows: number
 }
 
-export interface InventoryRoll {
-  id: string
-  product_id: string
-  code: string
-  width_m: number
-  initial_length_m: number
-  remaining_length_m: number
-  initial_area_m2: number
-  remaining_area_m2: number
-  status: 'available' | 'in_use' | 'empty' | 'discarded'
-  note: string | null
-  created_at: string
-}
-
-export interface InventorySheet {
-  id: string
-  product_id: string
-  code: string
-  sheet_kind: 'full' | 'in_use' | 'remnant'
-  width_m: number
-  length_m: number
-  area_m2: number
-  status: 'available' | 'used' | 'discarded'
-  note: string | null
-  created_at: string
-}
-
-export interface InventoryRollListResponse {
-  items: InventoryRoll[]
-  page: number
-  page_size: number
-  total: number
-}
-
-export interface InventorySheetListResponse {
-  items: InventorySheet[]
-  page: number
-  page_size: number
-  total: number
-}
-
 export interface MaterialOpeningConversionOption {
   unit_id: string
   code: string
@@ -192,34 +151,20 @@ export interface MaterialOpeningOptions {
   warnings: string[]
 }
 
-export type MaterialOpeningInput = {
+export interface MaterialOpeningInput {
   product_id: string
   inventory_shape: 'normal'
   opened_unit_id: string
   opened_qty: number
   old_remaining_qty?: number
   note?: string
-} | {
-  product_id: string
-  inventory_shape: 'roll'
-  old_inventory_roll_id: string
-  old_remaining_length_m: number
-  note?: string
-} | {
-  product_id: string
-  inventory_shape: 'sheet'
-  old_inventory_sheet_id: string
-  old_remaining_width_m?: number
-  old_remaining_length_m?: number
-  discard_old_sheet?: boolean
-  note?: string
 }
 
 export interface MaterialOpeningResult {
   id: string
   product_id: string
-  inventory_shape: 'normal' | 'roll' | 'sheet'
-  source_type: 'manual_normal' | 'standard_object' | 'kiotviet_provisional'
+  inventory_shape: 'normal'
+  source_type: 'manual_normal'
   opened_unit_id: string | null
   opened_qty: number | null
   opened_stock_qty: number | null

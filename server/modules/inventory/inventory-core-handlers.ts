@@ -84,28 +84,49 @@ export function createInventoryCoreHandlers(deps:InventoryDeps){const {request,u
         ? { found: true, data: item }
         : { found: true, data: { message: 'Stocktake not found' }, status: 404 }
     },
-    rolls: async () => ({ found: true, data: paged([{ id: 'roll-1', product_id: 'product-decal', code: 'ROLL0001', width_m: 1.27, initial_length_m: 50, remaining_length_m: 42, initial_area_m2: 63.5, remaining_area_m2: 53.34, status: 'in_use', note: null, created_at: nowIso }], page, pageSize) }),
-    sheets: async () => ({ found: true, data: paged([{ id: 'sheet-1', product_id: 'product-mica-3mm', code: 'SHEET0001', sheet_kind: 'full', width_m: 1.22, length_m: 2.44, area_m2: 2.9768, status: 'available', note: null, created_at: nowIso }], page, pageSize) }),
-    shortagePreview: async () => ({ found: true, data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] } }),
-    materialOpeningOptions: async () => ({ found: true, data: { product: { id: products[0].id, code: products[0].code, name: products[0].name, inventory_shape: 'sheet', stock_unit: { id: 'unit-sheet', code: 'TAM', name: 'tam' } }, conversions: [], warnings: [] } }),
+    shortagePreview: async () => ({
+      found: true,
+      data: { product_id: products[0].id, quantity: 1, source: 'product', shortages: [], warnings: [] },
+    }),
+    materialOpeningOptions: async () => ({
+      found: true,
+      data: {
+        product: {
+          id: products[0].id,
+          code: products[0].code,
+          name: products[0].name,
+          inventory_shape: 'normal',
+          stock_unit: { id: 'unit-normal', code: 'DONVI', name: 'đơn vị' },
+        },
+        conversions: [],
+        warnings: [],
+      },
+    }),
     createMaterialOpening: async () => {
       const body = await readJson(request)
       const created = await repository.createMaterialOpening?.({
         organizationId: currentUser.organization.id,
         input: {
           product_id: requiredString(body.product_id, 'product_id'),
-          inventory_shape: body.inventory_shape === 'roll' || body.inventory_shape === 'sheet' ? body.inventory_shape : 'normal',
+          inventory_shape: 'normal',
           opened_unit_id: nullableString(body.opened_unit_id) ?? undefined,
           opened_qty: body.opened_qty === undefined ? undefined : Number(body.opened_qty),
           old_remaining_qty: body.old_remaining_qty === undefined ? undefined : Number(body.old_remaining_qty),
-          old_inventory_roll_id: nullableString(body.old_inventory_roll_id) ?? undefined,
-          old_remaining_length_m: body.old_remaining_length_m === undefined ? undefined : Number(body.old_remaining_length_m),
-          old_inventory_sheet_id: nullableString(body.old_inventory_sheet_id) ?? undefined,
-          old_remaining_width_m: body.old_remaining_width_m === undefined ? undefined : Number(body.old_remaining_width_m),
-          discard_old_sheet: Boolean(body.discard_old_sheet),
           note: nullableString(body.note) ?? undefined,
         },
-      }) ?? { id: randomUUID(), product_id: products[0].id, inventory_shape: 'normal', source_type: 'manual_normal', opened_unit_id: null, opened_qty: null, opened_stock_qty: null, stock_movement_id: null, warnings: [], created_at: nowIso }
+      }) ?? {
+        id: randomUUID(),
+        product_id: products[0].id,
+        inventory_shape: 'normal',
+        source_type: 'manual_normal',
+        opened_unit_id: null,
+        opened_qty: null,
+        opened_stock_qty: null,
+        stock_movement_id: null,
+        warnings: [],
+        created_at: nowIso,
+      }
       return { found: true, data: created, status: 201 }
     },
-  }}
+  }
+}
