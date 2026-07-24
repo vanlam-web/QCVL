@@ -106,14 +106,12 @@ export function createInventoryCoreHandlers(deps:InventoryDeps){const {request,u
       const body = await readJson(request)
       const created = await repository.createMaterialOpening?.({
         organizationId: currentUser.organization.id,
-        input: {
-          product_id: requiredString(body.product_id, 'product_id'),
-          inventory_shape: 'normal',
-          opened_unit_id: nullableString(body.opened_unit_id) ?? undefined,
-          opened_qty: body.opened_qty === undefined ? undefined : Number(body.opened_qty),
-          old_remaining_qty: body.old_remaining_qty === undefined ? undefined : Number(body.old_remaining_qty),
-          note: nullableString(body.note) ?? undefined,
-        },
+        product_id: requiredString(body.product_id, 'product_id'),
+        inventory_shape: 'normal',
+        opened_unit_id: nullableString(body.opened_unit_id) ?? undefined,
+        opened_qty: body.opened_qty === undefined ? undefined : Number(body.opened_qty),
+        old_remaining_qty: body.old_remaining_qty === undefined ? undefined : Number(body.old_remaining_qty),
+        note: nullableString(body.note) ?? undefined,
       }) ?? {
         id: randomUUID(),
         product_id: products[0].id,

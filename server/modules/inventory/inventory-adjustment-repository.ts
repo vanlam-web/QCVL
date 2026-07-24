@@ -117,17 +117,17 @@ export function createInventoryAdjustmentRepository(pool:pg.Pool,deps:InventoryA
       await ensureUnits(pool)
       await ensureMovements(pool)
       await ensureOpenings(pool)
-      if (input.input.inventory_shape !== 'normal') {
+      if (input.inventory_shape !== 'normal') {
         throw new Error('MATERIAL_OPENING_SHAPE_NOT_SUPPORTED')
       }
-      const product = await openingProduct(pool, input.organizationId, input.input.product_id)
+      const product = await openingProduct(pool, input.organizationId, input.product_id)
       if (!product) throw new Error('PRODUCT_NOT_FOUND')
       if (product.inventory_shape !== 'normal') {
         throw new Error('MATERIAL_OPENING_SHAPE_NOT_SUPPORTED')
       }
-      const openedUnitId = input.input.opened_unit_id ?? ''
-      const openedQty = Number(input.input.opened_qty ?? 0)
-      const oldRemainingQty = Number(input.input.old_remaining_qty ?? 0)
+      const openedUnitId = input.opened_unit_id ?? ''
+      const openedQty = Number(input.opened_qty ?? 0)
+      const oldRemainingQty = Number(input.old_remaining_qty ?? 0)
       if (!openedUnitId || !Number.isFinite(openedQty) || openedQty <= 0 || !Number.isFinite(oldRemainingQty) || oldRemainingQty < 0) {
         throw new Error('INVALID_MATERIAL_OPENING')
       }
@@ -149,7 +149,7 @@ export function createInventoryAdjustmentRepository(pool:pg.Pool,deps:InventoryA
             values ($1, $2, $3, 'normal', 'manual_normal', $4, $5, $6, $7, null, $8, $9)
             returning id::text, created_at
           `,
-          [openingId, input.organizationId, product.id, openedUnitId, openedQty, openedStockQty, oldRemainingQty, input.input.note ?? null, createdAt],
+          [openingId, input.organizationId, product.id, openedUnitId, openedQty, openedStockQty, oldRemainingQty, input.note ?? null, createdAt],
         )
         if (quantityDelta !== 0) {
           stockMovementId = stableId(`stock-movement-material-opening-${openingId}`)

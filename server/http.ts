@@ -3263,8 +3263,6 @@ async function getDevApiResponse(
       stocktakes: inventoryCoreHandlers.stocktakes,
       getStocktake: inventoryCoreHandlers.getStocktake,
       updateStocktake: inventoryCoreHandlers.updateStocktake,
-      rolls: inventoryCoreHandlers.rolls,
-      sheets: inventoryCoreHandlers.sheets,
       shortagePreview: inventoryCoreHandlers.shortagePreview,
       previewKiotVietStocktakeImport: inventoryImportHandlers.previewKiotVietStocktakeImport,
       importKiotVietStocktakes: inventoryImportHandlers.importKiotVietStocktakes,
