@@ -2291,7 +2291,15 @@ describe('createPgRepository product units', () => {
     expect(itemInsertCall?.[1]).toEqual([
       '11111111-1111-1111-1111-111111111111',
       'existing-order',
-      expect.any(String),
+      'product-ib',
+      JSON.stringify({
+        source_system: 'kiotviet',
+        source_code: 'IB',
+        code: 'IB',
+        name: 'In bat',
+        unit_name: 'm2',
+        source_row_number: 646,
+      }),
       15,
       40000,
       0,

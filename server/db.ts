@@ -1642,6 +1642,14 @@ function salesDocumentDataFromImportRows(
     note: first.note ?? '',
     items: rows.map((row) => ({
       product_id: resolveImportedProductSnapshotId(row.product_code),
+      product_snapshot: {
+        source_system: 'kiotviet',
+        source_code: row.product_code,
+        code: row.product_code,
+        name: row.product_name,
+        unit_name: row.unit_name,
+        source_row_number: row.rowNumber,
+      },
       quantity: row.quantity,
       unit_price: row.unit_price,
       discount_amount: row.line_discount_amount,
@@ -2827,6 +2835,7 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
   for (const [index, item] of document.items.entries()) {
     const detailItem = item as {
       product_id: string
+      product_snapshot?: Record<string, unknown>
       quantity?: number
       unit_price?: number
       discount_amount?: number
@@ -2852,9 +2861,23 @@ async function insertSalesDocument(pool: pg.Pool, organizationId: string, docume
           organization_id, order_id, product_id, product_snapshot, quantity, unit_price, discount_amount, line_total, sort_order,
           width_m, height_m, linear_m, note
         )
-        values ($1, $2, $3, '{}'::jsonb, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        values ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       `,
-      [organizationId, orderId, detailItem.product_id, quantity, unitPrice, discountAmount, lineTotal, index + 1, widthM, heightM, linearM, note],
+      [
+        organizationId,
+        orderId,
+        detailItem.product_id,
+        JSON.stringify(detailItem.product_snapshot ?? {}),
+        quantity,
+        unitPrice,
+        discountAmount,
+        lineTotal,
+        index + 1,
+        widthM,
+        heightM,
+        linearM,
+        note,
+      ],
     )
   }
 

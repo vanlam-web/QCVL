@@ -104,6 +104,12 @@ export function createSalesImportRepository(pool:pg.Pool,deps:SalesImportDeps):P
             const first = rows[0]
             const customer = await customerByCode(transactionPool, input.organizationId, first.customer_code)
             const document = documentFromRows(sourceCode, rows, customer)
+            document.items = document.items.map((item, index) => {
+              const sourceRow = rows[index]
+              const product = sourceRow ? resolveProduct(products, sourceRow.product_code) : null
+              if (!product) return item
+              return { ...item, product_id: product.id }
+            })
             await insertDocument(transactionPool, input.organizationId, document)
 
             const deleted = await deleteMovementsForDocument(transactionPool, input.organizationId, 'sale_invoice', sourceCode)
