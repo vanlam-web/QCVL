@@ -25,3 +25,20 @@ describe('KiotViet shifted PCPN allocation', () => {
     expect(result.receipts.map((item) => item.paid_amount)).toEqual([0, 0])
   })
 })
+
+describe('KiotViet delayed customer payment', () => {
+  test('keeps TT payment unallocated without immutable invoice allocation source', () => {
+    const invoice = {
+      id: 'invoice-1', code: 'HD011200', created_at: '2026-07-12T01:00:00.000Z', status: 'completed', order_type: 'invoice',
+      total_amount: 320000, paid_amount: 0, debt_amount: 320000, customer: { id: 'customer-303', code: 'KH000303' },
+    }
+    const row = {
+      id: 'cashbook-tt-1848', source_code: 'TT001848', entry_time: '2026-07-13T09:55:00.000Z',
+      direction: 'in' as const, amount_delta: 320000, status: 'posted',
+      counterparty_code: 'KH000303', counterparty_name: 'Customer 303', category_name: 'Tiền khách trả',
+    }
+    const result = rebuildKiotVietCashbookAllocations({ invoices: [invoice], receipts: [], cashbookRows: [row] })
+    expect(result.cashbookAllocations[0]).toMatchObject({ allocations: [], order_code: null })
+    expect(result.invoices[0]).toMatchObject({ paid_amount: 0, debt_amount: 320000 })
+  })
+})

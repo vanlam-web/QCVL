@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compareQcvMovementBucketsWithKiotVietXnt, mapKiotVietXntReportRows, toKiotVietXntCheckpointRows } from './kiotviet-xnt-report'
+import { compareQcvAggregateMovementsWithKiotVietXnt, compareQcvMovementBucketsWithKiotVietXnt, mapKiotVietAggregateXntReportRows, mapKiotVietXntReportRows, toKiotVietXntCheckpointRows } from './kiotviet-xnt-report'
 
 describe('mapKiotVietXntReportRows', () => {
   it('maps KiotViet XNT report movement buckets by product code', () => {
@@ -99,6 +99,36 @@ describe('compareQcvMovementBucketsWithKiotVietXnt', () => {
         },
       },
     ])
+  })
+})
+
+describe('aggregate KiotViet XNT report', () => {
+  it('maps and compares aggregate SL Nhập/SL xuất without inventing detail buckets', () => {
+    const mapped = mapKiotVietAggregateXntReportRows([{
+      rowNumber: 2,
+      'Mã hàng': 'A6XB',
+      'Tên hàng': 'Alu 3li 0.06 EV2001 Xám bạc',
+      'Đơn vị tính': 'Tấm',
+      'Tồn đầu kì': 0,
+      'SL Nhập': 1,
+      'SL xuất': 0,
+      'Tồn cuối kì': 1,
+    }])
+    expect(mapped.invalid).toEqual([])
+    expect(mapped.valid).toEqual([{
+      rowNumber: 2,
+      product_code: 'A6XB',
+      product_name: 'Alu 3li 0.06 EV2001 Xám bạc',
+      unit_name: 'Tấm',
+      opening_qty: 0,
+      total_in_qty: 1,
+      total_out_qty: 0,
+      ending_qty: 1,
+    }])
+    expect(compareQcvAggregateMovementsWithKiotVietXnt({
+      xntRows: mapped.valid,
+      qcvRows: [{ product_code: 'A6XB', total_in_qty: 1, total_out_qty: 0, ending_qty: 1 }],
+    })[0]).toMatchObject({ product_code: 'A6XB', total_in_diff: 0, total_out_diff: 0, ending_diff: 0 })
   })
 })
 

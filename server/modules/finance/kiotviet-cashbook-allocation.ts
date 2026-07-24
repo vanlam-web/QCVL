@@ -97,18 +97,6 @@ export function resetImportedKiotVietPurchasePayment(receipt: AllocatablePurchas
   receipt.remaining_amount = receipt.status === 'posted' ? receipt.payable_amount : 0
 }
 
-function matchCustomer(
-  row: KiotVietCashbookAllocationRow,
-  invoices: AllocatableInvoice[],
-) {
-  const code = normalize(row.counterparty_code ?? '')
-  const name = normalize(row.counterparty_name ?? '')
-  return invoices.find((invoice) => (
-    (code && normalize(invoice.customer.code) === code)
-    || (name && normalize(invoice.customer.name ?? '') === name)
-  ))?.customer ?? null
-}
-
 function matchSupplier(
   row: KiotVietCashbookAllocationRow,
   receipts: AllocatablePurchaseReceipt[],
@@ -180,81 +168,6 @@ function allocateDirectSupplierPayment(
   }]
 }
 
-function allocateFifoCustomerPayment(
-  row: KiotVietCashbookAllocationRow,
-  invoices: AllocatableInvoice[],
-): CashbookAllocation[] {
-  const customer = matchCustomer(row, invoices)
-  if (!customer) return []
-  let remaining = Math.max(row.amount_delta, 0)
-  const entryTime = Date.parse(row.entry_time ?? '')
-  const allocations: CashbookAllocation[] = []
-  const openInvoices = invoices
-    .filter((document) => (
-      document.order_type === 'invoice'
-      && document.status !== 'cancelled'
-      && document.debt_amount > 0
-      && (!Number.isFinite(entryTime) || Date.parse(document.created_at) <= entryTime)
-      && (document.customer.id === customer.id || normalize(document.customer.code) === normalize(customer.code))
-    ))
-    .sort((left, right) => Date.parse(left.created_at) - Date.parse(right.created_at))
-
-  for (const invoice of openInvoices) {
-    if (remaining <= 0) break
-    const allocated = Math.min(invoice.debt_amount, remaining)
-    const collectedBefore = invoice.paid_amount
-    invoice.paid_amount += allocated
-    invoice.debt_amount = Math.max(invoice.debt_amount - allocated, 0)
-    allocations.push({
-      order_id: invoice.id,
-      order_code: invoice.code,
-      order_total_amount: invoice.total_amount,
-      collected_before: collectedBefore,
-      allocated_amount: allocated,
-      remaining_after: invoice.debt_amount,
-    })
-    remaining -= allocated
-  }
-  return allocations
-}
-
-function allocateFifoSupplierPayment(
-  row: KiotVietCashbookAllocationRow,
-  receipts: AllocatablePurchaseReceipt[],
-): CashbookAllocation[] {
-  const supplier = matchSupplier(row, receipts)
-  if (!supplier) return []
-  let remaining = Math.abs(row.amount_delta)
-  const entryTime = Date.parse(row.entry_time ?? '')
-  const allocations: CashbookAllocation[] = []
-  const openReceipts = receipts
-    .filter((receipt) => (
-      receipt.status === 'posted'
-      && receipt.remaining_amount > 0
-      && (!Number.isFinite(entryTime) || Date.parse(receipt.received_at) <= entryTime)
-      && (receipt.supplier.id === supplier.id || normalize(receipt.supplier.code) === normalize(supplier.code))
-    ))
-    .sort((left, right) => Date.parse(left.received_at) - Date.parse(right.received_at))
-
-  for (const receipt of openReceipts) {
-    if (remaining <= 0) break
-    const allocated = Math.min(receipt.remaining_amount, remaining)
-    const paidBefore = receipt.paid_amount
-    receipt.paid_amount += allocated
-    receipt.remaining_amount = Math.max(receipt.remaining_amount - allocated, 0)
-    allocations.push({
-      order_id: receipt.id,
-      order_code: receipt.code,
-      order_total_amount: receipt.payable_amount,
-      collected_before: paidBefore,
-      allocated_amount: allocated,
-      remaining_after: receipt.remaining_amount,
-    })
-    remaining -= allocated
-  }
-  return allocations
-}
-
 export function allocateImportedCashbookRow(
   row: KiotVietCashbookAllocationRow,
   invoices: AllocatableInvoice[],
@@ -279,8 +192,9 @@ export function allocateImportedCashbookRow(
     return allocateDirectSupplierPayment(row, directReceipt?.status === 'posted' ? directReceipt : strictFallback)
   }
 
-  if (isKiotVietDelayedCustomerPayment(row)) return allocateFifoCustomerPayment(row, invoices)
-  if (isKiotVietDelayedSupplierPayment(row)) return allocateFifoSupplierPayment(row, receipts)
+  // TT*/PC* delayed cashbook rows carry customer/supplier identity but no source
+  // document allocation. Keep them unallocated until an immutable KV allocation
+  // source is available; FIFO would fabricate payment ownership.
   return []
 }
 

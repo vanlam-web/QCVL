@@ -55,6 +55,46 @@ export interface XntComparisonRow {
   }
 }
 
+export interface KiotVietAggregateXntReportRow {
+  rowNumber: number
+  product_code: string
+  product_name: string | null
+  unit_name: string | null
+  opening_qty: number
+  total_in_qty: number
+  total_out_qty: number
+  ending_qty: number
+}
+
+export interface KiotVietInvalidAggregateXntReportRow {
+  rowNumber: number
+  product_code: string | null
+  errors: Array<'missing_product_code'>
+}
+
+export interface QcvAggregateMovementRow {
+  product_code: string
+  total_in_qty: number
+  total_out_qty: number
+  ending_qty: number | null
+}
+
+export interface AggregateXntComparisonRow {
+  product_code: string
+  product_name: string | null
+  unit_name: string | null
+  kv_opening_qty: number
+  kv_total_in_qty: number
+  kv_total_out_qty: number
+  kv_ending_qty: number
+  qcv_total_in_qty: number | null
+  qcv_total_out_qty: number | null
+  qcv_ending_qty: number | null
+  total_in_diff: number | null
+  total_out_diff: number | null
+  ending_diff: number | null
+}
+
 export function parseKiotVietXntReportWorkbookBuffer(buffer: Buffer): KiotVietRawXntReportRow[] {
   return parseKiotVietProductWorkbookBuffer(buffer)
 }
@@ -114,6 +154,54 @@ export function compareQcvMovementBucketsWithKiotVietXnt(input: {
         sale_out_qty: round((qcv?.sale_out_qty ?? 0) - kv.sale_out_qty),
         stocktake_out_qty: round((qcv?.stocktake_out_qty ?? 0) - kv.stocktake_out_qty),
       },
+    }
+  })
+}
+
+export function mapKiotVietAggregateXntReportRows(rows: KiotVietRawXntReportRow[]) {
+  const valid: KiotVietAggregateXntReportRow[] = []
+  const invalid: KiotVietInvalidAggregateXntReportRow[] = []
+  for (const row of rows) {
+    const productCode = text(valueByHeader(row, 'Ma hang', 'Mã hàng'))
+    if (!productCode) {
+      invalid.push({ rowNumber: row.rowNumber, product_code: null, errors: ['missing_product_code'] })
+      continue
+    }
+    valid.push({
+      rowNumber: row.rowNumber,
+      product_code: productCode,
+      product_name: text(valueByHeader(row, 'Ten hang', 'Tên hàng')),
+      unit_name: text(valueByHeader(row, 'Don vi tinh', 'Đơn vị tính', 'DVT', 'ĐVT')),
+      opening_qty: qty(row, 'Ton dau ki', 'Tồn đầu kì', 'Tồn đầu kỳ'),
+      total_in_qty: qty(row, 'SL Nhap', 'SL Nhập'),
+      total_out_qty: qty(row, 'SL xuat', 'SL xuất'),
+      ending_qty: qty(row, 'Ton cuoi ki', 'Tồn cuối kì', 'Tồn cuối kỳ'),
+    })
+  }
+  return { valid, invalid }
+}
+
+export function compareQcvAggregateMovementsWithKiotVietXnt(input: {
+  xntRows: KiotVietAggregateXntReportRow[]
+  qcvRows: QcvAggregateMovementRow[]
+}) {
+  const qcvByCode = new Map(input.qcvRows.map((row) => [row.product_code, row]))
+  return input.xntRows.map<AggregateXntComparisonRow>((kv) => {
+    const qcv = qcvByCode.get(kv.product_code)
+    return {
+      product_code: kv.product_code,
+      product_name: kv.product_name,
+      unit_name: kv.unit_name,
+      kv_opening_qty: kv.opening_qty,
+      kv_total_in_qty: kv.total_in_qty,
+      kv_total_out_qty: kv.total_out_qty,
+      kv_ending_qty: kv.ending_qty,
+      qcv_total_in_qty: qcv?.total_in_qty ?? null,
+      qcv_total_out_qty: qcv?.total_out_qty ?? null,
+      qcv_ending_qty: qcv?.ending_qty ?? null,
+      total_in_diff: qcv ? round(qcv.total_in_qty - kv.total_in_qty) : null,
+      total_out_diff: qcv ? round(qcv.total_out_qty - kv.total_out_qty) : null,
+      ending_diff: qcv?.ending_qty === null || qcv?.ending_qty === undefined ? null : round(qcv.ending_qty - kv.ending_qty),
     }
   })
 }
